@@ -123,18 +123,6 @@ Build an optimized release:
 cargo build --release
 ```
 
-## GitHub Pages Setup
-
-1. Push your code to GitHub
-2. Go to repository Settings > Pages
-3. Set source to "Deploy from a branch"
-4. Select the `main` branch and `/docs` folder
-5. Save the settings
-
-The dashboard will be available at `https://yourusername.github.io/your-repo-name/`
-
-**📊 Current Dashboard**: [https://nigelleck.github.io/GRQ-validation/](https://nigelleck.github.io/GRQ-validation/)
-
 ## Contributing
 
 1. Fork the repository
