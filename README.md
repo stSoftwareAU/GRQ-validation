@@ -84,6 +84,8 @@ The web dashboard is located at `docs/index.html` and will be served by GitHub P
 - Interactive table with sorting and filtering
 - Visual indicators for stock performance
 
+**🌐 Live Dashboard**: [https://stSoftwareAU.github.io/GRQ-validation/](https://stSoftwareAU.github.io/GRQ-validation/)
+
 ## TSV File Format
 
 The application expects TSV files with the following columns:
@@ -130,6 +132,8 @@ cargo build --release
 5. Save the settings
 
 The dashboard will be available at `https://yourusername.github.io/your-repo-name/`
+
+**📊 Current Dashboard**: [https://nigelleck.github.io/GRQ-validation/](https://nigelleck.github.io/GRQ-validation/)
 
 ## Contributing
 
