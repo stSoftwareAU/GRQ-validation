@@ -50,6 +50,7 @@
             gap: 10px;
             align-items: center;
             justify-content: center;
+            flex-wrap: wrap;
         }
         
         select, button {
@@ -104,6 +105,45 @@
             color: #212529;
         }
         
+        .performance-section {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .performance-section h2 {
+            margin: 0 0 15px 0;
+            color: #0c5460;
+        }
+        
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .performance-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .performance-item .label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .performance-item .value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #212529;
+        }
+        
         .stock-table {
             width: 100%;
             border-collapse: collapse;
@@ -135,6 +175,10 @@
             background: #d4edda !important;
         }
         
+        .performance-positive { color: #28a745; }
+        .performance-negative { color: #dc3545; }
+        .performance-neutral { color: #6c757d; }
+        
         .loading {
             text-align: center;
             padding: 40px;
@@ -148,26 +192,26 @@
             border-radius: 4px;
             margin: 20px 0;
         }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>GRQ Stock Validation</h1>
-            <p>Daily stock analysis and validation dashboard</p>
+            <p>Daily stock analysis and prediction performance dashboard</p>
         </div>
         
         <div class="controls">
             <div class="date-selector">
-                <label for="yearSelect">Year:</label>
-                <select id="yearSelect"></select>
-                
-                <label for="monthSelect">Month:</label>
-                <select id="monthSelect"></select>
-                
-                <label for="daySelect">Day:</label>
-                <select id="daySelect"></select>
-                
+                <label for="dateSelect">Select Date:</label>
+                <select id="dateSelect"></select>
                 <button onclick="loadData()">Load Data</button>
             </div>
         </div>
@@ -179,6 +223,11 @@
             
             <div id="error" class="error" style="display: none;"></div>
             
+            <div id="performance" class="performance-section" style="display: none;">
+                <h2>📊 Prediction Performance</h2>
+                <div id="performanceGrid" class="performance-grid"></div>
+            </div>
+            
             <div id="summary" class="summary" style="display: none;"></div>
             
             <div id="tableContainer" style="display: none;">
@@ -186,8 +235,10 @@
                     <thead>
                         <tr>
                             <th>Stock</th>
-                            <th>Score</th>
-                            <th>Target</th>
+                            <th>Predicted Score</th>
+                            <th>Target Price</th>
+                            <th>Current Price</th>
+                            <th>Performance</th>
                             <th>Ex-Dividend Date</th>
                             <th>Dividend/Share</th>
                             <th>Intrinsic Value (Basic)</th>
@@ -198,109 +249,163 @@
                     <tbody id="stockTableBody"></tbody>
                 </table>
             </div>
+            
+            <div id="noData" class="no-data" style="display: none;">
+                No performance data available yet. Stock prices will be fetched by the Rust program.
+            </div>
         </div>
     </div>
 
     <script>
         let availableDates = [];
+        let currentData = null;
         
         async function initializeApp() {
             try {
                 // Load the index.json to get available dates
                 const response = await fetch('scores/index.json');
                 const data = await response.json();
-                availableDates = data.dates || [];
+                availableDates = data.scores || [];
                 
-                populateDateSelectors();
-                loadLatestData();
+                populateDateSelector();
+                if (availableDates.length > 0) {
+                    loadLatestData();
+                }
             } catch (error) {
                 showError('Failed to initialize application: ' + error.message);
             }
         }
         
-        function populateDateSelectors() {
-            const yearSelect = document.getElementById('yearSelect');
-            const monthSelect = document.getElementById('monthSelect');
-            const daySelect = document.getElementById('daySelect');
+        function populateDateSelector() {
+            const dateSelect = document.getElementById('dateSelect');
+            dateSelect.innerHTML = '';
             
-            // Clear existing options
-            yearSelect.innerHTML = '';
-            monthSelect.innerHTML = '';
-            daySelect.innerHTML = '';
+            // Sort dates in descending order (newest first)
+            const sortedDates = [...availableDates].sort((a, b) => 
+                new Date(b.date) - new Date(a.date)
+            );
             
-            // Get unique years, months, and days from available dates
-            const years = [...new Set(availableDates.map(d => d.year))].sort();
-            const months = [...new Set(availableDates.map(d => d.month))].sort();
-            const days = [...new Set(availableDates.map(d => d.day))].sort();
-            
-            // Populate year selector
-            years.forEach(year => {
+            sortedDates.forEach(dateInfo => {
                 const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                yearSelect.appendChild(option);
+                option.value = dateInfo.date;
+                option.textContent = `${dateInfo.month} ${dateInfo.day}, ${dateInfo.year}`;
+                dateSelect.appendChild(option);
             });
-            
-            // Populate month selector
-            months.forEach(month => {
-                const option = document.createElement('option');
-                option.value = month;
-                option.textContent = month;
-                monthSelect.appendChild(option);
-            });
-            
-            // Populate day selector
-            days.forEach(day => {
-                const option = document.createElement('option');
-                option.value = day;
-                option.textContent = day;
-                daySelect.appendChild(option);
-            });
-            
-            // Set to latest date
-            if (availableDates.length > 0) {
-                const latest = availableDates[availableDates.length - 1];
-                yearSelect.value = latest.year;
-                monthSelect.value = latest.month;
-                daySelect.value = latest.day;
-            }
         }
         
         async function loadLatestData() {
             if (availableDates.length > 0) {
-                const latest = availableDates[availableDates.length - 1];
-                await loadDataForDate(latest.year, latest.month, latest.day);
+                const latest = availableDates[0]; // First one after sorting
+                await loadDataForDate(latest);
             }
         }
         
         async function loadData() {
-            const year = document.getElementById('yearSelect').value;
-            const month = document.getElementById('monthSelect').value;
-            const day = document.getElementById('daySelect').value;
+            const selectedDate = document.getElementById('dateSelect').value;
+            const dateInfo = availableDates.find(d => d.date === selectedDate);
             
-            await loadDataForDate(year, month, day);
+            if (dateInfo) {
+                await loadDataForDate(dateInfo);
+            }
         }
         
-        async function loadDataForDate(year, month, day) {
+        async function loadDataForDate(dateInfo) {
             showLoading(true);
             hideError();
+            hideAllSections();
             
             try {
-                const filePath = `scores/${year}/${month}/${day}.tsv`;
-                const response = await fetch(filePath);
+                // Load the TSV file for original predictions
+                const tsvPath = `scores/${dateInfo.file}`;
+                const tsvResponse = await fetch(tsvPath);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                if (!tsvResponse.ok) {
+                    throw new Error(`HTTP ${tsvResponse.status}: ${tsvResponse.statusText}`);
                 }
                 
-                const tsvData = await response.text();
-                const data = parseTSV(tsvData);
-                displayData(data);
+                const tsvData = await tsvResponse.text();
+                const predictionData = parseTSV(tsvData);
+                currentData = predictionData;
+                
+                // Try to load the corresponding CSV file for performance data
+                const csvPath = `scores/${dateInfo.file.replace('.tsv', '.csv')}`;
+                let performanceData = null;
+                
+                try {
+                    const csvResponse = await fetch(csvPath);
+                    if (csvResponse.ok) {
+                        const csvData = await csvResponse.text();
+                        performanceData = parseCSV(csvData);
+                    }
+                } catch (csvError) {
+                    console.log('No performance data available yet:', csvError.message);
+                }
+                
+                displayPerformanceData(dateInfo, performanceData);
+                displaySummary(predictionData);
+                displayTable(predictionData, performanceData, dateInfo);
+                
             } catch (error) {
-                showError(`Failed to load data for ${month} ${day}, ${year}: ${error.message}`);
+                showError(`Failed to load data for ${dateInfo.month} ${dateInfo.day}, ${dateInfo.year}: ${error.message}`);
             } finally {
                 showLoading(false);
             }
+        }
+        
+        function displayPerformanceData(dateInfo, performanceData) {
+            const performanceDiv = document.getElementById('performance');
+            const performanceGrid = document.getElementById('performanceGrid');
+            
+            if (performanceData) {
+                // Display actual performance data from CSV
+                const totalStocks = currentData.length;
+                const averageScore = currentData.reduce((sum, r) => sum + r.Score, 0) / totalStocks;
+                const undervaluedCount = currentData.filter(r => r.intrinsicValuePerShareAdjusted > r.Target).length;
+                
+                // Calculate performance metrics from CSV data
+                const performanceMetrics = calculatePerformanceMetrics(currentData, performanceData);
+                
+                performanceGrid.innerHTML = `
+                    <div class="performance-item">
+                        <div class="label">Total Stocks</div>
+                        <div class="value">${totalStocks}</div>
+                    </div>
+                    <div class="performance-item">
+                        <div class="label">Avg Predicted Score</div>
+                        <div class="value">${averageScore.toFixed(2)}</div>
+                    </div>
+                    <div class="performance-item">
+                        <div class="label">Prediction Accuracy</div>
+                        <div class="value ${performanceMetrics.accuracyClass}">${performanceMetrics.accuracy}%</div>
+                    </div>
+                    <div class="performance-item">
+                        <div class="label">Avg Return</div>
+                        <div class="value ${performanceMetrics.returnClass}">${performanceMetrics.avgReturn}%</div>
+                    </div>
+                `;
+            } else {
+                // Show placeholder data when CSV is not available
+                performanceGrid.innerHTML = `
+                    <div class="performance-item">
+                        <div class="label">Total Stocks</div>
+                        <div class="value">${currentData ? currentData.length : 0}</div>
+                    </div>
+                    <div class="performance-item">
+                        <div class="label">Avg Predicted Score</div>
+                        <div class="value">${currentData ? (currentData.reduce((sum, r) => sum + r.Score, 0) / currentData.length).toFixed(2) : '0.00'}</div>
+                    </div>
+                    <div class="performance-item">
+                        <div class="label">Performance Data</div>
+                        <div class="value performance-neutral">Pending</div>
+                    </div>
+                    <div class="performance-item">
+                        <div class="label">Status</div>
+                        <div class="value performance-neutral">CSV Not Generated</div>
+                    </div>
+                `;
+            }
+            
+            performanceDiv.style.display = 'block';
         }
         
         function parseTSV(tsvData) {
@@ -331,9 +436,73 @@
             return records;
         }
         
-        function displayData(data) {
-            displaySummary(data);
-            displayTable(data);
+        function parseCSV(csvData) {
+            const lines = csvData.trim().split('\n');
+            const headers = lines[0].split(',');
+            const records = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const record = {};
+                
+                headers.forEach((header, index) => {
+                    let value = values[index] || '';
+                    
+                    // Parse numeric values
+                    if (header === 'CurrentPrice' || header === 'Return' || header === 'Accuracy') {
+                        value = parseFloat(value) || 0;
+                    }
+                    
+                    record[header] = value;
+                });
+                
+                records.push(record);
+            }
+            
+            return records;
+        }
+        
+        function calculatePerformanceMetrics(predictionData, performanceData) {
+            // Match prediction data with performance data by stock symbol
+            const matchedData = predictionData.map(pred => {
+                const perf = performanceData.find(p => p.Stock === pred.Stock);
+                return { prediction: pred, performance: perf };
+            }).filter(item => item.performance);
+            
+            if (matchedData.length === 0) {
+                return {
+                    accuracy: 0,
+                    accuracyClass: 'performance-neutral',
+                    avgReturn: 0,
+                    returnClass: 'performance-neutral'
+                };
+            }
+            
+            // Calculate accuracy (how many predictions were correct)
+            const correctPredictions = matchedData.filter(item => {
+                const pred = item.prediction;
+                const perf = item.performance;
+                
+                // Consider it correct if:
+                // - Predicted undervalued and current price > target
+                // - Predicted overvalued and current price <= target
+                const predictedUndervalued = pred.intrinsicValuePerShareAdjusted > pred.Target;
+                const actuallyUndervalued = perf.CurrentPrice > pred.Target;
+                
+                return predictedUndervalued === actuallyUndervalued;
+            }).length;
+            
+            const accuracy = (correctPredictions / matchedData.length) * 100;
+            
+            // Calculate average return
+            const avgReturn = matchedData.reduce((sum, item) => sum + item.performance.Return, 0) / matchedData.length;
+            
+            return {
+                accuracy: accuracy.toFixed(1),
+                accuracyClass: accuracy >= 70 ? 'performance-positive' : accuracy >= 50 ? 'performance-neutral' : 'performance-negative',
+                avgReturn: avgReturn.toFixed(2),
+                returnClass: avgReturn >= 0 ? 'performance-positive' : 'performance-negative'
+            };
         }
         
         function displaySummary(data) {
@@ -369,12 +538,15 @@
             summary.style.display = 'grid';
         }
         
-        function displayTable(data) {
+        function displayTable(data, performanceData, dateInfo) {
             const tbody = document.getElementById('stockTableBody');
             tbody.innerHTML = '';
             
             data.forEach(record => {
                 const row = document.createElement('tr');
+                
+                // Find corresponding performance data
+                const perf = performanceData ? performanceData.find(p => p.Stock === record.Stock) : null;
                 
                 // Add class for undervalued stocks
                 if (record.intrinsicValuePerShareAdjusted > record.Target) {
@@ -386,10 +558,25 @@
                 if (record.Score >= 0.95) scoreClass = 'score-high';
                 else if (record.Score < 0.9) scoreClass = 'score-low';
                 
+                // Determine performance class
+                let currentPrice = 'Fetching...';
+                let performance = 'Pending';
+                let currentPriceClass = 'performance-neutral';
+                let performanceClass = 'performance-neutral';
+                
+                if (perf) {
+                    currentPrice = `$${perf.CurrentPrice.toFixed(2)}`;
+                    performance = `${perf.Return >= 0 ? '+' : ''}${perf.Return.toFixed(2)}%`;
+                    currentPriceClass = perf.CurrentPrice > record.Target ? 'performance-positive' : 'performance-negative';
+                    performanceClass = perf.Return >= 0 ? 'performance-positive' : 'performance-negative';
+                }
+                
                 row.innerHTML = `
                     <td><strong>${record.Stock}</strong></td>
                     <td class="${scoreClass}">${record.Score.toFixed(3)}</td>
                     <td>$${record.Target.toFixed(2)}</td>
+                    <td class="${currentPriceClass}">${currentPrice}</td>
+                    <td class="${performanceClass}">${performance}</td>
                     <td>${record.ExDividendDate || '-'}</td>
                     <td>${record.DividendPerShare ? '$' + record.DividendPerShare.toFixed(4) : '-'}</td>
                     <td>$${record.intrinsicValuePerShareBasic.toFixed(2)}</td>
@@ -401,6 +588,13 @@
             });
             
             document.getElementById('tableContainer').style.display = 'block';
+        }
+        
+        function hideAllSections() {
+            document.getElementById('performance').style.display = 'none';
+            document.getElementById('summary').style.display = 'none';
+            document.getElementById('tableContainer').style.display = 'none';
+            document.getElementById('noData').style.display = 'none';
         }
         
         function showLoading(show) {
