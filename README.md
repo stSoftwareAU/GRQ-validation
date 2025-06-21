@@ -84,7 +84,7 @@ The web dashboard is located at `docs/index.html` and will be served by GitHub P
 - Interactive table with sorting and filtering
 - Visual indicators for stock performance
 
-**🌐 Live Dashboard**: [https://stSoftwareAU.github.io/GRQ-validation/](https://stSoftwareAU.github.io/GRQ-validation/)
+**🌐 Live Dashboard**: [https://stsoftwareau.github.io/GRQ-validation/](https://stsoftwareau.github.io/GRQ-validation/)
 
 ## TSV File Format
 
