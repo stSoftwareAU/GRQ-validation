@@ -34,27 +34,65 @@ fn main() -> Result<()> {
     info!("Starting GRQ Validation processor");
     info!("Docs path: {}", args.docs_path);
 
-    // Read the index to get the first score file
+    // Read the index to get all score files
     let index_data = read_index_json(&args.docs_path)?;
-    let first_score_entry = &index_data.scores[0];
-    let score_file_path = format!("{}/scores/{}", args.docs_path, first_score_entry.file);
+    info!("Found {} score files to process", index_data.scores.len());
 
-    info!("Processing score file: {}", score_file_path);
-    info!("Score file date: {}", first_score_entry.date);
+    let mut processed_count = 0;
+    let mut error_count = 0;
 
-    // Extract ticker codes from the score file
-    let ticker_codes = extract_ticker_codes_from_score_file(&score_file_path)?;
-    info!("Found {} ticker codes in score file", ticker_codes.len());
+    for (i, score_entry) in index_data.scores.iter().enumerate() {
+        let score_file_path = format!("{}/scores/{}", args.docs_path, score_entry.file);
 
-    // Create CSV file with market data in long format in the same directory as the score file
-    let output_path = create_market_data_long_csv_for_score_file(
-        &score_file_path,
-        &ticker_codes,
-        &first_score_entry.date,
-        None,
-    )?;
+        info!(
+            "Processing score file {}/{}: {}",
+            i + 1,
+            index_data.scores.len(),
+            score_file_path
+        );
+        info!("Score file date: {}", score_entry.date);
 
-    info!("Successfully created market data CSV: {}", output_path);
-    info!("Processing completed successfully");
+        // Extract ticker codes from the score file
+        match extract_ticker_codes_from_score_file(&score_file_path) {
+            Ok(ticker_codes) => {
+                info!("Found {} ticker codes in score file", ticker_codes.len());
+
+                // Create CSV file with market data in long format in the same directory as the score file
+                match create_market_data_long_csv_for_score_file(
+                    &score_file_path,
+                    &ticker_codes,
+                    &score_entry.date,
+                    None,
+                ) {
+                    Ok(output_path) => {
+                        info!("Successfully created market data CSV: {}", output_path);
+                        processed_count += 1;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create CSV for {}: {}", score_file_path, e);
+                        error_count += 1;
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to read ticker codes from {}: {}",
+                    score_file_path,
+                    e
+                );
+                error_count += 1;
+            }
+        }
+    }
+
+    info!(
+        "Processing completed: {} successful, {} errors",
+        processed_count, error_count
+    );
+
+    if error_count > 0 {
+        log::warn!("Some files had errors, but processing continued");
+    }
+
     Ok(())
 }

@@ -193,11 +193,8 @@ pub fn create_market_data_csv(
     for symbol in symbols {
         match read_market_data(symbol) {
             Ok(market_data) => {
-                match filter_market_data_by_date_range(
-                    &market_data,
-                    score_file_date,
-                    &end_date_str,
-                ) {
+                match filter_market_data_by_date_range(&market_data, score_file_date, &end_date_str)
+                {
                     Ok(filtered_data) => {
                         for (date, _) in &filtered_data {
                             all_dates.insert(date.clone());
@@ -282,14 +279,11 @@ pub fn create_market_data_long_csv(
             Ok(md) => md,
             Err(_) => continue, // skip missing data
         };
-        let filtered = match filter_market_data_by_date_range(
-            &market_data,
-            score_file_date,
-            &end_date_str,
-        ) {
-            Ok(f) => f,
-            Err(_) => continue,
-        };
+        let filtered =
+            match filter_market_data_by_date_range(&market_data, score_file_date, &end_date_str) {
+                Ok(f) => f,
+                Err(_) => continue,
+            };
         for (date, _close) in filtered {
             if let Some(day) = market_data.time_series_daily.get(&date) {
                 writer.write_record([
