@@ -16,10 +16,45 @@
     },
     {
       "year": "2025",
+      "month": "January",
+      "day": "15",
+      "file": "2025/January/15.tsv",
+      "date": "2025-01-15"
+    },
+    {
+      "year": "2025",
+      "month": "February",
+      "day": "15",
+      "file": "2025/February/15.tsv",
+      "date": "2025-02-15"
+    },
+    {
+      "year": "2025",
+      "month": "March",
+      "day": "5",
+      "file": "2025/March/5.tsv",
+      "date": "2025-03-05"
+    },
+    {
+      "year": "2025",
       "month": "March",
       "day": "21",
       "file": "2025/March/21.tsv",
       "date": "2025-03-21"
+    },
+    {
+      "year": "2025",
+      "month": "April",
+      "day": "15",
+      "file": "2025/April/15.tsv",
+      "date": "2025-04-15"
+    },
+    {
+      "year": "2025",
+      "month": "May",
+      "day": "15",
+      "file": "2025/May/15.tsv",
+      "date": "2025-05-15"
     },
     {
       "year": "2025",
