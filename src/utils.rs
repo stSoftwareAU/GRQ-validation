@@ -1,10 +1,11 @@
 use crate::models::IndexData;
+use crate::models::StockRecord;
 use anyhow::Result;
 
 #[allow(dead_code)]
 pub fn validate_stock_symbol(symbol: &str) -> bool {
     // Basic validation for stock symbols
-    if symbol.is_empty() || symbol.len() > 10 {
+    if symbol.is_empty() || symbol.len() > 30 {
         return false;
     }
 
@@ -52,6 +53,46 @@ pub fn get_market_data_path(ticker: &str) -> String {
     )
 }
 
+#[allow(dead_code)]
+pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
+    use csv::ReaderBuilder;
+    use std::fs::File;
+
+    let file = File::open(file_path)?;
+    let mut reader = ReaderBuilder::new()
+        .delimiter(b'\t')
+        .has_headers(true)
+        .from_reader(file);
+
+    let mut stock_records = Vec::new();
+
+    for result in reader.deserialize() {
+        let record: StockRecord = result?;
+        stock_records.push(record);
+    }
+
+    Ok(stock_records)
+}
+
+#[allow(dead_code)]
+pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<String>> {
+    let stock_records = read_tsv_score_file(file_path)?;
+    let ticker_codes: Vec<String> = stock_records
+        .into_iter()
+        .map(|record| record.stock)
+        .collect();
+
+    Ok(ticker_codes)
+}
+
+#[allow(dead_code)]
+pub fn extract_symbol_from_ticker(ticker: &str) -> String {
+    match ticker.rsplit_once(':') {
+        Some((_, symbol)) => symbol.to_string(),
+        None => ticker.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,7 +103,7 @@ mod tests {
         assert!(validate_stock_symbol("NYSE:AAPL"));
         assert!(validate_stock_symbol("BRK.A"));
         assert!(!validate_stock_symbol(""));
-        assert!(!validate_stock_symbol("TOOLONGSTOCKSYMBOL"));
+        assert!(!validate_stock_symbol("THISISAREALLYLONGSTOCKSYMBOLTHATEXCEEDSTHELIMIT"));
     }
 
     #[test]
@@ -127,5 +168,75 @@ mod tests {
             get_market_data_path("TSLA"),
             "../GRQ-shareprices2025Q1/data/T/TSLA.json"
         );
+    }
+
+    #[test]
+    fn test_read_tsv_score_file() {
+        let result = read_tsv_score_file("docs/scores/2025/June/20.tsv");
+        assert!(
+            result.is_ok(),
+            "Failed to read TSV file: {:?}",
+            result.err()
+        );
+
+        let stock_records = result.unwrap();
+        assert!(!stock_records.is_empty());
+
+        // Check that we have the expected number of records (19 in the file)
+        assert_eq!(stock_records.len(), 19);
+
+        // Check first record
+        let first_record = &stock_records[0];
+        assert_eq!(first_record.stock, "NYSE:SEM");
+        assert_eq!(first_record.score, 1.0);
+        assert_eq!(first_record.target, 22.63);
+        assert_eq!(
+            first_record.ex_dividend_date,
+            Some("2025-05-15".to_string())
+        );
+        assert_eq!(first_record.dividend_per_share, Some(0.09375));
+
+        // Check that all records have valid stock symbols
+        for (i, record) in stock_records.iter().enumerate() {
+            if !validate_stock_symbol(&record.stock) {
+                println!("Invalid stock symbol at row {}: {}", i + 2, record.stock);
+            }
+            assert!(validate_stock_symbol(&record.stock));
+        }
+    }
+
+    #[test]
+    fn test_extract_ticker_codes_from_score_file() {
+        let result = extract_ticker_codes_from_score_file("docs/scores/2025/June/20.tsv");
+        assert!(
+            result.is_ok(),
+            "Failed to read TSV file: {:?}",
+            result.err()
+        );
+
+        let ticker_codes = result.unwrap();
+        assert!(!ticker_codes.is_empty());
+
+        // Check that we have the expected number of ticker codes (19 in the file)
+        assert_eq!(ticker_codes.len(), 19);
+
+        // Check that we have some expected ticker codes
+        assert!(ticker_codes.contains(&"NYSE:SEM".to_string()));
+        assert!(ticker_codes.contains(&"NASDAQ:PPC".to_string()));
+        assert!(ticker_codes.contains(&"NYSE:OI".to_string()));
+
+        // Check that all ticker codes are valid
+        for ticker in &ticker_codes {
+            assert!(validate_stock_symbol(ticker));
+        }
+    }
+
+    #[test]
+    fn test_extract_symbol_from_ticker() {
+        assert_eq!(extract_symbol_from_ticker("NASDAQ:CALM"), "CALM");
+        assert_eq!(extract_symbol_from_ticker("NYSE:SEM"), "SEM");
+        assert_eq!(extract_symbol_from_ticker("SEM"), "SEM");
+        assert_eq!(extract_symbol_from_ticker(""), "");
+        assert_eq!(extract_symbol_from_ticker("LON:VOD.L"), "VOD.L");
     }
 }

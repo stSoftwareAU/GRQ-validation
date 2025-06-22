@@ -2,13 +2,21 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StockRecord {
+    #[serde(rename = "Stock")]
     pub stock: String,
+    #[serde(rename = "Score")]
     pub score: f64,
+    #[serde(rename = "Target")]
     pub target: f64,
+    #[serde(rename = "ExDividendDate")]
     pub ex_dividend_date: Option<String>,
+    #[serde(rename = "DividendPerShare")]
     pub dividend_per_share: Option<f64>,
+    #[serde(rename = "Notes")]
     pub notes: Option<String>,
+    #[serde(rename = "intrinsicValuePerShareBasic")]
     pub intrinsic_value_per_share_basic: Option<f64>,
+    #[serde(rename = "intrinsicValuePerShareAdjusted")]
     pub intrinsic_value_per_share_adjusted: Option<f64>,
 }
 
@@ -30,8 +38,16 @@ impl StockRecord {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScoreEntry {
+    #[serde(rename = "year")]
+    pub year: String,
+    #[serde(rename = "month")]
+    pub month: String,
+    #[serde(rename = "day")]
+    pub day: String,
+    #[serde(rename = "file")]
+    pub file: String,
+    #[serde(rename = "date")]
     pub date: String,
-    pub path: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,24 +107,33 @@ mod tests {
     #[test]
     fn test_score_entry_creation() {
         let entry = ScoreEntry {
+            year: "2025".to_string(),
+            month: "June".to_string(),
+            day: "20".to_string(),
+            file: "2025/June/20.tsv".to_string(),
             date: "2025-06-20".to_string(),
-            path: "2025/June/20.tsv".to_string(),
         };
 
         assert_eq!(entry.date, "2025-06-20");
-        assert_eq!(entry.path, "2025/June/20.tsv");
+        assert_eq!(entry.file, "2025/June/20.tsv");
     }
 
     #[test]
     fn test_index_data_creation() {
         let entry1 = ScoreEntry {
+            year: "2025".to_string(),
+            month: "June".to_string(),
+            day: "20".to_string(),
+            file: "2025/June/20.tsv".to_string(),
             date: "2025-06-20".to_string(),
-            path: "2025/June/20.tsv".to_string(),
         };
 
         let entry2 = ScoreEntry {
+            year: "2025".to_string(),
+            month: "June".to_string(),
+            day: "21".to_string(),
+            file: "2025/June/21.tsv".to_string(),
             date: "2025-06-21".to_string(),
-            path: "2025/June/21.tsv".to_string(),
         };
 
         let index_data = IndexData {

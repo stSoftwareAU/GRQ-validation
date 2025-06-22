@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
 description = "A Rust program to process daily stock scores from TSV files"
 
+[lib]
+name = "grq_validation"
+path = "src/lib.rs"
+
 [dependencies]
 # For CSV/TSV processing
 csv = "1.3"
