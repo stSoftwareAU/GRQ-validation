@@ -2,6 +2,13 @@
   "scores": [
     {
       "year": "2025",
+      "month": "March",
+      "day": "21",
+      "file": "2025/March/21.tsv",
+      "date": "2025-03-21"
+    },
+    {
+      "year": "2025",
       "month": "June",
       "day": "20",
       "file": "2025/June/20.tsv",
