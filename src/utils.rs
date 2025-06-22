@@ -103,7 +103,9 @@ mod tests {
         assert!(validate_stock_symbol("NYSE:AAPL"));
         assert!(validate_stock_symbol("BRK.A"));
         assert!(!validate_stock_symbol(""));
-        assert!(!validate_stock_symbol("THISISAREALLYLONGSTOCKSYMBOLTHATEXCEEDSTHELIMIT"));
+        assert!(!validate_stock_symbol(
+            "THISISAREALLYLONGSTOCKSYMBOLTHATEXCEEDSTHELIMIT"
+        ));
     }
 
     #[test]
