@@ -147,27 +147,30 @@
         .performance-neutral {
             color: #6c757d;
         }
+        .clickable-stock {
+            cursor: pointer;
+            color: #007bff;
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+        .clickable-stock:hover {
+            color: #0056b3;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>GRQ Stock Prediction Validation</h1>
+            <h1>GRQ Validation Dashboard</h1>
             <p>Validating AI predictions against 90-day targets and 10% annual cost of capital</p>
         </div>
         
         <div class="content">
             <div class="controls">
-                <div class="control-group">
-                    <label for="scoreFileSelect">Score File:</label>
-                    <select id="scoreFileSelect">
-                        <option value="">Loading...</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label for="costOfCapital">Cost of Capital (% per year):</label>
-                    <input type="number" id="costOfCapital" value="10" min="0" max="100" step="0.1">
-                </div>
+                <label for="scoreFileSelect">Score File:</label>
+                <select id="scoreFileSelect">
+                    <option value="">Select a score file...</option>
+                </select>
             </div>
 
             <div id="loading" class="loading">
@@ -182,24 +185,16 @@
             <div id="summary" style="display: none;">
                 <div class="summary-stats">
                     <div class="stat-card">
-                        <h3>Average Target Gain</h3>
-                        <div class="value" id="avgTargetGain">-</div>
-                        <div class="subtitle">90-day prediction</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Current Performance</h3>
-                        <div class="value" id="currentPerformance">-</div>
-                        <div class="subtitle">vs target</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Cost of Capital</h3>
-                        <div class="value" id="costOfCapitalDisplay">-</div>
-                        <div class="subtitle">90-day equivalent</div>
-                    </div>
-                    <div class="stat-card">
                         <h3>Days Elapsed</h3>
                         <div class="value" id="daysElapsed">-</div>
-                        <div class="subtitle">since prediction</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Stocks Tracked</h3>
+                        <div class="value" id="stocksTracked">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Average Performance</h3>
+                        <div class="value" id="avgPerformance">-</div>
                     </div>
                 </div>
 
@@ -213,11 +208,10 @@
                         <thead>
                             <tr>
                                 <th>Stock</th>
-                                <th>Target Price</th>
+                                <th>Buy Price</th>
                                 <th>Current Price</th>
-                                <th>Target Gain (%)</th>
-                                <th>Current Gain (%)</th>
-                                <th>Progress</th>
+                                <th>Gain/Loss (%)</th>
+                                <th>Progress vs Cost of Capital</th>
                             </tr>
                         </thead>
                         <tbody id="stockTableBody">
@@ -231,32 +225,29 @@
     <script>
         class GRQValidator {
             constructor() {
-                this.scoreData = null;
-                this.marketData = null;
-                this.selectedScoreFile = null;
-                this.costOfCapital = 10; // 10% per year
+                this.scoreData = [];
+                this.marketData = {};
+                this.costOfCapital = 10; // 10% annual cost of capital
+                this.selectedFile = '';
+                this.filteredStocks = [];
                 this.chart = null;
-                this.scoreFileDates = {}; // Map file path to date
                 
-                this.initializeEventListeners();
-                this.loadScoreFiles();
+                this.init();
             }
 
-            initializeEventListeners() {
+            async init() {
+                await this.loadIndex();
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
                 document.getElementById('scoreFileSelect').addEventListener('change', (e) => {
-                    this.selectedScoreFile = e.target.value;
-                    if (this.selectedScoreFile) {
-                        this.loadData();
-                    }
-                });
-
-                document.getElementById('costOfCapital').addEventListener('input', (e) => {
-                    this.costOfCapital = parseFloat(e.target.value) || 10;
-                    this.updateDisplay();
+                    this.selectedFile = e.target.value;
+                    this.loadScoreFile();
                 });
             }
 
-            async loadScoreFiles() {
+            async loadIndex() {
                 try {
                     const response = await fetch('scores/index.json');
                     const indexData = await response.json();
@@ -269,28 +260,24 @@
                         option.value = score.file;
                         option.textContent = `${score.date} (${score.month} ${score.day})`;
                         select.appendChild(option);
-                        this.scoreFileDates[score.file] = score.date; // Store the date
                     });
 
                     if (indexData.scores.length > 0) {
-                        this.selectedScoreFile = indexData.scores[0].file;
-                        select.value = this.selectedScoreFile;
-                        this.loadData();
+                        this.selectedFile = indexData.scores[0].file;
+                        select.value = this.selectedFile;
+                        await this.loadScoreFile();
                     }
                 } catch (error) {
                     this.showError('Failed to load score files: ' + error.message);
                 }
             }
 
-            async loadData() {
+            async loadScoreFile() {
                 this.showLoading();
                 
                 try {
-                    await Promise.all([
-                        this.loadScoreData(),
-                        this.loadMarketData()
-                    ]);
-                    
+                    await this.loadScoreData();
+                    await this.loadMarketData();
                     this.updateDisplay();
                 } catch (error) {
                     this.showError('Failed to load data: ' + error.message);
@@ -298,32 +285,27 @@
             }
 
             async loadScoreData() {
-                const response = await fetch(`scores/${this.selectedScoreFile}`);
+                const response = await fetch(`scores/${this.selectedFile}`);
                 const text = await response.text();
                 
-                const lines = text.split('\n').filter(line => line.trim());
+                const lines = text.trim().split('\n');
                 const headers = lines[0].split('\t');
                 
                 this.scoreData = lines.slice(1).map(line => {
                     const values = line.split('\t');
-                    const stock = values[0];
-                    const score = parseFloat(values[1]);
-                    const target = parseFloat(values[2]);
-                    const exDividendDate = values[3] || null;
-                    const dividendPerShare = parseFloat(values[4]) || 0;
-                    
                     return {
-                        stock,
-                        score,
-                        target,
-                        exDividendDate,
-                        dividendPerShare
+                        stock: values[0],
+                        score: parseFloat(values[1]),
+                        target: parseFloat(values[2])
                     };
                 });
+                
+                // Initialize filtered stocks
+                this.filteredStocks = [...this.scoreData];
             }
 
             async loadMarketData() {
-                const csvFile = this.selectedScoreFile.replace('.tsv', '.csv');
+                const csvFile = this.selectedFile.replace('.tsv', '.csv');
                 
                 try {
                     const response = await fetch(`scores/${csvFile}`);
@@ -379,52 +361,58 @@
 
                 this.hideMessages();
                 this.updateSummaryStats();
-                this.updateChart();
                 this.updateStockTable();
+                this.updateChart();
             }
 
             updateSummaryStats() {
-                const scoreDateStr = this.scoreFileDates[this.selectedScoreFile];
+                // Extract date from file path (e.g., "2025/March/21.tsv" -> "2025-03-21")
+                const pathParts = this.selectedFile.split('/');
+                const year = pathParts[0];
+                const month = pathParts[1];
+                const day = pathParts[2].replace('.tsv', '');
+                
+                // Convert month name to number
+                const monthMap = {
+                    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                    'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                };
+                
+                const scoreDateStr = `${year}-${monthMap[month]}-${day.padStart(2, '0')}`;
                 const scoreDate = new Date(scoreDateStr);
                 const today = new Date();
                 const daysElapsed = Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
 
-                // Calculate average target gain
-                const avgTargetGain = this.scoreData.reduce((sum, stock) => {
-                    const marketData = this.marketData[stock.stock];
-                    if (marketData && marketData.length > 0) {
-                        const initialPrice = marketData[0].high; // Buy at high on score date
-                        const targetGain = ((stock.target - initialPrice) / initialPrice) * 100;
-                        return sum + targetGain;
-                    }
-                    return sum;
-                }, 0) / this.scoreData.length;
-
-                // Calculate current performance
-                const currentPerformance = this.scoreData.reduce((sum, stock) => {
-                    const marketData = this.marketData[stock.stock];
-                    if (marketData && marketData.length > 0) {
-                        const initialPrice = marketData[0].high; // Buy at high on score date
-                        const currentPrice = marketData[marketData.length - 1].low; // Use low for subsequent days
-                        const actualGain = ((currentPrice - initialPrice) / initialPrice) * 100;
-                        return sum + actualGain;
-                    }
-                    return sum;
-                }, 0) / this.scoreData.length;
-
-                // Cost of capital for 90 days
+                // Calculate 90-day cost of capital equivalent
                 const costOfCapital90Days = (Math.pow(1 + this.costOfCapital / 100, 90 / 365) - 1) * 100;
 
-                document.getElementById('avgTargetGain').textContent = avgTargetGain.toFixed(2) + '%';
-                document.getElementById('currentPerformance').textContent = currentPerformance.toFixed(2) + '%';
-                document.getElementById('costOfCapitalDisplay').textContent = costOfCapital90Days.toFixed(2) + '%';
+                // Calculate average performance
+                let totalGain = 0;
+                let validStocks = 0;
+                
+                this.scoreData.forEach(stock => {
+                    const marketData = this.marketData[stock.stock];
+                    if (marketData && marketData.length > 0) {
+                        const initialPrice = marketData[0].high;
+                        const currentPrice = marketData[marketData.length - 1].close;
+                        const gain = ((currentPrice - initialPrice) / initialPrice) * 100;
+                        totalGain += gain;
+                        validStocks++;
+                    }
+                });
+
+                const currentPerformance = validStocks > 0 ? totalGain / validStocks : 0;
+
                 document.getElementById('daysElapsed').textContent = daysElapsed;
+                document.getElementById('stocksTracked').textContent = this.scoreData.length;
+                document.getElementById('avgPerformance').textContent = currentPerformance.toFixed(2) + '%';
 
                 // Color coding
-                const currentEl = document.getElementById('currentPerformance');
+                const currentEl = document.getElementById('avgPerformance');
                 if (currentPerformance > costOfCapital90Days) {
                     currentEl.className = 'value performance-positive';
-                } else if (currentPerformance < costOfCapital90Days) {
+                } else if (currentPerformance < 0) {
                     currentEl.className = 'value performance-negative';
                 } else {
                     currentEl.className = 'value performance-neutral';
@@ -434,171 +422,236 @@
             updateChart() {
                 const ctx = document.getElementById('performanceChart').getContext('2d');
                 
+                // Destroy existing chart if it exists
                 if (this.chart) {
                     this.chart.destroy();
                 }
 
-                const scoreDateStr = this.scoreFileDates[this.selectedScoreFile];
-                const scoreDate = new Date(scoreDateStr);
-                const costOfCapital90Days = (Math.pow(1 + this.costOfCapital / 100, 90 / 365) - 1) * 100;
-
                 // Prepare data for chart
-                const dates = [];
-                const targetLine = [];
-                const costOfCapitalLine = [];
-                const actualPerformance = [];
-
-                // Generate data points for 90 days
-                for (let i = 0; i <= 90; i++) {
-                    const date = new Date(scoreDate);
-                    date.setDate(date.getDate() + i);
-                    dates.push(date);
-
-                    // Target line (linear progression to target)
-                    const targetProgress = (i / 90) * 100; // Assuming average target is 100%
-                    targetLine.push(targetProgress);
-
-                    // Cost of capital line (compound growth)
-                    const costOfCapitalProgress = (Math.pow(1 + this.costOfCapital / 100, i / 365) - 1) * 100;
-                    costOfCapitalLine.push(costOfCapitalProgress);
-
-                    // Actual performance (if we have data)
-                    if (i <= this.getDaysElapsed()) {
-                        const actual = this.calculateActualPerformance(i);
-                        actualPerformance.push(actual);
-                    } else {
-                        actualPerformance.push(null);
-                    }
+                const chartData = this.prepareChartData();
+                
+                if (chartData.labels.length === 0) {
+                    return;
                 }
 
                 this.chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: dates,
-                        datasets: [
-                            {
-                                label: 'Target Performance',
-                                data: targetLine,
-                                borderColor: '#28a745',
-                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                                borderWidth: 2,
-                                fill: false
-                            },
-                            {
-                                label: 'Cost of Capital (10% annual)',
-                                data: costOfCapitalLine,
-                                borderColor: '#dc3545',
-                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                                borderWidth: 2,
-                                fill: false
-                            },
-                            {
-                                label: 'Actual Performance',
-                                data: actualPerformance,
-                                borderColor: '#007bff',
-                                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                                borderWidth: 3,
-                                fill: false,
-                                pointRadius: 4
-                            }
-                        ]
+                        labels: chartData.labels,
+                        datasets: chartData.datasets
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         scales: {
                             x: {
-                                type: 'time',
-                                time: {
-                                    unit: 'day'
-                                },
                                 title: {
                                     display: true,
-                                    text: 'Days Since Prediction'
+                                    text: 'Date'
+                                },
+                                ticks: {
+                                    callback: function(value, index) {
+                                        const label = this.getLabelForValue(value);
+                                        return label || '';
+                                    }
                                 }
                             },
                             y: {
                                 title: {
                                     display: true,
                                     text: 'Performance (%)'
+                                },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toFixed(1) + '%';
+                                    }
                                 }
                             }
                         },
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Stock Performance vs Targets and Cost of Capital'
+                                text: 'Portfolio Performance vs Cost of Capital'
                             },
                             legend: {
+                                display: true,
                                 position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const index = context[0].dataIndex;
+                                        const sortedDates = Array.from(new Set(
+                                            context[0].dataset.data.map((_, i) => i)
+                                        )).sort();
+                                        const date = new Date(sortedDates[index]);
+                                        return date.toLocaleDateString('en-US', { 
+                                            weekday: 'short',
+                                            month: 'short', 
+                                            day: 'numeric',
+                                            year: 'numeric'
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
                 });
             }
 
-            calculateActualPerformance(daysElapsed) {
-                if (!this.marketData) return null;
+            prepareChartData() {
+                const labels = [];
+                const datasets = [];
 
-                let totalGain = 0;
-                let validStocks = 0;
-
-                this.scoreData.forEach(stock => {
+                // Get all unique dates from market data
+                const allDates = new Set();
+                this.filteredStocks.forEach(stock => {
                     const marketData = this.marketData[stock.stock];
-                    if (marketData && marketData.length > 0) {
-                        const initialPrice = marketData[0].high; // Buy at high on score date
-                        const currentPrice = marketData[Math.min(daysElapsed, marketData.length - 1)].low; // Use low for subsequent days
-                        const gain = ((currentPrice - initialPrice) / initialPrice) * 100;
-                        totalGain += gain;
-                        validStocks++;
+                    if (marketData) {
+                        marketData.forEach(entry => {
+                            allDates.add(entry.date.toISOString().split('T')[0]); // Convert to YYYY-MM-DD string
+                        });
                     }
                 });
 
-                return validStocks > 0 ? totalGain / validStocks : null;
-            }
+                // Sort dates
+                const sortedDates = Array.from(allDates).sort();
+                
+                // Format dates for display (show every 7th date to avoid crowding)
+                const formattedLabels = sortedDates.map((date, index) => {
+                    if (index % 7 === 0 || index === sortedDates.length - 1) {
+                        const dateObj = new Date(date);
+                        return dateObj.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric' 
+                        });
+                    }
+                    return '';
+                });
+                
+                labels.push(...formattedLabels);
 
-            getDaysElapsed() {
-                const scoreDateStr = this.scoreFileDates[this.selectedScoreFile];
-                const scoreDate = new Date(scoreDateStr);
-                const today = new Date();
-                return Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
+                // Calculate aggregated portfolio performance
+                const portfolioData = [];
+
+                sortedDates.forEach(date => {
+                    let totalGain = 0;
+                    let validStocks = 0;
+
+                    this.filteredStocks.forEach(stock => {
+                        const marketData = this.marketData[stock.stock];
+                        if (marketData) {
+                            const entry = marketData.find(e => e.date.toISOString().split('T')[0] === date);
+                            if (entry) {
+                                const initialPrice = marketData[0].high;
+                                const performance = ((entry.close - initialPrice) / initialPrice) * 100;
+                                totalGain += performance;
+                                validStocks++;
+                            }
+                        }
+                    });
+
+                    const avgPerformance = validStocks > 0 ? totalGain / validStocks : null;
+                    portfolioData.push(avgPerformance);
+                });
+
+                // Create portfolio dataset
+                datasets.push({
+                    label: this.filteredStocks.length === this.scoreData.length ? 
+                           'Portfolio Performance' : 
+                           `Filtered Stocks (${this.filteredStocks.length})`,
+                    data: portfolioData,
+                    borderColor: '#36A2EB',
+                    backgroundColor: '#36A2EB20',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                });
+
+                // Add cost of capital reference line
+                const costOfCapitalData = sortedDates.map((date, index) => {
+                    const daysElapsed = index;
+                    return (Math.pow(1 + this.costOfCapital / 100, daysElapsed / 365) - 1) * 100;
+                });
+
+                datasets.push({
+                    label: 'Cost of Capital (10% annual)',
+                    data: costOfCapitalData,
+                    borderColor: '#FF6384',
+                    backgroundColor: '#FF638420',
+                    borderWidth: 2,
+                    fill: false,
+                    borderDash: [5, 5],
+                    tension: 0.1,
+                    pointRadius: 0
+                });
+
+                return { labels, datasets };
             }
 
             updateStockTable() {
                 const tbody = document.getElementById('stockTableBody');
                 tbody.innerHTML = '';
 
-                this.scoreData.forEach(stock => {
+                // Calculate 90-day cost of capital
+                const costOfCapital90Days = (Math.pow(1 + this.costOfCapital / 100, 90 / 365) - 1) * 100;
+
+                this.filteredStocks.forEach(stock => {
                     const row = document.createElement('tr');
                     const marketData = this.marketData[stock.stock];
                     
                     if (marketData && marketData.length > 0) {
                         const initialPrice = marketData[0].high; // Buy at high on score date
-                        const currentPrice = marketData[marketData.length - 1].low; // Use low for subsequent days
-                        const targetGain = ((stock.target - initialPrice) / initialPrice) * 100;
-                        const currentGain = ((currentPrice - initialPrice) / initialPrice) * 100;
-                        const progress = (currentGain / targetGain) * 100;
+                        const currentPrice = marketData[marketData.length - 1].close; // Use close for current price
+                        const gain = ((currentPrice - initialPrice) / initialPrice) * 100;
+                        
+                        // Calculate progress vs cost of capital
+                        const progressVsCostOfCapital = gain - costOfCapital90Days;
+                        let progressText, progressClass;
+                        
+                        if (progressVsCostOfCapital >= 0) {
+                            progressText = `+${progressVsCostOfCapital.toFixed(1)}%`;
+                            progressClass = 'performance-positive';
+                        } else {
+                            progressText = `${progressVsCostOfCapital.toFixed(1)}%`;
+                            progressClass = 'performance-negative';
+                        }
 
                         row.innerHTML = `
-                            <td><strong>${stock.stock}</strong></td>
-                            <td>$${stock.target.toFixed(2)}</td>
+                            <td><strong class="clickable-stock" data-stock="${stock.stock}">${stock.stock}</strong></td>
+                            <td>$${initialPrice.toFixed(2)}</td>
                             <td>$${currentPrice.toFixed(2)}</td>
-                            <td class="${targetGain >= 0 ? 'performance-positive' : 'performance-negative'}">${targetGain.toFixed(2)}%</td>
-                            <td class="${currentGain >= 0 ? 'performance-positive' : 'performance-negative'}">${currentGain.toFixed(2)}%</td>
-                            <td class="${progress >= 100 ? 'performance-positive' : progress >= 0 ? 'performance-neutral' : 'performance-negative'}">${progress.toFixed(1)}%</td>
+                            <td class="${gain >= 0 ? 'performance-positive' : 'performance-negative'}">${gain.toFixed(2)}%</td>
+                            <td class="${progressClass}">${progressText}</td>
                         `;
                     } else {
                         row.innerHTML = `
-                            <td><strong>${stock.stock}</strong></td>
-                            <td>$${stock.target.toFixed(2)}</td>
+                            <td><strong class="clickable-stock" data-stock="${stock.stock}">${stock.stock}</strong></td>
                             <td>No data</td>
-                            <td>-</td>
+                            <td>No data</td>
                             <td>-</td>
                             <td>-</td>
                         `;
                     }
 
                     tbody.appendChild(row);
+                });
+
+                // Add click handlers for stock selection
+                document.querySelectorAll('.clickable-stock').forEach(element => {
+                    element.addEventListener('click', (e) => {
+                        const stockSymbol = e.target.dataset.stock;
+                        
+                        if (this.filteredStocks.length === 1 && this.filteredStocks[0].stock === stockSymbol) {
+                            // If only this stock is selected, show all stocks (portfolio)
+                            this.filterStocks('');
+                        } else {
+                            // Select this specific stock
+                            this.filterStocks(stockSymbol);
+                        }
+                    });
                 });
             }
 
@@ -629,6 +682,38 @@
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('noData').style.display = 'none';
                 document.getElementById('summary').style.display = 'block';
+            }
+
+            getDaysElapsed() {
+                // Extract date from file path (e.g., "2025/March/21.tsv" -> "2025-03-21")
+                const pathParts = this.selectedFile.split('/');
+                const year = pathParts[0];
+                const month = pathParts[1];
+                const day = pathParts[2].replace('.tsv', '');
+                
+                // Convert month name to number
+                const monthMap = {
+                    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                    'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                };
+                
+                const scoreDateStr = `${year}-${monthMap[month]}-${day.padStart(2, '0')}`;
+                const scoreDate = new Date(scoreDateStr);
+                const today = new Date();
+                return Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
+            }
+
+            filterStocks(filter) {
+                if (!filter.trim()) {
+                    this.filteredStocks = [...this.scoreData];
+                } else {
+                    this.filteredStocks = this.scoreData.filter(stock => 
+                        stock.stock.toLowerCase().includes(filter.toLowerCase())
+                    );
+                }
+                this.updateStockTable();
+                this.updateChart();
             }
         }
 
