@@ -1,6 +1,20 @@
 {
   "scores": [
     {
+      "year": "2024",
+      "month": "November",
+      "day": "15",
+      "file": "2024/November/15.tsv",
+      "date": "2024-11-15"
+    },
+    {
+      "year": "2024",
+      "month": "December",
+      "day": "15",
+      "file": "2024/December/15.tsv",
+      "date": "2024-12-15"
+    },
+    {
       "year": "2025",
       "month": "March",
       "day": "21",
