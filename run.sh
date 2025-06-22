@@ -3,14 +3,14 @@ set -e
 
 # Configuration
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="$REPO_DIR/run.log"
+
 SCRIPT_NAME="${BASH_SOURCE[0]##*/}"
 PID_FILE="$REPO_DIR/.${SCRIPT_NAME/.sh/.pid}"
 MAX_STALE_SECONDS=14400 # Four hours
 
 # Logging function
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
 }
 
 # Check if already running using PID-based locking
