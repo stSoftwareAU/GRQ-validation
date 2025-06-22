@@ -7,6 +7,9 @@ cargo clean
 echo "📦 Updating dependencies..."
 cargo update
 
+echo "🪄 Auto-formatting code..."
+cargo fmt --all
+
 echo "🔍 Checking code formatting..."
 cargo fmt --all -- --check
 

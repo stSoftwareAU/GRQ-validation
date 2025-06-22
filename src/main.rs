@@ -2,6 +2,9 @@ use anyhow::Result;
 use clap::Parser;
 use log::info;
 
+mod models;
+mod utils;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
