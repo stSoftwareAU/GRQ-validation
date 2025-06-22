@@ -37,6 +37,48 @@ impl StockRecord {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct MarketDataMeta {
+    #[serde(rename = "1. Information")]
+    pub information: String,
+    #[serde(rename = "2. Symbol")]
+    pub symbol: String,
+    #[serde(rename = "3. Last Refreshed")]
+    pub last_refreshed: String,
+    #[serde(rename = "4. Output Size")]
+    pub output_size: String,
+    #[serde(rename = "5. Time Zone")]
+    pub time_zone: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DailyData {
+    #[serde(rename = "1. open")]
+    pub open: String,
+    #[serde(rename = "2. high")]
+    pub high: String,
+    #[serde(rename = "3. low")]
+    pub low: String,
+    #[serde(rename = "4. close")]
+    pub close: String,
+    #[serde(rename = "5. adjusted close")]
+    pub adjusted_close: String,
+    #[serde(rename = "6. volume")]
+    pub volume: String,
+    #[serde(rename = "7. dividend amount")]
+    pub dividend_amount: String,
+    #[serde(rename = "8. split coefficient")]
+    pub split_coefficient: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MarketData {
+    #[serde(rename = "Meta Data")]
+    pub meta_data: MarketDataMeta,
+    #[serde(rename = "Time Series (Daily)")]
+    pub time_series_daily: std::collections::HashMap<String, DailyData>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ScoreEntry {
     #[serde(rename = "year")]
     pub year: String,

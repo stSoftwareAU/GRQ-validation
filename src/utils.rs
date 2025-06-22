@@ -1,6 +1,10 @@
 use crate::models::IndexData;
+use crate::models::MarketData;
 use crate::models::StockRecord;
 use anyhow::Result;
+use chrono::{Duration, NaiveDate};
+use std::collections::HashMap;
+use std::path::Path;
 
 #[allow(dead_code)]
 pub fn validate_stock_symbol(symbol: &str) -> bool {
@@ -91,6 +95,235 @@ pub fn extract_symbol_from_ticker(ticker: &str) -> String {
         Some((_, symbol)) => symbol.to_string(),
         None => ticker.to_string(),
     }
+}
+
+#[allow(dead_code)]
+pub fn read_market_data(symbol: &str) -> Result<MarketData> {
+    use std::fs::File;
+
+    let first_letter = symbol.chars().next().unwrap_or('X').to_uppercase();
+    let market_data_path = format!(
+        "../GRQ-shareprices2025Q1/data/{}/{}.json",
+        first_letter, symbol
+    );
+
+    let file = File::open(&market_data_path)?;
+    let market_data: MarketData = serde_json::from_reader(file)?;
+
+    Ok(market_data)
+}
+
+#[allow(dead_code)]
+pub fn filter_market_data_by_date_range(
+    market_data: &MarketData,
+    start_date: &str,
+    end_date: &str,
+) -> Result<Vec<(String, f64)>> {
+    let start = NaiveDate::parse_from_str(start_date, "%Y-%m-%d")?;
+    let end = NaiveDate::parse_from_str(end_date, "%Y-%m-%d")?;
+
+    let mut filtered_data = Vec::new();
+
+    for (date_str, daily_data) in &market_data.time_series_daily {
+        if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+            if date >= start && date <= end {
+                if let Ok(close_price) = daily_data.close.parse::<f64>() {
+                    filtered_data.push((date_str.clone(), close_price));
+                }
+            }
+        }
+    }
+
+    // Sort by date (oldest first)
+    filtered_data.sort_by(|a, b| a.0.cmp(&b.0));
+
+    Ok(filtered_data)
+}
+
+/// Derives the CSV output path from a score file path
+/// For example: "docs/scores/2025/June/20.tsv" -> "docs/scores/2025/June/20.csv"
+pub fn derive_csv_output_path(score_file_path: &str) -> String {
+    let path = Path::new(score_file_path);
+    if let Some(parent) = path.parent() {
+        if let Some(stem) = path.file_stem() {
+            return parent
+                .join(format!("{}.csv", stem.to_string_lossy()))
+                .to_string_lossy()
+                .to_string();
+        }
+    }
+    // Fallback: just replace .tsv with .csv
+    score_file_path.replace(".tsv", ".csv")
+}
+
+/// Creates a CSV file with market data for the given symbols and date range
+/// The CSV file will be created in the same directory as the score file with the same base name
+pub fn create_market_data_csv_for_score_file(
+    score_file_path: &str,
+    symbols: &[String],
+    score_file_date: &str,
+) -> Result<()> {
+    let output_path = derive_csv_output_path(score_file_path);
+    create_market_data_csv(symbols, score_file_date, &output_path)
+}
+
+/// Creates a CSV file with market data for the given symbols and date range
+pub fn create_market_data_csv(
+    symbols: &[String],
+    score_file_date: &str,
+    output_path: &str,
+) -> Result<()> {
+    use csv::Writer;
+    use std::fs::File;
+
+    // Calculate date range: from score file date to 180 days after
+    let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
+    let end_date = score_date + Duration::days(180);
+    let end_date_str = end_date.format("%Y-%m-%d").to_string();
+
+    println!(
+        "Reading market data from {} to {}",
+        score_file_date, end_date_str
+    );
+
+    // Collect all market data
+    let mut all_market_data: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+    let mut all_dates: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for symbol in symbols {
+        match read_market_data(symbol) {
+            Ok(market_data) => {
+                match filter_market_data_by_date_range(
+                    &market_data,
+                    score_file_date,
+                    &end_date_str,
+                ) {
+                    Ok(filtered_data) => {
+                        for (date, _) in &filtered_data {
+                            all_dates.insert(date.clone());
+                        }
+                        all_market_data.insert(symbol.clone(), filtered_data);
+                        println!(
+                            "  {}: {} data points",
+                            symbol,
+                            all_market_data[symbol].len()
+                        );
+                    }
+                    Err(e) => {
+                        println!("  {}: Error filtering data: {}", symbol, e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("  {}: Error reading market data: {}", symbol, e);
+            }
+        }
+    }
+
+    // Sort all dates
+    let mut sorted_dates: Vec<String> = all_dates.into_iter().collect();
+    sorted_dates.sort();
+
+    // Create CSV file
+    let file = File::create(output_path)?;
+    let mut writer = Writer::from_writer(file);
+
+    // Write header
+    let mut header = vec!["Date".to_string()];
+    header.extend(symbols.iter().cloned());
+    writer.write_record(&header)?;
+
+    // Write data rows
+    for date in sorted_dates {
+        let mut row = vec![date.clone()];
+        for symbol in symbols {
+            if let Some(symbol_data) = all_market_data.get(symbol) {
+                if let Some((_, price)) = symbol_data.iter().find(|(d, _)| d == &date) {
+                    row.push(price.to_string());
+                } else {
+                    row.push("".to_string()); // No data for this date
+                }
+            } else {
+                row.push("".to_string()); // No data for this symbol
+            }
+        }
+        writer.write_record(&row)?;
+    }
+
+    writer.flush()?;
+    println!("CSV file created: {}", output_path);
+
+    Ok(())
+}
+
+/// Creates a CSV file with market data for the given tickers and date range, in long format.
+/// Each row: date, ticker, high, low, open, close
+/// The ticker is the full code from the scores file (e.g., NYSE:SEM)
+pub fn create_market_data_long_csv(
+    tickers: &[String],
+    score_file_date: &str,
+    output_path: &str,
+) -> Result<()> {
+    use crate::utils::extract_symbol_from_ticker;
+    use csv::Writer;
+    use std::fs::File;
+
+    let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
+    let end_date = score_date + Duration::days(180);
+    let end_date_str = end_date.format("%Y-%m-%d").to_string();
+
+    let file = File::create(output_path)?;
+    let mut writer = Writer::from_writer(file);
+    writer.write_record(["date", "ticker", "high", "low", "open", "close"])?;
+
+    for ticker in tickers {
+        let symbol = extract_symbol_from_ticker(ticker);
+        let market_data = match read_market_data(&symbol) {
+            Ok(md) => md,
+            Err(_) => continue, // skip missing data
+        };
+        let filtered = match filter_market_data_by_date_range(
+            &market_data,
+            score_file_date,
+            &end_date_str,
+        ) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        for (date, _close) in filtered {
+            if let Some(day) = market_data.time_series_daily.get(&date) {
+                writer.write_record([
+                    &date,
+                    ticker,
+                    &day.high.to_string(),
+                    &day.low.to_string(),
+                    &day.open.to_string(),
+                    &day.close.to_string(),
+                ])?;
+            }
+        }
+    }
+    writer.flush()?;
+    Ok(())
+}
+
+/// Like create_market_data_csv_for_score_file, but outputs long format and allows custom output dir (for tests)
+pub fn create_market_data_long_csv_for_score_file(
+    score_file_path: &str,
+    tickers: &[String],
+    score_file_date: &str,
+    output_dir: Option<&str>,
+) -> Result<String> {
+    let output_path = if let Some(dir) = output_dir {
+        let path = std::path::Path::new(score_file_path);
+        let stem = path.file_stem().unwrap_or_default();
+        let out = std::path::Path::new(dir).join(format!("{}.csv", stem.to_string_lossy()));
+        out.to_string_lossy().to_string()
+    } else {
+        derive_csv_output_path(score_file_path)
+    };
+    create_market_data_long_csv(tickers, score_file_date, &output_path)?;
+    Ok(output_path)
 }
 
 #[cfg(test)]
@@ -240,5 +473,66 @@ mod tests {
         assert_eq!(extract_symbol_from_ticker("SEM"), "SEM");
         assert_eq!(extract_symbol_from_ticker(""), "");
         assert_eq!(extract_symbol_from_ticker("LON:VOD.L"), "VOD.L");
+    }
+
+    #[test]
+    fn test_derive_csv_output_path() {
+        assert_eq!(
+            derive_csv_output_path("docs/scores/2025/June/20.tsv"),
+            "docs/scores/2025/June/20.csv"
+        );
+        assert_eq!(
+            derive_csv_output_path("scores/2025/June/21.tsv"),
+            "scores/2025/June/21.csv"
+        );
+        assert_eq!(derive_csv_output_path("20.tsv"), "20.csv");
+    }
+
+    #[test]
+    fn test_read_market_data() {
+        let result = read_market_data("SEM");
+        if result.is_err() {
+            println!("Market data file not found, skipping test");
+            return;
+        }
+
+        let market_data = result.unwrap();
+        assert_eq!(market_data.meta_data.symbol, "SEM");
+        assert!(!market_data.time_series_daily.is_empty());
+
+        // Check that we have some recent data
+        let recent_dates: Vec<&String> = market_data.time_series_daily.keys().collect();
+        assert!(!recent_dates.is_empty());
+    }
+
+    #[test]
+    fn test_filter_market_data_by_date_range() {
+        let result = read_market_data("SEM");
+        if result.is_err() {
+            println!("Market data file not found, skipping test");
+            return;
+        }
+
+        let market_data = result.unwrap();
+        let filtered_data =
+            filter_market_data_by_date_range(&market_data, "2025-06-15", "2025-06-20").unwrap();
+
+        assert!(!filtered_data.is_empty());
+
+        // Check that all dates are within the range
+        for (date_str, _price) in &filtered_data {
+            let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap();
+            let start = NaiveDate::parse_from_str("2025-06-15", "%Y-%m-%d").unwrap();
+            let end = NaiveDate::parse_from_str("2025-06-20", "%Y-%m-%d").unwrap();
+
+            assert!(date >= start && date <= end);
+        }
+
+        // Check that data is sorted by date
+        for i in 1..filtered_data.len() {
+            let prev_date = NaiveDate::parse_from_str(&filtered_data[i - 1].0, "%Y-%m-%d").unwrap();
+            let curr_date = NaiveDate::parse_from_str(&filtered_data[i].0, "%Y-%m-%d").unwrap();
+            assert!(prev_date <= curr_date);
+        }
     }
 }
