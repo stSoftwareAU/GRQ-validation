@@ -249,7 +249,9 @@
 
             async loadIndex() {
                 try {
-                    const response = await fetch('scores/index.json');
+                    // Add cache-busting parameter to force fresh fetch
+                    const timestamp = new Date().getTime();
+                    const response = await fetch(`scores/index.json?t=${timestamp}`);
                     const indexData = await response.json();
                     
                     const select = document.getElementById('scoreFileSelect');
@@ -285,7 +287,9 @@
             }
 
             async loadScoreData() {
-                const response = await fetch(`scores/${this.selectedFile}`);
+                // Add cache-busting parameter
+                const timestamp = new Date().getTime();
+                const response = await fetch(`scores/${this.selectedFile}?t=${timestamp}`);
                 const text = await response.text();
                 
                 const lines = text.trim().split('\n');
@@ -308,7 +312,9 @@
                 const csvFile = this.selectedFile.replace('.tsv', '.csv');
                 
                 try {
-                    const response = await fetch(`scores/${csvFile}`);
+                    // Add cache-busting parameter
+                    const timestamp = new Date().getTime();
+                    const response = await fetch(`scores/${csvFile}?t=${timestamp}`);
                     const text = await response.text();
                     
                     if (!text.trim()) {
