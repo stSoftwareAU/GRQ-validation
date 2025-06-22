@@ -143,14 +143,13 @@ jobs:
   deploy-pages:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    needs: [check-changes, build]
+    needs: check-changes
     if: |
       github.ref == 'refs/heads/main' && 
       needs.check-changes.outputs.docs-changed == 'true'
     permissions:
       pages: write
       id-token: write
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
