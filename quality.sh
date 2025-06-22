@@ -26,7 +26,7 @@ if ! command -v cargo-tarpaulin &> /dev/null; then
     cargo install cargo-tarpaulin
 fi
 
-cargo tarpaulin --out Html --output-dir coverage || {
+cargo tarpaulin --out Html --output-dir .coverage || {
     echo "⚠️  Coverage generation failed, continuing..."
 }
 
@@ -34,6 +34,6 @@ echo "🏗️ Building release version..."
 cargo build --release
 
 echo "✅ Quality checks completed successfully!"
-if [ -d "coverage" ]; then
-    echo "📈 Coverage report available in: coverage/tarpaulin-report.html"
+if [ -d ".coverage" ]; then
+    echo "📈 Coverage report available in: .coverage/tarpaulin-report.html"
 fi 
