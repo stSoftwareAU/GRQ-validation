@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GRQ Stock Validation Dashboard</title>
+    <title>GRQ Stock Prediction Validation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 20px;
             background-color: #f5f5f5;
         }
-        
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -20,599 +21,619 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             overflow: hidden;
         }
-        
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 30px;
             text-align: center;
         }
-        
         .header h1 {
             margin: 0;
             font-size: 2.5em;
             font-weight: 300;
         }
-        
         .header p {
             margin: 10px 0 0 0;
             opacity: 0.9;
+            font-size: 1.1em;
         }
-        
+        .content {
+            padding: 30px;
+        }
         .controls {
-            padding: 20px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .date-selector {
             display: flex;
-            gap: 10px;
-            align-items: center;
-            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
             flex-wrap: wrap;
+            align-items: center;
         }
-        
-        select, button {
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-group label {
+            font-weight: 600;
+            color: #333;
+        }
+        select, input {
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
         }
-        
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        button:hover {
-            background: #0056b3;
-        }
-        
-        .content {
-            padding: 20px;
-        }
-        
-        .summary {
+        .summary-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
-        
-        .summary-card {
+        .stat-card {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 8px;
-            text-align: center;
-            border-left: 4px solid #007bff;
+            border-left: 4px solid #667eea;
         }
-        
-        .summary-card h3 {
+        .stat-card h3 {
             margin: 0 0 10px 0;
-            color: #495057;
-            font-size: 14px;
+            color: #333;
+            font-size: 0.9em;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
-        
-        .summary-card .value {
+        .stat-card .value {
             font-size: 2em;
             font-weight: bold;
-            color: #212529;
+            color: #667eea;
         }
-        
-        .performance-section {
-            background: #e8f4fd;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid #17a2b8;
+        .stat-card .subtitle {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
         }
-        
-        .performance-section h2 {
-            margin: 0 0 15px 0;
-            color: #0c5460;
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
         }
-        
-        .performance-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-        }
-        
-        .performance-item {
-            background: white;
-            padding: 15px;
-            border-radius: 6px;
+        .loading {
             text-align: center;
+            padding: 40px;
+            color: #666;
         }
-        
-        .performance-item .label {
-            font-size: 12px;
-            color: #6c757d;
-            text-transform: uppercase;
-            margin-bottom: 5px;
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #c33;
         }
-        
-        .performance-item .value {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #212529;
+        .no-data {
+            background: #f0f8ff;
+            color: #0066cc;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #0066cc;
         }
-        
         .stock-table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
         }
-        
         .stock-table th,
         .stock-table td {
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid #eee;
         }
-        
         .stock-table th {
             background: #f8f9fa;
             font-weight: 600;
-            color: #495057;
+            color: #333;
         }
-        
         .stock-table tr:hover {
             background: #f8f9fa;
         }
-        
-        .score-high { color: #28a745; font-weight: bold; }
-        .score-medium { color: #ffc107; font-weight: bold; }
-        .score-low { color: #dc3545; font-weight: bold; }
-        
-        .undervalued {
-            background: #d4edda !important;
+        .performance-positive {
+            color: #28a745;
+            font-weight: bold;
         }
-        
-        .performance-positive { color: #28a745; }
-        .performance-negative { color: #dc3545; }
-        .performance-neutral { color: #6c757d; }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
+        .performance-negative {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .performance-neutral {
             color: #6c757d;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
-        
-        .no-data {
-            text-align: center;
-            padding: 40px;
-            color: #6c757d;
-            font-style: italic;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>GRQ Stock Validation</h1>
-            <p>Daily stock analysis and prediction performance dashboard</p>
-        </div>
-        
-        <div class="controls">
-            <div class="date-selector">
-                <label for="dateSelect">Select Date:</label>
-                <select id="dateSelect"></select>
-                <button onclick="loadData()">Load Data</button>
-            </div>
+            <h1>GRQ Stock Prediction Validation</h1>
+            <p>Validating AI predictions against 90-day targets and 10% annual cost of capital</p>
         </div>
         
         <div class="content">
-            <div id="loading" class="loading" style="display: none;">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="scoreFileSelect">Score File:</label>
+                    <select id="scoreFileSelect">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="costOfCapital">Cost of Capital (% per year):</label>
+                    <input type="number" id="costOfCapital" value="10" min="0" max="100" step="0.1">
+                </div>
+            </div>
+
+            <div id="loading" class="loading">
                 Loading data...
             </div>
-            
+
             <div id="error" class="error" style="display: none;"></div>
-            
-            <div id="performance" class="performance-section" style="display: none;">
-                <h2>📊 Prediction Performance</h2>
-                <div id="performanceGrid" class="performance-grid"></div>
-            </div>
-            
-            <div id="summary" class="summary" style="display: none;"></div>
-            
-            <div id="tableContainer" style="display: none;">
-                <table class="stock-table" id="stockTable">
-                    <thead>
-                        <tr>
-                            <th>Stock</th>
-                            <th>Predicted Score</th>
-                            <th>Target Price</th>
-                            <th>Current Price</th>
-                            <th>Performance</th>
-                            <th>Ex-Dividend Date</th>
-                            <th>Dividend/Share</th>
-                            <th>Intrinsic Value (Basic)</th>
-                            <th>Intrinsic Value (Adjusted)</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stockTableBody"></tbody>
-                </table>
-            </div>
-            
             <div id="noData" class="no-data" style="display: none;">
-                No performance data available yet. Stock prices will be fetched by the Rust program.
+                No market data available yet for this score file. Data will appear as it becomes available.
+            </div>
+
+            <div id="summary" style="display: none;">
+                <div class="summary-stats">
+                    <div class="stat-card">
+                        <h3>Average Target Gain</h3>
+                        <div class="value" id="avgTargetGain">-</div>
+                        <div class="subtitle">90-day prediction</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Current Performance</h3>
+                        <div class="value" id="currentPerformance">-</div>
+                        <div class="subtitle">vs target</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Cost of Capital</h3>
+                        <div class="value" id="costOfCapitalDisplay">-</div>
+                        <div class="subtitle">90-day equivalent</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Days Elapsed</h3>
+                        <div class="value" id="daysElapsed">-</div>
+                        <div class="subtitle">since prediction</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+
+                <div id="stockDetails">
+                    <h3>Individual Stock Performance</h3>
+                    <table class="stock-table" id="stockTable">
+                        <thead>
+                            <tr>
+                                <th>Stock</th>
+                                <th>Target Price</th>
+                                <th>Current Price</th>
+                                <th>Target Gain (%)</th>
+                                <th>Current Gain (%)</th>
+                                <th>Progress</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockTableBody">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        let availableDates = [];
-        let currentData = null;
-        
-        async function initializeApp() {
-            try {
-                // Load the index.json to get available dates
-                const response = await fetch('scores/index.json');
-                const data = await response.json();
-                availableDates = data.scores || [];
+        class GRQValidator {
+            constructor() {
+                this.scoreData = null;
+                this.marketData = null;
+                this.selectedScoreFile = null;
+                this.costOfCapital = 10; // 10% per year
+                this.chart = null;
                 
-                populateDateSelector();
-                if (availableDates.length > 0) {
-                    loadLatestData();
+                this.initializeEventListeners();
+                this.loadScoreFiles();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('scoreFileSelect').addEventListener('change', (e) => {
+                    this.selectedScoreFile = e.target.value;
+                    if (this.selectedScoreFile) {
+                        this.loadData();
+                    }
+                });
+
+                document.getElementById('costOfCapital').addEventListener('input', (e) => {
+                    this.costOfCapital = parseFloat(e.target.value) || 10;
+                    this.updateDisplay();
+                });
+            }
+
+            async loadScoreFiles() {
+                try {
+                    const response = await fetch('scores/index.json');
+                    const indexData = await response.json();
+                    
+                    const select = document.getElementById('scoreFileSelect');
+                    select.innerHTML = '';
+                    
+                    indexData.scores.forEach(score => {
+                        const option = document.createElement('option');
+                        option.value = score.file;
+                        option.textContent = `${score.date} (${score.month} ${score.day})`;
+                        select.appendChild(option);
+                    });
+
+                    if (indexData.scores.length > 0) {
+                        this.selectedScoreFile = indexData.scores[0].file;
+                        select.value = this.selectedScoreFile;
+                        this.loadData();
+                    }
+                } catch (error) {
+                    this.showError('Failed to load score files: ' + error.message);
                 }
-            } catch (error) {
-                showError('Failed to initialize application: ' + error.message);
             }
-        }
-        
-        function populateDateSelector() {
-            const dateSelect = document.getElementById('dateSelect');
-            dateSelect.innerHTML = '';
-            
-            // Sort dates in descending order (newest first)
-            const sortedDates = [...availableDates].sort((a, b) => 
-                new Date(b.date) - new Date(a.date)
-            );
-            
-            sortedDates.forEach(dateInfo => {
-                const option = document.createElement('option');
-                option.value = dateInfo.date;
-                option.textContent = `${dateInfo.month} ${dateInfo.day}, ${dateInfo.year}`;
-                dateSelect.appendChild(option);
-            });
-        }
-        
-        async function loadLatestData() {
-            if (availableDates.length > 0) {
-                const latest = availableDates[0]; // First one after sorting
-                await loadDataForDate(latest);
-            }
-        }
-        
-        async function loadData() {
-            const selectedDate = document.getElementById('dateSelect').value;
-            const dateInfo = availableDates.find(d => d.date === selectedDate);
-            
-            if (dateInfo) {
-                await loadDataForDate(dateInfo);
-            }
-        }
-        
-        async function loadDataForDate(dateInfo) {
-            showLoading(true);
-            hideError();
-            hideAllSections();
-            
-            try {
-                // Load the TSV file for original predictions
-                const tsvPath = `scores/${dateInfo.file}`;
-                const tsvResponse = await fetch(tsvPath);
-                
-                if (!tsvResponse.ok) {
-                    throw new Error(`HTTP ${tsvResponse.status}: ${tsvResponse.statusText}`);
-                }
-                
-                const tsvData = await tsvResponse.text();
-                const predictionData = parseTSV(tsvData);
-                currentData = predictionData;
-                
-                // Try to load the corresponding CSV file for performance data
-                const csvPath = `scores/${dateInfo.file.replace('.tsv', '.csv')}`;
-                let performanceData = null;
+
+            async loadData() {
+                this.showLoading();
                 
                 try {
-                    const csvResponse = await fetch(csvPath);
-                    if (csvResponse.ok) {
-                        const csvData = await csvResponse.text();
-                        performanceData = parseCSV(csvData);
-                    }
-                } catch (csvError) {
-                    console.log('No performance data available yet:', csvError.message);
+                    await Promise.all([
+                        this.loadScoreData(),
+                        this.loadMarketData()
+                    ]);
+                    
+                    this.updateDisplay();
+                } catch (error) {
+                    this.showError('Failed to load data: ' + error.message);
                 }
-                
-                displayPerformanceData(dateInfo, performanceData);
-                displaySummary(predictionData);
-                displayTable(predictionData, performanceData, dateInfo);
-                
-            } catch (error) {
-                showError(`Failed to load data for ${dateInfo.month} ${dateInfo.day}, ${dateInfo.year}: ${error.message}`);
-            } finally {
-                showLoading(false);
             }
-        }
-        
-        function displayPerformanceData(dateInfo, performanceData) {
-            const performanceDiv = document.getElementById('performance');
-            const performanceGrid = document.getElementById('performanceGrid');
-            
-            if (performanceData) {
-                // Display actual performance data from CSV
-                const totalStocks = currentData.length;
-                const averageScore = currentData.reduce((sum, r) => sum + r.Score, 0) / totalStocks;
-                const undervaluedCount = currentData.filter(r => r.intrinsicValuePerShareAdjusted > r.Target).length;
+
+            async loadScoreData() {
+                const response = await fetch(`scores/${this.selectedScoreFile}`);
+                const text = await response.text();
                 
-                // Calculate performance metrics from CSV data
-                const performanceMetrics = calculatePerformanceMetrics(currentData, performanceData);
+                const lines = text.split('\n').filter(line => line.trim());
+                const headers = lines[0].split('\t');
                 
-                performanceGrid.innerHTML = `
-                    <div class="performance-item">
-                        <div class="label">Total Stocks</div>
-                        <div class="value">${totalStocks}</div>
-                    </div>
-                    <div class="performance-item">
-                        <div class="label">Avg Predicted Score</div>
-                        <div class="value">${averageScore.toFixed(2)}</div>
-                    </div>
-                    <div class="performance-item">
-                        <div class="label">Prediction Accuracy</div>
-                        <div class="value ${performanceMetrics.accuracyClass}">${performanceMetrics.accuracy}%</div>
-                    </div>
-                    <div class="performance-item">
-                        <div class="label">Avg Return</div>
-                        <div class="value ${performanceMetrics.returnClass}">${performanceMetrics.avgReturn}%</div>
-                    </div>
-                `;
-            } else {
-                // Show placeholder data when CSV is not available
-                performanceGrid.innerHTML = `
-                    <div class="performance-item">
-                        <div class="label">Total Stocks</div>
-                        <div class="value">${currentData ? currentData.length : 0}</div>
-                    </div>
-                    <div class="performance-item">
-                        <div class="label">Avg Predicted Score</div>
-                        <div class="value">${currentData ? (currentData.reduce((sum, r) => sum + r.Score, 0) / currentData.length).toFixed(2) : '0.00'}</div>
-                    </div>
-                    <div class="performance-item">
-                        <div class="label">Performance Data</div>
-                        <div class="value performance-neutral">Pending</div>
-                    </div>
-                    <div class="performance-item">
-                        <div class="label">Status</div>
-                        <div class="value performance-neutral">CSV Not Generated</div>
-                    </div>
-                `;
-            }
-            
-            performanceDiv.style.display = 'block';
-        }
-        
-        function parseTSV(tsvData) {
-            const lines = tsvData.trim().split('\n');
-            const headers = lines[0].split('\t');
-            const records = [];
-            
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split('\t');
-                const record = {};
-                
-                headers.forEach((header, index) => {
-                    let value = values[index] || '';
+                this.scoreData = lines.slice(1).map(line => {
+                    const values = line.split('\t');
+                    const stock = values[0];
+                    const score = parseFloat(values[1]);
+                    const target = parseFloat(values[2]);
+                    const exDividendDate = values[3] || null;
+                    const dividendPerShare = parseFloat(values[4]) || 0;
                     
-                    // Parse numeric values
-                    if (header === 'Score' || header === 'Target' || 
-                        header === 'DividendPerShare' || header === 'intrinsicValuePerShareBasic' || 
-                        header === 'intrinsicValuePerShareAdjusted') {
-                        value = parseFloat(value) || 0;
-                    }
-                    
-                    record[header] = value;
+                    return {
+                        stock,
+                        score,
+                        target,
+                        exDividendDate,
+                        dividendPerShare
+                    };
                 });
-                
-                records.push(record);
             }
-            
-            return records;
-        }
-        
-        function parseCSV(csvData) {
-            const lines = csvData.trim().split('\n');
-            const headers = lines[0].split(',');
-            const records = [];
-            
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',');
-                const record = {};
+
+            async loadMarketData() {
+                const csvFile = this.selectedScoreFile.replace('.tsv', '.csv');
                 
-                headers.forEach((header, index) => {
-                    let value = values[index] || '';
+                try {
+                    const response = await fetch(`scores/${csvFile}`);
+                    const text = await response.text();
                     
-                    // Parse numeric values
-                    if (header === 'CurrentPrice' || header === 'Return' || header === 'Accuracy') {
-                        value = parseFloat(value) || 0;
+                    if (!text.trim()) {
+                        this.marketData = null;
+                        return;
                     }
                     
-                    record[header] = value;
+                    const lines = text.split('\n').filter(line => line.trim());
+                    const headers = lines[0].split(',');
+                    
+                    this.marketData = {};
+                    
+                    lines.slice(1).forEach(line => {
+                        const values = line.split(',');
+                        const date = values[0];
+                        const ticker = values[1];
+                        const high = parseFloat(values[2]);
+                        const low = parseFloat(values[3]);
+                        const open = parseFloat(values[4]);
+                        const close = parseFloat(values[5]);
+                        
+                        if (!this.marketData[ticker]) {
+                            this.marketData[ticker] = [];
+                        }
+                        
+                        this.marketData[ticker].push({
+                            date: new Date(date),
+                            high,
+                            low,
+                            open,
+                            close
+                        });
+                    });
+                } catch (error) {
+                    console.warn('No market data available yet:', error.message);
+                    this.marketData = null;
+                }
+            }
+
+            updateDisplay() {
+                if (!this.scoreData) {
+                    this.showError('No score data available');
+                    return;
+                }
+
+                if (!this.marketData || Object.keys(this.marketData).length === 0) {
+                    this.showNoData();
+                    return;
+                }
+
+                this.hideMessages();
+                this.updateSummaryStats();
+                this.updateChart();
+                this.updateStockTable();
+            }
+
+            updateSummaryStats() {
+                const scoreFile = this.selectedScoreFile;
+                const scoreDate = new Date(scoreFile.split('/')[1] + '/' + scoreFile.split('/')[2] + '/' + scoreFile.split('/')[0]);
+                const today = new Date();
+                const daysElapsed = Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
+
+                // Calculate average target gain
+                const avgTargetGain = this.scoreData.reduce((sum, stock) => {
+                    const marketData = this.marketData[stock.stock];
+                    if (marketData && marketData.length > 0) {
+                        const currentPrice = marketData[marketData.length - 1].close;
+                        const targetGain = ((stock.target - currentPrice) / currentPrice) * 100;
+                        return sum + targetGain;
+                    }
+                    return sum;
+                }, 0) / this.scoreData.length;
+
+                // Calculate current performance
+                const currentPerformance = this.scoreData.reduce((sum, stock) => {
+                    const marketData = this.marketData[stock.stock];
+                    if (marketData && marketData.length > 0) {
+                        const initialPrice = marketData[0].close;
+                        const currentPrice = marketData[marketData.length - 1].close;
+                        const actualGain = ((currentPrice - initialPrice) / initialPrice) * 100;
+                        return sum + actualGain;
+                    }
+                    return sum;
+                }, 0) / this.scoreData.length;
+
+                // Cost of capital for 90 days
+                const costOfCapital90Days = (Math.pow(1 + this.costOfCapital / 100, 90 / 365) - 1) * 100;
+
+                document.getElementById('avgTargetGain').textContent = avgTargetGain.toFixed(2) + '%';
+                document.getElementById('currentPerformance').textContent = currentPerformance.toFixed(2) + '%';
+                document.getElementById('costOfCapitalDisplay').textContent = costOfCapital90Days.toFixed(2) + '%';
+                document.getElementById('daysElapsed').textContent = daysElapsed;
+
+                // Color coding
+                const currentEl = document.getElementById('currentPerformance');
+                if (currentPerformance > costOfCapital90Days) {
+                    currentEl.className = 'value performance-positive';
+                } else if (currentPerformance < costOfCapital90Days) {
+                    currentEl.className = 'value performance-negative';
+                } else {
+                    currentEl.className = 'value performance-neutral';
+                }
+            }
+
+            updateChart() {
+                const ctx = document.getElementById('performanceChart').getContext('2d');
+                
+                if (this.chart) {
+                    this.chart.destroy();
+                }
+
+                const scoreFile = this.selectedScoreFile;
+                const scoreDate = new Date(scoreFile.split('/')[1] + '/' + scoreFile.split('/')[2] + '/' + scoreFile.split('/')[0]);
+                const costOfCapital90Days = (Math.pow(1 + this.costOfCapital / 100, 90 / 365) - 1) * 100;
+
+                // Prepare data for chart
+                const dates = [];
+                const targetLine = [];
+                const costOfCapitalLine = [];
+                const actualPerformance = [];
+
+                // Generate data points for 90 days
+                for (let i = 0; i <= 90; i++) {
+                    const date = new Date(scoreDate);
+                    date.setDate(date.getDate() + i);
+                    dates.push(date);
+
+                    // Target line (linear progression to target)
+                    const targetProgress = (i / 90) * 100; // Assuming average target is 100%
+                    targetLine.push(targetProgress);
+
+                    // Cost of capital line (compound growth)
+                    const costOfCapitalProgress = (Math.pow(1 + this.costOfCapital / 100, i / 365) - 1) * 100;
+                    costOfCapitalLine.push(costOfCapitalProgress);
+
+                    // Actual performance (if we have data)
+                    if (i <= this.getDaysElapsed()) {
+                        const actual = this.calculateActualPerformance(i);
+                        actualPerformance.push(actual);
+                    } else {
+                        actualPerformance.push(null);
+                    }
+                }
+
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [
+                            {
+                                label: 'Target Performance',
+                                data: targetLine,
+                                borderColor: '#28a745',
+                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                borderWidth: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'Cost of Capital (10% annual)',
+                                data: costOfCapitalLine,
+                                borderColor: '#dc3545',
+                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                borderWidth: 2,
+                                fill: false
+                            },
+                            {
+                                label: 'Actual Performance',
+                                data: actualPerformance,
+                                borderColor: '#007bff',
+                                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                borderWidth: 3,
+                                fill: false,
+                                pointRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'day'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Days Since Prediction'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Performance (%)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Stock Performance vs Targets and Cost of Capital'
+                            },
+                            legend: {
+                                position: 'top'
+                            }
+                        }
+                    }
                 });
-                
-                records.push(record);
             }
-            
-            return records;
-        }
-        
-        function calculatePerformanceMetrics(predictionData, performanceData) {
-            // Match prediction data with performance data by stock symbol
-            const matchedData = predictionData.map(pred => {
-                const perf = performanceData.find(p => p.Stock === pred.Stock);
-                return { prediction: pred, performance: perf };
-            }).filter(item => item.performance);
-            
-            if (matchedData.length === 0) {
-                return {
-                    accuracy: 0,
-                    accuracyClass: 'performance-neutral',
-                    avgReturn: 0,
-                    returnClass: 'performance-neutral'
-                };
+
+            calculateActualPerformance(daysElapsed) {
+                if (!this.marketData) return null;
+
+                let totalGain = 0;
+                let validStocks = 0;
+
+                this.scoreData.forEach(stock => {
+                    const marketData = this.marketData[stock.stock];
+                    if (marketData && marketData.length > 0) {
+                        const initialPrice = marketData[0].close;
+                        const currentPrice = marketData[Math.min(daysElapsed, marketData.length - 1)].close;
+                        const gain = ((currentPrice - initialPrice) / initialPrice) * 100;
+                        totalGain += gain;
+                        validStocks++;
+                    }
+                });
+
+                return validStocks > 0 ? totalGain / validStocks : null;
             }
-            
-            // Calculate accuracy (how many predictions were correct)
-            const correctPredictions = matchedData.filter(item => {
-                const pred = item.prediction;
-                const perf = item.performance;
-                
-                // Consider it correct if:
-                // - Predicted undervalued and current price > target
-                // - Predicted overvalued and current price <= target
-                const predictedUndervalued = pred.intrinsicValuePerShareAdjusted > pred.Target;
-                const actuallyUndervalued = perf.CurrentPrice > pred.Target;
-                
-                return predictedUndervalued === actuallyUndervalued;
-            }).length;
-            
-            const accuracy = (correctPredictions / matchedData.length) * 100;
-            
-            // Calculate average return
-            const avgReturn = matchedData.reduce((sum, item) => sum + item.performance.Return, 0) / matchedData.length;
-            
-            return {
-                accuracy: accuracy.toFixed(1),
-                accuracyClass: accuracy >= 70 ? 'performance-positive' : accuracy >= 50 ? 'performance-neutral' : 'performance-negative',
-                avgReturn: avgReturn.toFixed(2),
-                returnClass: avgReturn >= 0 ? 'performance-positive' : 'performance-negative'
-            };
+
+            getDaysElapsed() {
+                const scoreFile = this.selectedScoreFile;
+                const scoreDate = new Date(scoreFile.split('/')[1] + '/' + scoreFile.split('/')[2] + '/' + scoreFile.split('/')[0]);
+                const today = new Date();
+                return Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
+            }
+
+            updateStockTable() {
+                const tbody = document.getElementById('stockTableBody');
+                tbody.innerHTML = '';
+
+                this.scoreData.forEach(stock => {
+                    const row = document.createElement('tr');
+                    const marketData = this.marketData[stock.stock];
+                    
+                    if (marketData && marketData.length > 0) {
+                        const initialPrice = marketData[0].close;
+                        const currentPrice = marketData[marketData.length - 1].close;
+                        const targetGain = ((stock.target - initialPrice) / initialPrice) * 100;
+                        const currentGain = ((currentPrice - initialPrice) / initialPrice) * 100;
+                        const progress = (currentGain / targetGain) * 100;
+
+                        row.innerHTML = `
+                            <td><strong>${stock.stock}</strong></td>
+                            <td>$${stock.target.toFixed(2)}</td>
+                            <td>$${currentPrice.toFixed(2)}</td>
+                            <td class="${targetGain >= 0 ? 'performance-positive' : 'performance-negative'}">${targetGain.toFixed(2)}%</td>
+                            <td class="${currentGain >= 0 ? 'performance-positive' : 'performance-negative'}">${currentGain.toFixed(2)}%</td>
+                            <td class="${progress >= 100 ? 'performance-positive' : progress >= 0 ? 'performance-neutral' : 'performance-negative'}">${progress.toFixed(1)}%</td>
+                        `;
+                    } else {
+                        row.innerHTML = `
+                            <td><strong>${stock.stock}</strong></td>
+                            <td>$${stock.target.toFixed(2)}</td>
+                            <td>No data</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                        `;
+                    }
+
+                    tbody.appendChild(row);
+                });
+            }
+
+            showLoading() {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('summary').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('noData').style.display = 'none';
+            }
+
+            showError(message) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('summary').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('noData').style.display = 'none';
+                document.getElementById('error').textContent = message;
+            }
+
+            showNoData() {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('summary').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('noData').style.display = 'block';
+            }
+
+            hideMessages() {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('noData').style.display = 'none';
+                document.getElementById('summary').style.display = 'block';
+            }
         }
-        
-        function displaySummary(data) {
-            const summary = document.getElementById('summary');
-            const totalStocks = data.length;
-            const averageScore = data.reduce((sum, record) => sum + record.Score, 0) / totalStocks;
-            const undervaluedCount = data.filter(record => 
-                record.intrinsicValuePerShareAdjusted > record.Target
-            ).length;
-            const totalIntrinsicValue = data.reduce((sum, record) => 
-                sum + record.intrinsicValuePerShareAdjusted, 0
-            );
-            
-            summary.innerHTML = `
-                <div class="summary-card">
-                    <h3>Total Stocks</h3>
-                    <div class="value">${totalStocks}</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Average Score</h3>
-                    <div class="value">${averageScore.toFixed(2)}</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Undervalued</h3>
-                    <div class="value">${undervaluedCount}</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Total Intrinsic Value</h3>
-                    <div class="value">$${(totalIntrinsicValue / 1000).toFixed(1)}K</div>
-                </div>
-            `;
-            
-            summary.style.display = 'grid';
-        }
-        
-        function displayTable(data, performanceData, dateInfo) {
-            const tbody = document.getElementById('stockTableBody');
-            tbody.innerHTML = '';
-            
-            data.forEach(record => {
-                const row = document.createElement('tr');
-                
-                // Find corresponding performance data
-                const perf = performanceData ? performanceData.find(p => p.Stock === record.Stock) : null;
-                
-                // Add class for undervalued stocks
-                if (record.intrinsicValuePerShareAdjusted > record.Target) {
-                    row.classList.add('undervalued');
-                }
-                
-                // Determine score class
-                let scoreClass = 'score-medium';
-                if (record.Score >= 0.95) scoreClass = 'score-high';
-                else if (record.Score < 0.9) scoreClass = 'score-low';
-                
-                // Determine performance class
-                let currentPrice = 'Fetching...';
-                let performance = 'Pending';
-                let currentPriceClass = 'performance-neutral';
-                let performanceClass = 'performance-neutral';
-                
-                if (perf) {
-                    currentPrice = `$${perf.CurrentPrice.toFixed(2)}`;
-                    performance = `${perf.Return >= 0 ? '+' : ''}${perf.Return.toFixed(2)}%`;
-                    currentPriceClass = perf.CurrentPrice > record.Target ? 'performance-positive' : 'performance-negative';
-                    performanceClass = perf.Return >= 0 ? 'performance-positive' : 'performance-negative';
-                }
-                
-                row.innerHTML = `
-                    <td><strong>${record.Stock}</strong></td>
-                    <td class="${scoreClass}">${record.Score.toFixed(3)}</td>
-                    <td>$${record.Target.toFixed(2)}</td>
-                    <td class="${currentPriceClass}">${currentPrice}</td>
-                    <td class="${performanceClass}">${performance}</td>
-                    <td>${record.ExDividendDate || '-'}</td>
-                    <td>${record.DividendPerShare ? '$' + record.DividendPerShare.toFixed(4) : '-'}</td>
-                    <td>$${record.intrinsicValuePerShareBasic.toFixed(2)}</td>
-                    <td>$${record.intrinsicValuePerShareAdjusted.toFixed(2)}</td>
-                    <td>${record.Notes || '-'}</td>
-                `;
-                
-                tbody.appendChild(row);
-            });
-            
-            document.getElementById('tableContainer').style.display = 'block';
-        }
-        
-        function hideAllSections() {
-            document.getElementById('performance').style.display = 'none';
-            document.getElementById('summary').style.display = 'none';
-            document.getElementById('tableContainer').style.display = 'none';
-            document.getElementById('noData').style.display = 'none';
-        }
-        
-        function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
-        }
-        
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-        
-        function hideError() {
-            document.getElementById('error').style.display = 'none';
-        }
-        
-        // Initialize the application when the page loads
-        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new GRQValidator();
+        });
     </script>
 </body>
 </html> 
