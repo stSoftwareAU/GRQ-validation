@@ -6,6 +6,7 @@
     <title>GRQ Stock Prediction Validation</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -209,9 +210,11 @@
                             <tr>
                                 <th>Stock</th>
                                 <th>Buy Price</th>
+                                <th>90-Day Target</th>
                                 <th>Current Price</th>
                                 <th>Gain/Loss (%)</th>
                                 <th>Progress vs Cost of Capital</th>
+                                <th>Judgement (90-day)</th>
                             </tr>
                         </thead>
                         <tbody id="stockTableBody">
@@ -477,7 +480,7 @@
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Portfolio Performance vs Cost of Capital'
+                                text: 'Portfolio Performance vs 90-Day AI Targets'
                             },
                             legend: {
                                 display: true,
@@ -539,8 +542,9 @@
 
                 // Calculate aggregated portfolio performance
                 const portfolioData = [];
+                const portfolioDataAfter90 = []; // Separate data for after 90 days
 
-                sortedDates.forEach(date => {
+                sortedDates.forEach((date, index) => {
                     let totalGain = 0;
                     let validStocks = 0;
 
@@ -558,10 +562,19 @@
                     });
 
                     const avgPerformance = validStocks > 0 ? totalGain / validStocks : null;
-                    portfolioData.push(avgPerformance);
+                    
+                    // Check if this is after 90 days
+                    const daysElapsed = this.getDaysElapsedFromDate(date);
+                    if (daysElapsed <= 90) {
+                        portfolioData.push(avgPerformance);
+                        portfolioDataAfter90.push(null);
+                    } else {
+                        portfolioData.push(null);
+                        portfolioDataAfter90.push(avgPerformance);
+                    }
                 });
 
-                // Create portfolio dataset
+                // Create portfolio dataset (before 90 days)
                 datasets.push({
                     label: this.filteredStocks.length === this.scoreData.length ? 
                            'Portfolio Performance' : 
@@ -576,9 +589,59 @@
                     pointHoverRadius: 5
                 });
 
+                // Create portfolio dataset (after 90 days - grayed out)
+                datasets.push({
+                    label: 'Portfolio Performance (After 90 days)',
+                    data: portfolioDataAfter90,
+                    borderColor: '#999999',
+                    backgroundColor: '#99999920',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                });
+
+                // Add 90-day target line
+                const targetData = sortedDates.map((date, index) => {
+                    const daysElapsed = this.getDaysElapsedFromDate(date);
+                    if (daysElapsed <= 90) {
+                        // Calculate average target performance at 90 days
+                        let totalTargetGain = 0;
+                        let validTargets = 0;
+                        
+                        this.filteredStocks.forEach(stock => {
+                            const marketData = this.marketData[stock.stock];
+                            if (marketData && marketData.length > 0) {
+                                const initialPrice = marketData[0].high;
+                                const targetPrice = stock.target;
+                                const targetGain = ((targetPrice - initialPrice) / initialPrice) * 100;
+                                totalTargetGain += targetGain;
+                                validTargets++;
+                            }
+                        });
+                        
+                        const avgTargetGain = validTargets > 0 ? totalTargetGain / validTargets : 0;
+                        return avgTargetGain;
+                    }
+                    return null;
+                });
+
+                datasets.push({
+                    label: '90-Day AI Target',
+                    data: targetData,
+                    borderColor: '#FFA500',
+                    backgroundColor: '#FFA50020',
+                    borderWidth: 2,
+                    fill: false,
+                    borderDash: [3, 3],
+                    tension: 0.1,
+                    pointRadius: 0
+                });
+
                 // Add cost of capital reference line
                 const costOfCapitalData = sortedDates.map((date, index) => {
-                    const daysElapsed = index;
+                    const daysElapsed = this.getDaysElapsedFromDate(date);
                     return (Math.pow(1 + this.costOfCapital / 100, daysElapsed / 365) - 1) * 100;
                 });
 
@@ -594,7 +657,49 @@
                     pointRadius: 0
                 });
 
+                // Add 90-day marker line
+                const daysElapsed = this.getDaysElapsed();
+                if (daysElapsed >= 90) {
+                    const markerData = sortedDates.map((date, index) => {
+                        const daysFromStart = this.getDaysElapsedFromDate(date);
+                        return daysFromStart === 90 ? 0 : null; // Only show at 90 days
+                    });
+
+                    datasets.push({
+                        label: '90-Day Mark',
+                        data: markerData,
+                        borderColor: '#FFA500',
+                        backgroundColor: '#FFA500',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        pointStyle: 'circle'
+                    });
+                }
+
                 return { labels, datasets };
+            }
+
+            getDaysElapsedFromDate(dateStr) {
+                // Extract date from file path (e.g., "2025/March/21.tsv" -> "2025-03-21")
+                const pathParts = this.selectedFile.split('/');
+                const year = pathParts[0];
+                const month = pathParts[1];
+                const day = pathParts[2].replace('.tsv', '');
+                
+                // Convert month name to number
+                const monthMap = {
+                    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+                    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+                    'September': '09', 'October': '10', 'November': '11', 'December': '12'
+                };
+                
+                const scoreDateStr = `${year}-${monthMap[month]}-${day.padStart(2, '0')}`;
+                const scoreDate = new Date(scoreDateStr);
+                const targetDate = new Date(dateStr);
+                return Math.floor((targetDate - scoreDate) / (1000 * 60 * 60 * 24));
             }
 
             updateStockTable() {
@@ -625,18 +730,56 @@
                             progressClass = 'performance-negative';
                         }
 
+                        // Calculate 90-day judgement
+                        const daysElapsed = this.getDaysElapsed();
+                        let judgementText, judgementClass;
+                        
+                        if (daysElapsed >= 90) {
+                            // Find the price at or closest to 90 days
+                            const targetDate = new Date(marketData[0].date);
+                            targetDate.setDate(targetDate.getDate() + 90);
+                            
+                            const closestEntry = marketData.reduce((closest, entry) => {
+                                const daysDiff = Math.abs((entry.date - marketData[0].date) / (1000 * 60 * 60 * 24) - 90);
+                                const closestDaysDiff = Math.abs((closest.date - marketData[0].date) / (1000 * 60 * 60 * 24) - 90);
+                                return daysDiff < closestDaysDiff ? entry : closest;
+                            });
+                            
+                            const priceAt90Days = closestEntry.close;
+                            const targetGain = ((stock.target - initialPrice) / initialPrice) * 100;
+                            const actualGainAt90 = ((priceAt90Days - initialPrice) / initialPrice) * 100;
+                            
+                            if (actualGainAt90 >= targetGain * 0.8) { // Within 20% of target
+                                judgementText = 'Hit Target';
+                                judgementClass = 'performance-positive';
+                            } else if (actualGainAt90 > 0) {
+                                judgementText = 'Partial Success';
+                                judgementClass = 'performance-neutral';
+                            } else {
+                                judgementText = 'Missed Target';
+                                judgementClass = 'performance-negative';
+                            }
+                        } else {
+                            judgementText = `Pending (${90 - daysElapsed} days left)`;
+                            judgementClass = 'performance-neutral';
+                        }
+
                         row.innerHTML = `
                             <td><strong class="clickable-stock" data-stock="${stock.stock}">${stock.stock}</strong></td>
                             <td>$${initialPrice.toFixed(2)}</td>
+                            <td>$${stock.target.toFixed(2)}</td>
                             <td>$${currentPrice.toFixed(2)}</td>
                             <td class="${gain >= 0 ? 'performance-positive' : 'performance-negative'}">${gain.toFixed(2)}%</td>
                             <td class="${progressClass}">${progressText}</td>
+                            <td class="${judgementClass}">${judgementText}</td>
                         `;
                     } else {
                         row.innerHTML = `
                             <td><strong class="clickable-stock" data-stock="${stock.stock}">${stock.stock}</strong></td>
                             <td>No data</td>
+                            <td>$${stock.target.toFixed(2)}</td>
                             <td>No data</td>
+                            <td>-</td>
                             <td>-</td>
                             <td>-</td>
                         `;
