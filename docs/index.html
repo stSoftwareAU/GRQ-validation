@@ -236,6 +236,7 @@
                 this.selectedScoreFile = null;
                 this.costOfCapital = 10; // 10% per year
                 this.chart = null;
+                this.scoreFileDates = {}; // Map file path to date
                 
                 this.initializeEventListeners();
                 this.loadScoreFiles();
@@ -268,6 +269,7 @@
                         option.value = score.file;
                         option.textContent = `${score.date} (${score.month} ${score.day})`;
                         select.appendChild(option);
+                        this.scoreFileDates[score.file] = score.date; // Store the date
                     });
 
                     if (indexData.scores.length > 0) {
@@ -382,8 +384,8 @@
             }
 
             updateSummaryStats() {
-                const scoreFile = this.selectedScoreFile;
-                const scoreDate = new Date(scoreFile.split('/')[1] + '/' + scoreFile.split('/')[2] + '/' + scoreFile.split('/')[0]);
+                const scoreDateStr = this.scoreFileDates[this.selectedScoreFile];
+                const scoreDate = new Date(scoreDateStr);
                 const today = new Date();
                 const daysElapsed = Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
 
@@ -391,8 +393,8 @@
                 const avgTargetGain = this.scoreData.reduce((sum, stock) => {
                     const marketData = this.marketData[stock.stock];
                     if (marketData && marketData.length > 0) {
-                        const currentPrice = marketData[marketData.length - 1].close;
-                        const targetGain = ((stock.target - currentPrice) / currentPrice) * 100;
+                        const initialPrice = marketData[0].high; // Buy at high on score date
+                        const targetGain = ((stock.target - initialPrice) / initialPrice) * 100;
                         return sum + targetGain;
                     }
                     return sum;
@@ -402,8 +404,8 @@
                 const currentPerformance = this.scoreData.reduce((sum, stock) => {
                     const marketData = this.marketData[stock.stock];
                     if (marketData && marketData.length > 0) {
-                        const initialPrice = marketData[0].close;
-                        const currentPrice = marketData[marketData.length - 1].close;
+                        const initialPrice = marketData[0].high; // Buy at high on score date
+                        const currentPrice = marketData[marketData.length - 1].low; // Use low for subsequent days
                         const actualGain = ((currentPrice - initialPrice) / initialPrice) * 100;
                         return sum + actualGain;
                     }
@@ -436,8 +438,8 @@
                     this.chart.destroy();
                 }
 
-                const scoreFile = this.selectedScoreFile;
-                const scoreDate = new Date(scoreFile.split('/')[1] + '/' + scoreFile.split('/')[2] + '/' + scoreFile.split('/')[0]);
+                const scoreDateStr = this.scoreFileDates[this.selectedScoreFile];
+                const scoreDate = new Date(scoreDateStr);
                 const costOfCapital90Days = (Math.pow(1 + this.costOfCapital / 100, 90 / 365) - 1) * 100;
 
                 // Prepare data for chart
@@ -544,8 +546,8 @@
                 this.scoreData.forEach(stock => {
                     const marketData = this.marketData[stock.stock];
                     if (marketData && marketData.length > 0) {
-                        const initialPrice = marketData[0].close;
-                        const currentPrice = marketData[Math.min(daysElapsed, marketData.length - 1)].close;
+                        const initialPrice = marketData[0].high; // Buy at high on score date
+                        const currentPrice = marketData[Math.min(daysElapsed, marketData.length - 1)].low; // Use low for subsequent days
                         const gain = ((currentPrice - initialPrice) / initialPrice) * 100;
                         totalGain += gain;
                         validStocks++;
@@ -556,8 +558,8 @@
             }
 
             getDaysElapsed() {
-                const scoreFile = this.selectedScoreFile;
-                const scoreDate = new Date(scoreFile.split('/')[1] + '/' + scoreFile.split('/')[2] + '/' + scoreFile.split('/')[0]);
+                const scoreDateStr = this.scoreFileDates[this.selectedScoreFile];
+                const scoreDate = new Date(scoreDateStr);
                 const today = new Date();
                 return Math.floor((today - scoreDate) / (1000 * 60 * 60 * 24));
             }
@@ -571,8 +573,8 @@
                     const marketData = this.marketData[stock.stock];
                     
                     if (marketData && marketData.length > 0) {
-                        const initialPrice = marketData[0].close;
-                        const currentPrice = marketData[marketData.length - 1].close;
+                        const initialPrice = marketData[0].high; // Buy at high on score date
+                        const currentPrice = marketData[marketData.length - 1].low; // Use low for subsequent days
                         const targetGain = ((stock.target - initialPrice) / initialPrice) * 100;
                         const currentGain = ((currentPrice - initialPrice) / initialPrice) * 100;
                         const progress = (currentGain / targetGain) * 100;
