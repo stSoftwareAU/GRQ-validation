@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dividend Calculation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .pass { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .fail { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Dividend Calculation Test</h1>
+    <p>Testing NYSE:WFG dividend calculation for 2024-11-15 score file</p>
+    
+    <div id="test-results"></div>
+
+    <script>
+        class DividendCalculationTest {
+            constructor() {
+                this.scoreDate = new Date(2024, 10, 15); // November 15, 2024
+                this.ninetyDayDate = new Date(this.scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+                this.testDividends = [
+                    { exDivDate: new Date('2024-12-19'), amount: 0.135 },
+                    { exDivDate: new Date('2024-12-27'), amount: 0.32 },
+                    { exDivDate: new Date('2025-03-14'), amount: 0.32 }
+                ];
+            }
+
+            testDividendFiltering() {
+                let output = '<h3>Dividend Calculation Test</h3>';
+                output += `<p><strong>Score Date:</strong> ${this.scoreDate.toDateString()}</p>`;
+                output += `<p><strong>90-Day End Date:</strong> ${this.ninetyDayDate.toDateString()}</p>`;
+
+                // Test the filtering logic
+                const dividendsWithin90Days = this.testDividends.filter(dividend => 
+                    dividend.exDivDate <= this.ninetyDayDate
+                );
+
+                output += '<h4>All dividends for NYSE:WFG:</h4><ul>';
+                this.testDividends.forEach((div, index) => {
+                    const isWithin90Days = div.exDivDate <= this.ninetyDayDate;
+                    output += `<li>${index + 1}. ${div.exDivDate.toDateString()}: $${div.amount.toFixed(3)} ${isWithin90Days ? '(WITHIN 90 days)' : '(AFTER 90 days)'}</li>`;
+                });
+                output += '</ul>';
+
+                output += `<p><strong>Dividends within 90 days:</strong> ${dividendsWithin90Days.length}</p>`;
+                output += `<p><strong>Expected:</strong> 2 dividends</p>`;
+                output += `<p><strong>Actual:</strong> ${dividendsWithin90Days.length}</p>`;
+
+                const dividendTestPass = dividendsWithin90Days.length === 2;
+                output += `<div class="test-result ${dividendTestPass ? 'pass' : 'fail'}">`;
+                output += `<strong>Test Result:</strong> ${dividendTestPass ? 'PASS' : 'FAIL'}</div>`;
+
+                // Calculate total dividends within 90 days
+                const totalDividends = dividendsWithin90Days.reduce((sum, div) => sum + div.amount, 0);
+                output += `<p><strong>Total dividends within 90 days:</strong> $${totalDividends.toFixed(3)}</p>`;
+                output += `<p><strong>Expected:</strong> $0.455 (0.135 + 0.32)</p>`;
+                output += `<p><strong>Actual:</strong> $${totalDividends.toFixed(3)}</p>`;
+
+                const totalTestPass = Math.abs(totalDividends - 0.455) < 0.001;
+                output += `<div class="test-result ${totalTestPass ? 'pass' : 'fail'}">`;
+                output += `<strong>Test Result:</strong> ${totalTestPass ? 'PASS' : 'FAIL'}</div>`;
+
+                return { output, dividendTestPass, totalTestPass };
+            }
+
+            testDateCalculations() {
+                let output = '<h3>Date Calculation Test</h3>';
+                
+                // Verify 90-day calculation
+                const expected90DayDate = new Date(2025, 1, 13); // February 13, 2025
+                const daysDiff = Math.round((this.ninetyDayDate - this.scoreDate) / (1000 * 60 * 60 * 24));
+                
+                output += `<p><strong>Score Date:</strong> ${this.scoreDate.toDateString()}</p>`;
+                output += `<p><strong>Calculated 90-Day Date:</strong> ${this.ninetyDayDate.toDateString()}</p>`;
+                output += `<p><strong>Expected 90-Day Date:</strong> ${expected90DayDate.toDateString()}</p>`;
+                output += `<p><strong>Days difference:</strong> ${daysDiff}</p>`;
+
+                const dateTestPass = daysDiff === 90;
+                output += `<div class="test-result ${dateTestPass ? 'pass' : 'fail'}">`;
+                output += `<strong>Test Result:</strong> ${dateTestPass ? 'PASS' : 'FAIL'}</div>`;
+
+                return { output, dateTestPass };
+            }
+
+            runAllTests() {
+                const results = document.getElementById('test-results');
+                let output = '';
+
+                const dividendTest = this.testDividendFiltering();
+                const dateTest = this.testDateCalculations();
+
+                output += dividendTest.output;
+                output += dateTest.output;
+
+                const allTestsPass = dividendTest.dividendTestPass && dividendTest.totalTestPass && dateTest.dateTestPass;
+                
+                output += '<h3>Test Summary</h3>';
+                output += `<div class="test-result ${allTestsPass ? 'pass' : 'fail'}">`;
+                output += `<strong>Overall Result:</strong> ${allTestsPass ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'}</div>`;
+
+                results.innerHTML = output;
+            }
+        }
+
+        // Run the tests when page loads
+        window.addEventListener('load', () => {
+            const test = new DividendCalculationTest();
+            test.runAllTests();
+        });
+    </script>
+</body>
+</html> 
