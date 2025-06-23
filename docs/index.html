@@ -77,16 +77,6 @@
                         ← Back to Portfolio View
                       </button>
                     </div>
-                    <div id="selectedStockInfo" class="mt-2" style="display: none">
-                      <p class="text-muted mb-0">
-                        <small>
-                          <strong>Score:</strong> <span id="selectedStockScore">-</span> | 
-                          <strong>Target:</strong> <span id="selectedStockTarget">-</span> | 
-                          <strong>Intrinsic Value (Basic):</strong> <span id="selectedStockIntrinsicBasic">-</span> | 
-                          <strong>Intrinsic Value (Adjusted):</strong> <span id="selectedStockIntrinsicAdjusted">-</span>
-                        </small>
-                      </p>
-                    </div>
                   </div>
                 </div>
                 <div class="card mb-4">
@@ -123,7 +113,8 @@
                             <th>Intrinsic Value (Basic)</th>
                             <th>Intrinsic Value (Adjusted)</th>
                             <th>Ex-Dividend Date</th>
-                            <th>Dividend Per Share</th>
+                            <th>Average Dividend (90-day)</th>
+                            <th>Total Dividends (90-day)</th>
                             <th>Notes</th>
                           </tr>
                         </thead>
@@ -382,23 +373,6 @@
           // Show/hide back button based on view mode
           document.getElementById("backToAggregate").style.display =
             this.selectedStock ? "block" : "none";
-            
-          // Show/hide selected stock info panel
-          const selectedStockInfo = document.getElementById("selectedStockInfo");
-          if (this.selectedStock) {
-            selectedStockInfo.style.display = "block";
-            const stock = this.scoreData.find(s => s.stock === this.selectedStock);
-            if (stock) {
-              document.getElementById("selectedStockScore").textContent = stock.score.toFixed(3);
-              document.getElementById("selectedStockTarget").textContent = "$" + stock.target.toFixed(2);
-              document.getElementById("selectedStockIntrinsicBasic").textContent = 
-                stock.intrinsicValuePerShareBasic !== null ? "$" + stock.intrinsicValuePerShareBasic.toFixed(2) : "N/A";
-              document.getElementById("selectedStockIntrinsicAdjusted").textContent = 
-                stock.intrinsicValuePerShareAdjusted !== null ? "$" + stock.intrinsicValuePerShareAdjusted.toFixed(2) : "N/A";
-            }
-          } else {
-            selectedStockInfo.style.display = "none";
-          }
             
           // Apply CSS class for detailed view
           const tableContainer = document.querySelector('.table-responsive');
@@ -730,7 +704,7 @@
                   });
                 }
 
-                // Add after 90 days data (gray)
+                // Add after 90 days data (ghosted/gray)
                 if (after90Days.length > 0) {
                   datasets.push({
                     label: `${stock.stock} (After 90 Days)`,
@@ -783,7 +757,6 @@
               // Split portfolio data into before and after 90 days
               const before90Days = [];
               const after90Days = [];
-
               portfolioData.forEach((point) => {
                 if (point.x <= ninetyDayDate) {
                   before90Days.push(point);
@@ -820,7 +793,7 @@
                 });
               }
 
-              // Add after 90 days data (gray)
+              // Add after 90 days data (ghosted/gray)
               if (after90Days.length > 0) {
                 datasets.push({
                   label: "Portfolio Performance (After 90 Days)",
@@ -848,12 +821,13 @@
                 });
               }
 
-              // Add target price as a single point at 90 days
+              // Add portfolio target as a single point at 90 days
+              const portfolioTarget = this.calculatePortfolioTargetPercentage();
               datasets.push({
-                label: "Target Price",
+                label: "Portfolio Target",
                 data: [{
                   x: ninetyDayDate,
-                  y: 20, // 20% target
+                  y: portfolioTarget,
                 }],
                 borderColor: "rgba(255, 193, 7, 0.8)",
                 backgroundColor: "rgba(255, 193, 7, 0.8)",
@@ -885,16 +859,18 @@
 
         calculatePortfolioData() {
           const scoreDate = this.getScoreDate(this.selectedFile);
+          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
           const portfolioData = [];
 
-          // Get all unique dates from market data
+          // Get all unique dates from market data (include all dates, not just 90 days)
           const allDates = new Set();
           this.scoreData.forEach((stock) => {
             const marketData = this.marketData[stock.stock];
             if (marketData) {
-              marketData.forEach((point) =>
-                allDates.add(point.date.getTime())
-              );
+              marketData.forEach((point) => {
+                // Include all dates, not just within 90 days
+                allDates.add(point.date.getTime());
+              });
             }
           });
 
@@ -943,9 +919,19 @@
                     ? (scoreDateData.high + scoreDateData.low) / 2
                     : stock.target;
 
-                  totalPerformance +=
-                    (((dataPoint.high + dataPoint.low) / 2 - buyPrice) /
-                      buyPrice) * 100;
+                  // Calculate price return
+                  const priceReturn = ((dataPoint.high + dataPoint.low) / 2 - buyPrice) / buyPrice * 100;
+                  
+                  // Add dividend return up to this date (but only count dividends within 90 days)
+                  const dividends = this.getDividendsWithin90Days(stock.stock);
+                  const dividendsUpToDate = dividends.filter(d => d.exDivDate <= date);
+                  const totalDividends = dividendsUpToDate.reduce((sum, div) => sum + div.amount, 0);
+                  const dividendReturn = (totalDividends / buyPrice) * 100;
+                  
+                  // Total return including dividends
+                  const totalReturn = priceReturn + dividendReturn;
+                  
+                  totalPerformance += totalReturn;
                   validStocks++;
                 }
               }
@@ -960,8 +946,6 @@
               // Check if this is an ex-dividend date for any stock
               const dividendsOnDate = [];
               if (this.dividendData) {
-                const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-                
                 Object.entries(this.dividendData).forEach(
                   ([stock, dividends]) => {
                     dividends.forEach((d) => {
@@ -1016,14 +1000,15 @@
           const scoreDate = this.getScoreDate(this.selectedFile);
           const costOfCapitalData = [];
 
-          // Get all unique dates from market data
+          // Get all unique dates from market data (include all dates, not just 90 days)
           const allDates = new Set();
           this.scoreData.forEach((stock) => {
             const marketData = this.marketData[stock.stock];
             if (marketData) {
-              marketData.forEach((point) =>
-                allDates.add(point.date.getTime())
-              );
+              marketData.forEach((point) => {
+                // Include all dates, not just within 90 days
+                allDates.add(point.date.getTime());
+              });
             }
           });
 
@@ -1157,8 +1142,8 @@
                         <div class="col-6">${stock.exDividendDate || 'N/A'}</div>
                       </div>
                       <div class="row mb-2">
-                        <div class="col-6"><strong>Dividend Per Share:</strong></div>
-                        <div class="col-6">${stock.dividendPerShare > 0 ? '$' + stock.dividendPerShare.toFixed(4) : 'N/A'}</div>
+                        <div class="col-6"><strong>Average Dividend (90-day):</strong></div>
+                        <div class="col-6">${dividends.length > 0 ? '$' + (totalDividends / dividends.length).toFixed(4) : 'N/A'}</div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Total Dividends (90-day):</strong></div>
@@ -1254,16 +1239,17 @@
             const scoreFile = this.selectedFile;
             const scoreDate = this.getScoreDate(scoreFile);
             const daysElapsed = this.getDaysElapsed(scoreDate);
-            const avgPerformance = validStocks > 0 ? totalPerformance / validStocks : 0;
+            const portfolioPerformance90Day = this.calculatePortfolioPerformance90Day();
+            const portfolioTarget = this.calculatePortfolioTargetPercentage();
 
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
             totalsRow.innerHTML = `
-              <td>Portfolio Totals</td>
+              <td>Portfolio Totals (90-day)</td>
               <td>-</td>
               <td>-</td>
               <td>-</td>
-              <td class="${this.getPerformanceClass(avgPerformance)}">${avgPerformance.toFixed(1)}%</td>
+              <td class="${this.getPerformanceClass(portfolioPerformance90Day)}">${portfolioPerformance90Day.toFixed(1)}%</td>
               <td>-</td>
               <td>-</td>
               <td>-</td>
@@ -1274,14 +1260,17 @@
             summaryDiv.classList.add("portfolio-summary");
             summaryDiv.innerHTML = `
               <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                   <strong>Days Elapsed:</strong> ${daysElapsed}
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                   <strong>Stocks Tracked:</strong> ${this.scoreData.length}
                 </div>
-                <div class="col-md-4">
-                  <strong>Average Performance:</strong> ${avgPerformance.toFixed(1)}%
+                <div class="col-md-3">
+                  <strong>Portfolio Performance (90-day):</strong> ${portfolioPerformance90Day.toFixed(1)}%
+                </div>
+                <div class="col-md-3">
+                  <strong>Portfolio Target:</strong> ${portfolioTarget.toFixed(1)}%
                 </div>
               </div>
             `;
@@ -1304,18 +1293,24 @@
         getCurrentPrice(stockSymbol) {
           const marketData = this.marketData[stockSymbol];
           if (!marketData || marketData.length === 0) return "N/A";
-          const latestData = marketData[marketData.length - 1];
-          const currentPrice = (latestData.high + latestData.low) / 2;
+          
+          const scoreDate = this.getScoreDate(this.selectedFile);
+          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+          
+          // Find the last price within 90 days
+          const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+          if (within90Days.length === 0) return "N/A";
+          
+          const lastData = within90Days[within90Days.length - 1];
+          const currentPrice = (lastData.high + lastData.low) / 2;
           return "$" + currentPrice.toFixed(2);
         }
 
         calculateProgressVsCostOfCapital(stock, performance) {
           if (performance === null) return "N/A";
 
-          const scoreDate = this.getScoreDate(this.selectedFile);
-          const daysElapsed = this.getDaysElapsed(scoreDate);
-          const costOfCapitalReturn = (this.costOfCapital / 365) *
-            daysElapsed;
+          // Use 90 days for cost of capital calculation since all performance is 90-day based
+          const costOfCapitalReturn = (this.costOfCapital / 365) * 90;
 
           const excessReturn = performance - costOfCapitalReturn;
           return excessReturn.toFixed(1) + "%";
@@ -1417,12 +1412,17 @@
           const marketData = this.marketData[stock.stock];
           if (!marketData || marketData.length === 0) return null;
 
-          // Get the latest price (midpoint between high and low)
-          const latestData = marketData[marketData.length - 1];
-          const currentPrice = (latestData.high + latestData.low) / 2;
+          const scoreDate = this.getScoreDate(this.selectedFile);
+          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+          
+          // Find the last price within 90 days
+          const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+          if (within90Days.length === 0) return null;
+          
+          const lastData = within90Days[within90Days.length - 1];
+          const currentPrice = (lastData.high + lastData.low) / 2;
 
           // Get the price on the score date as the buy price
-          const scoreDate = this.getScoreDate(this.selectedFile);
           const scoreDateData = marketData.find((point) => {
             // Compare dates by day only, ignoring time components
             const pointDate = new Date(
@@ -1441,7 +1441,100 @@
             ? (scoreDateData.high + scoreDateData.low) / 2
             : stock.target;
 
-          return ((currentPrice - buyPrice) / buyPrice) * 100;
+          // Calculate price return
+          const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+          
+          // Add dividend return within 90 days
+          const dividends = this.getDividendsWithin90Days(stock.stock);
+          const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+          const dividendReturn = (totalDividends / buyPrice) * 100;
+          
+          // Total return including dividends
+          return priceReturn + dividendReturn;
+        }
+
+        calculatePortfolioTargetPercentage() {
+          // Calculate portfolio target based on equal investment amounts
+          // Each stock has a 20% target, so portfolio target is also 20%
+          // This assumes equal weighting of investments
+          return 20.0; // 20% target
+        }
+
+        calculatePortfolioPerformance90Day() {
+          const scoreDate = this.getScoreDate(this.selectedFile);
+          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+          
+          let totalPerformance = 0;
+          let validStocks = 0;
+
+          this.scoreData.forEach((stock) => {
+            const marketData = this.marketData[stock.stock];
+            if (marketData) {
+              // Find the price at 90 days (or closest available date)
+              let ninetyDayData = null;
+              
+              // First try to find exact 90-day date
+              ninetyDayData = marketData.find((point) => {
+                const pointDate = new Date(
+                  point.date.getFullYear(),
+                  point.date.getMonth(),
+                  point.date.getDate(),
+                );
+                const targetDate = new Date(
+                  ninetyDayDate.getFullYear(),
+                  ninetyDayDate.getMonth(),
+                  ninetyDayDate.getDate(),
+                );
+                return pointDate.getTime() === targetDate.getTime();
+              });
+
+              // If not found, find the closest date within 90 days
+              if (!ninetyDayData) {
+                const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+                if (within90Days.length > 0) {
+                  // Get the latest data point within 90 days
+                  ninetyDayData = within90Days[within90Days.length - 1];
+                }
+              }
+
+              if (ninetyDayData) {
+                // Get the price on the score date as the buy price
+                const scoreDateData = marketData.find((point) => {
+                  const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const scoreDateOnly = new Date(
+                    scoreDate.getFullYear(),
+                    scoreDate.getMonth(),
+                    scoreDate.getDate(),
+                  );
+                  return pointDate.getTime() === scoreDateOnly.getTime();
+                });
+                
+                const buyPrice = scoreDateData
+                  ? (scoreDateData.high + scoreDateData.low) / 2
+                  : stock.target;
+
+                const currentPrice = (ninetyDayData.high + ninetyDayData.low) / 2;
+                
+                // Add dividend income within 90 days
+                const dividends = this.getDividendsWithin90Days(stock.stock);
+                const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+                
+                // Calculate total return including dividends
+                const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+                const dividendReturn = (totalDividends / buyPrice) * 100;
+                const totalReturn = priceReturn + dividendReturn;
+                
+                totalPerformance += totalReturn;
+                validStocks++;
+              }
+            }
+          });
+
+          return validStocks > 0 ? totalPerformance / validStocks : 0;
         }
       }
 
