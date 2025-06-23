@@ -529,14 +529,30 @@
                     label: function (context) {
                       const label = context.dataset.label || "";
                       const value = context.parsed.y;
+                      const dataPoint = context.raw;
 
+                      let tooltipText = "";
                       if (label.includes("Target")) {
-                        return `${label}: $${value.toFixed(2)}`;
+                        tooltipText = `${label}: $${value.toFixed(2)}`;
                       } else if (label.includes("Actual")) {
-                        return `${label}: $${value.toFixed(2)}`;
+                        tooltipText = `${label}: $${value.toFixed(2)}`;
                       } else {
-                        return `${label}: ${value.toFixed(1)}%`;
+                        tooltipText = `${label}: ${value.toFixed(1)}%`;
                       }
+
+                      // Add dividend information if available
+                      if (dataPoint && dataPoint.dividend) {
+                        if (typeof dataPoint.dividend === "number") {
+                          tooltipText += ` (Ex-Dividend: $${
+                            dataPoint.dividend.toFixed(2)
+                          })`;
+                        } else {
+                          tooltipText +=
+                            ` (Ex-Dividend: ${dataPoint.dividend})`;
+                        }
+                      }
+
+                      return tooltipText;
                     },
                   },
                 },
@@ -649,8 +665,6 @@
                         },
                       },
                     },
-                    // Add ex-dividend markers
-                    ...this.getExDividendAnnotations(),
                   },
                 },
               },
@@ -698,12 +712,51 @@
                   ? (scoreDateData.high + scoreDateData.low) / 2
                   : stock.target;
 
+                // Get dividend data for this stock
+                const stockDividends =
+                  this.dividendData?.[stock.stock] || [];
+                const exDivDates = stockDividends.map((d) =>
+                  d.exDivDate.getTime()
+                );
+
                 marketData.forEach((point) => {
                   const dataPoint = {
                     x: point.date,
                     y: (((point.high + point.low) / 2 - buyPrice) /
                       buyPrice) * 100,
                   };
+
+                  // Check if this is an ex-dividend date
+                  const pointDateOnly = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const isExDivDate = exDivDates.some((exDivTime) => {
+                    const exDivDateOnly = new Date(
+                      new Date(exDivTime).getFullYear(),
+                      new Date(exDivTime).getMonth(),
+                      new Date(exDivTime).getDate(),
+                    );
+                    return pointDateOnly.getTime() ===
+                      exDivDateOnly.getTime();
+                  });
+
+                  // Add dividend info to tooltip
+                  if (isExDivDate) {
+                    const dividend = stockDividends.find((d) => {
+                      const dDateOnly = new Date(
+                        d.exDivDate.getFullYear(),
+                        d.exDivDate.getMonth(),
+                        d.exDivDate.getDate(),
+                      );
+                      return dDateOnly.getTime() ===
+                        pointDateOnly.getTime();
+                    });
+                    if (dividend) {
+                      dataPoint.dividend = dividend.amount;
+                    }
+                  }
 
                   if (point.date <= ninetyDayDate) {
                     before90Days.push(dataPoint);
@@ -721,6 +774,22 @@
                     backgroundColor: "rgba(102, 126, 234, 0.1)",
                     borderWidth: 3,
                     fill: false,
+                    pointRadius: before90Days.map((point) =>
+                      point.dividend ? 8 : 3
+                    ),
+                    pointBackgroundColor: before90Days.map((point) =>
+                      point.dividend
+                        ? "rgba(0, 123, 255, 1)"
+                        : "rgba(102, 126, 234, 1)"
+                    ),
+                    pointBorderColor: before90Days.map((point) =>
+                      point.dividend
+                        ? "rgba(0, 123, 255, 1)"
+                        : "rgba(102, 126, 234, 1)"
+                    ),
+                    pointHoverRadius: before90Days.map((point) =>
+                      point.dividend ? 12 : 6
+                    ),
                   });
                 }
 
@@ -733,6 +802,22 @@
                     backgroundColor: "rgba(108, 117, 125, 0.1)",
                     borderWidth: 1,
                     fill: false,
+                    pointRadius: after90Days.map((point) =>
+                      point.dividend ? 8 : 3
+                    ),
+                    pointBackgroundColor: after90Days.map((point) =>
+                      point.dividend
+                        ? "rgba(0, 123, 255, 1)"
+                        : "rgba(108, 117, 125, 0.5)"
+                    ),
+                    pointBorderColor: after90Days.map((point) =>
+                      point.dividend
+                        ? "rgba(0, 123, 255, 1)"
+                        : "rgba(108, 117, 125, 0.5)"
+                    ),
+                    pointHoverRadius: after90Days.map((point) =>
+                      point.dividend ? 12 : 6
+                    ),
                   });
                 }
 
@@ -762,7 +847,64 @@
               const before90Days = [];
               const after90Days = [];
 
+              // Get all ex-dividend dates for aggregate view
+              const allExDivDates = [];
+              if (this.dividendData) {
+                Object.values(this.dividendData).forEach(
+                  (dividends) => {
+                    dividends.forEach((d) => {
+                      allExDivDates.push(d.exDivDate.getTime());
+                    });
+                  },
+                );
+              }
+
               portfolioData.forEach((point) => {
+                // Check if this is an ex-dividend date
+                const pointDateOnly = new Date(
+                  point.x.getFullYear(),
+                  point.x.getMonth(),
+                  point.x.getDate(),
+                );
+                const isExDivDate = allExDivDates.some((exDivTime) => {
+                  const exDivDateOnly = new Date(
+                    new Date(exDivTime).getFullYear(),
+                    new Date(exDivTime).getMonth(),
+                    new Date(exDivTime).getDate(),
+                  );
+                  return pointDateOnly.getTime() ===
+                    exDivDateOnly.getTime();
+                });
+
+                // Add dividend info to tooltip
+                if (isExDivDate) {
+                  const dividendsOnDate = [];
+                  if (this.dividendData) {
+                    Object.entries(this.dividendData).forEach(
+                      ([stock, dividends]) => {
+                        dividends.forEach((d) => {
+                          const dDateOnly = new Date(
+                            d.exDivDate.getFullYear(),
+                            d.exDivDate.getMonth(),
+                            d.exDivDate.getDate(),
+                          );
+                          if (
+                            dDateOnly.getTime() ===
+                              pointDateOnly.getTime()
+                          ) {
+                            dividendsOnDate.push(
+                              `${stock}: $${d.amount.toFixed(2)}`,
+                            );
+                          }
+                        });
+                      },
+                    );
+                  }
+                  if (dividendsOnDate.length > 0) {
+                    point.dividend = dividendsOnDate.join(", ");
+                  }
+                }
+
                 if (point.x <= ninetyDayDate) {
                   before90Days.push(point);
                 } else {
@@ -779,6 +921,22 @@
                   backgroundColor: "rgba(102, 126, 234, 0.1)",
                   borderWidth: 3,
                   fill: false,
+                  pointRadius: before90Days.map((point) =>
+                    point.dividend ? 8 : 3
+                  ),
+                  pointBackgroundColor: before90Days.map((point) =>
+                    point.dividend
+                      ? "rgba(0, 123, 255, 1)"
+                      : "rgba(102, 126, 234, 1)"
+                  ),
+                  pointBorderColor: before90Days.map((point) =>
+                    point.dividend
+                      ? "rgba(0, 123, 255, 1)"
+                      : "rgba(102, 126, 234, 1)"
+                  ),
+                  pointHoverRadius: before90Days.map((point) =>
+                    point.dividend ? 12 : 6
+                  ),
                 });
               }
 
@@ -791,6 +949,22 @@
                   backgroundColor: "rgba(108, 117, 125, 0.1)",
                   borderWidth: 1,
                   fill: false,
+                  pointRadius: after90Days.map((point) =>
+                    point.dividend ? 8 : 3
+                  ),
+                  pointBackgroundColor: after90Days.map((point) =>
+                    point.dividend
+                      ? "rgba(0, 123, 255, 1)"
+                      : "rgba(108, 117, 125, 0.5)"
+                  ),
+                  pointBorderColor: after90Days.map((point) =>
+                    point.dividend
+                      ? "rgba(0, 123, 255, 1)"
+                      : "rgba(108, 117, 125, 0.5)"
+                  ),
+                  pointHoverRadius: after90Days.map((point) =>
+                    point.dividend ? 12 : 6
+                  ),
                 });
               }
 
@@ -1088,88 +1262,6 @@
           document.getElementById("error").style.display = "none";
           document.getElementById("noData").style.display = "none";
           document.getElementById("summary").style.display = "block";
-        }
-
-        getExDividendAnnotations() {
-          const annotations = {};
-          if (this.dividendData) {
-            let exDivDates = [];
-
-            if (this.selectedStock) {
-              // Single stock view - show only dividends for this stock
-              const stockDividends =
-                this.dividendData[this.selectedStock] || [];
-              exDivDates = stockDividends.map((d) => d.exDivDate);
-            } else {
-              // Aggregate view - show all dividend dates
-              exDivDates = Object.values(this.dividendData).flatMap(
-                (dividends) => dividends.map((d) => d.exDivDate),
-              );
-            }
-
-            // Get unique ex-dividend dates
-            const uniqueExDivDates = [
-              ...new Set(exDivDates.map((d) => d.getTime())),
-            ];
-
-            uniqueExDivDates.forEach((timestamp, index) => {
-              const exDivDate = new Date(timestamp);
-
-              // Get dividend details for tooltip
-              let tooltipText = "Ex-Dividend";
-              if (this.selectedStock) {
-                const stockDividends =
-                  this.dividendData[this.selectedStock] || [];
-                const dividend = stockDividends.find((d) =>
-                  d.exDivDate.getTime() === timestamp
-                );
-                if (dividend) {
-                  tooltipText = `Ex-Dividend: $${
-                    dividend.amount.toFixed(2)
-                  }`;
-                }
-              } else {
-                // Aggregate view - show all dividends on this date
-                const dividendsOnDate = Object.entries(
-                  this.dividendData,
-                )
-                  .flatMap(([stock, dividends]) =>
-                    dividends
-                      .filter((d) =>
-                        d.exDivDate.getTime() === timestamp
-                      )
-                      .map((d) => `${stock}: $${d.amount.toFixed(2)}`)
-                  );
-                if (dividendsOnDate.length > 0) {
-                  tooltipText = `Ex-Dividend: ${
-                    dividendsOnDate.join(", ")
-                  }`;
-                }
-              }
-
-              annotations[`exDiv${index}`] = {
-                type: "line",
-                xMin: exDivDate,
-                xMax: exDivDate,
-                borderColor: "rgba(0, 123, 255, 0.6)",
-                borderWidth: 2,
-                borderDash: [3, 3],
-                label: {
-                  content: tooltipText,
-                  enabled: true,
-                  position: "top",
-                  font: {
-                    size: 10,
-                  },
-                  backgroundColor: "rgba(0, 0, 0, 0.8)",
-                  color: "white",
-                  padding: 4,
-                  borderRadius: 4,
-                },
-              };
-            });
-          }
-          return annotations;
         }
       }
 
