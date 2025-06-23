@@ -36,6 +36,12 @@ cargo tarpaulin --out Html --output-dir .coverage || {
 echo "🏗️ Building release version..."
 cargo build --release
 
+echo "🔍 Running DenoJS judgement tests..."
+deno run tests/judgement_tests.js
+
+echo "📝 Formatting JS, HTML, and CSS files with deno fmt..."
+deno fmt docs/*.js docs/*.html docs/*.css tests/*.js
+
 echo "✅ Quality checks completed successfully!"
 if [ -d ".coverage" ]; then
     echo "📈 Coverage report available in: .coverage/tarpaulin-report.html"
