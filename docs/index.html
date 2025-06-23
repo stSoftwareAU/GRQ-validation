@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GRQ Stock Prediction Validation</title>
+    <title>GRQ Validation Dashboard</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>"
+    />
 
     <!-- Bootstrap 5 CSS -->
     <link
@@ -963,30 +967,14 @@
             a - b
           );
 
-          // Debug: Log dividend data
-          console.log("Dividend data available:", this.dividendData);
-          console.log(
-            "Number of stocks with dividends:",
-            Object.keys(this.dividendData || {}).length,
-          );
-
-          // Debug: Log all dividend dates
+          // Simple debug: Check if dividend data is loaded
+          console.log("Dividend data loaded:", !!this.dividendData);
           if (this.dividendData) {
-            Object.entries(this.dividendData).forEach(
-              ([stock, dividends]) => {
-                console.log(
-                  `Stock ${stock} has ${dividends.length} dividends:`,
-                  dividends.map((d) => d.exDivDate.toDateString()),
-                );
-              },
+            console.log(
+              "Stocks with dividends:",
+              Object.keys(this.dividendData),
             );
           }
-
-          console.log(
-            "Processing",
-            sortedDates.length,
-            "portfolio dates",
-          );
 
           sortedDates.forEach((timestamp) => {
             const date = new Date(timestamp);
@@ -1051,24 +1039,11 @@
                         date.getDate(),
                       );
 
-                      // Debug: Log date comparison for first few dates
-                      if (sortedDates.indexOf(timestamp) < 5) {
-                        console.log(
-                          `Comparing ${date.toDateString()} with ${d.exDivDate.toDateString()} for ${stock}: ${
-                            dDateOnly.getTime() ===
-                              pointDateOnly.getTime()
-                          }`,
-                        );
-                      }
-
                       if (
                         dDateOnly.getTime() === pointDateOnly.getTime()
                       ) {
                         dividendsOnDate.push(
                           `${stock}: $${d.amount.toFixed(2)}`,
-                        );
-                        console.log(
-                          `MATCH FOUND! Date: ${date.toDateString()}, Stock: ${stock}, Amount: $${d.amount}`,
                         );
                       }
                     });
@@ -1092,12 +1067,6 @@
           console.log(
             "Portfolio data points with dividends:",
             portfolioData.filter((p) => p.dividend).length,
-          );
-
-          // Debug: Show first few portfolio points
-          console.log(
-            "First 5 portfolio points:",
-            portfolioData.slice(0, 5),
           );
 
           return portfolioData;
