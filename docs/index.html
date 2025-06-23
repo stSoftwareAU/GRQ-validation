@@ -454,7 +454,26 @@
           // Get the latest price (midpoint between high and low)
           const latestData = marketData[marketData.length - 1];
           const currentPrice = (latestData.high + latestData.low) / 2;
-          const buyPrice = stock.target; // Using target as buy price
+
+          // Get the price on the score date as the buy price
+          const scoreDate = this.getScoreDate(this.selectedFile);
+          const scoreDateData = marketData.find((point) => {
+            // Compare dates by day only, ignoring time components
+            const pointDate = new Date(
+              point.date.getFullYear(),
+              point.date.getMonth(),
+              point.date.getDate(),
+            );
+            const scoreDateOnly = new Date(
+              scoreDate.getFullYear(),
+              scoreDate.getMonth(),
+              scoreDate.getDate(),
+            );
+            return pointDate.getTime() === scoreDateOnly.getTime();
+          });
+          const buyPrice = scoreDateData
+            ? (scoreDateData.high + scoreDateData.low) / 2
+            : stock.target;
 
           return ((currentPrice - buyPrice) / buyPrice) * 100;
         }
@@ -659,12 +678,31 @@
                 const before90Days = [];
                 const after90Days = [];
 
+                // Get the price on the score date as the buy price
+                const scoreDateData = marketData.find((point) => {
+                  // Compare dates by day only, ignoring time components
+                  const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const scoreDateOnly = new Date(
+                    scoreDate.getFullYear(),
+                    scoreDate.getMonth(),
+                    scoreDate.getDate(),
+                  );
+                  return pointDate.getTime() ===
+                    scoreDateOnly.getTime();
+                });
+                const buyPrice = scoreDateData
+                  ? (scoreDateData.high + scoreDateData.low) / 2
+                  : stock.target;
+
                 marketData.forEach((point) => {
                   const dataPoint = {
                     x: point.date,
-                    y: (((point.high + point.low) / 2 - stock.target) /
-                      stock.target) *
-                      100,
+                    y: (((point.high + point.low) / 2 - buyPrice) /
+                      buyPrice) * 100,
                   };
 
                   if (point.date <= ninetyDayDate) {
@@ -712,22 +750,6 @@
                   pointHoverRadius: 8,
                   fill: false,
                   showLine: false, // Don't connect points
-                  yAxisID: "y1", // Use secondary Y-axis for prices
-                });
-
-                // Add actual price line
-                const actualData = marketData.map((point) => ({
-                  x: point.date,
-                  y: (point.high + point.low) / 2,
-                }));
-
-                datasets.push({
-                  label: "Actual Price",
-                  data: actualData,
-                  borderColor: "rgba(40, 167, 69, 0.8)",
-                  backgroundColor: "rgba(40, 167, 69, 0.1)",
-                  borderWidth: 2,
-                  fill: false,
                   yAxisID: "y1", // Use secondary Y-axis for prices
                 });
               }
@@ -841,10 +863,29 @@
                   (point) => point.date.getTime() === timestamp,
                 );
                 if (dataPoint) {
+                  // Get the price on the score date as the buy price
+                  const scoreDateData = marketData.find((point) => {
+                    // Compare dates by day only, ignoring time components
+                    const pointDate = new Date(
+                      point.date.getFullYear(),
+                      point.date.getMonth(),
+                      point.date.getDate(),
+                    );
+                    const scoreDateOnly = new Date(
+                      scoreDate.getFullYear(),
+                      scoreDate.getMonth(),
+                      scoreDate.getDate(),
+                    );
+                    return pointDate.getTime() ===
+                      scoreDateOnly.getTime();
+                  });
+                  const buyPrice = scoreDateData
+                    ? (scoreDateData.high + scoreDateData.low) / 2
+                    : stock.target;
+
                   totalPerformance +=
-                    (((dataPoint.high + dataPoint.low) / 2 -
-                      stock.target) / stock.target) *
-                    100;
+                    (((dataPoint.high + dataPoint.low) / 2 - buyPrice) /
+                      buyPrice) * 100;
                   validStocks++;
                 }
               }
