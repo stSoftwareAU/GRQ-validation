@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::Parser;
 use log::info;
 use utils::{
-    create_market_data_long_csv_for_score_file, extract_ticker_codes_from_score_file,
-    read_index_json,
+    create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
+    extract_ticker_codes_from_score_file, read_index_json,
 };
 
 pub mod models;
@@ -66,6 +66,25 @@ fn main() -> Result<()> {
                 ) {
                     Ok(output_path) => {
                         info!("Successfully created market data CSV: {}", output_path);
+
+                        // Also create dividend CSV file
+                        match create_dividend_csv_for_score_file(
+                            &score_file_path,
+                            &ticker_codes,
+                            &score_entry.date,
+                        ) {
+                            Ok(_) => {
+                                info!("Successfully created dividend CSV for {}", score_file_path);
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to create dividend CSV for {}: {}",
+                                    score_file_path,
+                                    e
+                                );
+                            }
+                        }
+
                         processed_count += 1;
                     }
                     Err(e) => {

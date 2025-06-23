@@ -1,3 +1,4 @@
+use crate::models::DividendData;
 use crate::models::IndexData;
 use crate::models::MarketData;
 use crate::models::StockRecord;
@@ -224,27 +225,27 @@ pub fn create_market_data_csv(
     // Create CSV file
     let file = File::create(output_path)?;
     let mut writer = Writer::from_writer(file);
+    writer.write_record(["date", "symbol", "close"])?;
 
-    // Write header
-    let mut header = vec!["Date".to_string()];
-    header.extend(symbols.iter().cloned());
-    writer.write_record(&header)?;
-
-    // Write data rows
-    for date in sorted_dates {
-        let mut row = vec![date.clone()];
-        for symbol in symbols {
-            if let Some(symbol_data) = all_market_data.get(symbol) {
-                if let Some((_, price)) = symbol_data.iter().find(|(d, _)| d == &date) {
-                    row.push(price.to_string());
-                } else {
-                    row.push("".to_string()); // No data for this date
+    for symbol in symbols {
+        match read_market_data(symbol) {
+            Ok(market_data) => {
+                match filter_market_data_by_date_range(&market_data, score_file_date, &end_date_str)
+                {
+                    Ok(filtered_data) => {
+                        for (date, close_price) in filtered_data {
+                            writer.write_record([&date, symbol, &close_price.to_string()])?;
+                        }
+                    }
+                    Err(e) => {
+                        println!("  {}: Error filtering data: {}", symbol, e);
+                    }
                 }
-            } else {
-                row.push("".to_string()); // No data for this symbol
+            }
+            Err(e) => {
+                println!("  {}: Error reading market data: {}", symbol, e);
             }
         }
-        writer.write_record(&row)?;
     }
 
     writer.flush()?;
@@ -318,6 +319,141 @@ pub fn create_market_data_long_csv_for_score_file(
     };
     create_market_data_long_csv(tickers, score_file_date, &output_path)?;
     Ok(output_path)
+}
+
+/// Gets the dividend data path for a given ticker
+/// For example: "SEM" -> "../GRQ-dividends/data/S/SEM.json"
+pub fn get_dividend_data_path(ticker: &str) -> String {
+    let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
+    format!("../GRQ-dividends/data/{}/{}.json", first_letter, ticker)
+}
+
+/// Reads dividend data for a given ticker
+pub fn read_dividend_data(ticker: &str) -> Result<DividendData> {
+    use std::fs::File;
+
+    let dividend_data_path = get_dividend_data_path(ticker);
+    let file = File::open(&dividend_data_path)?;
+    let dividend_data: DividendData = serde_json::from_reader(file)?;
+
+    Ok(dividend_data)
+}
+
+/// Filters dividend data by date range
+pub fn filter_dividend_data_by_date_range(
+    dividend_data: &DividendData,
+    start_date: &str,
+    end_date: &str,
+) -> Result<Vec<(String, f64)>> {
+    let start = NaiveDate::parse_from_str(start_date, "%Y-%m-%d")?;
+    let end = NaiveDate::parse_from_str(end_date, "%Y-%m-%d")?;
+
+    let mut filtered_data = Vec::new();
+
+    for dividend_record in &dividend_data.data {
+        if let Ok(ex_div_date) =
+            NaiveDate::parse_from_str(&dividend_record.ex_dividend_date, "%Y-%m-%d")
+        {
+            if ex_div_date >= start && ex_div_date <= end {
+                if let Ok(amount) = dividend_record.amount.parse::<f64>() {
+                    filtered_data.push((dividend_record.ex_dividend_date.clone(), amount));
+                }
+            }
+        }
+    }
+
+    // Sort by date (oldest first)
+    filtered_data.sort_by(|a, b| a.0.cmp(&b.0));
+
+    Ok(filtered_data)
+}
+
+/// Derives the dividend CSV output path from a score file path
+/// For example: "docs/scores/2025/June/20.tsv" -> "docs/scores/2025/June/20-dividends.csv"
+pub fn derive_dividend_csv_output_path(score_file_path: &str) -> String {
+    let path = Path::new(score_file_path);
+    if let Some(parent) = path.parent() {
+        if let Some(stem) = path.file_stem() {
+            return parent
+                .join(format!("{}-dividends.csv", stem.to_string_lossy()))
+                .to_string_lossy()
+                .to_string();
+        }
+    }
+    // Fallback: just replace .tsv with -dividends.csv
+    score_file_path.replace(".tsv", "-dividends.csv")
+}
+
+/// Creates a dividend CSV file for the given symbols and date range
+pub fn create_dividend_csv(
+    symbols: &[String],
+    score_file_date: &str,
+    output_path: &str,
+) -> Result<()> {
+    use csv::Writer;
+    use std::fs::File;
+
+    // Calculate date range: from score file date to 180 days after
+    let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
+    let end_date = score_date + Duration::days(180);
+    let end_date_str = end_date.format("%Y-%m-%d").to_string();
+
+    println!(
+        "Reading dividend data from {} to {}",
+        score_file_date, end_date_str
+    );
+
+    let file = File::create(output_path)?;
+    let mut writer = Writer::from_writer(file);
+    writer.write_record(["date", "symbol", "amount"])?;
+
+    for symbol in symbols {
+        // Extract just the symbol part (e.g., "NYSE:SEM" -> "SEM")
+        let symbol_only = extract_symbol_from_ticker(symbol);
+
+        match read_dividend_data(&symbol_only) {
+            Ok(dividend_data) => {
+                match filter_dividend_data_by_date_range(
+                    &dividend_data,
+                    score_file_date,
+                    &end_date_str,
+                ) {
+                    Ok(filtered_data) => {
+                        for (date, amount) in filtered_data {
+                            writer.write_record([&date, symbol, &amount.to_string()])?;
+                        }
+                    }
+                    Err(e) => {
+                        println!(
+                            "Warning: Could not filter dividend data for {}: {}",
+                            symbol, e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                println!(
+                    "Warning: Could not read dividend data for {}: {}",
+                    symbol, e
+                );
+            }
+        }
+    }
+
+    writer.flush()?;
+    println!("Dividend CSV file created: {}", output_path);
+
+    Ok(())
+}
+
+/// Creates a dividend CSV file for a score file
+pub fn create_dividend_csv_for_score_file(
+    score_file_path: &str,
+    symbols: &[String],
+    score_file_date: &str,
+) -> Result<()> {
+    let output_path = derive_dividend_csv_output_path(score_file_path);
+    create_dividend_csv(symbols, score_file_date, &output_path)
 }
 
 #[cfg(test)]
@@ -528,5 +664,30 @@ mod tests {
             let curr_date = NaiveDate::parse_from_str(&filtered_data[i].0, "%Y-%m-%d").unwrap();
             assert!(prev_date <= curr_date);
         }
+    }
+
+    #[test]
+    fn test_get_dividend_data_path() {
+        assert_eq!(
+            get_dividend_data_path("SEM"),
+            "../GRQ-dividends/data/S/SEM.json"
+        );
+        assert_eq!(
+            get_dividend_data_path("AAPL"),
+            "../GRQ-dividends/data/A/AAPL.json"
+        );
+        assert_eq!(get_dividend_data_path(""), "../GRQ-dividends/data/X/.json");
+    }
+
+    #[test]
+    fn test_derive_dividend_csv_output_path() {
+        assert_eq!(
+            derive_dividend_csv_output_path("docs/scores/2025/June/20.tsv"),
+            "docs/scores/2025/June/20-dividends.csv"
+        );
+        assert_eq!(
+            derive_dividend_csv_output_path("test.tsv"),
+            "test-dividends.csv"
+        );
     }
 }

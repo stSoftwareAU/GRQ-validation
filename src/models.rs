@@ -97,6 +97,26 @@ pub struct IndexData {
     pub scores: Vec<ScoreEntry>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DividendRecord {
+    #[serde(rename = "ex_dividend_date")]
+    pub ex_dividend_date: String,
+    #[serde(rename = "declaration_date")]
+    pub declaration_date: Option<String>,
+    #[serde(rename = "record_date")]
+    pub record_date: Option<String>,
+    #[serde(rename = "payment_date")]
+    pub payment_date: Option<String>,
+    #[serde(rename = "amount")]
+    pub amount: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DividendData {
+    pub symbol: String,
+    pub data: Vec<DividendRecord>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
