@@ -655,7 +655,6 @@
                       ),
                       borderColor: "rgba(220, 53, 69, 0.8)",
                       borderWidth: 2,
-                      borderDash: [5, 5],
                       label: {
                         content: "90-Day Target",
                         enabled: true,
@@ -857,7 +856,7 @@
               // Add before 90 days data (normal color)
               if (before90Days.length > 0) {
                 datasets.push({
-                  label: "Portfolio Average",
+                  label: "Portfolio Performance",
                   data: before90Days,
                   borderColor: "rgba(102, 126, 234, 1)",
                   backgroundColor: "rgba(102, 126, 234, 0.1)",
@@ -885,7 +884,7 @@
               // Add after 90 days data (gray)
               if (after90Days.length > 0) {
                 datasets.push({
-                  label: "Portfolio Average (After 90 Days)",
+                  label: "Portfolio Performance (After 90 Days)",
                   data: after90Days,
                   borderColor: "rgba(108, 117, 125, 0.5)",
                   backgroundColor: "rgba(108, 117, 125, 0.1)",
@@ -910,16 +909,12 @@
                 });
               }
 
-              // Add target price as a single point at 90 days for aggregate view
-              const avgTarget = this.scoreData.reduce((sum, stock) =>
-                sum + stock.target, 0) / this.scoreData.length;
-              const targetReturn = 20; // 20% target
-
+              // Add target price as a single point at 90 days
               datasets.push({
                 label: "Target Price",
                 data: [{
                   x: ninetyDayDate,
-                  y: targetReturn,
+                  y: 20, // 20% target
                 }],
                 borderColor: "rgba(255, 193, 7, 0.8)",
                 backgroundColor: "rgba(255, 193, 7, 0.8)",
@@ -942,6 +937,7 @@
               backgroundColor: "rgba(108, 117, 125, 0.1)",
               borderWidth: 2,
               fill: false,
+              pointRadius: 0, // No points, just a line
             });
           }
 
@@ -965,6 +961,31 @@
 
           const sortedDates = Array.from(allDates).sort((a, b) =>
             a - b
+          );
+
+          // Debug: Log dividend data
+          console.log("Dividend data available:", this.dividendData);
+          console.log(
+            "Number of stocks with dividends:",
+            Object.keys(this.dividendData || {}).length,
+          );
+
+          // Debug: Log all dividend dates
+          if (this.dividendData) {
+            Object.entries(this.dividendData).forEach(
+              ([stock, dividends]) => {
+                console.log(
+                  `Stock ${stock} has ${dividends.length} dividends:`,
+                  dividends.map((d) => d.exDivDate.toDateString()),
+                );
+              },
+            );
+          }
+
+          console.log(
+            "Processing",
+            sortedDates.length,
+            "portfolio dates",
           );
 
           sortedDates.forEach((timestamp) => {
@@ -1029,11 +1050,25 @@
                         date.getMonth(),
                         date.getDate(),
                       );
+
+                      // Debug: Log date comparison for first few dates
+                      if (sortedDates.indexOf(timestamp) < 5) {
+                        console.log(
+                          `Comparing ${date.toDateString()} with ${d.exDivDate.toDateString()} for ${stock}: ${
+                            dDateOnly.getTime() ===
+                              pointDateOnly.getTime()
+                          }`,
+                        );
+                      }
+
                       if (
                         dDateOnly.getTime() === pointDateOnly.getTime()
                       ) {
                         dividendsOnDate.push(
                           `${stock}: $${d.amount.toFixed(2)}`,
+                        );
+                        console.log(
+                          `MATCH FOUND! Date: ${date.toDateString()}, Stock: ${stock}, Amount: $${d.amount}`,
                         );
                       }
                     });
@@ -1042,11 +1077,28 @@
               }
               if (dividendsOnDate.length > 0) {
                 portfolioPoint.dividend = dividendsOnDate.join(", ");
+                console.log(
+                  "Found ex-dividend date:",
+                  date.toDateString(),
+                  "with dividends:",
+                  dividendsOnDate,
+                );
               }
 
               portfolioData.push(portfolioPoint);
             }
           });
+
+          console.log(
+            "Portfolio data points with dividends:",
+            portfolioData.filter((p) => p.dividend).length,
+          );
+
+          // Debug: Show first few portfolio points
+          console.log(
+            "First 5 portfolio points:",
+            portfolioData.slice(0, 5),
+          );
 
           return portfolioData;
         }
