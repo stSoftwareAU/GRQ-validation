@@ -136,20 +136,6 @@ cargo build --release
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 #Prompt
-The overall rust program should read the docs/index.json file to find which score files are present, then for each score file we should find the list of ticker codes ( first column). 
 
-For each ticker code read the corresponding market data in the repo ../GRQ-shareprices2025Q1
-
-For example market data for the ticker "NYSE:SEM" will be in the file data/S/SEM.json of the repo ../GRQ-shareprices2025Q1@SEM.json 
-
-I want to create a short price history for each score file which contains only the tickers in that score file and up to 180 days worth of price history from that score file's date. ( We only started recording scores a few days ago so this price history file will be small at the moment) which will grow over time up to 180 days from the score file's date. 
-
-I'm trying to validate the predictions in the score file ( which is the top 20 predictions), these predictions are for increase price over the next 90 days. As time goes on I will be able to tell how accurate these predictions are. 
-
-I think we will be creating a corresponding "csv" which contains the market prices for each score file. 
-
-I want to do the development feature by feature in a TDD manner so I can follow along and learn Rust. 
-
-Let's start with the first test then implement. 
 
 
