@@ -641,7 +641,6 @@
                       yMax: 0,
                       borderColor: "rgba(108, 117, 125, 0.5)",
                       borderWidth: 1,
-                      borderDash: [5, 5],
                     },
                     // Add 90-day target line
                     line3: {
@@ -847,64 +846,7 @@
               const before90Days = [];
               const after90Days = [];
 
-              // Get all ex-dividend dates for aggregate view
-              const allExDivDates = [];
-              if (this.dividendData) {
-                Object.values(this.dividendData).forEach(
-                  (dividends) => {
-                    dividends.forEach((d) => {
-                      allExDivDates.push(d.exDivDate.getTime());
-                    });
-                  },
-                );
-              }
-
               portfolioData.forEach((point) => {
-                // Check if this is an ex-dividend date
-                const pointDateOnly = new Date(
-                  point.x.getFullYear(),
-                  point.x.getMonth(),
-                  point.x.getDate(),
-                );
-                const isExDivDate = allExDivDates.some((exDivTime) => {
-                  const exDivDateOnly = new Date(
-                    new Date(exDivTime).getFullYear(),
-                    new Date(exDivTime).getMonth(),
-                    new Date(exDivTime).getDate(),
-                  );
-                  return pointDateOnly.getTime() ===
-                    exDivDateOnly.getTime();
-                });
-
-                // Add dividend info to tooltip
-                if (isExDivDate) {
-                  const dividendsOnDate = [];
-                  if (this.dividendData) {
-                    Object.entries(this.dividendData).forEach(
-                      ([stock, dividends]) => {
-                        dividends.forEach((d) => {
-                          const dDateOnly = new Date(
-                            d.exDivDate.getFullYear(),
-                            d.exDivDate.getMonth(),
-                            d.exDivDate.getDate(),
-                          );
-                          if (
-                            dDateOnly.getTime() ===
-                              pointDateOnly.getTime()
-                          ) {
-                            dividendsOnDate.push(
-                              `${stock}: $${d.amount.toFixed(2)}`,
-                            );
-                          }
-                        });
-                      },
-                    );
-                  }
-                  if (dividendsOnDate.length > 0) {
-                    point.dividend = dividendsOnDate.join(", ");
-                  }
-                }
-
                 if (point.x <= ninetyDayDate) {
                   before90Days.push(point);
                 } else {
@@ -1066,10 +1008,43 @@
             });
 
             if (validStocks > 0) {
-              portfolioData.push({
+              const portfolioPoint = {
                 x: date,
                 y: totalPerformance / validStocks,
-              });
+              };
+
+              // Check if this is an ex-dividend date for any stock
+              const dividendsOnDate = [];
+              if (this.dividendData) {
+                Object.entries(this.dividendData).forEach(
+                  ([stock, dividends]) => {
+                    dividends.forEach((d) => {
+                      const dDateOnly = new Date(
+                        d.exDivDate.getFullYear(),
+                        d.exDivDate.getMonth(),
+                        d.exDivDate.getDate(),
+                      );
+                      const pointDateOnly = new Date(
+                        date.getFullYear(),
+                        date.getMonth(),
+                        date.getDate(),
+                      );
+                      if (
+                        dDateOnly.getTime() === pointDateOnly.getTime()
+                      ) {
+                        dividendsOnDate.push(
+                          `${stock}: $${d.amount.toFixed(2)}`,
+                        );
+                      }
+                    });
+                  },
+                );
+              }
+              if (dividendsOnDate.length > 0) {
+                portfolioPoint.dividend = dividendsOnDate.join(", ");
+              }
+
+              portfolioData.push(portfolioPoint);
             }
           });
 
