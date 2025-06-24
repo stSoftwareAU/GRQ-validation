@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Split Adjustment Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background-color: #d4edda; border-color: #c3e6cb; }
+        .fail { background-color: #f8d7da; border-color: #f5c6cb; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Split Adjustment Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Mock market data for NASDAQ:IBKR with 4:1 split on 2025-06-18
+        const mockMarketData = {
+            'NASDAQ:IBKR': [
+                { date: new Date('2025-04-14'), high: 260.0, low: 257.0, splitCoefficient: 1.0 }, // Score date
+                { date: new Date('2025-06-18'), high: 65.0, low: 64.0, splitCoefficient: 4.0 },   // Split date
+                { date: new Date('2025-06-24'), high: 53.30, low: 51.20, splitCoefficient: 1.0 }  // Current date
+            ]
+        };
+
+        // Mock stock data
+        const mockStock = {
+            stock: 'NASDAQ:IBKR',
+            target: 258.84
+        };
+
+        // Copy the split adjustment functions from the main code
+        function getHistoricalToCurrentSplitAdjustment(stockSymbol, historicalDate) {
+            const marketData = mockMarketData[stockSymbol];
+            if (!marketData) return 1.0;
+
+            // Find all splits that occurred after the historical date
+            let cumulativeSplit = 1.0;
+            for (const point of marketData) {
+                if (point.date > historicalDate && point.splitCoefficient > 1.0) {
+                    cumulativeSplit *= point.splitCoefficient;
+                }
+            }
+            return cumulativeSplit;
+        }
+
+        function adjustHistoricalPriceToCurrent(price, stockSymbol, historicalDate) {
+            const splitAdjustment = getHistoricalToCurrentSplitAdjustment(stockSymbol, historicalDate);
+            return price / splitAdjustment;
+        }
+
+        // Test cases
+        function runTests() {
+            const results = document.getElementById('results');
+            const scoreDate = new Date('2025-04-14');
+            const currentDate = new Date('2025-06-24');
+
+            // Test 1: Split adjustment calculation
+            const splitAdjustment = getHistoricalToCurrentSplitAdjustment('NASDAQ:IBKR', scoreDate);
+            const expectedSplitAdjustment = 4.0;
+            
+            const test1Result = document.createElement('div');
+            test1Result.className = `test-result ${splitAdjustment === expectedSplitAdjustment ? 'pass' : 'fail'}`;
+            test1Result.innerHTML = `
+                <h3>Test 1: Split Adjustment Calculation</h3>
+                <p><strong>Expected:</strong> ${expectedSplitAdjustment}</p>
+                <p><strong>Actual:</strong> ${splitAdjustment}</p>
+                <p><strong>Result:</strong> ${splitAdjustment === expectedSplitAdjustment ? 'PASS' : 'FAIL'}</p>
+            `;
+            results.appendChild(test1Result);
+
+            // Test 2: Buy price adjustment
+            const originalBuyPrice = mockStock.target; // $258.84
+            const adjustedBuyPrice = adjustHistoricalPriceToCurrent(originalBuyPrice, 'NASDAQ:IBKR', scoreDate);
+            const expectedAdjustedBuyPrice = 258.84 / 4; // $64.71
+            
+            const test2Result = document.createElement('div');
+            test2Result.className = `test-result ${Math.abs(adjustedBuyPrice - expectedAdjustedBuyPrice) < 0.01 ? 'pass' : 'fail'}`;
+            test2Result.innerHTML = `
+                <h3>Test 2: Buy Price Adjustment</h3>
+                <p><strong>Original Price:</strong> $${originalBuyPrice.toFixed(2)}</p>
+                <p><strong>Split Adjustment:</strong> ÷ ${splitAdjustment}</p>
+                <p><strong>Expected Adjusted Price:</strong> $${expectedAdjustedBuyPrice.toFixed(2)}</p>
+                <p><strong>Actual Adjusted Price:</strong> $${adjustedBuyPrice.toFixed(2)}</p>
+                <p><strong>Result:</strong> ${Math.abs(adjustedBuyPrice - expectedAdjustedBuyPrice) < 0.01 ? 'PASS' : 'FAIL'}</p>
+            `;
+            results.appendChild(test2Result);
+
+            // Test 3: Current price (should not be adjusted)
+            const currentPrice = (53.30 + 51.20) / 2; // $52.25
+            const currentPriceAdjustment = getHistoricalToCurrentSplitAdjustment('NASDAQ:IBKR', currentDate);
+            const expectedCurrentPriceAdjustment = 1.0;
+            
+            const test3Result = document.createElement('div');
+            test3Result.className = `test-result ${currentPriceAdjustment === expectedCurrentPriceAdjustment ? 'pass' : 'fail'}`;
+            test3Result.innerHTML = `
+                <h3>Test 3: Current Price (No Adjustment)</h3>
+                <p><strong>Current Price:</strong> $${currentPrice.toFixed(2)}</p>
+                <p><strong>Split Adjustment:</strong> ${currentPriceAdjustment}</p>
+                <p><strong>Expected Adjustment:</strong> ${expectedCurrentPriceAdjustment}</p>
+                <p><strong>Result:</strong> ${currentPriceAdjustment === expectedCurrentPriceAdjustment ? 'PASS' : 'FAIL'}</p>
+            `;
+            results.appendChild(test3Result);
+
+            // Test 4: Performance calculation
+            const buyPrice = adjustedBuyPrice; // $64.71
+            const currentPriceUnadjusted = currentPrice; // $52.25
+            const performance = ((currentPriceUnadjusted - buyPrice) / buyPrice) * 100;
+            const expectedPerformance = ((52.25 - 64.71) / 64.71) * 100; // -19.25%
+            
+            const test4Result = document.createElement('div');
+            test4Result.className = `test-result ${Math.abs(performance - expectedPerformance) < 0.1 ? 'pass' : 'fail'}`;
+            test4Result.innerHTML = `
+                <h3>Test 4: Performance Calculation</h3>
+                <p><strong>Buy Price (adjusted):</strong> $${buyPrice.toFixed(2)}</p>
+                <p><strong>Current Price:</strong> $${currentPriceUnadjusted.toFixed(2)}</p>
+                <p><strong>Performance Formula:</strong> ((${currentPriceUnadjusted.toFixed(2)} - ${buyPrice.toFixed(2)}) / ${buyPrice.toFixed(2)}) × 100</p>
+                <p><strong>Expected Performance:</strong> ${expectedPerformance.toFixed(1)}%</p>
+                <p><strong>Actual Performance:</strong> ${performance.toFixed(1)}%</p>
+                <p><strong>Result:</strong> ${Math.abs(performance - expectedPerformance) < 0.1 ? 'PASS' : 'FAIL'}</p>
+            `;
+            results.appendChild(test4Result);
+
+            // Summary
+            const summary = document.createElement('div');
+            summary.className = 'test-result';
+            summary.innerHTML = `
+                <h3>Summary</h3>
+                <p><strong>Original Target Price:</strong> $${originalBuyPrice.toFixed(2)}</p>
+                <p><strong>Split Adjustment Factor:</strong> ${splitAdjustment}:1</p>
+                <p><strong>Adjusted Buy Price:</strong> $${adjustedBuyPrice.toFixed(2)}</p>
+                <p><strong>Current Price:</strong> $${currentPriceUnadjusted.toFixed(2)}</p>
+                <p><strong>Performance:</strong> ${performance.toFixed(1)}%</p>
+            `;
+            results.appendChild(summary);
+        }
+
+        // Run tests when page loads
+        window.onload = runTests;
+    </script>
+</body>
+</html> 
