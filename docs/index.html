@@ -1560,12 +1560,17 @@
             const portfolioTarget = this
               .calculatePortfolioTargetPercentage();
 
+            // Calculate actual days elapsed (max 90)
+            const actualDaysElapsed = Math.min(daysElapsed, 90);
+
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
             totalsRow.innerHTML = `
-              <td>Portfolio Totals (90-day)</td>
+              <td>Days Elapsed: ${actualDaysElapsed}</td>
               <td>-</td>
-              <td>-</td>
+              <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
+              portfolioTarget.toFixed(1)
+            }%</span></td>
               <td>-</td>
               <td class="${
               this.getPerformanceClass(portfolioPerformance90Day)
@@ -1575,37 +1580,7 @@
               <td>-</td>
             `;
 
-            // Add summary info below the table
-            const summaryDiv = document.createElement("div");
-            summaryDiv.classList.add("portfolio-summary");
-            summaryDiv.innerHTML = `
-              <div class="row">
-                <div class="col-md-3">
-                  <strong>Days Elapsed:</strong> ${daysElapsed}
-                </div>
-                <div class="col-md-3">
-                  <strong>Stocks Tracked:</strong> ${this.scoreData.length}
-                </div>
-                <div class="col-md-3">
-                  <strong>Portfolio Performance (90-day):</strong> ${
-              portfolioPerformance90Day.toFixed(1)
-            }%
-                </div>
-                <div class="col-md-3">
-                  <strong>Portfolio Target:</strong> <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
-              portfolioTarget.toFixed(1)
-            }%</span>
-                </div>
-              </div>
-            `;
-
             tbody.appendChild(totalsRow);
-
-            // Add summary info after the table
-            tableContainer.parentNode.insertBefore(
-              summaryDiv,
-              tableContainer.nextSibling,
-            );
           }
 
           // Dispose of existing popovers
