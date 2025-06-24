@@ -516,7 +516,10 @@
                       let tooltipText = "";
                       if (label.includes("Target Price")) {
                         tooltipText = `${label}: $${value.toFixed(2)}`;
-                      } else if (label.includes("Price") && !label.includes("Performance")) {
+                      } else if (
+                        label.includes("Price") &&
+                        !label.includes("Performance")
+                      ) {
                         tooltipText = `${label}: $${value.toFixed(2)}`;
                       } else if (label.includes("Actual")) {
                         tooltipText = `${label}: $${value.toFixed(2)}`;
@@ -580,9 +583,9 @@
                     font: {
                       size: isMobile ? 8 : 10,
                     },
-                    callback: function(value) {
-                      return value + '%';
-                    }
+                    callback: function (value) {
+                      return value + "%";
+                    },
                   },
                 },
                 y1: {
@@ -601,9 +604,9 @@
                     font: {
                       size: isMobile ? 8 : 10,
                     },
-                    callback: function(value) {
-                      return '$' + value.toFixed(2);
-                    }
+                    callback: function (value) {
+                      return "$" + value.toFixed(2);
+                    },
                   },
                   grid: {
                     drawOnChartArea: false,
@@ -822,7 +825,7 @@
                     x: ninetyDayDate,
                     y: adjustedTarget, // Use actual target price value
                   }],
-                  yAxisID: 'y1', // Use right Y-axis (price axis)
+                  yAxisID: "y1", // Use right Y-axis (price axis)
                   borderColor: "rgba(255, 193, 7, 0.8)",
                   backgroundColor: "rgba(255, 193, 7, 0.8)",
                   borderWidth: 3,
@@ -987,7 +990,7 @@
                 const dataPoint = marketData.find(
                   (point) => point.date.getTime() === timestamp,
                 );
-                
+
                 // Get the price on the score date as the buy price
                 const scoreDateData = marketData.find((point) => {
                   // Compare dates by day only, ignoring time components
@@ -1018,14 +1021,16 @@
 
                 if (dataPoint) {
                   // Use split-adjusted price for current price calculation
-                  const currentPrice = this.adjustHistoricalPriceToCurrent(
-                    (dataPoint.high + dataPoint.low) / 2,
-                    stock.stock,
-                    dataPoint.date,
-                  );
+                  const currentPrice = this
+                    .adjustHistoricalPriceToCurrent(
+                      (dataPoint.high + dataPoint.low) / 2,
+                      stock.stock,
+                      dataPoint.date,
+                    );
 
                   // Calculate price return
-                  const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+                  const priceReturn =
+                    ((currentPrice - buyPrice) / buyPrice) * 100;
 
                   // Add dividend return up to this date (but only count dividends within 90 days)
                   const dividends = this.getDividendsWithin90Days(
@@ -1289,7 +1294,9 @@
                       <div class="row mb-2">
                         <div class="col-6"><strong>Performance:</strong></div>
                         <div class="col-6">
-                          <span class="clickable-value ${this.getPerformanceClass(performance)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
+                          <span class="clickable-value ${
+                this.getPerformanceClass(performance)
+              }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
                 performance !== null
                   ? performance.toFixed(1) + "%"
                   : "N/A"
@@ -1299,7 +1306,9 @@
                       <div class="row mb-2">
                         <div class="col-6"><strong>Progress vs Cost of Capital:</strong></div>
                         <div class="col-6">
-                          <span class="clickable-value ${this.getPerformanceClass(performance)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
+                          <span class="clickable-value ${
+                this.getPerformanceClass(performance)
+              }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
                 this.calculateProgressVsCostOfCapital(
                   stock,
                   performance,
@@ -1324,7 +1333,12 @@
                         <div class="col-6"><strong>Intrinsic Value (Basic):</strong></div>
                         <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${
                 stock.intrinsicValuePerShareBasic !== null
-                  ? "$" + this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareBasic, stock.stock, this.getScoreDate(this.selectedFile)).toFixed(2)
+                  ? "$" +
+                    this.adjustHistoricalPriceToCurrent(
+                      stock.intrinsicValuePerShareBasic,
+                      stock.stock,
+                      this.getScoreDate(this.selectedFile),
+                    ).toFixed(2)
                   : "N/A"
               }</span></div>
                       </div>
@@ -1332,7 +1346,12 @@
                         <div class="col-6"><strong>Intrinsic Value (Adjusted):</strong></div>
                         <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${
                 stock.intrinsicValuePerShareAdjusted !== null
-                  ? "$" + this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareAdjusted, stock.stock, this.getScoreDate(this.selectedFile)).toFixed(2)
+                  ? "$" +
+                    this.adjustHistoricalPriceToCurrent(
+                      stock.intrinsicValuePerShareAdjusted,
+                      stock.stock,
+                      this.getScoreDate(this.selectedFile),
+                    ).toFixed(2)
                   : "N/A"
               }</span></div>
                       </div>
@@ -1850,7 +1869,8 @@
               const scoreDate = this.getScoreDate(this.selectedFile);
               const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
               if (buyPrice > 0) {
-                const targetPercentage = ((stock.target - buyPrice) / buyPrice) * 100;
+                const targetPercentage =
+                  ((stock.target - buyPrice) / buyPrice) * 100;
                 totalTarget += targetPercentage;
                 validStocks++;
               }
@@ -1961,27 +1981,40 @@
         getWorking(field, stockSymbol, scoreData) {
           // Special handling for portfolio target - no specific stock needed
           if (field === "portfolio-target") {
-            const portfolioTargetValue = this.calculatePortfolioTargetPercentage();
+            const portfolioTargetValue = this
+              .calculatePortfolioTargetPercentage();
             const scoreDate = this.getScoreDate(this.selectedFile);
-            
+
             // Calculate individual stock targets for display
             let targetDetails = [];
             let totalTarget = 0;
             let validStocks = 0;
-            
+
             this.scoreData.forEach((stock) => {
               if (stock.target !== null && !isNaN(stock.target)) {
-                const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+                const buyPrice = this.getBuyPrice(
+                  stock.stock,
+                  scoreDate,
+                );
                 if (buyPrice > 0) {
-                  const targetPercentage = ((stock.target - buyPrice) / buyPrice) * 100;
-                  targetDetails.push(`${stock.stock}: ${targetPercentage.toFixed(1)}%`);
+                  const targetPercentage =
+                    ((stock.target - buyPrice) / buyPrice) * 100;
+                  targetDetails.push(
+                    `${stock.stock}: ${targetPercentage.toFixed(1)}%`,
+                  );
                   totalTarget += targetPercentage;
                   validStocks++;
                 }
               }
             });
-            
-            return `Portfolio Target working:\n= Average target of all stocks in portfolio\n= Individual targets:\n  ${targetDetails.join('\n  ')}\n= Total: ${totalTarget.toFixed(1)}% / ${validStocks} stocks\n= Portfolio target: ${portfolioTargetValue.toFixed(1)}%`;
+
+            return `Portfolio Target working:\n= Average target of all stocks in portfolio\n= Individual targets:\n  ${
+              targetDetails.join("\n  ")
+            }\n= Total: ${
+              totalTarget.toFixed(1)
+            }% / ${validStocks} stocks\n= Portfolio target: ${
+              portfolioTargetValue.toFixed(1)
+            }%`;
           }
 
           const stock = scoreData.find((s) => s.stock === stockSymbol);
@@ -2233,24 +2266,40 @@
               if (stock.intrinsicValuePerShareBasic === null) {
                 return "Intrinsic Value (Basic) working:\nNo data available";
               }
-              const adjustedBasicValue = this.adjustHistoricalPriceToCurrent(
-                stock.intrinsicValuePerShareBasic,
-                stock.stock,
-                this.getScoreDate(this.selectedFile),
-              );
+              const adjustedBasicValue = this
+                .adjustHistoricalPriceToCurrent(
+                  stock.intrinsicValuePerShareBasic,
+                  stock.stock,
+                  this.getScoreDate(this.selectedFile),
+                );
               return header +
-                `Intrinsic Value (Basic) working:\n= Value from score file (adjusted for splits)\n= Original: $${stock.intrinsicValuePerShareBasic.toFixed(2)}\n= Split adjustment: ÷ ${this.getHistoricalToCurrentSplitAdjustment(stock.stock, this.getScoreDate(this.selectedFile)).toFixed(1)}\n= Adjusted: $${adjustedBasicValue.toFixed(2)}`;
+                `Intrinsic Value (Basic) working:\n= Value from score file (adjusted for splits)\n= Original: $${
+                  stock.intrinsicValuePerShareBasic.toFixed(2)
+                }\n= Split adjustment: ÷ ${
+                  this.getHistoricalToCurrentSplitAdjustment(
+                    stock.stock,
+                    this.getScoreDate(this.selectedFile),
+                  ).toFixed(1)
+                }\n= Adjusted: $${adjustedBasicValue.toFixed(2)}`;
             case "intrinsic-adjusted":
               if (stock.intrinsicValuePerShareAdjusted === null) {
                 return "Intrinsic Value (Adjusted) working:\nNo data available";
               }
-              const adjustedAdjustedValue = this.adjustHistoricalPriceToCurrent(
-                stock.intrinsicValuePerShareAdjusted,
-                stock.stock,
-                this.getScoreDate(this.selectedFile),
-              );
+              const adjustedAdjustedValue = this
+                .adjustHistoricalPriceToCurrent(
+                  stock.intrinsicValuePerShareAdjusted,
+                  stock.stock,
+                  this.getScoreDate(this.selectedFile),
+                );
               return header +
-                `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file (adjusted for splits)\n= Original: $${stock.intrinsicValuePerShareAdjusted.toFixed(2)}\n= Split adjustment: ÷ ${this.getHistoricalToCurrentSplitAdjustment(stock.stock, this.getScoreDate(this.selectedFile)).toFixed(1)}\n= Adjusted: $${adjustedAdjustedValue.toFixed(2)}`;
+                `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file (adjusted for splits)\n= Original: $${
+                  stock.intrinsicValuePerShareAdjusted.toFixed(2)
+                }\n= Split adjustment: ÷ ${
+                  this.getHistoricalToCurrentSplitAdjustment(
+                    stock.stock,
+                    this.getScoreDate(this.selectedFile),
+                  ).toFixed(1)
+                }\n= Adjusted: $${adjustedAdjustedValue.toFixed(2)}`;
             case "avg-dividend":
               const avgDividends = this.getDividendsWithin90Days(
                 stockSymbol,
@@ -2419,7 +2468,9 @@
           }
 
           // Fallback to target price if no market data
-          const stock = this.scoreData.find(s => s.stock === stockSymbol);
+          const stock = this.scoreData.find((s) =>
+            s.stock === stockSymbol
+          );
           if (stock && stock.target) {
             return this.adjustHistoricalPriceToCurrent(
               stock.target,

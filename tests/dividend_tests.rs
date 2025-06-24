@@ -30,8 +30,5 @@ fn test_create_dividend_csv_for_first_score_file() -> Result<()> {
     let lines: Vec<&str> = content.lines().collect();
     assert!(lines.len() > 1, "Should have at least header and some data");
 
-    // Clean up
-    std::fs::remove_file(dividend_output_path)?;
-
     Ok(())
 }

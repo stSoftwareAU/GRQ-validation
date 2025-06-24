@@ -76,31 +76,6 @@ log "Working directory: $REPO_DIR"
 log "Starting git operations"
 check_pid
 
-# Stash any local changes to avoid conflicts
-if ! git diff --quiet; then
-    log "Stashing local changes"
-    git stash push -m "Auto-stash before pull $(date)"
-fi
-
-# Fetch latest changes
-log "Fetching latest changes"
-git fetch origin
-
-# Check if we're behind remote
-if [ "$(git rev-list HEAD..origin/main --count)" -gt 0 ]; then
-    log "Local is behind remote, pulling changes"
-    
-    # Reset to match remote (clean repo approach)
-    git reset --hard origin/main
-    git clean -fd
-    
-    log "Successfully updated to latest version"
-else
-    log "Already up to date"
-fi
-
-check_pid
-
 # Check if Rust program needs rebuilding
 log "Checking if rebuild is needed"
 NEED_REBUILD=false
