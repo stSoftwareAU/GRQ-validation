@@ -514,7 +514,9 @@
                       const dataPoint = context.raw;
 
                       let tooltipText = "";
-                      if (label.includes("Target")) {
+                      if (label.includes("Target Price")) {
+                        tooltipText = `${label}: $${value.toFixed(2)}`;
+                      } else if (label.includes("Price") && !label.includes("Performance")) {
                         tooltipText = `${label}: $${value.toFixed(2)}`;
                       } else if (label.includes("Actual")) {
                         tooltipText = `${label}: $${value.toFixed(2)}`;
@@ -564,10 +566,11 @@
                 },
                 y: {
                   type: "linear",
-                  display: true,
+                  display: true, // Show for both single stock and aggregate view
                   position: "left",
+                  beginAtZero: true,
                   title: {
-                    display: true,
+                    display: true, // Show for both views
                     text: "Performance (%)",
                     font: {
                       size: isMobile ? 10 : 12,
@@ -577,12 +580,16 @@
                     font: {
                       size: isMobile ? 8 : 10,
                     },
+                    callback: function(value) {
+                      return value + '%';
+                    }
                   },
                 },
                 y1: {
                   type: "linear",
                   display: this.selectedStock, // Only show for single stock view
                   position: "right",
+                  beginAtZero: true,
                   title: {
                     display: this.selectedStock,
                     text: "Price ($)",
@@ -594,6 +601,9 @@
                     font: {
                       size: isMobile ? 8 : 10,
                     },
+                    callback: function(value) {
+                      return '$' + value.toFixed(2);
+                    }
                   },
                   grid: {
                     drawOnChartArea: false,
@@ -776,14 +786,6 @@
                         ? "rgba(0, 123, 255, 1)"
                         : "rgba(102, 126, 234, 1)"
                     ),
-                    pointBorderColor: before90Days.map((point) =>
-                      point.dividend
-                        ? "rgba(0, 123, 255, 1)"
-                        : "rgba(102, 126, 234, 1)"
-                    ),
-                    pointHoverRadius: before90Days.map((point) =>
-                      point.dividend ? 12 : 6
-                    ),
                   });
                 }
 
@@ -804,14 +806,6 @@
                         ? "rgba(108, 117, 125, 0.8)"
                         : "rgba(108, 117, 125, 0.5)"
                     ),
-                    pointBorderColor: after90Days.map((point) =>
-                      point.dividend
-                        ? "rgba(108, 117, 125, 0.8)"
-                        : "rgba(108, 117, 125, 0.5)"
-                    ),
-                    pointHoverRadius: after90Days.map((point) =>
-                      point.dividend ? 12 : 6
-                    ),
                   });
                 }
 
@@ -826,8 +820,9 @@
                   label: "Target Price",
                   data: [{
                     x: ninetyDayDate,
-                    y: ((adjustedTarget - buyPrice) / buyPrice) * 100,
+                    y: adjustedTarget, // Use actual target price value
                   }],
+                  yAxisID: 'y1', // Use right Y-axis (price axis)
                   borderColor: "rgba(255, 193, 7, 0.8)",
                   backgroundColor: "rgba(255, 193, 7, 0.8)",
                   borderWidth: 3,
