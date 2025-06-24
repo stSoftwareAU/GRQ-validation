@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    >
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>GRQ Validation Dashboard v1.0.1</title>
@@ -189,27 +192,40 @@
             },
           );
 
-          // Global click handler to ignore clicks within popover content
-          document.addEventListener('click', (event) => {
-            const popoverTrigger = event.target.closest('[data-bs-toggle="popover"]');
-            const popoverContent = event.target.closest('.popover');
-            
-            // Don't close popovers if clicking inside the popover content
+          // Global click handler to manage popover behavior
+          document.addEventListener("click", (event) => {
+            const popoverTrigger = event.target.closest(
+              '[data-bs-toggle="popover"]',
+            );
+            const popoverContent = event.target.closest(".popover");
+
+            // Don't do anything if clicking inside the popover content
             if (popoverContent) {
               return;
             }
-            
-            // Close all existing popovers first
-            const popovers = document.querySelectorAll('[data-bs-toggle="popover"]');
-            popovers.forEach(element => {
+
+            // Close all existing popovers
+            const popovers = document.querySelectorAll(
+              '[data-bs-toggle="popover"]',
+            );
+            popovers.forEach((element) => {
               const popover = bootstrap.Popover.getInstance(element);
-              if (popover && popover._element.classList.contains('show')) {
+              if (popover && element.hasAttribute("aria-describedby")) {
                 popover.hide();
               }
             });
-            
-            // If we clicked on a popover trigger, let Bootstrap handle showing the new one
-            // (it will be shown after this event handler completes)
+
+            // If we clicked on a popover trigger, show the new one after a brief delay
+            if (popoverTrigger) {
+              setTimeout(() => {
+                const popover = bootstrap.Popover.getInstance(
+                  popoverTrigger,
+                );
+                if (popover) {
+                  popover.show();
+                }
+              }, 10);
+            }
           });
         }
 
@@ -278,8 +294,12 @@
               exDividendDate: values[3] || null,
               dividendPerShare: values[4] ? parseFloat(values[4]) : 0,
               notes: values[5] || "",
-              intrinsicValuePerShareBasic: values[6] ? parseFloat(values[6]) : null,
-              intrinsicValuePerShareAdjusted: values[7] ? parseFloat(values[7]) : null,
+              intrinsicValuePerShareBasic: values[6]
+                ? parseFloat(values[6])
+                : null,
+              intrinsicValuePerShareAdjusted: values[7]
+                ? parseFloat(values[7])
+                : null,
             };
           });
 
@@ -416,13 +436,15 @@
           // Show/hide back button based on view mode
           document.getElementById("backToAggregate").style.display =
             this.selectedStock ? "block" : "none";
-            
+
           // Apply CSS class for detailed view
-          const tableContainer = document.querySelector('.table-responsive');
+          const tableContainer = document.querySelector(
+            ".table-responsive",
+          );
           if (this.selectedStock) {
-            tableContainer.classList.add('stock-detail-view');
+            tableContainer.classList.add("stock-detail-view");
           } else {
-            tableContainer.classList.remove('stock-detail-view');
+            tableContainer.classList.remove("stock-detail-view");
           }
         }
 
@@ -437,9 +459,13 @@
           const chartData = this.prepareChartData();
           let chartTitle;
           if (this.selectedStock) {
-            const stock = this.scoreData.find(s => s.stock === this.selectedStock);
+            const stock = this.scoreData.find((s) =>
+              s.stock === this.selectedStock
+            );
             if (stock) {
-              chartTitle = `${this.selectedStock} Performance (Score: ${stock.score.toFixed(3)}, Target: $${stock.target.toFixed(2)})`;
+              chartTitle = `${this.selectedStock} Performance (Score: ${
+                stock.score.toFixed(3)
+              }, Target: $${stock.target.toFixed(2)})`;
             } else {
               chartTitle = `${this.selectedStock} Performance`;
             }
@@ -663,8 +689,16 @@
                     scoreDateOnly.getTime();
                 });
                 const buyPrice = scoreDateData
-                  ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stock.stock, scoreDate)
-                  : this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate);
+                  ? this.adjustHistoricalPriceToCurrent(
+                    (scoreDateData.high + scoreDateData.low) / 2,
+                    stock.stock,
+                    scoreDate,
+                  )
+                  : this.adjustHistoricalPriceToCurrent(
+                    stock.target,
+                    stock.stock,
+                    scoreDate,
+                  );
 
                 // Get dividend data for this stock
                 const stockDividends =
@@ -674,10 +708,16 @@
                 );
 
                 marketData.forEach((point) => {
+                  // Use split-adjusted price for chart
+                  const adjustedPrice = this
+                    .adjustHistoricalPriceToCurrent(
+                      (point.high + point.low) / 2,
+                      stock.stock,
+                      point.date,
+                    );
                   const dataPoint = {
                     x: point.date,
-                    y: (((point.high + point.low) / 2 - buyPrice) /
-                      buyPrice) * 100,
+                    y: ((adjustedPrice - buyPrice) / buyPrice) * 100,
                   };
 
                   // Check if this is an ex-dividend date
@@ -776,11 +816,17 @@
                 }
 
                 // Add target price as a single point at 90 days
+                const adjustedTarget = this
+                  .adjustHistoricalPriceToCurrent(
+                    stock.target,
+                    stock.stock,
+                    scoreDate,
+                  );
                 datasets.push({
                   label: "Target Price",
                   data: [{
                     x: ninetyDayDate,
-                    y: stock.target,
+                    y: ((adjustedTarget - buyPrice) / buyPrice) * 100,
                   }],
                   borderColor: "rgba(255, 193, 7, 0.8)",
                   backgroundColor: "rgba(255, 193, 7, 0.8)",
@@ -789,7 +835,6 @@
                   pointHoverRadius: 8,
                   fill: false,
                   showLine: false, // Don't connect points
-                  yAxisID: "y1", // Use secondary Y-axis for prices
                 });
               }
             }
@@ -865,7 +910,8 @@
               }
 
               // Add portfolio target as a single point at 90 days
-              const portfolioTarget = this.calculatePortfolioTargetPercentage();
+              const portfolioTarget = this
+                .calculatePortfolioTargetPercentage();
               datasets.push({
                 label: "Portfolio Target",
                 data: [{
@@ -902,7 +948,9 @@
 
         calculatePortfolioData() {
           const scoreDate = this.getScoreDate(this.selectedFile);
-          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+          const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+          );
           const portfolioData = [];
 
           // Get all unique dates from market data (include all dates, not just 90 days)
@@ -959,21 +1007,39 @@
                       scoreDateOnly.getTime();
                   });
                   const buyPrice = scoreDateData
-                    ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stock.stock, scoreDate)
-                    : this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate);
+                    ? this.adjustHistoricalPriceToCurrent(
+                      (scoreDateData.high + scoreDateData.low) / 2,
+                      stock.stock,
+                      scoreDate,
+                    )
+                    : this.adjustHistoricalPriceToCurrent(
+                      stock.target,
+                      stock.stock,
+                      scoreDate,
+                    );
 
                   // Calculate price return
-                  const priceReturn = ((dataPoint.high + dataPoint.low) / 2 - buyPrice) / buyPrice * 100;
-                  
+                  const priceReturn =
+                    ((dataPoint.high + dataPoint.low) / 2 - buyPrice) /
+                    buyPrice * 100;
+
                   // Add dividend return up to this date (but only count dividends within 90 days)
-                  const dividends = this.getDividendsWithin90Days(stock.stock);
-                  const dividendsUpToDate = dividends.filter(d => d.exDivDate <= date);
-                  const totalDividends = dividendsUpToDate.reduce((sum, div) => sum + div.amount, 0);
-                  const dividendReturn = (totalDividends / buyPrice) * 100;
-                  
+                  const dividends = this.getDividendsWithin90Days(
+                    stock.stock,
+                  );
+                  const dividendsUpToDate = dividends.filter((d) =>
+                    d.exDivDate <= date
+                  );
+                  const totalDividends = dividendsUpToDate.reduce(
+                    (sum, div) => sum + div.amount,
+                    0,
+                  );
+                  const dividendReturn = (totalDividends / buyPrice) *
+                    100;
+
                   // Total return including dividends
                   const totalReturn = priceReturn + dividendReturn;
-                  
+
                   totalPerformance += totalReturn;
                   validStocks++;
                 }
@@ -1006,7 +1072,8 @@
                         );
 
                         if (
-                          dDateOnly.getTime() === pointDateOnly.getTime()
+                          dDateOnly.getTime() ===
+                            pointDateOnly.getTime()
                         ) {
                           dividendsOnDate.push(
                             `${stock}: $${d.amount.toFixed(2)}`,
@@ -1091,14 +1158,18 @@
           tbody.innerHTML = "";
 
           // Remove any existing summary elements first
-          const existingSummary = document.querySelector(".portfolio-summary");
+          const existingSummary = document.querySelector(
+            ".portfolio-summary",
+          );
           if (existingSummary) {
             existingSummary.remove();
           }
 
           // Determine which stocks to show
-          const stocksToShow = this.selectedStock 
-            ? this.scoreData.filter(stock => stock.stock === this.selectedStock)
+          const stocksToShow = this.selectedStock
+            ? this.scoreData.filter((stock) =>
+              stock.stock === this.selectedStock
+            )
             : this.scoreData;
 
           if (this.selectedStock) {
@@ -1106,35 +1177,73 @@
             const stock = stocksToShow[0];
             if (stock) {
               const performance = this.calculateStockPerformance(stock);
-              const judgement = this.calculateJudgement(stock, performance);
-              const dividends = this.getDividendsWithin90Days(stock.stock);
-              const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+              const judgement = this.calculateJudgement(
+                stock,
+                performance,
+              );
+              const dividends = this.getDividendsWithin90Days(
+                stock.stock,
+              );
+              const totalDividends = dividends.reduce(
+                (sum, div) => sum + div.amount,
+                0,
+              );
 
               // Calculate buy price using market data on score date
               const scoreDate = this.getScoreDate(this.selectedFile);
               const marketData = this.marketData[stock.stock];
-              const scoreDateData = marketData ? marketData.find((point) => {
-                const pointDate = new Date(point.date.getFullYear(), point.date.getMonth(), point.date.getDate());
-                const scoreDateOnly = new Date(scoreDate.getFullYear(), scoreDate.getMonth(), scoreDate.getDate());
-                return pointDate.getTime() === scoreDateOnly.getTime();
-              }) : null;
-              
-              const buyPrice = scoreDateData 
-                ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stock.stock, scoreDate)
-                : this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate); // fallback to target if no market data
-              const target = this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate);
+              const scoreDateData = marketData
+                ? marketData.find((point) => {
+                  const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const scoreDateOnly = new Date(
+                    scoreDate.getFullYear(),
+                    scoreDate.getMonth(),
+                    scoreDate.getDate(),
+                  );
+                  return pointDate.getTime() ===
+                    scoreDateOnly.getTime();
+                })
+                : null;
+
+              const buyPrice = scoreDateData
+                ? this.adjustHistoricalPriceToCurrent(
+                  (scoreDateData.high + scoreDateData.low) / 2,
+                  stock.stock,
+                  scoreDate,
+                )
+                : this.adjustHistoricalPriceToCurrent(
+                  stock.target,
+                  stock.stock,
+                  scoreDate,
+                ); // fallback to target if no market data
+              const target = this.adjustHistoricalPriceToCurrent(
+                stock.target,
+                stock.stock,
+                scoreDate,
+              );
 
               // Hide the table and show card
-              const tableContainer = document.querySelector(".table-responsive");
+              const tableContainer = document.querySelector(
+                ".table-responsive",
+              );
               tableContainer.style.display = "none";
 
               // Create or update stock detail card
-              let stockCard = document.getElementById("stockDetailCard");
+              let stockCard = document.getElementById(
+                "stockDetailCard",
+              );
               if (!stockCard) {
                 stockCard = document.createElement("div");
                 stockCard.id = "stockDetailCard";
                 stockCard.className = "card mb-4";
-                tableContainer.parentNode.insertBefore(stockCard, tableContainer);
+                tableContainer.parentNode.insertBefore(
+                  stockCard,
+                  tableContainer,
+                );
               }
 
               stockCard.innerHTML = `
@@ -1147,36 +1256,59 @@
                       <h6 class="text-muted text-uppercase mb-3">Basic Information</h6>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Score:</strong></div>
-                        <div class="col-6">${stock.score.toFixed(3)}</div>
+                        <div class="col-6">${
+                stock.score.toFixed(3)
+              }</div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Buy Price:</strong></div>
-                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${buyPrice !== null ? buyPrice.toFixed(2) : "N/A"}</span></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${
+                buyPrice !== null ? buyPrice.toFixed(2) : "N/A"
+              }</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>90-Day Target:</strong></div>
-                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${target !== null ? target.toFixed(2) : "N/A"}</span></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${
+                target !== null ? target.toFixed(2) : "N/A"
+              }</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Current Price:</strong></div>
-                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${this.getCurrentPrice(stock.stock)}</span></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${
+                this.getCurrentPrice(stock.stock)
+              }</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Performance:</strong></div>
-                        <div class="col-6 ${this.getPerformanceClass(performance)}">
-                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${performance !== null ? performance.toFixed(1) + "%" : "N/A"}</span>
+                        <div class="col-6 ${
+                this.getPerformanceClass(performance)
+              }">
+                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
+                performance !== null
+                  ? performance.toFixed(1) + "%"
+                  : "N/A"
+              }</span>
                         </div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Progress vs Cost of Capital:</strong></div>
-                        <div class="col-6 ${this.getPerformanceClass(performance)}">
-                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${this.calculateProgressVsCostOfCapital(stock, performance)}</span>
+                        <div class="col-6 ${
+                this.getPerformanceClass(performance)
+              }">
+                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
+                this.calculateProgressVsCostOfCapital(
+                  stock,
+                  performance,
+                )
+              }</span>
                         </div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Judgement:</strong></div>
                         <div class="col-6">
-                          <span class="badge ${this.getJudgementClass(judgement)}">
+                          <span class="badge ${
+                this.getJudgementClass(judgement)
+              }">
                             <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Judgement - ${stock.stock}" data-field="judgement" data-stock="${stock.stock}">${judgement}</span>
                           </span>
                         </div>
@@ -1186,29 +1318,54 @@
                       <h6 class="text-muted text-uppercase mb-3">Valuation & Dividends</h6>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Intrinsic Value (Basic):</strong></div>
-                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${stock.intrinsicValuePerShareBasic !== null ? '$' + stock.intrinsicValuePerShareBasic.toFixed(2) : 'N/A'}</span></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${
+                stock.intrinsicValuePerShareBasic !== null
+                  ? "$" + stock.intrinsicValuePerShareBasic.toFixed(2)
+                  : "N/A"
+              }</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Intrinsic Value (Adjusted):</strong></div>
-                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${stock.intrinsicValuePerShareAdjusted !== null ? '$' + stock.intrinsicValuePerShareAdjusted.toFixed(2) : 'N/A'}</span></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${
+                stock.intrinsicValuePerShareAdjusted !== null
+                  ? "$" +
+                    stock.intrinsicValuePerShareAdjusted.toFixed(2)
+                  : "N/A"
+              }</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Ex-Dividend Date:</strong></div>
-                        <div class="col-6">${stock.exDividendDate || 'N/A'}</div>
+                        <div class="col-6">${
+                stock.exDividendDate || "N/A"
+              }</div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Average Dividend (90-day):</strong></div>
-                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Average Dividend (90-day) - ${stock.stock}" data-field="avg-dividend" data-stock="${stock.stock}">${dividends.length > 0 ? '$' + (totalDividends / dividends.length).toFixed(4) : 'N/A'}</span></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Average Dividend (90-day) - ${stock.stock}" data-field="avg-dividend" data-stock="${stock.stock}">${
+                dividends.length > 0
+                  ? "$" + (totalDividends / dividends.length).toFixed(4)
+                  : "N/A"
+              }</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Total Dividends (90-day):</strong></div>
                         <div class="col-6">
-                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Total Dividends (90-day) - ${stock.stock}" data-field="total-dividend" data-stock="${stock.stock}">${dividends.length > 0 ? `$${totalDividends.toFixed(2)} (${dividends.length} div${dividends.length > 1 ? 's' : ''})` : 'None'}</span>
+                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Total Dividends (90-day) - ${stock.stock}" data-field="total-dividend" data-stock="${stock.stock}">${
+                dividends.length > 0
+                  ? `$${
+                    totalDividends.toFixed(2)
+                  } (${dividends.length} div${
+                    dividends.length > 1 ? "s" : ""
+                  })`
+                  : "None"
+              }</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  ${stock.notes ? `
+                  ${
+                stock.notes
+                  ? `
                     <div class="row mt-3">
                       <div class="col-12">
                         <h6 class="text-muted text-uppercase mb-2">Notes</h6>
@@ -1217,23 +1374,31 @@
                         </div>
                       </div>
                     </div>
-                  ` : ''}
+                  `
+                  : ""
+              }
                 </div>
               `;
             }
           } else {
             // Aggregate view - show table
-            const tableContainer = document.querySelector(".table-responsive");
+            const tableContainer = document.querySelector(
+              ".table-responsive",
+            );
             tableContainer.style.display = "block";
 
             // Remove stock detail card if it exists
-            const stockCard = document.getElementById("stockDetailCard");
+            const stockCard = document.getElementById(
+              "stockDetailCard",
+            );
             if (stockCard) {
               stockCard.remove();
             }
 
             // Update table headers for aggregate view
-            const thead = document.querySelector("#stockTable thead tr");
+            const thead = document.querySelector(
+              "#stockTable thead tr",
+            );
             thead.innerHTML = `
               <th>Stock</th>
               <th>Buy Price</th>
@@ -1251,26 +1416,54 @@
             stocksToShow.forEach((stock) => {
               const row = document.createElement("tr");
               const scoreDate = this.getScoreDate(this.selectedFile);
-              const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+              const ninetyDayDate = new Date(
+                scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+              );
               const marketData = this.marketData[stock.stock];
               // Split-adjusted buy price and target
               // buy price should be the (high + low) / 2 on the score date
-              const scoreDateData = marketData ? marketData.find((point) => {
-                const pointDate = new Date(point.date.getFullYear(), point.date.getMonth(), point.date.getDate());
-                const scoreDateOnly = new Date(scoreDate.getFullYear(), scoreDate.getMonth(), scoreDate.getDate());
-                return pointDate.getTime() === scoreDateOnly.getTime();
-              }) : null;
-              
-              const buyPrice = scoreDateData 
-                ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stock.stock, scoreDate)
-                : this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate); // fallback to target if no market data
-              const target = this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate);
+              const scoreDateData = marketData
+                ? marketData.find((point) => {
+                  const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const scoreDateOnly = new Date(
+                    scoreDate.getFullYear(),
+                    scoreDate.getMonth(),
+                    scoreDate.getDate(),
+                  );
+                  return pointDate.getTime() ===
+                    scoreDateOnly.getTime();
+                })
+                : null;
+
+              const buyPrice = scoreDateData
+                ? this.adjustHistoricalPriceToCurrent(
+                  (scoreDateData.high + scoreDateData.low) / 2,
+                  stock.stock,
+                  scoreDate,
+                )
+                : this.adjustHistoricalPriceToCurrent(
+                  stock.target,
+                  stock.stock,
+                  scoreDate,
+                ); // fallback to target if no market data
+              const target = this.adjustHistoricalPriceToCurrent(
+                stock.target,
+                stock.stock,
+                scoreDate,
+              );
               // Current price (already post-split, no adjustment needed)
               let currentPrice = null;
               if (marketData && marketData.length > 0) {
-                const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+                const within90Days = marketData.filter((point) =>
+                  point.date <= ninetyDayDate
+                );
                 if (within90Days.length > 0) {
-                  const lastData = within90Days[within90Days.length - 1];
+                  const lastData =
+                    within90Days[within90Days.length - 1];
                   currentPrice = (lastData.high + lastData.low) / 2; // No split adjustment needed
                 }
               }
@@ -1278,33 +1471,75 @@
               let performance = null;
               if (buyPrice && currentPrice !== null) {
                 // Add dividend return within 90 days
-                const dividends = this.getDividendsWithin90Days(stock.stock);
-                const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
-                const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
-                const dividendReturn = (totalDividends / buyPrice) * 100;
+                const dividends = this.getDividendsWithin90Days(
+                  stock.stock,
+                );
+                const totalDividends = dividends.reduce(
+                  (sum, div) => sum + div.amount,
+                  0,
+                );
+                const priceReturn =
+                  ((currentPrice - buyPrice) / buyPrice) * 100;
+                const dividendReturn = (totalDividends / buyPrice) *
+                  100;
                 performance = priceReturn + dividendReturn;
               }
-              const judgement = this.calculateJudgement(stock, performance);
+              const judgement = this.calculateJudgement(
+                stock,
+                performance,
+              );
               // Get dividend information (only within 90 days)
-              const dividends = this.getDividendsWithin90Days(stock.stock);
-              const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+              const dividends = this.getDividendsWithin90Days(
+                stock.stock,
+              );
+              const totalDividends = dividends.reduce(
+                (sum, div) => sum + div.amount,
+                0,
+              );
               const dividendInfo = dividends.length > 0
-                ? `$${totalDividends.toFixed(2)} (${dividends.length} div${dividends.length > 1 ? "s" : ""})`
+                ? `$${
+                  totalDividends.toFixed(2)
+                } (${dividends.length} div${
+                  dividends.length > 1 ? "s" : ""
+                })`
                 : "None";
               // Aggregate view
               row.innerHTML = `
                 <td class="clickable-stock" onclick="validator.showStockDetails('${stock.stock}')">${stock.stock}</td>
-                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${buyPrice !== null ? buyPrice.toFixed(2) : "N/A"}</span></td>
-                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${target !== null ? target.toFixed(2) : "N/A"}</span></td>
-                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${currentPrice !== null ? "$" + currentPrice.toFixed(2) : "N/A"}</span></td>
-                <td><span class="clickable-value ${this.getPerformanceClass(performance)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${performance !== null ? performance.toFixed(1) + "%" : "N/A"}</span></td>
-                <td><span class="clickable-value ${this.getPerformanceClass(performance)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${this.calculateProgressVsCostOfCapital(stock, performance)}</span></td>
-                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Judgement - ${stock.stock}" data-field="judgement" data-stock="${stock.stock}"><span class="badge ${this.getJudgementClass(judgement)}">${judgement}</span></span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${
+                buyPrice !== null ? buyPrice.toFixed(2) : "N/A"
+              }</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${
+                target !== null ? target.toFixed(2) : "N/A"
+              }</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${
+                currentPrice !== null
+                  ? "$" + currentPrice.toFixed(2)
+                  : "N/A"
+              }</span></td>
+                <td><span class="clickable-value ${
+                this.getPerformanceClass(performance)
+              }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
+                performance !== null
+                  ? performance.toFixed(1) + "%"
+                  : "N/A"
+              }</span></td>
+                <td><span class="clickable-value ${
+                this.getPerformanceClass(performance)
+              }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
+                this.calculateProgressVsCostOfCapital(
+                  stock,
+                  performance,
+                )
+              }</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Judgement - ${stock.stock}" data-field="judgement" data-stock="${stock.stock}"><span class="badge ${
+                this.getJudgementClass(judgement)
+              }">${judgement}</span></span></td>
                 <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${stock.stock}" data-field="dividend-info" data-stock="${stock.stock}">${dividendInfo}</span></td>
               `;
               // Add highlighting for selected stock in aggregate view
               if (this.selectedStock === stock.stock) {
-                row.classList.add('table-primary');
+                row.classList.add("table-primary");
               }
               tbody.appendChild(row);
             });
@@ -1313,8 +1548,10 @@
             const scoreFile = this.selectedFile;
             const scoreDate = this.getScoreDate(scoreFile);
             const daysElapsed = this.getDaysElapsed(scoreDate);
-            const portfolioPerformance90Day = this.calculatePortfolioPerformance90Day();
-            const portfolioTarget = this.calculatePortfolioTargetPercentage();
+            const portfolioPerformance90Day = this
+              .calculatePortfolioPerformance90Day();
+            const portfolioTarget = this
+              .calculatePortfolioTargetPercentage();
 
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
@@ -1323,7 +1560,9 @@
               <td>-</td>
               <td>-</td>
               <td>-</td>
-              <td class="${this.getPerformanceClass(portfolioPerformance90Day)}">${portfolioPerformance90Day.toFixed(1)}%</td>
+              <td class="${
+              this.getPerformanceClass(portfolioPerformance90Day)
+            }">${portfolioPerformance90Day.toFixed(1)}%</td>
               <td>-</td>
               <td>-</td>
               <td>-</td>
@@ -1341,23 +1580,32 @@
                   <strong>Stocks Tracked:</strong> ${this.scoreData.length}
                 </div>
                 <div class="col-md-3">
-                  <strong>Portfolio Performance (90-day):</strong> ${portfolioPerformance90Day.toFixed(1)}%
+                  <strong>Portfolio Performance (90-day):</strong> ${
+              portfolioPerformance90Day.toFixed(1)
+            }%
                 </div>
                 <div class="col-md-3">
-                  <strong>Portfolio Target:</strong> ${portfolioTarget.toFixed(1)}%
+                  <strong>Portfolio Target:</strong> ${
+              portfolioTarget.toFixed(1)
+            }%
                 </div>
               </div>
             `;
 
             tbody.appendChild(totalsRow);
-            
+
             // Add summary info after the table
-            tableContainer.parentNode.insertBefore(summaryDiv, tableContainer.nextSibling);
+            tableContainer.parentNode.insertBefore(
+              summaryDiv,
+              tableContainer.nextSibling,
+            );
           }
 
           // Dispose of existing popovers
-          const existingPopovers = document.querySelectorAll('.clickable-value[data-bs-toggle="popover"]');
-          existingPopovers.forEach(element => {
+          const existingPopovers = document.querySelectorAll(
+            '.clickable-value[data-bs-toggle="popover"]',
+          );
+          existingPopovers.forEach((element) => {
             const popover = bootstrap.Popover.getInstance(element);
             if (popover) {
               popover.dispose();
@@ -1365,46 +1613,84 @@
           });
 
           // Loop through all .clickable-value elements
-          const clickableValues = document.querySelectorAll('.clickable-value');
+          const clickableValues = document.querySelectorAll(
+            ".clickable-value",
+          );
           clickableValues.forEach((value) => {
-            const field = value.getAttribute('data-field');
-            const stock = value.getAttribute('data-stock');
+            const field = value.getAttribute("data-field");
+            const stock = value.getAttribute("data-stock");
 
             // Generate the popover content using the actual values for that stock/field
-            const working = this.getWorking(field, stock, this.scoreData);
+            const working = this.getWorking(
+              field,
+              stock,
+              this.scoreData,
+            );
 
             // Set the data-bs-content attribute
-            value.setAttribute('data-bs-content', working);
+            value.setAttribute("data-bs-content", working);
 
-            // Initialize the Bootstrap popover with trigger: 'click', html: false
+            // Initialize the Bootstrap popover
             new bootstrap.Popover(value, {
-              trigger: 'click',
+              trigger: "manual",
               html: false,
-              container: 'body',
-              boundary: 'viewport'
+              container: "body",
             });
           });
+
+          // Add document click handler to close popovers when clicking outside
+          // Temporarily disabled to fix popover issues
+          /*
+          document.addEventListener('click', (event) => {
+            const clickableValues = document.querySelectorAll('.clickable-value');
+            let clickedOnPopover = false;
+
+            clickableValues.forEach(element => {
+              if (element.contains(event.target) || event.target.closest('.popover')) {
+                clickedOnPopover = true;
+              }
+            });
+
+            if (!clickedOnPopover) {
+              // Close all open popovers
+              clickableValues.forEach(element => {
+                const popover = bootstrap.Popover.getInstance(element);
+                if (popover && popover._isShown()) {
+                  popover.hide();
+                }
+              });
+            }
+          });
+          */
         }
 
         getDividendsWithin90Days(stockSymbol) {
           const dividends = this.dividendData?.[stockSymbol] || [];
           const scoreDate = this.getScoreDate(this.selectedFile);
-          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-          
-          return dividends.filter(dividend => dividend.exDivDate <= ninetyDayDate);
+          const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+          );
+
+          return dividends.filter((dividend) =>
+            dividend.exDivDate <= ninetyDayDate
+          );
         }
 
         getCurrentPrice(stockSymbol) {
           const marketData = this.marketData[stockSymbol];
           if (!marketData || marketData.length === 0) return "N/A";
-          
+
           const scoreDate = this.getScoreDate(this.selectedFile);
-          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-          
+          const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+          );
+
           // Find the last price within 90 days
-          const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+          const within90Days = marketData.filter((point) =>
+            point.date <= ninetyDayDate
+          );
           if (within90Days.length === 0) return "N/A";
-          
+
           const lastData = within90Days[within90Days.length - 1];
           const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
           return "$" + currentPrice.toFixed(2);
@@ -1517,12 +1803,16 @@
           if (!marketData || marketData.length === 0) return null;
 
           const scoreDate = this.getScoreDate(this.selectedFile);
-          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-          
+          const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+          );
+
           // Find the last price within 90 days
-          const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+          const within90Days = marketData.filter((point) =>
+            point.date <= ninetyDayDate
+          );
           if (within90Days.length === 0) return null;
-          
+
           const lastData = within90Days[within90Days.length - 1];
           const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
 
@@ -1542,17 +1832,29 @@
             return pointDate.getTime() === scoreDateOnly.getTime();
           });
           const buyPrice = scoreDateData
-            ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stock.stock, scoreDate)
-            : this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate);
+            ? this.adjustHistoricalPriceToCurrent(
+              (scoreDateData.high + scoreDateData.low) / 2,
+              stock.stock,
+              scoreDate,
+            )
+            : this.adjustHistoricalPriceToCurrent(
+              stock.target,
+              stock.stock,
+              scoreDate,
+            );
 
           // Calculate price return
-          const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
-          
+          const priceReturn = ((currentPrice - buyPrice) / buyPrice) *
+            100;
+
           // Add dividend return within 90 days
           const dividends = this.getDividendsWithin90Days(stock.stock);
-          const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+          const totalDividends = dividends.reduce(
+            (sum, div) => sum + div.amount,
+            0,
+          );
           const dividendReturn = (totalDividends / buyPrice) * 100;
-          
+
           // Total return including dividends
           return priceReturn + dividendReturn;
         }
@@ -1566,8 +1868,10 @@
 
         calculatePortfolioPerformance90Day() {
           const scoreDate = this.getScoreDate(this.selectedFile);
-          const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-          
+          const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+          );
+
           let totalPerformance = 0;
           let validStocks = 0;
 
@@ -1576,7 +1880,7 @@
             if (marketData) {
               // Find the price at 90 days (or closest available date)
               let ninetyDayData = null;
-              
+
               // First try to find exact 90-day date
               ninetyDayData = marketData.find((point) => {
                 const pointDate = new Date(
@@ -1594,7 +1898,9 @@
 
               // If not found, find the closest date within 90 days
               if (!ninetyDayData) {
-                const within90Days = marketData.filter(point => point.date <= ninetyDayDate);
+                const within90Days = marketData.filter((point) =>
+                  point.date <= ninetyDayDate
+                );
                 if (within90Days.length > 0) {
                   // Get the latest data point within 90 days
                   ninetyDayData = within90Days[within90Days.length - 1];
@@ -1614,24 +1920,41 @@
                     scoreDate.getMonth(),
                     scoreDate.getDate(),
                   );
-                  return pointDate.getTime() === scoreDateOnly.getTime();
+                  return pointDate.getTime() ===
+                    scoreDateOnly.getTime();
                 });
-                
-                const buyPrice = scoreDateData
-                  ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stock.stock, scoreDate)
-                  : this.adjustHistoricalPriceToCurrent(stock.target, stock.stock, scoreDate);
 
-                const currentPrice = (ninetyDayData.high + ninetyDayData.low) / 2; // Already post-split
-                
+                const buyPrice = scoreDateData
+                  ? this.adjustHistoricalPriceToCurrent(
+                    (scoreDateData.high + scoreDateData.low) / 2,
+                    stock.stock,
+                    scoreDate,
+                  )
+                  : this.adjustHistoricalPriceToCurrent(
+                    stock.target,
+                    stock.stock,
+                    scoreDate,
+                  );
+
+                const currentPrice =
+                  (ninetyDayData.high + ninetyDayData.low) / 2; // Already post-split
+
                 // Add dividend income within 90 days
-                const dividends = this.getDividendsWithin90Days(stock.stock);
-                const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
-                
+                const dividends = this.getDividendsWithin90Days(
+                  stock.stock,
+                );
+                const totalDividends = dividends.reduce(
+                  (sum, div) => sum + div.amount,
+                  0,
+                );
+
                 // Calculate total return including dividends
-                const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
-                const dividendReturn = (totalDividends / buyPrice) * 100;
+                const priceReturn =
+                  ((currentPrice - buyPrice) / buyPrice) * 100;
+                const dividendReturn = (totalDividends / buyPrice) *
+                  100;
                 const totalReturn = priceReturn + dividendReturn;
-                
+
                 totalPerformance += totalReturn;
                 validStocks++;
               }
@@ -1642,175 +1965,432 @@
         }
 
         getWorking(field, stockSymbol, scoreData) {
-          const stock = scoreData.find(s => s.stock === stockSymbol);
+          const stock = scoreData.find((s) => s.stock === stockSymbol);
           if (!stock) return "Stock not found";
 
           const scoreDate = this.getScoreDate(this.selectedFile);
           const currentDate = new Date();
-          const header = `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${scoreDate.toISOString().split('T')[0]} | Current Date: ${currentDate.toISOString().split('T')[0]}\n\n`;
+          const header =
+            `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${
+              scoreDate.toISOString().split("T")[0]
+            } | Current Date: ${
+              currentDate.toISOString().split("T")[0]
+            }\n\n`;
 
-          switch(field) {
+          switch (field) {
             case "buy-price":
               const buyPriceMarketData = this.marketData[stockSymbol];
-              const buyPriceScoreDateData = buyPriceMarketData ? buyPriceMarketData.find((point) => {
-                const pointDate = new Date(point.date.getFullYear(), point.date.getMonth(), point.date.getDate());
-                const scoreDateOnly = new Date(scoreDate.getFullYear(), scoreDate.getMonth(), scoreDate.getDate());
-                return pointDate.getTime() === scoreDateOnly.getTime();
-              }) : null;
-              
-              const buyPriceOriginalPrice = buyPriceScoreDateData 
-                ? (buyPriceScoreDateData.high + buyPriceScoreDateData.low) / 2
+              const buyPriceScoreDateData = buyPriceMarketData
+                ? buyPriceMarketData.find((point) => {
+                  const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const scoreDateOnly = new Date(
+                    scoreDate.getFullYear(),
+                    scoreDate.getMonth(),
+                    scoreDate.getDate(),
+                  );
+                  return pointDate.getTime() ===
+                    scoreDateOnly.getTime();
+                })
+                : null;
+
+              const buyPriceOriginalPrice = buyPriceScoreDateData
+                ? (buyPriceScoreDateData.high +
+                  buyPriceScoreDateData.low) / 2
                 : stock.target; // fallback to target if no market data
-              
-              const buyPriceSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(stockSymbol, scoreDate);
-              const adjustedBuyPrice = this.adjustHistoricalPriceToCurrent(buyPriceOriginalPrice, stockSymbol, scoreDate);
-              
+
+              const buyPriceSplitAdjustment = this
+                .getHistoricalToCurrentSplitAdjustment(
+                  stockSymbol,
+                  scoreDate,
+                );
+              const adjustedBuyPrice = this
+                .adjustHistoricalPriceToCurrent(
+                  buyPriceOriginalPrice,
+                  stockSymbol,
+                  scoreDate,
+                );
+
               if (buyPriceSplitAdjustment > 1.0) {
-                return header + `Buy Price working:\n= Market price on score date (adjusted for ${buyPriceSplitAdjustment}:1 split)\n= Original: $${buyPriceOriginalPrice.toFixed(2)}\n= Split adjustment: ÷ ${buyPriceSplitAdjustment}\n= Adjusted: $${adjustedBuyPrice.toFixed(2)}`;
+                return header +
+                  `Buy Price working:\n= Market price on score date (adjusted for ${buyPriceSplitAdjustment}:1 split)\n= Original: $${
+                    buyPriceOriginalPrice.toFixed(2)
+                  }\n= Split adjustment: ÷ ${buyPriceSplitAdjustment}\n= Adjusted: $${
+                    adjustedBuyPrice.toFixed(2)
+                  }`;
               } else {
-                return header + `Buy Price working:\n= Market price on score date\n= $${adjustedBuyPrice.toFixed(2)}`;
+                return header +
+                  `Buy Price working:\n= Market price on score date\n= $${
+                    adjustedBuyPrice.toFixed(2)
+                  }`;
               }
             case "target":
-              const targetSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(stockSymbol, scoreDate);
-              const adjustedTarget = this.adjustHistoricalPriceToCurrent(stock.target, stockSymbol, scoreDate);
+              const targetSplitAdjustment = this
+                .getHistoricalToCurrentSplitAdjustment(
+                  stockSymbol,
+                  scoreDate,
+                );
+              const adjustedTarget = this
+                .adjustHistoricalPriceToCurrent(
+                  stock.target,
+                  stockSymbol,
+                  scoreDate,
+                );
               if (targetSplitAdjustment > 1.0) {
-                return header + `90-Day Target working:\n= Target price from score file (adjusted for ${targetSplitAdjustment}:1 split)\n= Original: $${stock.target.toFixed(2)}\n= Split adjustment: ÷ ${targetSplitAdjustment}\n= Adjusted: $${adjustedTarget.toFixed(2)}`;
+                return header +
+                  `90-Day Target working:\n= Target price from score file (adjusted for ${targetSplitAdjustment}:1 split)\n= Original: $${
+                    stock.target.toFixed(2)
+                  }\n= Split adjustment: ÷ ${targetSplitAdjustment}\n= Adjusted: $${
+                    adjustedTarget.toFixed(2)
+                  }`;
               } else {
-                return header + `90-Day Target working:\n= Target price from score file\n= $${stock.target.toFixed(2)}\n= $${adjustedTarget.toFixed(2)}`;
+                return header +
+                  `90-Day Target working:\n= Target price from score file\n= $${
+                    stock.target.toFixed(2)
+                  }\n= $${adjustedTarget.toFixed(2)}`;
               }
             case "current-price":
               const marketData = this.marketData[stockSymbol];
-              if (!marketData || marketData.length === 0) return header + "Current Price working:\nNo market data available";
+              if (!marketData || marketData.length === 0) {
+                return header +
+                  "Current Price working:\nNo market data available";
+              }
               const lastData = marketData[marketData.length - 1];
               const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
-              const currentSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(stockSymbol, lastData.date);
+              const currentSplitAdjustment = this
+                .getHistoricalToCurrentSplitAdjustment(
+                  stockSymbol,
+                  lastData.date,
+                );
               if (currentSplitAdjustment > 1.0) {
-                return header + `Current Price working:\n= (High + Low) / 2 from latest market data (post-split)\n= ($${lastData.high.toFixed(2)} + $${lastData.low.toFixed(2)}) / 2\n= $${currentPrice.toFixed(2)} (already post-split, no adjustment needed)`;
+                return header +
+                  `Current Price working:\n= (High + Low) / 2 from latest market data (post-split)\n= ($${
+                    lastData.high.toFixed(2)
+                  } + $${lastData.low.toFixed(2)}) / 2\n= $${
+                    currentPrice.toFixed(2)
+                  } (already post-split, no adjustment needed)`;
               } else {
-                return header + `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${lastData.high.toFixed(2)} + $${lastData.low.toFixed(2)}) / 2\n= $${currentPrice.toFixed(2)}`;
+                return header +
+                  `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${
+                    lastData.high.toFixed(2)
+                  } + $${lastData.low.toFixed(2)}) / 2\n= $${
+                    currentPrice.toFixed(2)
+                  }`;
               }
             case "gain-loss":
               const performance = this.calculateStockPerformance(stock);
-              if (performance === null) return header + "Gain/Loss working:\nNo market data available";
+              if (performance === null) {
+                return header +
+                  "Gain/Loss working:\nNo market data available";
+              }
               const gainLossMarketData = this.marketData[stockSymbol];
-              const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-              const within90Days = gainLossMarketData.filter(point => point.date <= ninetyDayDate);
-              const gainLossLastData = within90Days[within90Days.length - 1];
-              const gainLossCurrentPrice = (gainLossLastData.high + gainLossLastData.low) / 2; // Already post-split
+              const ninetyDayDate = new Date(
+                scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+              );
+              const within90Days = gainLossMarketData.filter((point) =>
+                point.date <= ninetyDayDate
+              );
+              const gainLossLastData =
+                within90Days[within90Days.length - 1];
+              const gainLossCurrentPrice =
+                (gainLossLastData.high + gainLossLastData.low) / 2; // Already post-split
               const scoreDateData = gainLossMarketData.find((point) => {
-                const pointDate = new Date(point.date.getFullYear(), point.date.getMonth(), point.date.getDate());
-                const scoreDateOnly = new Date(scoreDate.getFullYear(), scoreDate.getMonth(), scoreDate.getDate());
+                const pointDate = new Date(
+                  point.date.getFullYear(),
+                  point.date.getMonth(),
+                  point.date.getDate(),
+                );
+                const scoreDateOnly = new Date(
+                  scoreDate.getFullYear(),
+                  scoreDate.getMonth(),
+                  scoreDate.getDate(),
+                );
                 return pointDate.getTime() === scoreDateOnly.getTime();
               });
-              const buyPrice = scoreDateData ? this.adjustHistoricalPriceToCurrent((scoreDateData.high + scoreDateData.low) / 2, stockSymbol, scoreDate) : this.adjustHistoricalPriceToCurrent(stock.target, stockSymbol, scoreDate);
-              const dividends = this.getDividendsWithin90Days(stockSymbol);
-              const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
-              
+              const buyPrice = scoreDateData
+                ? this.adjustHistoricalPriceToCurrent(
+                  (scoreDateData.high + scoreDateData.low) / 2,
+                  stockSymbol,
+                  scoreDate,
+                )
+                : this.adjustHistoricalPriceToCurrent(
+                  stock.target,
+                  stockSymbol,
+                  scoreDate,
+                );
+              const dividends = this.getDividendsWithin90Days(
+                stockSymbol,
+              );
+              const totalDividends = dividends.reduce(
+                (sum, div) => sum + div.amount,
+                0,
+              );
+
               // Get split adjustments
-              const gainLossBuyPriceSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(stockSymbol, scoreDate);
-              
+              const gainLossBuyPriceSplitAdjustment = this
+                .getHistoricalToCurrentSplitAdjustment(
+                  stockSymbol,
+                  scoreDate,
+                );
+
               if (gainLossBuyPriceSplitAdjustment > 1.0) {
-                const originalBuyPrice = scoreDateData ? (scoreDateData.high + scoreDateData.low) / 2 : stock.target;
-                return header + `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${gainLossCurrentPrice.toFixed(2)} + $${totalDividends.toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)}) × 100\n= ($${(gainLossCurrentPrice + totalDividends).toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)} × 100\n= $${(gainLossCurrentPrice + totalDividends - buyPrice).toFixed(2)} / $${buyPrice.toFixed(2)} × 100\n= ${((gainLossCurrentPrice + totalDividends - buyPrice) / buyPrice * 100).toFixed(1)}%\n\nSplit Adjustments:\n- Buy Price: $${originalBuyPrice.toFixed(2)} ÷ ${gainLossBuyPriceSplitAdjustment} = $${buyPrice.toFixed(2)} (adjusted to current price level)\n- Current Price: $${gainLossCurrentPrice.toFixed(2)} (already post-split, no adjustment needed)`;
+                const originalBuyPrice = scoreDateData
+                  ? (scoreDateData.high + scoreDateData.low) / 2
+                  : stock.target;
+                return header +
+                  `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
+                    gainLossCurrentPrice.toFixed(2)
+                  } + $${totalDividends.toFixed(2)} - $${
+                    buyPrice.toFixed(2)
+                  }) / $${buyPrice.toFixed(2)}) × 100\n= ($${
+                    (gainLossCurrentPrice + totalDividends).toFixed(2)
+                  } - $${buyPrice.toFixed(2)}) / $${
+                    buyPrice.toFixed(2)
+                  } × 100\n= $${
+                    (gainLossCurrentPrice + totalDividends - buyPrice)
+                      .toFixed(2)
+                  } / $${buyPrice.toFixed(2)} × 100\n= ${
+                    ((gainLossCurrentPrice + totalDividends -
+                      buyPrice) / buyPrice * 100).toFixed(1)
+                  }%\n\nSplit Adjustments:\n- Buy Price: $${
+                    originalBuyPrice.toFixed(2)
+                  } ÷ ${gainLossBuyPriceSplitAdjustment} = $${
+                    buyPrice.toFixed(2)
+                  } (adjusted to current price level)\n- Current Price: $${
+                    gainLossCurrentPrice.toFixed(2)
+                  } (already post-split, no adjustment needed)`;
               } else {
-                return header + `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${gainLossCurrentPrice.toFixed(2)} + $${totalDividends.toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)}) × 100\n= ($${(gainLossCurrentPrice + totalDividends).toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)} × 100\n= $${(gainLossCurrentPrice + totalDividends - buyPrice).toFixed(2)} / $${buyPrice.toFixed(2)} × 100\n= ${((gainLossCurrentPrice + totalDividends - buyPrice) / buyPrice * 100).toFixed(1)}%`;
+                return header +
+                  `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
+                    gainLossCurrentPrice.toFixed(2)
+                  } + $${totalDividends.toFixed(2)} - $${
+                    buyPrice.toFixed(2)
+                  }) / $${buyPrice.toFixed(2)}) × 100\n= ($${
+                    (gainLossCurrentPrice + totalDividends).toFixed(2)
+                  } - $${buyPrice.toFixed(2)}) / $${
+                    buyPrice.toFixed(2)
+                  } × 100\n= $${
+                    (gainLossCurrentPrice + totalDividends - buyPrice)
+                      .toFixed(2)
+                  } / $${buyPrice.toFixed(2)} × 100\n= ${
+                    ((gainLossCurrentPrice + totalDividends -
+                      buyPrice) / buyPrice * 100).toFixed(1)
+                  }%`;
               }
             case "progress-vs-cost":
-              const progressPerformance = this.calculateStockPerformance(stock);
-              if (progressPerformance === null) return "Progress vs Cost of Capital working:\nNo market data available";
-              const daysElapsed = this.getDaysElapsed(this.getScoreDate(this.selectedFile));
-              const costOfCapitalReturn = (this.costOfCapital / 365) * daysElapsed;
-              return header + `Progress vs Cost of Capital working:\n= Stock Performance - Cost of Capital Return\n= ${progressPerformance.toFixed(1)}% - ${costOfCapitalReturn.toFixed(1)}%\n= ${(progressPerformance - costOfCapitalReturn).toFixed(1)}%`;
+              const progressPerformance = this
+                .calculateStockPerformance(stock);
+              if (progressPerformance === null) {
+                return "Progress vs Cost of Capital working:\nNo market data available";
+              }
+              const daysElapsed = this.getDaysElapsed(
+                this.getScoreDate(this.selectedFile),
+              );
+              const costOfCapitalReturn = (this.costOfCapital / 365) *
+                daysElapsed;
+              return header +
+                `Progress vs Cost of Capital working:\n= Stock Performance - Cost of Capital Return\n= ${
+                  progressPerformance.toFixed(1)
+                }% - ${costOfCapitalReturn.toFixed(1)}%\n= ${
+                  (progressPerformance - costOfCapitalReturn).toFixed(1)
+                }%`;
             case "judgement":
-              const judgementPerformance = this.calculateStockPerformance(stock);
-              const judgement = this.calculateJudgement(stock, judgementPerformance);
-              return header + `Judgement (90-day) working:\n= Based on performance vs 20% target\n= Performance: ${judgementPerformance !== null ? judgementPerformance.toFixed(1) + "%" : "N/A"}\n= Target: 20%\n= Judgement: ${judgement}`;
+              const judgementPerformance = this
+                .calculateStockPerformance(stock);
+              const judgement = this.calculateJudgement(
+                stock,
+                judgementPerformance,
+              );
+              return header +
+                `Judgement (90-day) working:\n= Based on performance vs 20% target\n= Performance: ${
+                  judgementPerformance !== null
+                    ? judgementPerformance.toFixed(1) + "%"
+                    : "N/A"
+                }\n= Target: 20%\n= Judgement: ${judgement}`;
             case "intrinsic-basic":
-              if (stock.intrinsicValuePerShareBasic === null) return "Intrinsic Value (Basic) working:\nNo data available";
-              return header + `Intrinsic Value (Basic) working:\n= Value from score file\n= $${stock.intrinsicValuePerShareBasic.toFixed(2)}`;
+              if (stock.intrinsicValuePerShareBasic === null) {
+                return "Intrinsic Value (Basic) working:\nNo data available";
+              }
+              return header +
+                `Intrinsic Value (Basic) working:\n= Value from score file\n= $${
+                  stock.intrinsicValuePerShareBasic.toFixed(2)
+                }`;
             case "intrinsic-adjusted":
-              if (stock.intrinsicValuePerShareAdjusted === null) return "Intrinsic Value (Adjusted) working:\nNo data available";
-              return header + `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file\n= $${stock.intrinsicValuePerShareAdjusted.toFixed(2)}`;
+              if (stock.intrinsicValuePerShareAdjusted === null) {
+                return "Intrinsic Value (Adjusted) working:\nNo data available";
+              }
+              return header +
+                `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file\n= $${
+                  stock.intrinsicValuePerShareAdjusted.toFixed(2)
+                }`;
             case "avg-dividend":
-              const avgDividends = this.getDividendsWithin90Days(stockSymbol);
-              if (avgDividends.length === 0) return "Average Dividend (90-day) working:\nNo dividends in 90-day period";
-              const avgTotalDividends = avgDividends.reduce((sum, div) => sum + div.amount, 0);
-              const avgDividend = avgTotalDividends / avgDividends.length;
-              return header + `Average Dividend (90-day) working:\n= Total Dividends / Number of Dividends\n= $${avgTotalDividends.toFixed(2)} / ${avgDividends.length}\n= $${avgDividend.toFixed(4)}`;
+              const avgDividends = this.getDividendsWithin90Days(
+                stockSymbol,
+              );
+              if (avgDividends.length === 0) {
+                return "Average Dividend (90-day) working:\nNo dividends in 90-day period";
+              }
+              const avgTotalDividends = avgDividends.reduce(
+                (sum, div) => sum + div.amount,
+                0,
+              );
+              const avgDividend = avgTotalDividends /
+                avgDividends.length;
+              return header +
+                `Average Dividend (90-day) working:\n= Total Dividends / Number of Dividends\n= $${
+                  avgTotalDividends.toFixed(2)
+                } / ${avgDividends.length}\n= $${
+                  avgDividend.toFixed(4)
+                }`;
             case "total-dividend":
-              const totalDivDividends = this.getDividendsWithin90Days(stockSymbol);
-              if (totalDivDividends.length === 0) return "Total Dividends (90-day) working:\nNo dividends in 90-day period";
-              const totalDivAmount = totalDivDividends.reduce((sum, div) => sum + div.amount, 0);
-              return header + `Total Dividends (90-day) working:\n= Sum of all dividends within 90 days\n= ${totalDivDividends.map(d => `$${d.amount.toFixed(2)}`).join(" + ")}\n= $${totalDivAmount.toFixed(2)} (${totalDivDividends.length} dividend${totalDivDividends.length > 1 ? "s" : ""})`;
+              const totalDivDividends = this.getDividendsWithin90Days(
+                stockSymbol,
+              );
+              if (totalDivDividends.length === 0) {
+                return "Total Dividends (90-day) working:\nNo dividends in 90-day period";
+              }
+              const totalDivAmount = totalDivDividends.reduce(
+                (sum, div) => sum + div.amount,
+                0,
+              );
+              return header +
+                `Total Dividends (90-day) working:\n= Sum of all dividends within 90 days\n= ${
+                  totalDivDividends.map((d) =>
+                    `$${d.amount.toFixed(2)}`
+                  ).join(" + ")
+                }\n= $${
+                  totalDivAmount.toFixed(2)
+                } (${totalDivDividends.length} dividend${
+                  totalDivDividends.length > 1 ? "s" : ""
+                })`;
             case "dividend-info":
-              const divInfoDividends = this.getDividendsWithin90Days(stockSymbol);
-              if (divInfoDividends.length === 0) return "Dividend Info working:\nNo dividends in 90-day period";
-              const divInfoTotal = divInfoDividends.reduce((sum, div) => sum + div.amount, 0);
-              return header + `Dividend Info working:\n= Total dividends within 90 days\n= $${divInfoTotal.toFixed(2)} (${divInfoDividends.length} dividend${divInfoDividends.length > 1 ? "s" : ""})`;
+              const divInfoDividends = this.getDividendsWithin90Days(
+                stockSymbol,
+              );
+              if (divInfoDividends.length === 0) {
+                return "Dividend Info working:\nNo dividends in 90-day period";
+              }
+              const divInfoTotal = divInfoDividends.reduce(
+                (sum, div) => sum + div.amount,
+                0,
+              );
+              return header +
+                `Dividend Info working:\n= Total dividends within 90 days\n= $${
+                  divInfoTotal.toFixed(2)
+                } (${divInfoDividends.length} dividend${
+                  divInfoDividends.length > 1 ? "s" : ""
+                })`;
             default:
               return "Calculation working not implemented for this field";
           }
         }
 
-        getHistoricalToCurrentSplitAdjustment(stockSymbol, historicalDate) {
+        getHistoricalToCurrentSplitAdjustment(
+          stockSymbol,
+          historicalDate,
+        ) {
           const marketData = this.marketData[stockSymbol];
           if (!marketData) return 1.0;
 
           // Debug for NASDAQ:IBKR
-          if (stockSymbol === 'NASDAQ:IBKR') {
-            console.log('getHistoricalToCurrentSplitAdjustment DEBUG:', {
-              stockSymbol,
-              historicalDate: historicalDate.toISOString().split('T')[0],
-              marketDataLength: marketData.length,
-              splits: marketData.filter(p => p.splitCoefficient > 1.0).map(p => ({
-                date: p.date.toISOString().split('T')[0],
-                splitCoefficient: p.splitCoefficient
-              }))
-            });
+          if (stockSymbol === "NASDAQ:IBKR") {
+            console.log(
+              "getHistoricalToCurrentSplitAdjustment DEBUG:",
+              {
+                stockSymbol,
+                historicalDate:
+                  historicalDate.toISOString().split("T")[0],
+                marketDataLength: marketData.length,
+                splits: marketData.filter((p) =>
+                  p.splitCoefficient > 1.0
+                ).map((p) => ({
+                  date: p.date.toISOString().split("T")[0],
+                  splitCoefficient: p.splitCoefficient,
+                })),
+              },
+            );
           }
 
           // Find all splits that occurred after the historical date
           let cumulativeSplit = 1.0;
           for (const point of marketData) {
-            if (point.date > historicalDate && point.splitCoefficient > 1.0) {
+            if (
+              point.date > historicalDate &&
+              point.splitCoefficient > 1.0
+            ) {
               cumulativeSplit *= point.splitCoefficient;
             }
           }
-          
+
           // Debug for NASDAQ:IBKR
-          if (stockSymbol === 'NASDAQ:IBKR') {
-            console.log('getHistoricalToCurrentSplitAdjustment RESULT:', {
-              stockSymbol,
-              cumulativeSplit
-            });
+          if (stockSymbol === "NASDAQ:IBKR") {
+            console.log(
+              "getHistoricalToCurrentSplitAdjustment RESULT:",
+              {
+                stockSymbol,
+                cumulativeSplit,
+              },
+            );
           }
-          
+
           return cumulativeSplit;
         }
 
-        adjustHistoricalPriceToCurrent(price, stockSymbol, historicalDate) {
-          const splitAdjustment = this.getHistoricalToCurrentSplitAdjustment(stockSymbol, historicalDate);
+        adjustHistoricalPriceToCurrent(
+          price,
+          stockSymbol,
+          historicalDate,
+        ) {
+          const splitAdjustment = this
+            .getHistoricalToCurrentSplitAdjustment(
+              stockSymbol,
+              historicalDate,
+            );
           const result = price / splitAdjustment;
-          
+
           // Debug for NASDAQ:IBKR
-          if (stockSymbol === 'NASDAQ:IBKR') {
-            console.log('adjustHistoricalPriceToCurrent DEBUG:', {
+          if (stockSymbol === "NASDAQ:IBKR") {
+            console.log("adjustHistoricalPriceToCurrent DEBUG:", {
               price,
               stockSymbol,
-              historicalDate: historicalDate.toISOString().split('T')[0],
+              historicalDate:
+                historicalDate.toISOString().split("T")[0],
               splitAdjustment,
-              result
+              result,
             });
           }
-          
+
           return result;
         }
       }
 
       // Initialize the validator
       const validator = new GRQValidator();
+
+      // Add document click handler to close popovers when clicking outside
+      document.addEventListener("click", (event) => {
+        // Check if the click was on a popover trigger or inside a popover
+        const isPopoverTrigger = event.target.closest(
+          ".clickable-value",
+        );
+        const isInsidePopover = event.target.closest(".popover");
+
+        if (!isPopoverTrigger && !isInsidePopover) {
+          // Close all open popovers
+          const clickableValues = document.querySelectorAll(
+            ".clickable-value",
+          );
+          clickableValues.forEach((element) => {
+            const popover = bootstrap.Popover.getInstance(element);
+            if (popover && element.hasAttribute("aria-describedby")) {
+              popover.hide();
+            }
+          });
+        }
+      });
     </script>
   </body>
 </html>
-
-</rewritten_file>

@@ -134,7 +134,11 @@
 }
 
 #stockDetailCard .card-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-color) 0%,
+    var(--secondary-color) 100%
+  );
   color: white;
   border-bottom: none;
   padding: 1rem 1.5rem;
@@ -353,13 +357,13 @@
     font-size: 0.7rem;
     padding: 0.3rem 0.2rem;
   }
-  
+
   .stock-detail-view .table th:last-child,
   .stock-detail-view .table td:last-child {
     min-width: 150px;
     max-width: 200px;
   }
-  
+
   /* Hide some columns on mobile for detailed view */
   .stock-detail-view .table th:nth-child(4),
   .stock-detail-view .table td:nth-child(4),
