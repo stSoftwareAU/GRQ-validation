@@ -1315,7 +1315,7 @@
                         <div class="col-6"><strong>Intrinsic Value (Basic):</strong></div>
                         <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${
                 stock.intrinsicValuePerShareBasic !== null
-                  ? "$" + stock.intrinsicValuePerShareBasic.toFixed(2)
+                  ? "$" + this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareBasic, stock.stock, this.getScoreDate(this.selectedFile)).toFixed(2)
                   : "N/A"
               }</span></div>
                       </div>
@@ -1323,8 +1323,7 @@
                         <div class="col-6"><strong>Intrinsic Value (Adjusted):</strong></div>
                         <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${
                 stock.intrinsicValuePerShareAdjusted !== null
-                  ? "$" +
-                    stock.intrinsicValuePerShareAdjusted.toFixed(2)
+                  ? "$" + this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareAdjusted, stock.stock, this.getScoreDate(this.selectedFile)).toFixed(2)
                   : "N/A"
               }</span></div>
                       </div>
@@ -2209,18 +2208,24 @@
               if (stock.intrinsicValuePerShareBasic === null) {
                 return "Intrinsic Value (Basic) working:\nNo data available";
               }
+              const adjustedBasicValue = this.adjustHistoricalPriceToCurrent(
+                stock.intrinsicValuePerShareBasic,
+                stock.stock,
+                this.getScoreDate(this.selectedFile),
+              );
               return header +
-                `Intrinsic Value (Basic) working:\n= Value from score file\n= $${
-                  stock.intrinsicValuePerShareBasic.toFixed(2)
-                }`;
+                `Intrinsic Value (Basic) working:\n= Value from score file (adjusted for splits)\n= Original: $${stock.intrinsicValuePerShareBasic.toFixed(2)}\n= Split adjustment: ÷ ${this.getHistoricalToCurrentSplitAdjustment(stock.stock, this.getScoreDate(this.selectedFile)).toFixed(1)}\n= Adjusted: $${adjustedBasicValue.toFixed(2)}`;
             case "intrinsic-adjusted":
               if (stock.intrinsicValuePerShareAdjusted === null) {
                 return "Intrinsic Value (Adjusted) working:\nNo data available";
               }
+              const adjustedAdjustedValue = this.adjustHistoricalPriceToCurrent(
+                stock.intrinsicValuePerShareAdjusted,
+                stock.stock,
+                this.getScoreDate(this.selectedFile),
+              );
               return header +
-                `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file\n= $${
-                  stock.intrinsicValuePerShareAdjusted.toFixed(2)
-                }`;
+                `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file (adjusted for splits)\n= Original: $${stock.intrinsicValuePerShareAdjusted.toFixed(2)}\n= Split adjustment: ÷ ${this.getHistoricalToCurrentSplitAdjustment(stock.stock, this.getScoreDate(this.selectedFile)).toFixed(1)}\n= Adjusted: $${adjustedAdjustedValue.toFixed(2)}`;
             case "avg-dividend":
               const avgDividends = this.getDividendsWithin90Days(
                 stockSymbol,
