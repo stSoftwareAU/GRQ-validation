@@ -272,7 +272,7 @@ pub fn create_market_data_long_csv(
 
     let file = File::create(output_path)?;
     let mut writer = Writer::from_writer(file);
-    writer.write_record(["date", "ticker", "high", "low", "open", "close"])?;
+    writer.write_record(["date", "ticker", "high", "low", "open", "close", "split_coefficient"])?;
 
     for ticker in tickers {
         let symbol = extract_symbol_from_ticker(ticker);
@@ -294,6 +294,7 @@ pub fn create_market_data_long_csv(
                     &day.low.to_string(),
                     &day.open.to_string(),
                     &day.close.to_string(),
+                    &day.split_coefficient.to_string(),
                 ])?;
             }
         }

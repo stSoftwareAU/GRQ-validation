@@ -315,6 +315,7 @@
               const low = parseFloat(values[3]);
               const open = parseFloat(values[4]);
               const close = parseFloat(values[5]);
+              const splitCoefficient = parseFloat(values[6]);
 
               if (!this.marketData[ticker]) {
                 this.marketData[ticker] = [];
@@ -326,6 +327,7 @@
                 low,
                 open,
                 close,
+                splitCoefficient,
               });
             });
 
@@ -1609,20 +1611,36 @@
 
           switch(field) {
             case "buy-price":
-              return header + `Buy Price working:\n= Target price from score file\n= $${stock.target.toFixed(2)}`;
+              const buyPriceSplitAdjustment = this.getSplitAdjustment(stockSymbol, scoreDate);
+              const adjustedBuyPrice = this.adjustPriceForSplit(stock.target, stockSymbol, scoreDate);
+              if (buyPriceSplitAdjustment > 1.0) {
+                return header + `Buy Price working:\n= Target price from score file (adjusted for ${buyPriceSplitAdjustment}:1 split)\n= Original: $${stock.target.toFixed(2)}\n= Split adjustment: ÷ ${buyPriceSplitAdjustment}\n= Adjusted: $${adjustedBuyPrice.toFixed(2)}`;
+              } else {
+                return header + `Buy Price working:\n= Target price from score file\n= $${stock.target.toFixed(2)}`;
+              }
             case "target":
-              return header + `90-Day Target working:\n= Buy Price × 1.2 (20% target)\n= $${stock.target.toFixed(2)} × 1.2\n= $${(stock.target * 1.2).toFixed(2)}`;
+              const targetSplitAdjustment = this.getSplitAdjustment(stockSymbol, scoreDate);
+              const adjustedTarget = this.adjustPriceForSplit(stock.target * 1.2, stockSymbol, scoreDate);
+              if (targetSplitAdjustment > 1.0) {
+                return header + `90-Day Target working:\n= Buy Price × 1.2 (20% target, adjusted for ${targetSplitAdjustment}:1 split)\n= Original: $${stock.target.toFixed(2)} × 1.2 = $${(stock.target * 1.2).toFixed(2)}\n= Split adjustment: ÷ ${targetSplitAdjustment}\n= Adjusted: $${adjustedTarget.toFixed(2)}`;
+              } else {
+                return header + `90-Day Target working:\n= Buy Price × 1.2 (20% target)\n= $${stock.target.toFixed(2)} × 1.2\n= $${(stock.target * 1.2).toFixed(2)}`;
+              }
             case "current-price":
               const marketData = this.marketData[stockSymbol];
-              if (!marketData || marketData.length === 0) return "Current Price working:\nNo market data available";
+              if (!marketData || marketData.length === 0) return header + "Current Price working:\nNo market data available";
               const lastData = marketData[marketData.length - 1];
               const currentPrice = (lastData.high + lastData.low) / 2;
-              return header + `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${lastData.high.toFixed(2)} + $${lastData.low.toFixed(2)}) / 2\n= $${currentPrice.toFixed(2)}`;
+              const currentSplitAdjustment = this.getSplitAdjustment(stockSymbol, lastData.date);
+              if (currentSplitAdjustment > 1.0) {
+                return header + `Current Price working:\n= (High + Low) / 2 from latest market data (post-split)\n= ($${lastData.high.toFixed(2)} + $${lastData.low.toFixed(2)}) / 2\n= $${currentPrice.toFixed(2)} (already adjusted for ${currentSplitAdjustment}:1 split)`;
+              } else {
+                return header + `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${lastData.high.toFixed(2)} + $${lastData.low.toFixed(2)}) / 2\n= $${currentPrice.toFixed(2)}`;
+              }
             case "gain-loss":
               const performance = this.calculateStockPerformance(stock);
-              if (performance === null) return "Gain/Loss working:\nNo market data available";
+              if (performance === null) return header + "Gain/Loss working:\nNo market data available";
               const gainLossMarketData = this.marketData[stockSymbol];
-              const scoreDate = this.getScoreDate(this.selectedFile);
               const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
               const within90Days = gainLossMarketData.filter(point => point.date <= ninetyDayDate);
               const gainLossLastData = within90Days[within90Days.length - 1];
@@ -1635,7 +1653,18 @@
               const buyPrice = scoreDateData ? (scoreDateData.high + scoreDateData.low) / 2 : stock.target;
               const dividends = this.getDividendsWithin90Days(stockSymbol);
               const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
-              return header + `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${gainLossCurrentPrice.toFixed(2)} + $${totalDividends.toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)}) × 100\n= $${(gainLossCurrentPrice + totalDividends).toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)} × 100\n= $${(gainLossCurrentPrice + totalDividends - buyPrice).toFixed(2)} / $${buyPrice.toFixed(2)} × 100\n= ${((gainLossCurrentPrice + totalDividends - buyPrice) / buyPrice * 100).toFixed(1)}%`;
+              
+              // Get split adjustments
+              const gainLossBuyPriceSplitAdjustment = this.getSplitAdjustment(stockSymbol, scoreDate);
+              const gainLossCurrentPriceSplitAdjustment = this.getSplitAdjustment(stockSymbol, gainLossLastData.date);
+              
+              if (gainLossBuyPriceSplitAdjustment > 1.0 || gainLossCurrentPriceSplitAdjustment > 1.0) {
+                const adjustedBuyPrice = buyPrice / gainLossBuyPriceSplitAdjustment;
+                const adjustedCurrentPrice = gainLossCurrentPrice / gainLossCurrentPriceSplitAdjustment;
+                return header + `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${adjustedCurrentPrice.toFixed(2)} + $${totalDividends.toFixed(2)} - $${adjustedBuyPrice.toFixed(2)}) / $${adjustedBuyPrice.toFixed(2)}) × 100\n= ($${(adjustedCurrentPrice + totalDividends).toFixed(2)} - $${adjustedBuyPrice.toFixed(2)}) / $${adjustedBuyPrice.toFixed(2)} × 100\n= $${(adjustedCurrentPrice + totalDividends - adjustedBuyPrice).toFixed(2)} / $${adjustedBuyPrice.toFixed(2)} × 100\n= ${((adjustedCurrentPrice + totalDividends - adjustedBuyPrice) / adjustedBuyPrice * 100).toFixed(1)}%\n\nSplit Adjustments:\n- Buy Price: $${buyPrice.toFixed(2)} ÷ ${gainLossBuyPriceSplitAdjustment} = $${adjustedBuyPrice.toFixed(2)}\n- Current Price: $${gainLossCurrentPrice.toFixed(2)} ÷ ${gainLossCurrentPriceSplitAdjustment} = $${adjustedCurrentPrice.toFixed(2)}`;
+              } else {
+                return header + `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${gainLossCurrentPrice.toFixed(2)} + $${totalDividends.toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)}) × 100\n= ($${(gainLossCurrentPrice + totalDividends).toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)} × 100\n= $${(gainLossCurrentPrice + totalDividends - buyPrice).toFixed(2)} / $${buyPrice.toFixed(2)} × 100\n= ${((gainLossCurrentPrice + totalDividends - buyPrice) / buyPrice * 100).toFixed(1)}%`;
+              }
             case "progress-vs-cost":
               const progressPerformance = this.calculateStockPerformance(stock);
               if (progressPerformance === null) return "Progress vs Cost of Capital working:\nNo market data available";
@@ -1671,6 +1700,25 @@
             default:
               return "Calculation working not implemented for this field";
           }
+        }
+
+        getSplitAdjustment(stockSymbol, date) {
+          const marketData = this.marketData[stockSymbol];
+          if (!marketData) return 1.0;
+
+          // Find the cumulative split adjustment up to the given date
+          let cumulativeSplit = 1.0;
+          for (const point of marketData) {
+            if (point.date <= date && point.splitCoefficient > 1.0) {
+              cumulativeSplit *= point.splitCoefficient;
+            }
+          }
+          return cumulativeSplit;
+        }
+
+        adjustPriceForSplit(price, stockSymbol, date) {
+          const splitAdjustment = this.getSplitAdjustment(stockSymbol, date);
+          return price / splitAdjustment;
         }
       }
 
