@@ -1288,10 +1288,8 @@
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Performance:</strong></div>
-                        <div class="col-6 ${
-                this.getPerformanceClass(performance)
-              }">
-                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
+                        <div class="col-6">
+                          <span class="clickable-value ${this.getPerformanceClass(performance)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
                 performance !== null
                   ? performance.toFixed(1) + "%"
                   : "N/A"
@@ -1300,10 +1298,8 @@
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Progress vs Cost of Capital:</strong></div>
-                        <div class="col-6 ${
-                this.getPerformanceClass(performance)
-              }">
-                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
+                        <div class="col-6">
+                          <span class="clickable-value ${this.getPerformanceClass(performance)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
                 this.calculateProgressVsCostOfCapital(
                   stock,
                   performance,
