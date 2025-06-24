@@ -1285,6 +1285,14 @@
               }</span></div>
                       </div>
                       <div class="row mb-2">
+                        <div class="col-6"><strong>Target Percentage:</strong></div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Target Percentage - ${stock.stock}" data-field="target-percentage" data-stock="${stock.stock}">${
+                buyPrice > 0 && target !== null 
+                  ? ((target - buyPrice) / buyPrice * 100).toFixed(1) + "%"
+                  : "N/A"
+              }</span></div>
+                      </div>
+                      <div class="row mb-2">
                         <div class="col-6"><strong>Current Price:</strong></div>
                         <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${
                 this.getCurrentPrice(stock.stock)
@@ -2102,6 +2110,21 @@
                   `90-Day Target working:\n= Target price from score file\n= $${
                     stock.target.toFixed(2)
                   }\n= $${adjustedTarget.toFixed(2)}`;
+              }
+            case "target-percentage":
+              const targetPercentageBuyPrice = this.getBuyPrice(stockSymbol, scoreDate);
+              const targetPercentageTarget = this.adjustHistoricalPriceToCurrent(
+                stock.target,
+                stockSymbol,
+                scoreDate,
+              );
+              if (targetPercentageBuyPrice > 0 && targetPercentageTarget !== null) {
+                const targetPercentage = ((targetPercentageTarget - targetPercentageBuyPrice) / targetPercentageBuyPrice) * 100;
+                return header +
+                  `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= (($${targetPercentageTarget.toFixed(2)} - $${targetPercentageBuyPrice.toFixed(2)}) / $${targetPercentageBuyPrice.toFixed(2)}) × 100\n= $${(targetPercentageTarget - targetPercentageBuyPrice).toFixed(2)} / $${targetPercentageBuyPrice.toFixed(2)} × 100\n= ${targetPercentage.toFixed(1)}%`;
+              } else {
+                return header +
+                  `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= Insufficient data to calculate`;
               }
             case "current-price":
               const marketData = this.marketData[stockSymbol];
