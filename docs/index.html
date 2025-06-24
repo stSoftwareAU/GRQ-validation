@@ -834,6 +834,43 @@
                   fill: false,
                   showLine: false, // Don't connect points
                 });
+
+                // Add intrinsic value shading if both values are available
+                if (stock.intrinsicValuePerShareBasic !== null && stock.intrinsicValuePerShareAdjusted !== null) {
+                  const adjustedBasicValue = this.adjustHistoricalPriceToCurrent(
+                    stock.intrinsicValuePerShareBasic,
+                    stock.stock,
+                    scoreDate,
+                  );
+                  const adjustedAdjustedValue = this.adjustHistoricalPriceToCurrent(
+                    stock.intrinsicValuePerShareAdjusted,
+                    stock.stock,
+                    scoreDate,
+                  );
+                  
+                  const basicPercentage = ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
+                  const adjustedPercentage = ((adjustedAdjustedValue - buyPrice) / buyPrice) * 100;
+                  
+                  // Create a shaded region between the two intrinsic values
+                  const intrinsicData = [
+                    { x: scoreDate, y: basicPercentage },
+                    { x: ninetyDayDate, y: basicPercentage },
+                    { x: ninetyDayDate, y: adjustedPercentage },
+                    { x: scoreDate, y: adjustedPercentage }
+                  ];
+                  
+                  datasets.push({
+                    label: "Intrinsic Value Range",
+                    data: intrinsicData,
+                    borderColor: "rgba(40, 167, 69, 0.3)",
+                    backgroundColor: "rgba(40, 167, 69, 0.1)",
+                    borderWidth: 1,
+                    fill: true,
+                    pointRadius: 0,
+                    showLine: true,
+                    tension: 0,
+                  });
+                }
               }
             }
           } else {
