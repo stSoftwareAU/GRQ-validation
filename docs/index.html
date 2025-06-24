@@ -960,6 +960,9 @@
             }
           });
 
+          // Add the score date to ensure we start at zero
+          allDates.add(scoreDate.getTime());
+
           const sortedDates = Array.from(allDates).sort((a, b) =>
             a - b
           );
@@ -984,39 +987,45 @@
                 const dataPoint = marketData.find(
                   (point) => point.date.getTime() === timestamp,
                 );
+                
+                // Get the price on the score date as the buy price
+                const scoreDateData = marketData.find((point) => {
+                  // Compare dates by day only, ignoring time components
+                  const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                  );
+                  const scoreDateOnly = new Date(
+                    scoreDate.getFullYear(),
+                    scoreDate.getMonth(),
+                    scoreDate.getDate(),
+                  );
+                  return pointDate.getTime() ===
+                    scoreDateOnly.getTime();
+                });
+                const buyPrice = scoreDateData
+                  ? this.adjustHistoricalPriceToCurrent(
+                    (scoreDateData.high + scoreDateData.low) / 2,
+                    stock.stock,
+                    scoreDate,
+                  )
+                  : this.adjustHistoricalPriceToCurrent(
+                    stock.target,
+                    stock.stock,
+                    scoreDate,
+                  );
+
                 if (dataPoint) {
-                  // Get the price on the score date as the buy price
-                  const scoreDateData = marketData.find((point) => {
-                    // Compare dates by day only, ignoring time components
-                    const pointDate = new Date(
-                      point.date.getFullYear(),
-                      point.date.getMonth(),
-                      point.date.getDate(),
-                    );
-                    const scoreDateOnly = new Date(
-                      scoreDate.getFullYear(),
-                      scoreDate.getMonth(),
-                      scoreDate.getDate(),
-                    );
-                    return pointDate.getTime() ===
-                      scoreDateOnly.getTime();
-                  });
-                  const buyPrice = scoreDateData
-                    ? this.adjustHistoricalPriceToCurrent(
-                      (scoreDateData.high + scoreDateData.low) / 2,
-                      stock.stock,
-                      scoreDate,
-                    )
-                    : this.adjustHistoricalPriceToCurrent(
-                      stock.target,
-                      stock.stock,
-                      scoreDate,
-                    );
+                  // Use split-adjusted price for current price calculation
+                  const currentPrice = this.adjustHistoricalPriceToCurrent(
+                    (dataPoint.high + dataPoint.low) / 2,
+                    stock.stock,
+                    dataPoint.date,
+                  );
 
                   // Calculate price return
-                  const priceReturn =
-                    ((dataPoint.high + dataPoint.low) / 2 - buyPrice) /
-                    buyPrice * 100;
+                  const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
 
                   // Add dividend return up to this date (but only count dividends within 90 days)
                   const dividends = this.getDividendsWithin90Days(
@@ -1037,6 +1046,10 @@
 
                   totalPerformance += totalReturn;
                   validStocks++;
+                } else if (timestamp === scoreDate.getTime()) {
+                  // For the score date, performance is 0%
+                  validStocks++;
+                  // totalPerformance remains 0
                 }
               }
             });
@@ -1579,9 +1592,9 @@
             }%
                 </div>
                 <div class="col-md-3">
-                  <strong>Portfolio Target:</strong> ${
+                  <strong>Portfolio Target:</strong> <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
               portfolioTarget.toFixed(1)
-            }%
+            }%</span>
                 </div>
               </div>
             `;
@@ -1615,11 +1628,13 @@
             const stock = value.getAttribute("data-stock");
 
             // Generate the popover content using the actual values for that stock/field
-            const working = this.getWorking(
-              field,
-              stock,
-              this.scoreData,
-            );
+            let working;
+            if (field === "portfolio-target") {
+              // Special handling for portfolio target - no specific stock
+              working = this.getWorking(field, "", this.scoreData);
+            } else {
+              working = this.getWorking(field, stock, this.scoreData);
+            }
 
             // Set the data-bs-content attribute
             value.setAttribute("data-bs-content", working);
@@ -1854,10 +1869,24 @@
         }
 
         calculatePortfolioTargetPercentage() {
-          // Calculate portfolio target based on equal investment amounts
-          // Each stock has a 20% target, so portfolio target is also 20%
-          // This assumes equal weighting of investments
-          return 20.0; // 20% target
+          // Calculate portfolio target based on the actual targets of all stocks
+          let totalTarget = 0;
+          let validStocks = 0;
+
+          this.scoreData.forEach((stock) => {
+            if (stock.target !== null && !isNaN(stock.target)) {
+              // Calculate target percentage based on actual target price vs buy price
+              const scoreDate = this.getScoreDate(this.selectedFile);
+              const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+              if (buyPrice > 0) {
+                const targetPercentage = ((stock.target - buyPrice) / buyPrice) * 100;
+                totalTarget += targetPercentage;
+                validStocks++;
+              }
+            }
+          });
+
+          return validStocks > 0 ? totalTarget / validStocks : 20.0;
         }
 
         calculatePortfolioPerformance90Day() {
@@ -1959,6 +1988,31 @@
         }
 
         getWorking(field, stockSymbol, scoreData) {
+          // Special handling for portfolio target - no specific stock needed
+          if (field === "portfolio-target") {
+            const portfolioTargetValue = this.calculatePortfolioTargetPercentage();
+            const scoreDate = this.getScoreDate(this.selectedFile);
+            
+            // Calculate individual stock targets for display
+            let targetDetails = [];
+            let totalTarget = 0;
+            let validStocks = 0;
+            
+            this.scoreData.forEach((stock) => {
+              if (stock.target !== null && !isNaN(stock.target)) {
+                const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+                if (buyPrice > 0) {
+                  const targetPercentage = ((stock.target - buyPrice) / buyPrice) * 100;
+                  targetDetails.push(`${stock.stock}: ${targetPercentage.toFixed(1)}%`);
+                  totalTarget += targetPercentage;
+                  validStocks++;
+                }
+              }
+            });
+            
+            return `Portfolio Target working:\n= Average target of all stocks in portfolio\n= Individual targets:\n  ${targetDetails.join('\n  ')}\n= Total: ${totalTarget.toFixed(1)}% / ${validStocks} stocks\n= Portfolio target: ${portfolioTargetValue.toFixed(1)}%`;
+          }
+
           const stock = scoreData.find((s) => s.stock === stockSymbol);
           if (!stock) return "Stock not found";
 
@@ -2364,6 +2418,46 @@
           }
 
           return result;
+        }
+
+        getBuyPrice(stockSymbol, scoreDate) {
+          const marketData = this.marketData[stockSymbol];
+          if (!marketData) return 0;
+
+          // Get the price on the score date as the buy price
+          const scoreDateData = marketData.find((point) => {
+            const pointDate = new Date(
+              point.date.getFullYear(),
+              point.date.getMonth(),
+              point.date.getDate(),
+            );
+            const scoreDateOnly = new Date(
+              scoreDate.getFullYear(),
+              scoreDate.getMonth(),
+              scoreDate.getDate(),
+            );
+            return pointDate.getTime() === scoreDateOnly.getTime();
+          });
+
+          if (scoreDateData) {
+            return this.adjustHistoricalPriceToCurrent(
+              (scoreDateData.high + scoreDateData.low) / 2,
+              stockSymbol,
+              scoreDate,
+            );
+          }
+
+          // Fallback to target price if no market data
+          const stock = this.scoreData.find(s => s.stock === stockSymbol);
+          if (stock && stock.target) {
+            return this.adjustHistoricalPriceToCurrent(
+              stock.target,
+              stockSymbol,
+              scoreDate,
+            );
+          }
+
+          return 0;
         }
       }
 
