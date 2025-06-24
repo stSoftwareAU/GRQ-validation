@@ -514,8 +514,8 @@
                       const dataPoint = context.raw;
 
                       let tooltipText = "";
-                      if (label.includes("Target Price")) {
-                        tooltipText = `${label}: $${value.toFixed(2)}`;
+                      if (label.includes("Target")) {
+                        tooltipText = `${label}: ${value.toFixed(1)}%`;
                       } else if (
                         label.includes("Price") &&
                         !label.includes("Performance")
@@ -590,11 +590,11 @@
                 },
                 y1: {
                   type: "linear",
-                  display: this.selectedStock, // Only show for single stock view
+                  display: false, // Hide the right Y-axis since we're not using price values
                   position: "right",
                   beginAtZero: true,
                   title: {
-                    display: this.selectedStock,
+                    display: false,
                     text: "Price ($)",
                     font: {
                       size: isMobile ? 10 : 12,
@@ -812,20 +812,20 @@
                   });
                 }
 
-                // Add target price as a single point at 90 days
-                const adjustedTarget = this
-                  .adjustHistoricalPriceToCurrent(
-                    stock.target,
-                    stock.stock,
-                    scoreDate,
-                  );
+                // Add target percentage as a single point at 90 days
+                const targetPercentage = ((stock.target - buyPrice) / buyPrice) * 100;
+                console.log(`Target calculation for ${stock.stock}:`, {
+                  stockTarget: stock.target,
+                  buyPrice: buyPrice,
+                  targetPercentage: targetPercentage,
+                  calculation: `((${stock.target} - ${buyPrice}) / ${buyPrice}) * 100 = ${targetPercentage}%`
+                });
                 datasets.push({
-                  label: "Target Price",
+                  label: "Target",
                   data: [{
                     x: ninetyDayDate,
-                    y: adjustedTarget, // Use actual target price value
+                    y: targetPercentage, // Use calculated target percentage
                   }],
-                  yAxisID: "y1", // Use right Y-axis (price axis)
                   borderColor: "rgba(255, 193, 7, 0.8)",
                   backgroundColor: "rgba(255, 193, 7, 0.8)",
                   borderWidth: 3,
@@ -921,8 +921,7 @@
                 borderWidth: 3,
                 pointRadius: 6,
                 pointHoverRadius: 8,
-                fill: false,
-                showLine: false, // Don't connect points
+                fill: false, // Don't connect points
               });
             }
           }
