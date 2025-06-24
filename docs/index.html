@@ -19,6 +19,21 @@
 
     <!-- Custom styles -->
     <link rel="stylesheet" href="styles.css">
+
+    <!-- Add CSS styling for clickable values in the head section -->
+    <style>
+      .clickable-value {
+        cursor: pointer;
+        color: #007bff;
+        transition: color 0.2s ease;
+      }
+      .clickable-value:hover {
+        color: #0056b3;
+      }
+      .clickable-value:active {
+        color: #004085;
+      }
+    </style>
   </head>
   <body class="bg-light">
     <div class="container-fluid">
@@ -170,6 +185,29 @@
               this.updateDisplay();
             },
           );
+
+          // Global click handler to ignore clicks within popover content
+          document.addEventListener('click', (event) => {
+            const popoverTrigger = event.target.closest('[data-bs-toggle="popover"]');
+            const popoverContent = event.target.closest('.popover');
+            
+            // Don't close popovers if clicking inside the popover content
+            if (popoverContent) {
+              return;
+            }
+            
+            // Close all existing popovers first
+            const popovers = document.querySelectorAll('[data-bs-toggle="popover"]');
+            popovers.forEach(element => {
+              const popover = bootstrap.Popover.getInstance(element);
+              if (popover && popover._isShown()) {
+                popover.hide();
+              }
+            });
+            
+            // If we clicked on a popover trigger, let Bootstrap handle showing the new one
+            // (it will be shown after this event handler completes)
+          });
         }
 
         async loadIndex() {
@@ -1094,32 +1132,34 @@
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Buy Price:</strong></div>
-                        <div class="col-6">$${stock.target.toFixed(2)}</div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${stock.target.toFixed(2)}</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>90-Day Target:</strong></div>
-                        <div class="col-6">$${(stock.target * 1.2).toFixed(2)}</div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${(stock.target * 1.2).toFixed(2)}</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Current Price:</strong></div>
-                        <div class="col-6">${this.getCurrentPrice(stock.stock)}</div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${this.getCurrentPrice(stock.stock)}</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Performance:</strong></div>
                         <div class="col-6 ${this.getPerformanceClass(performance)}">
-                          ${performance !== null ? performance.toFixed(1) + "%" : "N/A"}
+                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${performance !== null ? performance.toFixed(1) + "%" : "N/A"}</span>
                         </div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Progress vs Cost of Capital:</strong></div>
                         <div class="col-6 ${this.getPerformanceClass(performance)}">
-                          ${this.calculateProgressVsCostOfCapital(stock, performance)}
+                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${this.calculateProgressVsCostOfCapital(stock, performance)}</span>
                         </div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Judgement:</strong></div>
                         <div class="col-6">
-                          <span class="badge ${this.getJudgementClass(judgement)}">${judgement}</span>
+                          <span class="badge ${this.getJudgementClass(judgement)}">
+                            <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Judgement - ${stock.stock}" data-field="judgement" data-stock="${stock.stock}">${judgement}</span>
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1127,15 +1167,11 @@
                       <h6 class="text-muted text-uppercase mb-3">Valuation & Dividends</h6>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Intrinsic Value (Basic):</strong></div>
-                        <div class="col-6 intrinsic-value-basic">
-                          ${stock.intrinsicValuePerShareBasic !== null ? '$' + stock.intrinsicValuePerShareBasic.toFixed(2) : 'N/A'}
-                        </div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${stock.intrinsicValuePerShareBasic !== null ? '$' + stock.intrinsicValuePerShareBasic.toFixed(2) : 'N/A'}</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Intrinsic Value (Adjusted):</strong></div>
-                        <div class="col-6 intrinsic-value-adjusted">
-                          ${stock.intrinsicValuePerShareAdjusted !== null ? '$' + stock.intrinsicValuePerShareAdjusted.toFixed(2) : 'N/A'}
-                        </div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${stock.intrinsicValuePerShareAdjusted !== null ? '$' + stock.intrinsicValuePerShareAdjusted.toFixed(2) : 'N/A'}</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Ex-Dividend Date:</strong></div>
@@ -1143,12 +1179,12 @@
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Average Dividend (90-day):</strong></div>
-                        <div class="col-6">${dividends.length > 0 ? '$' + (totalDividends / dividends.length).toFixed(4) : 'N/A'}</div>
+                        <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Average Dividend (90-day) - ${stock.stock}" data-field="avg-dividend" data-stock="${stock.stock}">${dividends.length > 0 ? '$' + (totalDividends / dividends.length).toFixed(4) : 'N/A'}</span></div>
                       </div>
                       <div class="row mb-2">
                         <div class="col-6"><strong>Total Dividends (90-day):</strong></div>
                         <div class="col-6">
-                          ${dividends.length > 0 ? `$${totalDividends.toFixed(2)} (${dividends.length} div${dividends.length > 1 ? 's' : ''})` : 'None'}
+                          <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Total Dividends (90-day) - ${stock.stock}" data-field="total-dividend" data-stock="${stock.stock}">${dividends.length > 0 ? `$${totalDividends.toFixed(2)} (${dividends.length} div${dividends.length > 1 ? 's' : ''})` : 'None'}</span>
                         </div>
                       </div>
                     </div>
@@ -1214,17 +1250,13 @@
               // Aggregate view
               row.innerHTML = `
                 <td class="clickable-stock" onclick="validator.showStockDetails('${stock.stock}')">${stock.stock}</td>
-                <td>$${stock.target.toFixed(2)}</td>
-                <td>$${(stock.target * 1.2).toFixed(2)}</td>
-                <td>${this.getCurrentPrice(stock.stock)}</td>
-                <td class="${this.getPerformanceClass(performance)}">${
-                performance !== null ? performance.toFixed(1) + "%" : "N/A"
-              }</td>
-                <td class="${this.getPerformanceClass(performance)}">${
-                this.calculateProgressVsCostOfCapital(stock, performance)
-              }</td>
-                <td><span class="badge ${this.getJudgementClass(judgement)}">${judgement}</span></td>
-                <td>${dividendInfo}</td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${stock.target.toFixed(2)}</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${(stock.target * 1.2).toFixed(2)}</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${this.getCurrentPrice(stock.stock)}</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${performance !== null ? performance.toFixed(1) + "%" : "N/A"}</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${this.calculateProgressVsCostOfCapital(stock, performance)}</span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Judgement - ${stock.stock}" data-field="judgement" data-stock="${stock.stock}"><span class="badge ${this.getJudgementClass(judgement)}">${judgement}</span></span></td>
+                <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${stock.stock}" data-field="dividend-info" data-stock="${stock.stock}">${dividendInfo}</span></td>
               `;
               
               // Add highlighting for selected stock in aggregate view
@@ -1280,6 +1312,36 @@
             // Add summary info after the table
             tableContainer.parentNode.insertBefore(summaryDiv, tableContainer.nextSibling);
           }
+
+          // Dispose of existing popovers
+          const existingPopovers = document.querySelectorAll('.clickable-value[data-bs-toggle="popover"]');
+          existingPopovers.forEach(element => {
+            const popover = bootstrap.Popover.getInstance(element);
+            if (popover) {
+              popover.dispose();
+            }
+          });
+
+          // Loop through all .clickable-value elements
+          const clickableValues = document.querySelectorAll('.clickable-value');
+          clickableValues.forEach((value) => {
+            const field = value.getAttribute('data-field');
+            const stock = value.getAttribute('data-stock');
+
+            // Generate the popover content using the actual values for that stock/field
+            const working = this.getWorking(field, stock, this.scoreData);
+
+            // Set the data-bs-content attribute
+            value.setAttribute('data-bs-content', working);
+
+            // Initialize the Bootstrap popover with trigger: 'click', html: false
+            new bootstrap.Popover(value, {
+              trigger: 'click',
+              html: false,
+              container: 'body',
+              boundary: 'viewport'
+            });
+          });
         }
 
         getDividendsWithin90Days(stockSymbol) {
@@ -1535,6 +1597,80 @@
           });
 
           return validStocks > 0 ? totalPerformance / validStocks : 0;
+        }
+
+        getWorking(field, stockSymbol, scoreData) {
+          const stock = scoreData.find(s => s.stock === stockSymbol);
+          if (!stock) return "Stock not found";
+
+          const scoreDate = this.getScoreDate(this.selectedFile);
+          const currentDate = new Date();
+          const header = `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${scoreDate.toISOString().split('T')[0]} | Current Date: ${currentDate.toISOString().split('T')[0]}\n\n`;
+
+          switch(field) {
+            case "buy-price":
+              return header + `Buy Price working:\n= Target price from score file\n= $${stock.target.toFixed(2)}`;
+            case "target":
+              return header + `90-Day Target working:\n= Buy Price × 1.2 (20% target)\n= $${stock.target.toFixed(2)} × 1.2\n= $${(stock.target * 1.2).toFixed(2)}`;
+            case "current-price":
+              const marketData = this.marketData[stockSymbol];
+              if (!marketData || marketData.length === 0) return "Current Price working:\nNo market data available";
+              const lastData = marketData[marketData.length - 1];
+              const currentPrice = (lastData.high + lastData.low) / 2;
+              return header + `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${lastData.high.toFixed(2)} + $${lastData.low.toFixed(2)}) / 2\n= $${currentPrice.toFixed(2)}`;
+            case "gain-loss":
+              const performance = this.calculateStockPerformance(stock);
+              if (performance === null) return "Gain/Loss working:\nNo market data available";
+              const gainLossMarketData = this.marketData[stockSymbol];
+              const scoreDate = this.getScoreDate(this.selectedFile);
+              const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+              const within90Days = gainLossMarketData.filter(point => point.date <= ninetyDayDate);
+              const gainLossLastData = within90Days[within90Days.length - 1];
+              const gainLossCurrentPrice = (gainLossLastData.high + gainLossLastData.low) / 2;
+              const scoreDateData = gainLossMarketData.find((point) => {
+                const pointDate = new Date(point.date.getFullYear(), point.date.getMonth(), point.date.getDate());
+                const scoreDateOnly = new Date(scoreDate.getFullYear(), scoreDate.getMonth(), scoreDate.getDate());
+                return pointDate.getTime() === scoreDateOnly.getTime();
+              });
+              const buyPrice = scoreDateData ? (scoreDateData.high + scoreDateData.low) / 2 : stock.target;
+              const dividends = this.getDividendsWithin90Days(stockSymbol);
+              const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+              return header + `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${gainLossCurrentPrice.toFixed(2)} + $${totalDividends.toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)}) × 100\n= $${(gainLossCurrentPrice + totalDividends).toFixed(2)} - $${buyPrice.toFixed(2)}) / $${buyPrice.toFixed(2)} × 100\n= $${(gainLossCurrentPrice + totalDividends - buyPrice).toFixed(2)} / $${buyPrice.toFixed(2)} × 100\n= ${((gainLossCurrentPrice + totalDividends - buyPrice) / buyPrice * 100).toFixed(1)}%`;
+            case "progress-vs-cost":
+              const progressPerformance = this.calculateStockPerformance(stock);
+              if (progressPerformance === null) return "Progress vs Cost of Capital working:\nNo market data available";
+              const daysElapsed = this.getDaysElapsed(this.getScoreDate(this.selectedFile));
+              const costOfCapitalReturn = (this.costOfCapital / 365) * daysElapsed;
+              return header + `Progress vs Cost of Capital working:\n= Stock Performance - Cost of Capital Return\n= ${progressPerformance.toFixed(1)}% - ${costOfCapitalReturn.toFixed(1)}%\n= ${(progressPerformance - costOfCapitalReturn).toFixed(1)}%`;
+            case "judgement":
+              const judgementPerformance = this.calculateStockPerformance(stock);
+              const judgement = this.calculateJudgement(stock, judgementPerformance);
+              return header + `Judgement (90-day) working:\n= Based on performance vs 20% target\n= Performance: ${judgementPerformance !== null ? judgementPerformance.toFixed(1) + "%" : "N/A"}\n= Target: 20%\n= Judgement: ${judgement}`;
+            case "intrinsic-basic":
+              if (stock.intrinsicValuePerShareBasic === null) return "Intrinsic Value (Basic) working:\nNo data available";
+              return header + `Intrinsic Value (Basic) working:\n= Value from score file\n= $${stock.intrinsicValuePerShareBasic.toFixed(2)}`;
+            case "intrinsic-adjusted":
+              if (stock.intrinsicValuePerShareAdjusted === null) return "Intrinsic Value (Adjusted) working:\nNo data available";
+              return header + `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file\n= $${stock.intrinsicValuePerShareAdjusted.toFixed(2)}`;
+            case "avg-dividend":
+              const avgDividends = this.getDividendsWithin90Days(stockSymbol);
+              if (avgDividends.length === 0) return "Average Dividend (90-day) working:\nNo dividends in 90-day period";
+              const avgTotalDividends = avgDividends.reduce((sum, div) => sum + div.amount, 0);
+              const avgDividend = avgTotalDividends / avgDividends.length;
+              return header + `Average Dividend (90-day) working:\n= Total Dividends / Number of Dividends\n= $${avgTotalDividends.toFixed(2)} / ${avgDividends.length}\n= $${avgDividend.toFixed(4)}`;
+            case "total-dividend":
+              const totalDivDividends = this.getDividendsWithin90Days(stockSymbol);
+              if (totalDivDividends.length === 0) return "Total Dividends (90-day) working:\nNo dividends in 90-day period";
+              const totalDivAmount = totalDivDividends.reduce((sum, div) => sum + div.amount, 0);
+              return header + `Total Dividends (90-day) working:\n= Sum of all dividends within 90 days\n= ${totalDivDividends.map(d => `$${d.amount.toFixed(2)}`).join(" + ")}\n= $${totalDivAmount.toFixed(2)} (${totalDivDividends.length} dividend${totalDivDividends.length > 1 ? "s" : ""})`;
+            case "dividend-info":
+              const divInfoDividends = this.getDividendsWithin90Days(stockSymbol);
+              if (divInfoDividends.length === 0) return "Dividend Info working:\nNo dividends in 90-day period";
+              const divInfoTotal = divInfoDividends.reduce((sum, div) => sum + div.amount, 0);
+              return header + `Dividend Info working:\n= Total dividends within 90 days\n= $${divInfoTotal.toFixed(2)} (${divInfoDividends.length} dividend${divInfoDividends.length > 1 ? "s" : ""})`;
+            default:
+              return "Calculation working not implemented for this field";
+          }
         }
       }
 
