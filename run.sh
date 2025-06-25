@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # Configuration
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,7 +68,7 @@ check_pid() {
 }
 
 # Change to repository directory
-cd "$REPO_DIR"
+cd "$REPO_DIR" || exit 1
 log "Working directory: $REPO_DIR"
 
 check_pid
@@ -93,7 +92,10 @@ fi
 # Build if needed
 if [ "$NEED_REBUILD" = true ]; then
     log "Building Rust program"
-    cargo build --release
+    if ! cargo build --release; then
+        log "ERROR: Build failed"
+        exit 1
+    fi
     log "Build completed successfully"
 else
     log "No rebuild needed, using existing binary"
