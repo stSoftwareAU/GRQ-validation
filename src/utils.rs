@@ -92,10 +92,13 @@ pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<Strin
 
 #[allow(dead_code)]
 pub fn extract_symbol_from_ticker(ticker: &str) -> String {
-    match ticker.rsplit_once(':') {
+    let symbol = match ticker.rsplit_once(':') {
         Some((_, symbol)) => symbol.to_string(),
         None => ticker.to_string(),
-    }
+    };
+    // Convert dots to hyphens for file system compatibility
+    // e.g., "HEI.A" -> "HEI-A"
+    symbol.replace('.', "-")
 }
 
 #[allow(dead_code)]
@@ -611,7 +614,8 @@ mod tests {
         assert_eq!(extract_symbol_from_ticker("NYSE:SEM"), "SEM");
         assert_eq!(extract_symbol_from_ticker("SEM"), "SEM");
         assert_eq!(extract_symbol_from_ticker(""), "");
-        assert_eq!(extract_symbol_from_ticker("LON:VOD.L"), "VOD.L");
+        assert_eq!(extract_symbol_from_ticker("LON:VOD.L"), "VOD-L");
+        assert_eq!(extract_symbol_from_ticker("NYSE:HEI.A"), "HEI-A");
     }
 
     #[test]
