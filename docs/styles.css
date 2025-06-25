@@ -37,6 +37,17 @@
   margin-bottom: 2rem;
 }
 
+/* Ensure legend appears at bottom */
+.chart-container canvas {
+  margin-bottom: 0;
+}
+
+/* Chart.js legend positioning */
+.chartjs-legend {
+  margin-top: 10px;
+  text-align: center;
+}
+
 /* Loading and message styles */
 .loading {
   text-align: center;

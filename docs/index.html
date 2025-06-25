@@ -460,6 +460,7 @@
 
           // Check if mobile device
           const isMobile = window.innerWidth <= 768;
+          
 
           this.chart = new Chart(ctx, {
             type: "line",
@@ -478,12 +479,16 @@
                 legend: {
                   display: !isMobile,
                   position: "bottom",
+                  align: "center",
+                  fullSize: false,
+                  reverse: false,
                   labels: {
                     boxWidth: isMobile ? 12 : 16,
                     padding: isMobile ? 8 : 12,
                     font: {
                       size: isMobile ? 10 : 12,
                     },
+                    usePointStyle: true,
                   },
                 },
                 tooltip: {
@@ -649,6 +654,14 @@
               },
             },
           });
+          
+          // Force legend to bottom after chart creation
+          if (this.chart && !isMobile) {
+            setTimeout(() => {
+              this.chart.options.plugins.legend.position = "bottom";
+              this.chart.update();
+            }, 100);
+          }
         }
 
         prepareChartData() {
@@ -2634,10 +2647,36 @@
 
           return 0;
         }
+
+        createChart() {
+          const ctx = document
+            .getElementById("performanceChart")
+            .getContext("2d");
+          const isMobile = window.innerWidth <= 768;
+          
+          const chartTitle = this.selectedStock
+            ? `${this.selectedStock} Performance`
+            : "Portfolio Performance";
+        }
       }
 
       // Initialize the validator
       const validator = new GRQValidator();
+
+      // Add window resize listener to update chart configuration
+      window.addEventListener('resize', () => {
+        if (validator.chart) {
+          const isMobile = window.innerWidth <= 768;
+          console.log('Resize event - isMobile:', isMobile);
+          console.log('Resize event - window.innerWidth:', window.innerWidth);
+          console.log('Resize event - legend display:', !isMobile);
+          validator.chart.options.plugins.legend.display = !isMobile;
+          validator.chart.options.plugins.legend.labels.font.size = isMobile ? 10 : 12;
+          validator.chart.options.plugins.legend.labels.boxWidth = isMobile ? 12 : 16;
+          validator.chart.options.plugins.legend.labels.padding = isMobile ? 8 : 12;
+          validator.chart.update();
+        }
+      });
 
       // Add document click handler to close popovers when clicking outside
       document.addEventListener("click", (event) => {
