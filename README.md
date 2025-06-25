@@ -1,4 +1,4 @@
-# GRQ Stock Validation
+# GRQ score Validation
 
 A Rust application for processing and analyzing daily stock scores from TSV files, with a web dashboard for visualization.
 
@@ -30,6 +30,7 @@ GRQ-validation/
 
 - Rust (latest stable version)
 - Git
+- Deno
 
 ## Installation
 
@@ -123,19 +124,10 @@ Build an optimized release:
 cargo build --release
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-#Prompt
 
 
 
