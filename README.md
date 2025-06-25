@@ -1,4 +1,4 @@
-# GRQ score Validation
+# GRQ Score Validation
 
 A Rust application for processing and analyzing daily stock scores from TSV files, with a web dashboard for visualization.
 
