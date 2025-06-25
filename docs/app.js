@@ -126,7 +126,7 @@ class GRQValidator {
         const text = await response.text();
 
         const lines = text.trim().split("\n");
-        // const headers = lines[0].split("\t");
+        // Remove unused headers variable
 
         this.scoreData = lines.slice(1).map((line) => {
             const values = line.split("\t");
@@ -167,7 +167,7 @@ class GRQValidator {
             }
 
             const lines = text.split("\n").filter((line) => line.trim());
-            const headers = lines[0].split(",");
+            // Remove unused headers variable
 
             this.marketData = {};
 
@@ -226,7 +226,7 @@ class GRQValidator {
             }
 
             const lines = text.split("\n").filter((line) => line.trim());
-            const headers = lines[0].split(",");
+            // Remove unused headers variable
 
             this.dividendData = {};
 
@@ -1725,7 +1725,7 @@ class GRQValidator {
         return "$" + currentPrice.toFixed(2);
     }
 
-    calculateProgressVsCostOfCapital(_stock, performance) {
+    calculateProgressVsCostOfCapital(stock, performance) {
         if (performance === null) return "N/A";
 
         // Use 90 days for cost of capital calculation since all performance is 90-day based
@@ -1735,7 +1735,7 @@ class GRQValidator {
         return excessReturn.toFixed(1) + "%";
     }
 
-    calculateJudgement(_stock, performance) {
+    calculateJudgement(stock, performance) {
         if (performance === null) return "Pending";
 
         const targetReturn = 20; // 20% target
@@ -2548,7 +2548,7 @@ class GRQValidator {
 const validator = new GRQValidator();
 
 // Add window resize listener to update chart configuration
-window.addEventListener("resize", () => {
+globalThis.addEventListener("resize", () => {
     if (validator.chart) {
         const isMobile = window.innerWidth <= 768;
         console.log("Resize event - isMobile:", isMobile);
