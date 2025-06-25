@@ -72,8 +72,6 @@ check_pid() {
 cd "$REPO_DIR"
 log "Working directory: $REPO_DIR"
 
-# Git operations
-log "Starting git operations"
 check_pid
 
 # Check if Rust program needs rebuilding
@@ -110,36 +108,6 @@ if ./target/release/grq-validation --docs-path docs; then
 else
     log "ERROR: Program failed"
     exit 1
-fi
-
-check_pid
-
-# Check if there are changes to commit
-if git diff --quiet; then
-    log "No changes to commit"
-else
-    log "Changes detected, committing results"
-    
-    # Add all changes
-    git add .
-    
-    # Commit with timestamp
-    COMMIT_MSG="Auto-update stock scores $(date '+%Y-%m-%d %H:%M:%S')"
-    if git commit -m "$COMMIT_MSG"; then
-        log "Changes committed successfully"
-        
-        # Push to remote
-        log "Pushing to remote"
-        if git push origin main; then
-            log "Successfully pushed to remote"
-        else
-            log "ERROR: Failed to push to remote"
-            exit 1
-        fi
-    else
-        log "ERROR: Failed to commit changes"
-        exit 1
-    fi
 fi
 
 log "Automated run completed successfully" 
