@@ -705,74 +705,76 @@ class GRQValidator {
                     });
 
                     // Add intrinsic value shading if both values are available
-                    if (
-                        stock.intrinsicValuePerShareBasic !== null &&
-                        stock.intrinsicValuePerShareAdjusted !== null
-                    ) {
-                        const adjustedBasicValue = this
-                            .adjustHistoricalPriceToCurrent(
-                                stock.intrinsicValuePerShareBasic,
-                                stock.stock,
-                                scoreDate,
-                            );
-                        const adjustedAdjustedValue = this
-                            .adjustHistoricalPriceToCurrent(
-                                stock.intrinsicValuePerShareAdjusted,
-                                stock.stock,
-                                scoreDate,
-                            );
+                    // if (
+                    //     stock.intrinsicValuePerShareBasic !== null &&
+                    //     stock.intrinsicValuePerShareAdjusted !== null
+                    // ) {
+                    //     const adjustedBasicValue = this
+                    //         .adjustHistoricalPriceToCurrent(
+                    //             stock.intrinsicValuePerShareBasic,
+                    //             stock.stock,
+                    //             scoreDate,
+                    //         );
+                    //     const adjustedAdjustedValue = this
+                    //         .adjustHistoricalPriceToCurrent(
+                    //             stock.intrinsicValuePerShareAdjusted,
+                    //             stock.stock,
+                    //             scoreDate,
+                    //         );
 
-                        const basicPercentage =
-                            ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
-                        const adjustedPercentage =
-                            ((adjustedAdjustedValue - buyPrice) / buyPrice) *
-                            100;
+                    //     const basicPercentage =
+                    //         ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
+                    //     const adjustedPercentage =
+                    //         ((adjustedAdjustedValue - buyPrice) / buyPrice) *
+                    //         100;
 
-                        // Only show shading if both intrinsic values are positive
-                        if (basicPercentage > 0 && adjustedPercentage > 0) {
-                            // Determine which is higher and which is lower
-                            const lowerValue = Math.min(
-                                basicPercentage,
-                                adjustedPercentage,
-                            );
-                            const higherValue = Math.max(
-                                basicPercentage,
-                                adjustedPercentage,
-                            );
+                    //     // Only show shading if both intrinsic values are positive
+                    //     if (basicPercentage > 0 && adjustedPercentage > 0) {
+                    //         // Determine which is higher and which is lower
+                    //         const lowerValue = Math.min(
+                    //             basicPercentage,
+                    //             adjustedPercentage,
+                    //         );
+                    //         const higherValue = Math.max(
+                    //             basicPercentage,
+                    //             adjustedPercentage,
+                    //         );
 
-                            // Create the lower boundary line with fill to the upper line
-                            datasets.push({
-                                label: "Intrinsic Value (Lower)",
-                                data: [
-                                    { x: scoreDate, y: lowerValue },
-                                    { x: ninetyDayDate, y: lowerValue },
-                                ],
-                                borderColor: "rgba(40, 167, 69, 0.8)",
-                                backgroundColor: "rgba(40, 167, 69, 0.1)",
-                                borderWidth: 2,
-                                fill: "+1", // Fill to the next dataset (upper boundary)
-                                pointRadius: 0,
-                                showLine: true,
-                                tension: 0,
-                            });
+                    //         // if( higherValue < targetPercentage * 2){
+                    //         // Create the lower boundary line with fill to the upper line
+                    //         datasets.push({
+                    //             label: "Intrinsic Value (Lower)",
+                    //             data: [
+                    //                 { x: scoreDate, y: lowerValue },
+                    //                 { x: ninetyDayDate, y: lowerValue },
+                    //             ],
+                    //             borderColor: "rgba(40, 167, 69, 0.8)",
+                    //             backgroundColor: "rgba(40, 167, 69, 0.1)",
+                    //             borderWidth: 2,
+                    //             fill: "+1", // Fill to the next dataset (upper boundary)
+                    //             pointRadius: 0,
+                    //             showLine: true,
+                    //             tension: 0,
+                    //         });
 
-                            // Create the upper boundary line
-                            datasets.push({
-                                label: "Intrinsic Value (Upper)",
-                                data: [
-                                    { x: scoreDate, y: higherValue },
-                                    { x: ninetyDayDate, y: higherValue },
-                                ],
-                                borderColor: "rgba(40, 167, 69, 0.8)",
-                                backgroundColor: "rgba(40, 167, 69, 0.1)",
-                                borderWidth: 2,
-                                fill: false,
-                                pointRadius: 0,
-                                showLine: true,
-                                tension: 0,
-                            });
-                        }
-                    }
+                    //         // Create the upper boundary line
+                    //         datasets.push({
+                    //             label: "Intrinsic Value (Upper)",
+                    //             data: [
+                    //                 { x: scoreDate, y: higherValue },
+                    //                 { x: ninetyDayDate, y: higherValue },
+                    //             ],
+                    //             borderColor: "rgba(40, 167, 69, 0.8)",
+                    //             backgroundColor: "rgba(40, 167, 69, 0.1)",
+                    //             borderWidth: 2,
+                    //             fill: false,
+                    //             pointRadius: 0,
+                    //             showLine: true,
+                    //             tension: 0,
+                    //         });
+                    //     }
+                        //}
+                    // }
                 }
             }
         } else {
