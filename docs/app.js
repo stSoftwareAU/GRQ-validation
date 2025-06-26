@@ -288,7 +288,8 @@ class GRQValidator {
     }
 
     updateChart() {
-        const ctx = document.getElementById("performanceChart")
+        const ctx = document
+            .getElementById("performanceChart")
             .getContext("2d");
 
         if (this.chart) {
@@ -312,7 +313,7 @@ class GRQValidator {
             chartTitle = "Portfolio Performance Over Time";
         }
 
-        // Check if mobile device using Bootstrap breakpoints
+        // Use Bootstrap breakpoints for mobile detection
         function getBootstrapBreakpoint() {
             const width = window.innerWidth;
             if (width >= 1400) return 'xxl';
@@ -325,6 +326,12 @@ class GRQValidator {
         
         const breakpoint = getBootstrapBreakpoint();
         const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+
+        // Debug logging
+        console.log("updateChart - Bootstrap breakpoint:", breakpoint);
+        console.log("updateChart - isMobile:", isMobile);
+        console.log("updateChart - window.innerWidth:", window.innerWidth);
+        console.log("updateChart - legend display:", !isMobile);
 
         this.chart = new Chart(ctx, {
             type: "line",
@@ -341,7 +348,7 @@ class GRQValidator {
                         },
                     },
                     legend: {
-                        display: !isMobile,
+                        display: !isMobile, // This should hide the legend on mobile
                         position: "bottom",
                         align: "center",
                         fullSize: false,
@@ -531,11 +538,22 @@ class GRQValidator {
             },
         });
 
-        // Force legend to bottom after chart creation
-        if (this.chart && !isMobile) {
+        // Force hide legend on mobile after chart creation
+        if (isMobile) {
+            console.log("Forcing legend to be hidden on mobile");
+            // Try multiple approaches to hide the legend
             setTimeout(() => {
-                this.chart.options.plugins.legend.position = "bottom";
-                this.chart.update();
+                if (this.chart && this.chart.options.plugins.legend) {
+                    this.chart.options.plugins.legend.display = false;
+                    this.chart.update();
+                }
+                
+                // Also try to hide any legend elements via CSS
+                const legendElements = document.querySelectorAll('.chartjs-legend, .chart-container canvas + div');
+                legendElements.forEach(el => {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                });
             }, 100);
         }
     }

@@ -455,3 +455,34 @@
     padding: 0 0.5rem;
   }
 }
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+    .chart-container {
+        height: 300px;
+    }
+    
+    /* Force hide chart legend on mobile */
+    .chartjs-legend {
+        display: none !important;
+    }
+    
+    /* Alternative selector for Chart.js legend */
+    canvas + div[style*="position: relative"] {
+        display: none !important;
+    }
+    
+    /* Hide any element that might be the legend */
+    .chart-container canvas + div {
+        display: none !important;
+    }
+}
+
+/* Ensure debug info is always visible */
+.debug-info {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: static !important;
+    z-index: 9999 !important;
+}
