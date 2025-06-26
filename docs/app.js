@@ -312,8 +312,11 @@ class GRQValidator {
             chartTitle = "Portfolio Performance Over Time";
         }
 
-        // Check if mobile device
-        const isMobile = window.innerWidth <= 768;
+        // Check if mobile device - improved detection for iPhones
+        const isMobile = window.innerWidth <= 768 || 
+                        /iPhone|iPad|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                        ('ontouchstart' in window) ||
+                        (navigator.maxTouchPoints > 0);
 
         this.chart = new Chart(ctx, {
             type: "line",
@@ -2550,10 +2553,17 @@ const validator = new GRQValidator();
 // Add window resize listener to update chart configuration
 globalThis.addEventListener("resize", () => {
     if (validator.chart) {
-        const isMobile = window.innerWidth <= 768;
+        // Use the same improved mobile detection
+        const isMobile = window.innerWidth <= 768 || 
+                        /iPhone|iPad|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                        ('ontouchstart' in window) ||
+                        (navigator.maxTouchPoints > 0);
+        
         console.log("Resize event - isMobile:", isMobile);
         console.log("Resize event - window.innerWidth:", window.innerWidth);
+        console.log("Resize event - userAgent:", navigator.userAgent);
         console.log("Resize event - legend display:", !isMobile);
+        
         validator.chart.options.plugins.legend.display = !isMobile;
         validator.chart.options.plugins.legend.labels.font.size = isMobile
             ? 10

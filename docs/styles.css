@@ -193,6 +193,20 @@
   .chart-container {
     height: 400px; /* Still taller than before on mobile */
   }
+  
+  /* Hide chart legend on mobile devices */
+  .chart-container canvas + div,
+  .chartjs-legend {
+    display: none !important;
+  }
+}
+
+/* Additional mobile detection for touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .chart-container canvas + div,
+  .chartjs-legend {
+    display: none !important;
+  }
 }
 
 /* Custom form controls */
