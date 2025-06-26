@@ -658,8 +658,10 @@ class GRQValidator {
                                 stock.stock,
                                 point.date,
                             );
+                        
+                        // Create clean data point object to avoid circular references
                         const dataPoint = {
-                            x: point.date,
+                            x: new Date(point.date.getTime()), // Create new Date object
                             y: ((adjustedPrice - buyPrice) / buyPrice) * 100,
                         };
 
@@ -756,7 +758,7 @@ class GRQValidator {
                         datasets.push({
                             label: "Target",
                             data: [{
-                                x: ninetyDayDate,
+                                x: new Date(ninetyDayDate.getTime()), // Create new Date object
                                 y: targetPercentage, // Use calculated target percentage
                             }],
                             borderColor: "rgba(255, 193, 7, 0.8)",
@@ -765,7 +767,7 @@ class GRQValidator {
                             pointRadius: 6,
                             pointHoverRadius: 8,
                             fill: false,
-                            showLine: false, // Don't connect points
+                            showLine: false, // Don't connect points - this makes it a single dot
                         });
                     }
 
@@ -807,8 +809,8 @@ class GRQValidator {
                                 datasets.push({
                                     label: "Intrinsic Value (Lower)",
                                     data: [
-                                        { x: scoreDate, y: lowerValue },
-                                        { x: ninetyDayDate, y: lowerValue },
+                                        { x: new Date(scoreDate.getTime()), y: lowerValue },
+                                        { x: new Date(ninetyDayDate.getTime()), y: lowerValue },
                                     ],
                                     borderColor: "rgba(40, 167, 69, 0.8)",
                                     backgroundColor: "rgba(40, 167, 69, 0.1)",
@@ -823,8 +825,8 @@ class GRQValidator {
                                 datasets.push({
                                     label: "Intrinsic Value (Upper)",
                                     data: [
-                                        { x: scoreDate, y: higherValue },
-                                        { x: ninetyDayDate, y: higherValue },
+                                        { x: new Date(scoreDate.getTime()), y: higherValue },
+                                        { x: new Date(ninetyDayDate.getTime()), y: higherValue },
                                     ],
                                     borderColor: "rgba(40, 167, 69, 0.8)",
                                     backgroundColor: "rgba(40, 167, 69, 0.1)",
@@ -842,10 +844,24 @@ class GRQValidator {
         } else {
             // Portfolio view
             const portfolioData = this.calculatePortfolioData();
-            if (portfolioData.length > 0) {
+            
+            // Split portfolio data into before and after 90 days
+            const before90Days = [];
+            const after90Days = [];
+            
+            portfolioData.forEach((point) => {
+                if (point.x <= ninetyDayDate) {
+                    before90Days.push(point);
+                } else {
+                    after90Days.push(point);
+                }
+            });
+            
+            // Add before 90 days data (normal color)
+            if (before90Days.length > 0) {
                 datasets.push({
                     label: "Portfolio Performance",
-                    data: portfolioData,
+                    data: before90Days,
                     borderColor: "rgba(102, 126, 234, 1)",
                     backgroundColor: "rgba(102, 126, 234, 0.1)",
                     borderWidth: 3,
@@ -853,23 +869,36 @@ class GRQValidator {
                     pointRadius: 3,
                 });
             }
+            
+            // Add after 90 days data (ghosted/gray) - only if not mobile
+            if (after90Days.length > 0 && !isMobile) {
+                datasets.push({
+                    label: "Portfolio Performance (After 90 Days)",
+                    data: after90Days,
+                    borderColor: "rgba(108, 117, 125, 0.5)",
+                    backgroundColor: "rgba(108, 117, 125, 0.1)",
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 3,
+                });
+            }
 
-            // Add portfolio target line
+            // Add portfolio target as a single point at 90 days
             const portfolioTarget = this.calculatePortfolioTargetPercentage();
             if (portfolioTarget !== null) {
                 datasets.push({
                     label: "Portfolio Target",
-                    data: [
-                        { x: scoreDate, y: 0 },
-                        { x: ninetyDayDate, y: portfolioTarget },
-                    ],
+                    data: [{
+                        x: new Date(ninetyDayDate.getTime()),
+                        y: portfolioTarget,
+                    }],
                     borderColor: "rgba(255, 193, 7, 0.8)",
-                    backgroundColor: "rgba(255, 193, 7, 0.1)",
-                    borderWidth: 2,
+                    backgroundColor: "rgba(255, 193, 7, 0.8)",
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
                     fill: false,
-                    pointRadius: 0,
-                    showLine: true,
-                    tension: 0,
+                    showLine: false, // Don't connect points - this makes it a single dot
                 });
             }
         }
@@ -1006,7 +1035,7 @@ class GRQValidator {
 
             if (validStocks > 0) {
                 const portfolioPoint = {
-                    x: date,
+                    x: new Date(date.getTime()), // Create clean Date object
                     y: totalPerformance / validStocks,
                 };
 
@@ -1107,7 +1136,7 @@ class GRQValidator {
                 daysSinceScore;
 
             costOfCapitalData.push({
-                x: date,
+                x: new Date(date.getTime()), // Create clean Date object
                 y: costOfCapitalReturn,
             });
         });

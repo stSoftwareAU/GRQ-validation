@@ -1,5 +1,4 @@
-
-import { assertEquals,assertExists, assertAlmostEquals } from "@std/assert";
+import { assertAlmostEquals, assertEquals, assertExists } from "@std/assert";
 
 // Test case for target percentage calculations with stock dilution handling
 
@@ -73,7 +72,7 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
   // Mock market data with split information
   const createMockMarketData = (stock: MockStock): MarketDataPoint[] => {
     const marketData: MarketDataPoint[] = [];
-    
+
     // Add score date data
     marketData.push({
       date: scoreDate,
@@ -84,7 +83,9 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
 
     // Add split data if applicable
     if (stock.splitAdjustment > 1.0) {
-      const splitDate = new Date(scoreDate.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days after score
+      const splitDate = new Date(
+        scoreDate.getTime() + (30 * 24 * 60 * 60 * 1000),
+      ); // 30 days after score
       marketData.push({
         date: splitDate,
         high: stock.originalBuyPrice / stock.splitAdjustment * 1.01,
@@ -106,8 +107,9 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
 
   await t.step("single stock target percentage calculation - no splits", () => {
     const testStock = mockStocks[0]; // NYSE:WFG
-    const targetPercentage = ((testStock.target - testStock.buyPrice) / testStock.buyPrice) * 100;
-    
+    const targetPercentage =
+      ((testStock.target - testStock.buyPrice) / testStock.buyPrice) * 100;
+
     assertAlmostEquals(
       targetPercentage,
       testStock.expectedTargetPercentage,
@@ -116,35 +118,43 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
     );
   });
 
-  await t.step("single stock target percentage calculation - with 2:1 split", () => {
-    const testStock = mockStocks[3]; // NASDAQ:TSLA
-    
-    // When there's a split, both target and buy price are adjusted by the same factor
-    // So the target percentage remains the same: (250 - 125) / 125 * 100 = 100%
-    const targetPercentage = ((testStock.target - testStock.buyPrice) / testStock.buyPrice) * 100;
-    
-    assertAlmostEquals(
-      targetPercentage,
-      testStock.expectedTargetPercentage,
-      0.1,
-      `Target percentage for ${testStock.stock} with 2:1 split should be ${testStock.expectedTargetPercentage}%`,
-    );
-  });
+  await t.step(
+    "single stock target percentage calculation - with 2:1 split",
+    () => {
+      const testStock = mockStocks[3]; // NASDAQ:TSLA
 
-  await t.step("single stock target percentage calculation - with 3:1 split", () => {
-    const testStock = mockStocks[4]; // NASDAQ:AAPL
-    
-    // When there's a split, both target and buy price are adjusted by the same factor
-    // So the target percentage remains the same: (150 - 50) / 50 * 100 = 200%
-    const targetPercentage = ((testStock.target - testStock.buyPrice) / testStock.buyPrice) * 100;
-    
-    assertAlmostEquals(
-      targetPercentage,
-      testStock.expectedTargetPercentage,
-      0.1,
-      `Target percentage for ${testStock.stock} with 3:1 split should be ${testStock.expectedTargetPercentage}%`,
-    );
-  });
+      // When there's a split, both target and buy price are adjusted by the same factor
+      // So the target percentage remains the same: (250 - 125) / 125 * 100 = 100%
+      const targetPercentage =
+        ((testStock.target - testStock.buyPrice) / testStock.buyPrice) * 100;
+
+      assertAlmostEquals(
+        targetPercentage,
+        testStock.expectedTargetPercentage,
+        0.1,
+        `Target percentage for ${testStock.stock} with 2:1 split should be ${testStock.expectedTargetPercentage}%`,
+      );
+    },
+  );
+
+  await t.step(
+    "single stock target percentage calculation - with 3:1 split",
+    () => {
+      const testStock = mockStocks[4]; // NASDAQ:AAPL
+
+      // When there's a split, both target and buy price are adjusted by the same factor
+      // So the target percentage remains the same: (150 - 50) / 50 * 100 = 200%
+      const targetPercentage =
+        ((testStock.target - testStock.buyPrice) / testStock.buyPrice) * 100;
+
+      assertAlmostEquals(
+        targetPercentage,
+        testStock.expectedTargetPercentage,
+        0.1,
+        `Target percentage for ${testStock.stock} with 3:1 split should be ${testStock.expectedTargetPercentage}%`,
+      );
+    },
+  );
 
   await t.step("portfolio target percentage calculation", () => {
     // Calculate individual target percentages (split-adjusted prices are already provided)
@@ -153,7 +163,8 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
     });
 
     // Calculate portfolio target (average of individual targets)
-    const portfolioTarget = targetPercentages.reduce((sum, target) => sum + target, 0) / targetPercentages.length;
+    const portfolioTarget = targetPercentages.reduce((sum, target) =>
+      sum + target, 0) / targetPercentages.length;
     const expectedPortfolioTarget = 72.0; // Average of all target percentages
 
     assertAlmostEquals(
@@ -166,18 +177,18 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
 
   await t.step("split adjustment calculation", () => {
     const testStock = mockStocks[3]; // NASDAQ:TSLA with 2:1 split
-    
+
     // Test split adjustment logic
     const originalPrice = testStock.originalBuyPrice;
     const splitAdjustment = testStock.splitAdjustment;
     const adjustedPrice = originalPrice / splitAdjustment;
-    
+
     assertEquals(
       adjustedPrice,
       testStock.buyPrice,
       "Split-adjusted price should match expected buy price",
     );
-    
+
     assertEquals(
       splitAdjustment,
       2.0,
@@ -188,7 +199,7 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
   await t.step("market data split coefficient handling", () => {
     const testStock = mockStocks[3]; // NASDAQ:TSLA
     const marketData = createMockMarketData(testStock);
-    
+
     // Find split data
     const splitData = marketData.find((point) => point.splitCoefficient > 1.0);
     assertExists(splitData, "Split data should exist for stocks with splits");
@@ -211,8 +222,10 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
       splitAdjustment: 1.0,
       expectedTargetPercentage: 0.0,
     };
-    
-    const zeroTargetPercentage = ((zeroTargetStock.target - zeroTargetStock.buyPrice) / zeroTargetStock.buyPrice) * 100;
+
+    const zeroTargetPercentage =
+      ((zeroTargetStock.target - zeroTargetStock.buyPrice) /
+        zeroTargetStock.buyPrice) * 100;
     assertEquals(
       zeroTargetPercentage,
       zeroTargetStock.expectedTargetPercentage,
@@ -228,8 +241,10 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
       splitAdjustment: 1.0,
       expectedTargetPercentage: -20.0,
     };
-    
-    const negativeTargetPercentage = ((negativeTargetStock.target - negativeTargetStock.buyPrice) / negativeTargetStock.buyPrice) * 100;
+
+    const negativeTargetPercentage =
+      ((negativeTargetStock.target - negativeTargetStock.buyPrice) /
+        negativeTargetStock.buyPrice) * 100;
     assertEquals(
       negativeTargetPercentage,
       negativeTargetStock.expectedTargetPercentage,
@@ -247,10 +262,12 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
       splitAdjustment: 6.0, // 2:1 * 3:1 = 6:1 total
       expectedTargetPercentage: 500.0, // (300.00 - 50.00) / 50.00 * 100
     };
-    
+
     // Both target and buy price are already split-adjusted, so calculate directly
-    const targetPercentage = ((multiSplitStock.target - multiSplitStock.buyPrice) / multiSplitStock.buyPrice) * 100;
-    
+    const targetPercentage =
+      ((multiSplitStock.target - multiSplitStock.buyPrice) /
+        multiSplitStock.buyPrice) * 100;
+
     assertAlmostEquals(
       targetPercentage,
       multiSplitStock.expectedTargetPercentage,
@@ -262,17 +279,17 @@ Deno.test("Target Percentage Calculation Tests", async (t) => {
   await t.step("date validation for target calculations", () => {
     const testStock = mockStocks[0]; // NYSE:WFG
     const marketData = createMockMarketData(testStock);
-    
+
     // Verify score date exists in market data
-    const scoreDateData = marketData.find((point) => 
+    const scoreDateData = marketData.find((point) =>
       point.date.getTime() === scoreDate.getTime()
     );
     assertExists(scoreDateData, "Score date data should exist in market data");
-    
+
     // Verify 90-day date exists in market data
-    const ninetyDayData = marketData.find((point) => 
+    const ninetyDayData = marketData.find((point) =>
       point.date.getTime() === ninetyDayDate.getTime()
     );
     assertExists(ninetyDayData, "90-day date data should exist in market data");
   });
-}); 
+});
