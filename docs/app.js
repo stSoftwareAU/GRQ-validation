@@ -312,11 +312,19 @@ class GRQValidator {
             chartTitle = "Portfolio Performance Over Time";
         }
 
-        // Check if mobile device - improved detection for iPhones
-        const isMobile = window.innerWidth <= 768 || 
-                        /iPhone|iPad|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                        ('ontouchstart' in window) ||
-                        (navigator.maxTouchPoints > 0);
+        // Check if mobile device using Bootstrap breakpoints
+        function getBootstrapBreakpoint() {
+            const width = window.innerWidth;
+            if (width >= 1400) return 'xxl';
+            if (width >= 1200) return 'xl';
+            if (width >= 992) return 'lg';
+            if (width >= 768) return 'md';
+            if (width >= 576) return 'sm';
+            return 'xs';
+        }
+        
+        const breakpoint = getBootstrapBreakpoint();
+        const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
 
         this.chart = new Chart(ctx, {
             type: "line",
@@ -2493,15 +2501,23 @@ const validator = new GRQValidator();
 // Add window resize listener to update chart configuration
 globalThis.addEventListener("resize", () => {
     if (validator.chart) {
-        // Use the same improved mobile detection
-        const isMobile = window.innerWidth <= 768 || 
-                        /iPhone|iPad|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                        ('ontouchstart' in window) ||
-                        (navigator.maxTouchPoints > 0);
+        // Use Bootstrap breakpoints for mobile detection
+        function getBootstrapBreakpoint() {
+            const width = window.innerWidth;
+            if (width >= 1400) return 'xxl';
+            if (width >= 1200) return 'xl';
+            if (width >= 992) return 'lg';
+            if (width >= 768) return 'md';
+            if (width >= 576) return 'sm';
+            return 'xs';
+        }
         
+        const breakpoint = getBootstrapBreakpoint();
+        const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+        
+        console.log("Resize event - Bootstrap breakpoint:", breakpoint);
         console.log("Resize event - isMobile:", isMobile);
         console.log("Resize event - window.innerWidth:", window.innerWidth);
-        console.log("Resize event - userAgent:", navigator.userAgent);
         console.log("Resize event - legend display:", !isMobile);
         
         validator.chart.options.plugins.legend.display = !isMobile;
