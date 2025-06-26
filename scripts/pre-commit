@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Check if docs files are being committed
+if git diff --cached --name-only | grep -E "^docs/" > /dev/null; then
+    echo "Docs files detected in commit. Auto-incrementing version..."
+    
+    # Read current version from index.html
+    CURRENT_VERSION=$(grep -o 'const VERSION="[^"]*"' docs/index.html | cut -d'"' -f2)
+    echo "Current version: $CURRENT_VERSION"
+    
+    # Parse version components
+    IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+    
+    # Increment patch version
+    NEW_PATCH=$((patch + 1))
+    NEW_VERSION="$major.$minor.$NEW_PATCH"
+    echo "New version: $NEW_VERSION"
+    
+    # Update version in index.html
+    sed -i "s/const VERSION=\"[^\"]*\"/const VERSION=\"$NEW_VERSION\"/" docs/index.html
+    
+    # Add the updated file to the commit
+    git add docs/index.html
+    
+    echo "Version auto-incremented to $NEW_VERSION"
+fi 

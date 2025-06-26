@@ -11,7 +11,7 @@
     <meta http-equiv="Expires" content="0">
     <script>
         const VERSION="1.0.3";
-        window.title=`GRQ Validation Dashboard v${VERSION}`;
+        document.title=`GRQ Validation Dashboard v${VERSION}`;
     </script>
     <link rel="icon" type="image/png" href="logo.png" />
 
@@ -139,10 +139,21 @@
         </div>
       </div>
     </div>
-    <div id="version">${VERSION}</div>
+    
+    <!-- Version display -->
+    <div class="text-center text-muted small py-2">v<span id="version"></span></div>
+    
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script src="app.js?v=${VERSION}"></script>
+    <!-- Force reload of app.js when version changes -->
+    <script>
+        // Dynamically load app.js with version parameter
+        const script = document.createElement('script');
+        script.src = `app.js?v=${VERSION}`;
+        document.head.appendChild(script);
+        
+        // Set version display
+        document.getElementById('version').textContent = VERSION;
+    </script>
   </body>
 </html>
