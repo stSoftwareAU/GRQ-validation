@@ -605,6 +605,9 @@ class GRQValidator {
             if (stock) {
                 const marketData = this.marketData[stock.stock];
                 if (marketData && marketData.length > 0) {
+                    // Calculate target percentage early so it's available throughout the method
+                    const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+                    
                     // Filter market data based on mobile/desktop
                     const filteredMarketData = marketData.filter(point => point.date <= maxDate);
                     
@@ -740,7 +743,6 @@ class GRQValidator {
                     }
 
                     // Add target percentage as a single point at 90 days
-                    const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
                     console.log(`Target calculation for ${stock.stock}:`, {
                         stockTarget: stock.target,
                         buyPrice: buyPrice,
@@ -749,289 +751,126 @@ class GRQValidator {
                             `Target percentage: ${targetPercentage.toFixed(1)}%` : 
                             'Target percentage: null (insufficient data)'
                     });
-                    datasets.push({
-                        label: "Target",
-                        data: [{
-                            x: ninetyDayDate,
-                            y: targetPercentage, // Use calculated target percentage
-                        }],
-                        borderColor: "rgba(255, 193, 7, 0.8)",
-                        backgroundColor: "rgba(255, 193, 7, 0.8)",
-                        borderWidth: 3,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                        fill: false,
-                        showLine: false, // Don't connect points
-                    });
+                    
+                    if (targetPercentage !== null) {
+                        datasets.push({
+                            label: "Target",
+                            data: [{
+                                x: ninetyDayDate,
+                                y: targetPercentage, // Use calculated target percentage
+                            }],
+                            borderColor: "rgba(255, 193, 7, 0.8)",
+                            backgroundColor: "rgba(255, 193, 7, 0.8)",
+                            borderWidth: 3,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            fill: false,
+                            showLine: false, // Don't connect points
+                        });
+                    }
 
                     // Add intrinsic value shading if both values are available
-                    // if (
-                    //     stock.intrinsicValuePerShareBasic !== null &&
-                    //     stock.intrinsicValuePerShareAdjusted !== null
-                    // ) {
-                    //     const adjustedBasicValue = this
-                    //         .adjustHistoricalPriceToCurrent(
-                    //             stock.intrinsicValuePerShareBasic,
-                    //             stock.stock,
-                    //             scoreDate,
-                    //         );
-                    //     const adjustedAdjustedValue = this
-                    //         .adjustHistoricalPriceToCurrent(
-                    //             stock.intrinsicValuePerShareAdjusted,
-                    //             stock.stock,
-                    //             scoreDate,
-                    //         );
+                    if (
+                        stock.intrinsicValuePerShareBasic !== null &&
+                        stock.intrinsicValuePerShareAdjusted !== null &&
+                        targetPercentage !== null
+                    ) {
+                        const adjustedBasicValue = this
+                            .adjustHistoricalPriceToCurrent(
+                                stock.intrinsicValuePerShareBasic,
+                                stock.stock,
+                                scoreDate,
+                            );
+                        const adjustedAdjustedValue = this
+                            .adjustHistoricalPriceToCurrent(
+                                stock.intrinsicValuePerShareAdjusted,
+                                stock.stock,
+                                scoreDate,
+                            );
 
-                    //     const basicPercentage =
-                    //         ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
-                    //     const adjustedPercentage =
-                    //         ((adjustedAdjustedValue - buyPrice) / buyPrice) *
-                    //         100;
+                        const basicPercentage = ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
+                        const adjustedPercentage = ((adjustedAdjustedValue - buyPrice) / buyPrice) * 100;
 
-                    //     // Only show shading if both intrinsic values are positive
-                    //     if (basicPercentage > 0 && adjustedPercentage > 0) {
-                    //         // Determine which is higher and which is lower
-                    //         const lowerValue = Math.min(
-                    //             basicPercentage,
-                    //             adjustedPercentage,
-                    //         );
-                    //         const higherValue = Math.max(
-                    //             basicPercentage,
-                    //             adjustedPercentage,
-                    //         );
+                        if (basicPercentage > 0 && adjustedPercentage > 0) {
+                            // Determine which is higher and which is lower
+                            const lowerValue = Math.min(
+                                basicPercentage,
+                                adjustedPercentage,
+                            );
+                            const higherValue = Math.max(
+                                basicPercentage,
+                                adjustedPercentage,
+                            );
 
-                    //         // if( higherValue < targetPercentage * 2){
-                    //         // Create the lower boundary line with fill to the upper line
-                    //         datasets.push({
-                    //             label: "Intrinsic Value (Lower)",
-                    //             data: [
-                    //                 { x: scoreDate, y: lowerValue },
-                    //                 { x: ninetyDayDate, y: lowerValue },
-                    //             ],
-                    //             borderColor: "rgba(40, 167, 69, 0.8)",
-                    //             backgroundColor: "rgba(40, 167, 69, 0.1)",
-                    //             borderWidth: 2,
-                    //             fill: "+1", // Fill to the next dataset (upper boundary)
-                    //             pointRadius: 0,
-                    //             showLine: true,
-                    //             tension: 0,
-                    //         });
+                            if (higherValue < targetPercentage * 2) {
+                                // Create the lower boundary line with fill to the upper line
+                                datasets.push({
+                                    label: "Intrinsic Value (Lower)",
+                                    data: [
+                                        { x: scoreDate, y: lowerValue },
+                                        { x: ninetyDayDate, y: lowerValue },
+                                    ],
+                                    borderColor: "rgba(40, 167, 69, 0.8)",
+                                    backgroundColor: "rgba(40, 167, 69, 0.1)",
+                                    borderWidth: 2,
+                                    fill: "+1", // Fill to the next dataset (upper boundary)
+                                    pointRadius: 0,
+                                    showLine: true,
+                                    tension: 0,
+                                });
 
-                    //         // Create the upper boundary line
-                    //         datasets.push({
-                    //             label: "Intrinsic Value (Upper)",
-                    //             data: [
-                    //                 { x: scoreDate, y: higherValue },
-                    //                 { x: ninetyDayDate, y: higherValue },
-                    //             ],
-                    //             borderColor: "rgba(40, 167, 69, 0.8)",
-                    //             backgroundColor: "rgba(40, 167, 69, 0.1)",
-                    //             borderWidth: 2,
-                    //             fill: false,
-                    //             pointRadius: 0,
-                    //             showLine: true,
-                    //             tension: 0,
-                    //         });
-                    //     }
-                        //}
-                    // }
+                                // Create the upper boundary line
+                                datasets.push({
+                                    label: "Intrinsic Value (Upper)",
+                                    data: [
+                                        { x: scoreDate, y: higherValue },
+                                        { x: ninetyDayDate, y: higherValue },
+                                    ],
+                                    borderColor: "rgba(40, 167, 69, 0.8)",
+                                    backgroundColor: "rgba(40, 167, 69, 0.1)",
+                                    borderWidth: 2,
+                                    fill: false,
+                                    pointRadius: 0,
+                                    showLine: true,
+                                    tension: 0,
+                                });
+                            }
+                        }
+                    }
                 }
             }
         } else {
-            // Aggregate view - show portfolio average
+            // Portfolio view
             const portfolioData = this.calculatePortfolioData();
             if (portfolioData.length > 0) {
-                // Filter portfolio data based on mobile/desktop
-                const filteredPortfolioData = portfolioData.filter(point => point.x <= maxDate);
-                
-                // Split portfolio data into before and after 90 days
-                const before90Days = [];
-                const after90Days = [];
-                filteredPortfolioData.forEach((point) => {
-                    if (point.x <= ninetyDayDate) {
-                        before90Days.push(point);
-                    } else {
-                        after90Days.push(point);
-                    }
+                datasets.push({
+                    label: "Portfolio Performance",
+                    data: portfolioData,
+                    borderColor: "rgba(102, 126, 234, 1)",
+                    backgroundColor: "rgba(102, 126, 234, 0.1)",
+                    borderWidth: 3,
+                    fill: false,
+                    pointRadius: 3,
                 });
+            }
 
-                // Add before 90 days data (normal color)
-                if (before90Days.length > 0) {
-                    datasets.push({
-                        label: "Portfolio Performance",
-                        data: before90Days,
-                        borderColor: "rgba(102, 126, 234, 1)",
-                        backgroundColor: "rgba(102, 126, 234, 0.1)",
-                        borderWidth: 3,
-                        fill: false,
-                        pointRadius: before90Days.map((point) =>
-                            point.dividend ? 8 : 3
-                        ),
-                        pointBackgroundColor: before90Days.map((point) =>
-                            point.dividend
-                                ? "rgba(0, 123, 255, 1)"
-                                : "rgba(102, 126, 234, 1)"
-                        ),
-                        pointBorderColor: before90Days.map((point) =>
-                            point.dividend
-                                ? "rgba(0, 123, 255, 1)"
-                                : "rgba(102, 126, 234, 1)"
-                        ),
-                        pointHoverRadius: before90Days.map((point) =>
-                            point.dividend ? 12 : 6
-                        ),
-                    });
-                }
-
-                // Add after 90 days data (ghosted/gray) - only if not mobile
-                if (after90Days.length > 0 && !isMobile) {
-                    datasets.push({
-                        label: "Portfolio Performance (After 90 Days)",
-                        data: after90Days,
-                        borderColor: "rgba(108, 117, 125, 0.5)",
-                        backgroundColor: "rgba(108, 117, 125, 0.1)",
-                        borderWidth: 1,
-                        fill: false,
-                        pointRadius: after90Days.map((point) =>
-                            point.dividend ? 8 : 3
-                        ),
-                        pointBackgroundColor: after90Days.map((point) =>
-                            point.dividend
-                                ? "rgba(108, 117, 125, 0.8)"
-                                : "rgba(108, 117, 125, 0.5)"
-                        ),
-                        pointBorderColor: after90Days.map((point) =>
-                            point.dividend
-                                ? "rgba(108, 117, 125, 0.8)"
-                                : "rgba(108, 117, 125, 0.5)"
-                        ),
-                        pointHoverRadius: after90Days.map((point) =>
-                            point.dividend ? 12 : 6
-                        ),
-                    });
-                }
-
-                // Add portfolio target as a single point at 90 days
-                const portfolioTarget = this
-                    .calculatePortfolioTargetPercentage();
+            // Add portfolio target line
+            const portfolioTarget = this.calculatePortfolioTargetPercentage();
+            if (portfolioTarget !== null) {
                 datasets.push({
                     label: "Portfolio Target",
-                    data: [{
-                        x: ninetyDayDate,
-                        y: portfolioTarget,
-                    }],
+                    data: [
+                        { x: scoreDate, y: 0 },
+                        { x: ninetyDayDate, y: portfolioTarget },
+                    ],
                     borderColor: "rgba(255, 193, 7, 0.8)",
-                    backgroundColor: "rgba(255, 193, 7, 0.8)",
-                    borderWidth: 3,
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
-                    fill: false, // Don't connect points
+                    backgroundColor: "rgba(255, 193, 7, 0.1)",
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    showLine: true,
+                    tension: 0,
                 });
-            }
-        }
-
-        // Add intrinsic value shading for single stock view
-        if (this.selectedStock) {
-            const stock = this.scoreData.find((s) =>
-                s.stock === this.selectedStock
-            );
-            if (
-                stock && stock.intrinsicValuePerShareBasic !== null &&
-                stock.intrinsicValuePerShareAdjusted !== null
-            ) {
-                // Calculate buy price for this stock
-                const marketData = this.marketData[stock.stock];
-                let buyPrice = 0;
-                if (marketData) {
-                    const scoreDateData = marketData.find((point) => {
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() === scoreDateOnly.getTime();
-                    });
-                    buyPrice = scoreDateData
-                        ? this.adjustHistoricalPriceToCurrent(
-                            (scoreDateData.high + scoreDateData.low) / 2,
-                            stock.stock,
-                            scoreDate,
-                        )
-                        : this.adjustHistoricalPriceToCurrent(
-                            stock.target,
-                            stock.stock,
-                            scoreDate,
-                        );
-                }
-
-                const adjustedBasicValue = this.adjustHistoricalPriceToCurrent(
-                    stock.intrinsicValuePerShareBasic,
-                    stock.stock,
-                    scoreDate,
-                );
-                const adjustedAdjustedValue = this
-                    .adjustHistoricalPriceToCurrent(
-                        stock.intrinsicValuePerShareAdjusted,
-                        stock.stock,
-                        scoreDate,
-                    );
-
-                const basicPercentage =
-                    ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
-                const adjustedPercentage =
-                    ((adjustedAdjustedValue - buyPrice) / buyPrice) * 100;
-
-                // Only show shading if both intrinsic values are positive
-                if (basicPercentage > 0 && adjustedPercentage > 0) {
-                    // Determine which is higher and which is lower
-                    const lowerValue = Math.min(
-                        basicPercentage,
-                        adjustedPercentage,
-                    );
-                    const higherValue = Math.max(
-                        basicPercentage,
-                        adjustedPercentage,
-                    );
-
-                    if( higherValue < targetPercentage * 2 ) {
-                    // Create the lower boundary line with fill to the upper line
-                    datasets.push({
-                        label: "Intrinsic Value (Lower)",
-                        data: [
-                            { x: scoreDate, y: lowerValue },
-                            { x: ninetyDayDate, y: lowerValue },
-                        ],
-                        borderColor: "rgba(40, 167, 69, 0.8)",
-                        backgroundColor: "rgba(40, 167, 69, 0.1)",
-                        borderWidth: 2,
-                        fill: "+1", // Fill to the next dataset (upper boundary)
-                        pointRadius: 0,
-                        showLine: true,
-                        tension: 0,
-                    });
-
-                    // Create the upper boundary line
-                    datasets.push({
-                        label: "Intrinsic Value (Upper)",
-                        data: [
-                            { x: scoreDate, y: higherValue },
-                            { x: ninetyDayDate, y: higherValue },
-                        ],
-                        borderColor: "rgba(40, 167, 69, 0.8)",
-                        backgroundColor: "rgba(40, 167, 69, 0.1)",
-                        borderWidth: 2,
-                        fill: false,
-                        pointRadius: 0,
-                        showLine: true,
-                        tension: 0,
-                    });
-                }
-            }
             }
         }
 
@@ -2405,23 +2244,6 @@ class GRQValidator {
         const marketData = this.marketData[stockSymbol];
         if (!marketData) return 1.0;
 
-        // Debug for NASDAQ:IBKR
-        if (stockSymbol === "NASDAQ:IBKR") {
-            console.log(
-                "getHistoricalToCurrentSplitAdjustment DEBUG:",
-                {
-                    stockSymbol,
-                    historicalDate: historicalDate.toISOString().split("T")[0],
-                    marketDataLength: marketData.length,
-                    splits: marketData.filter((p) => p.splitCoefficient > 1.0)
-                        .map((p) => ({
-                            date: p.date.toISOString().split("T")[0],
-                            splitCoefficient: p.splitCoefficient,
-                        })),
-                },
-            );
-        }
-
         // Find all splits that occurred after the historical date
         let cumulativeSplit = 1.0;
         for (const point of marketData) {
@@ -2431,17 +2253,6 @@ class GRQValidator {
             ) {
                 cumulativeSplit *= point.splitCoefficient;
             }
-        }
-
-        // Debug for NASDAQ:IBKR
-        if (stockSymbol === "NASDAQ:IBKR") {
-            console.log(
-                "getHistoricalToCurrentSplitAdjustment RESULT:",
-                {
-                    stockSymbol,
-                    cumulativeSplit,
-                },
-            );
         }
 
         return cumulativeSplit;
@@ -2458,17 +2269,6 @@ class GRQValidator {
                 historicalDate,
             );
         const result = price / splitAdjustment;
-
-        // Debug for NASDAQ:IBKR
-        if (stockSymbol === "NASDAQ:IBKR") {
-            console.log("adjustHistoricalPriceToCurrent DEBUG:", {
-                price,
-                stockSymbol,
-                historicalDate: historicalDate.toISOString().split("T")[0],
-                splitAdjustment,
-                result,
-            });
-        }
 
         return result;
     }
@@ -2574,7 +2374,7 @@ const validator = new GRQValidator();
 
 // Add window resize listener to update chart configuration
 globalThis.addEventListener("resize", () => {
-    if (validator.chart) {
+    if (validator.chart && validator.chart.options && validator.chart.options.plugins && validator.chart.options.plugins.legend) {
         const breakpoint = validator.getBootstrapBreakpoint();
         const isMobile = validator.isMobileDevice();
         
@@ -2584,15 +2384,15 @@ globalThis.addEventListener("resize", () => {
         console.log("Resize event - legend display:", !isMobile);
         
         validator.chart.options.plugins.legend.display = !isMobile;
-        validator.chart.options.plugins.legend.labels.font.size = isMobile
-            ? 10
-            : 12;
-        validator.chart.options.plugins.legend.labels.boxWidth = isMobile
-            ? 12
-            : 16;
-        validator.chart.options.plugins.legend.labels.padding = isMobile
-            ? 8
-            : 12;
+        
+        // Only set font size if the labels object exists
+        if (validator.chart.options.plugins.legend.labels) {
+            validator.chart.options.plugins.legend.labels.font = validator.chart.options.plugins.legend.labels.font || {};
+            validator.chart.options.plugins.legend.labels.font.size = isMobile ? 10 : 12;
+            validator.chart.options.plugins.legend.labels.boxWidth = isMobile ? 12 : 16;
+            validator.chart.options.plugins.legend.labels.padding = isMobile ? 8 : 12;
+        }
+        
         validator.chart.update();
     }
 });
