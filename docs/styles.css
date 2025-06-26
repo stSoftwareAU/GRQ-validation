@@ -435,3 +435,23 @@
 .clickable-value:active {
   color: #004085;
 }
+
+/* Ensure debug info is always visible */
+#debug-info {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  font-size: 0.7rem !important;
+  color: #6c757d !important;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+/* Mobile adjustments for debug info */
+@media (max-width: 768px) {
+  #debug-info {
+    font-size: 0.6rem !important;
+    padding: 0 0.5rem;
+  }
+}

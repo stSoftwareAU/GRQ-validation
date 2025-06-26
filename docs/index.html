@@ -170,11 +170,27 @@
             return 'xs';
         }
         
-        const breakpoint = getBootstrapBreakpoint();
-        const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+        function updateDebugInfo() {
+            const breakpoint = getBootstrapBreakpoint();
+            const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+            
+            const debugInfo = document.getElementById('debug-info');
+            if (debugInfo) {
+                debugInfo.textContent = `Bootstrap: ${breakpoint} | Mobile: ${isMobile} | Width: ${window.innerWidth}px | UA: ${navigator.userAgent.substring(0, 60)}...`;
+                console.log('Debug info updated:', debugInfo.textContent);
+            } else {
+                console.error('Debug info element not found!');
+            }
+        }
         
-        const debugInfo = document.getElementById('debug-info');
-        debugInfo.textContent = `Bootstrap: ${breakpoint} | Mobile: ${isMobile} | Width: ${window.innerWidth}px | UA: ${navigator.userAgent.substring(0, 60)}...`;
+        // Update debug info immediately
+        updateDebugInfo();
+        
+        // Also update on window load to ensure it's populated
+        window.addEventListener('load', updateDebugInfo);
+        
+        // Update on resize
+        window.addEventListener('resize', updateDebugInfo);
     </script>
   </body>
 </html>
