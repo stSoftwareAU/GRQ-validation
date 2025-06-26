@@ -1,5 +1,27 @@
 {
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.13"
+  },
+  "exclude": [
+    "docs/**/*",
+    "src/**/*",
+    "Cargo.*",
+    "target/**/*",
+    "node_modules/**/*"
+  ],
+  "include": [
+    "tests/**/*"
+  ],
+  "lint": {
+    "include": ["tests/**/*"],
+    "exclude": ["docs/**/*", "src/**/*"]
+  },
+  "fmt": {
+    "include": ["tests/**/*"],
+    "exclude": ["docs/**/*", "src/**/*"]
+  },
+  "test": {
+    "include": ["tests/**/*"],
+    "exclude": ["docs/**/*", "src/**/*"]
   }
 }
