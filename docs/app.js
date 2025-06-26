@@ -13,6 +13,23 @@ class GRQValidator {
         this.loadIndex();
     }
 
+    // Centralized method to get Bootstrap breakpoint
+    getBootstrapBreakpoint() {
+        const width = window.innerWidth;
+        if (width >= 1400) return 'xxl';
+        if (width >= 1200) return 'xl';
+        if (width >= 992) return 'lg';
+        if (width >= 768) return 'md';
+        if (width >= 576) return 'sm';
+        return 'xs';
+    }
+
+    // Centralized method to check if device is mobile
+    isMobileDevice() {
+        const breakpoint = this.getBootstrapBreakpoint();
+        return breakpoint === 'xs' || breakpoint === 'sm';
+    }
+
     initializeEventListeners() {
         document
             .getElementById("scoreFileSelect")
@@ -313,19 +330,8 @@ class GRQValidator {
             chartTitle = "Portfolio Performance Over Time";
         }
 
-        // Use Bootstrap breakpoints for mobile detection
-        function getBootstrapBreakpoint() {
-            const width = window.innerWidth;
-            if (width >= 1400) return 'xxl';
-            if (width >= 1200) return 'xl';
-            if (width >= 992) return 'lg';
-            if (width >= 768) return 'md';
-            if (width >= 576) return 'sm';
-            return 'xs';
-        }
-        
-        const breakpoint = getBootstrapBreakpoint();
-        const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+        const breakpoint = this.getBootstrapBreakpoint();
+        const isMobile = this.isMobileDevice();
 
         // Debug logging
         console.log("updateChart - Bootstrap breakpoint:", breakpoint);
@@ -555,10 +561,35 @@ class GRQValidator {
                     el.style.visibility = 'hidden';
                 });
             }, 100);
+        } else {
+            // Ensure legend is at bottom for desktop devices
+            console.log("Ensuring legend is positioned at bottom for desktop");
+            setTimeout(() => {
+                if (this.chart && this.chart.options.plugins.legend) {
+                    this.chart.options.plugins.legend.position = "bottom";
+                    this.chart.options.plugins.legend.align = "center";
+                    this.chart.update();
+                }
+            }, 100);
         }
     }
 
     prepareChartData() {
+        const breakpoint = this.getBootstrapBreakpoint();
+        const isMobile = this.isMobileDevice();
+        
+        // On mobile, limit to 90 days for better readability
+        const maxDays = isMobile ? 90 : 180;
+        const maxDate = new Date(
+            this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
+        );
+
+        // Debug logging for mobile data limitation
+        if (isMobile) {
+            console.log("Mobile detected - limiting chart data to 90 days for better readability");
+            console.log("Max date for chart data:", maxDate.toISOString().split('T')[0]);
+        }
+
         const datasets = [];
         const scoreDate = this.getScoreDate(this.selectedFile);
         const daysElapsed = this.getDaysElapsed(scoreDate);
@@ -574,7 +605,10 @@ class GRQValidator {
             if (stock) {
                 const marketData = this.marketData[stock.stock];
                 if (marketData && marketData.length > 0) {
-                    // Split data into before and after 90 days
+                    // Filter market data based on mobile/desktop
+                    const filteredMarketData = marketData.filter(point => point.date <= maxDate);
+                    
+                    // Split data into before and after 90 days (but only if we're showing more than 90 days)
                     const before90Days = [];
                     const after90Days = [];
 
@@ -613,7 +647,7 @@ class GRQValidator {
                         d.exDivDate.getTime()
                     );
 
-                    marketData.forEach((point) => {
+                    filteredMarketData.forEach((point) => {
                         // Use split-adjusted price for chart
                         const adjustedPrice = this
                             .adjustHistoricalPriceToCurrent(
@@ -685,8 +719,8 @@ class GRQValidator {
                         });
                     }
 
-                    // Add after 90 days data (ghosted/gray)
-                    if (after90Days.length > 0) {
+                    // Add after 90 days data (ghosted/gray) - only if not mobile
+                    if (after90Days.length > 0 && !isMobile) {
                         datasets.push({
                             label: `${stock.stock} (After 90 Days)`,
                             data: after90Days,
@@ -807,10 +841,13 @@ class GRQValidator {
             // Aggregate view - show portfolio average
             const portfolioData = this.calculatePortfolioData();
             if (portfolioData.length > 0) {
+                // Filter portfolio data based on mobile/desktop
+                const filteredPortfolioData = portfolioData.filter(point => point.x <= maxDate);
+                
                 // Split portfolio data into before and after 90 days
                 const before90Days = [];
                 const after90Days = [];
-                portfolioData.forEach((point) => {
+                filteredPortfolioData.forEach((point) => {
                     if (point.x <= ninetyDayDate) {
                         before90Days.push(point);
                     } else {
@@ -846,8 +883,8 @@ class GRQValidator {
                     });
                 }
 
-                // Add after 90 days data (ghosted/gray)
-                if (after90Days.length > 0) {
+                // Add after 90 days data (ghosted/gray) - only if not mobile
+                if (after90Days.length > 0 && !isMobile) {
                     datasets.push({
                         label: "Portfolio Performance (After 90 Days)",
                         data: after90Days,
@@ -961,6 +998,7 @@ class GRQValidator {
                         adjustedPercentage,
                     );
 
+                    if( higherValue < targetPercentage * 2 ) {
                     // Create the lower boundary line with fill to the upper line
                     datasets.push({
                         label: "Intrinsic Value (Lower)",
@@ -993,6 +1031,7 @@ class GRQValidator {
                         tension: 0,
                     });
                 }
+            }
             }
         }
 
@@ -1187,17 +1226,34 @@ class GRQValidator {
     }
 
     calculateCostOfCapitalData() {
+        const breakpoint = this.getBootstrapBreakpoint();
+        const isMobile = this.isMobileDevice();
+        
+        // On mobile, limit to 90 days for better readability
+        const maxDays = isMobile ? 90 : 180;
+        const maxDate = new Date(
+            this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
+        );
+
+        // Debug logging for cost of capital mobile limitation
+        if (isMobile) {
+            console.log("Mobile detected - limiting cost of capital line to 90 days");
+            console.log("Cost of capital max date:", maxDate.toISOString().split('T')[0]);
+        }
+
         const scoreDate = this.getScoreDate(this.selectedFile);
         const costOfCapitalData = [];
 
-        // Get all unique dates from market data (include all dates, not just 90 days)
+        // Get all unique dates from market data (limit based on mobile/desktop)
         const allDates = new Set();
         this.scoreData.forEach((stock) => {
             const marketData = this.marketData[stock.stock];
             if (marketData) {
                 marketData.forEach((point) => {
-                    // Include all dates, not just within 90 days
-                    allDates.add(point.date.getTime());
+                    // Only include dates within the mobile/desktop limit
+                    if (point.date <= maxDate) {
+                        allDates.add(point.date.getTime());
+                    }
                 });
             }
         });
@@ -2461,7 +2517,7 @@ class GRQValidator {
         const ctx = document
             .getElementById("performanceChart")
             .getContext("2d");
-        const isMobile = window.innerWidth <= 768;
+        const isMobile = this.isMobileDevice();
 
         const chartTitle = this.selectedStock
             ? `${this.selectedStock} Performance`
@@ -2519,19 +2575,8 @@ const validator = new GRQValidator();
 // Add window resize listener to update chart configuration
 globalThis.addEventListener("resize", () => {
     if (validator.chart) {
-        // Use Bootstrap breakpoints for mobile detection
-        function getBootstrapBreakpoint() {
-            const width = window.innerWidth;
-            if (width >= 1400) return 'xxl';
-            if (width >= 1200) return 'xl';
-            if (width >= 992) return 'lg';
-            if (width >= 768) return 'md';
-            if (width >= 576) return 'sm';
-            return 'xs';
-        }
-        
-        const breakpoint = getBootstrapBreakpoint();
-        const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
+        const breakpoint = validator.getBootstrapBreakpoint();
+        const isMobile = validator.isMobileDevice();
         
         console.log("Resize event - Bootstrap breakpoint:", breakpoint);
         console.log("Resize event - isMobile:", isMobile);

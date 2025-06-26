@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <script>
-        const VERSION="1.0.10";
+        const VERSION="1.0.11";
         document.title=`GRQ Validation Dashboard v${VERSION}`;
     </script>
     <link rel="icon" type="image/png" href="logo.png" />
@@ -160,18 +160,16 @@
         document.getElementById('version').textContent = VERSION;
         
         // Add debug info using Bootstrap's responsive utilities
-        function getBootstrapBreakpoint() {
-            const width = window.innerWidth;
-            if (width >= 1400) return 'xxl';
-            if (width >= 1200) return 'xl';
-            if (width >= 992) return 'lg';
-            if (width >= 768) return 'md';
-            if (width >= 576) return 'sm';
-            return 'xs';
-        }
-        
         function updateDebugInfo() {
-            const breakpoint = getBootstrapBreakpoint();
+            const width = window.innerWidth;
+            let breakpoint;
+            if (width >= 1400) breakpoint = 'xxl';
+            else if (width >= 1200) breakpoint = 'xl';
+            else if (width >= 992) breakpoint = 'lg';
+            else if (width >= 768) breakpoint = 'md';
+            else if (width >= 576) breakpoint = 'sm';
+            else breakpoint = 'xs';
+            
             const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
             
             const debugInfo = document.getElementById('debug-info');
