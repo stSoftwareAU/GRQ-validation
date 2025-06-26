@@ -680,14 +680,14 @@ class GRQValidator {
                     }
 
                     // Add target percentage as a single point at 90 days
-                    const targetPercentage =
-                        ((stock.target - buyPrice) / buyPrice) * 100;
+                    const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
                     console.log(`Target calculation for ${stock.stock}:`, {
                         stockTarget: stock.target,
                         buyPrice: buyPrice,
                         targetPercentage: targetPercentage,
-                        calculation:
-                            `((${stock.target} - ${buyPrice}) / ${buyPrice}) * 100 = ${targetPercentage}%`,
+                        calculation: targetPercentage !== null ? 
+                            `Target percentage: ${targetPercentage.toFixed(1)}%` : 
+                            'Target percentage: null (insufficient data)'
                     });
                     datasets.push({
                         label: "Target",
@@ -1527,22 +1527,7 @@ class GRQValidator {
                     }
                 }
                 // Gain/loss calculation (split-adjusted)
-                let performance = null;
-                if (buyPrice && currentPrice !== null) {
-                    // Add dividend return within 90 days
-                    const dividends = this.getDividendsWithin90Days(
-                        stock.stock,
-                    );
-                    const totalDividends = dividends.reduce(
-                        (sum, div) => sum + div.amount,
-                        0,
-                    );
-                    const priceReturn = ((currentPrice - buyPrice) / buyPrice) *
-                        100;
-                    const dividendReturn = (totalDividends / buyPrice) *
-                        100;
-                    performance = priceReturn + dividendReturn;
-                }
+                let performance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
                 const judgement = this.calculateJudgement(
                     stock,
                     performance,
@@ -1894,15 +1879,13 @@ class GRQValidator {
         // Calculate portfolio target based on the actual targets of all stocks
         let totalTarget = 0;
         let validStocks = 0;
+        const scoreDate = this.getScoreDate(this.selectedFile);
 
         this.scoreData.forEach((stock) => {
             if (stock.target !== null && !isNaN(stock.target)) {
-                // Calculate target percentage based on actual target price vs buy price
-                const scoreDate = this.getScoreDate(this.selectedFile);
-                const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
-                if (buyPrice > 0) {
-                    const targetPercentage =
-                        ((stock.target - buyPrice) / buyPrice) * 100;
+                // Use centralized method to calculate target percentage
+                const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+                if (targetPercentage !== null) {
                     totalTarget += targetPercentage;
                     validStocks++;
                 }
@@ -1954,55 +1937,13 @@ class GRQValidator {
                 }
 
                 if (ninetyDayData) {
-                    // Get the price on the score date as the buy price
-                    const scoreDateData = marketData.find((point) => {
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() ===
-                            scoreDateOnly.getTime();
-                    });
-
-                    const buyPrice = scoreDateData
-                        ? this.adjustHistoricalPriceToCurrent(
-                            (scoreDateData.high + scoreDateData.low) / 2,
-                            stock.stock,
-                            scoreDate,
-                        )
-                        : this.adjustHistoricalPriceToCurrent(
-                            stock.target,
-                            stock.stock,
-                            scoreDate,
-                        );
-
-                    const currentPrice =
-                        (ninetyDayData.high + ninetyDayData.low) / 2; // Already post-split
-
-                    // Add dividend income within 90 days
-                    const dividends = this.getDividendsWithin90Days(
-                        stock.stock,
-                    );
-                    const totalDividends = dividends.reduce(
-                        (sum, div) => sum + div.amount,
-                        0,
-                    );
-
-                    // Calculate total return including dividends
-                    const priceReturn = ((currentPrice - buyPrice) / buyPrice) *
-                        100;
-                    const dividendReturn = (totalDividends / buyPrice) *
-                        100;
-                    const totalReturn = priceReturn + dividendReturn;
-
-                    totalPerformance += totalReturn;
-                    validStocks++;
+                    // Use centralized method for performance calculation
+                    const performance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
+                    
+                    if (performance !== null) {
+                        totalPerformance += performance;
+                        validStocks++;
+                    }
                 }
             }
         });
@@ -2134,32 +2075,22 @@ class GRQValidator {
                         }\n= $${adjustedTarget.toFixed(2)}`;
                 }
             case "target-percentage":
-                const targetPercentageBuyPrice = this.getBuyPrice(
-                    stockSymbol,
-                    scoreDate,
-                );
-                const targetPercentageTarget = this
-                    .adjustHistoricalPriceToCurrent(
+                const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+                if (targetPercentage !== null) {
+                    const buyPrice = this.getBuyPrice(stockSymbol, scoreDate);
+                    const adjustedTarget = this.adjustHistoricalPriceToCurrent(
                         stock.target,
                         stockSymbol,
-                        scoreDate,
+                        scoreDate
                     );
-                if (
-                    targetPercentageBuyPrice > 0 &&
-                    targetPercentageTarget !== null
-                ) {
-                    const targetPercentage =
-                        ((targetPercentageTarget - targetPercentageBuyPrice) /
-                            targetPercentageBuyPrice) * 100;
                     return header +
                         `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= (($${
-                            targetPercentageTarget.toFixed(2)
-                        } - $${targetPercentageBuyPrice.toFixed(2)}) / $${
-                            targetPercentageBuyPrice.toFixed(2)
+                            adjustedTarget.toFixed(2)
+                        } - $${buyPrice.toFixed(2)}) / $${
+                            buyPrice.toFixed(2)
                         }) × 100\n= $${
-                            (targetPercentageTarget - targetPercentageBuyPrice)
-                                .toFixed(2)
-                        } / $${targetPercentageBuyPrice.toFixed(2)} × 100\n= ${
+                            (adjustedTarget - buyPrice).toFixed(2)
+                        } / $${buyPrice.toFixed(2)} × 100\n= ${
                             targetPercentage.toFixed(1)
                         }%`;
                 } else {
@@ -2195,102 +2126,65 @@ class GRQValidator {
                         }`;
                 }
             case "gain-loss":
-                const performance = this.calculateStockPerformance(stock);
-                if (performance === null) {
+                const gainLossPerformance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
+                if (gainLossPerformance === null) {
                     return header +
                         "Gain/Loss working:\nNo market data available";
                 }
+                
+                const gainLossBuyPrice = this.getBuyPrice(stockSymbol, scoreDate);
+                const gainLossDividends = this.getDividendsWithin90Days(stockSymbol);
+                const gainLossTotalDividends = gainLossDividends.reduce((sum, div) => sum + div.amount, 0);
+                
+                // Get current price for display
                 const gainLossMarketData = this.marketData[stockSymbol];
-                const ninetyDayDate = new Date(
-                    scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-                );
-                const within90Days = gainLossMarketData.filter((point) =>
-                    point.date <= ninetyDayDate
-                );
-                const gainLossLastData = within90Days[within90Days.length - 1];
-                const gainLossCurrentPrice =
-                    (gainLossLastData.high + gainLossLastData.low) / 2; // Already post-split
-                const scoreDateData = gainLossMarketData.find((point) => {
-                    const pointDate = new Date(
-                        point.date.getFullYear(),
-                        point.date.getMonth(),
-                        point.date.getDate(),
-                    );
-                    const scoreDateOnly = new Date(
-                        scoreDate.getFullYear(),
-                        scoreDate.getMonth(),
-                        scoreDate.getDate(),
-                    );
-                    return pointDate.getTime() === scoreDateOnly.getTime();
-                });
-                const buyPrice = scoreDateData
-                    ? this.adjustHistoricalPriceToCurrent(
-                        (scoreDateData.high + scoreDateData.low) / 2,
-                        stockSymbol,
-                        scoreDate,
-                    )
-                    : this.adjustHistoricalPriceToCurrent(
-                        stock.target,
-                        stockSymbol,
-                        scoreDate,
-                    );
-                const dividends = this.getDividendsWithin90Days(
-                    stockSymbol,
-                );
-                const totalDividends = dividends.reduce(
-                    (sum, div) => sum + div.amount,
-                    0,
-                );
+                const gainLossNinetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+                const gainLossWithin90Days = gainLossMarketData.filter((point) => point.date <= gainLossNinetyDayDate);
+                const gainLossLastData = gainLossWithin90Days[gainLossWithin90Days.length - 1];
+                const gainLossCurrentPrice = (gainLossLastData.high + gainLossLastData.low) / 2;
 
-                // Get split adjustments
-                const gainLossBuyPriceSplitAdjustment = this
-                    .getHistoricalToCurrentSplitAdjustment(
-                        stockSymbol,
-                        scoreDate,
-                    );
+                // Get split adjustments for display
+                const gainLossBuyPriceSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(
+                    stockSymbol,
+                    scoreDate
+                );
 
                 if (gainLossBuyPriceSplitAdjustment > 1.0) {
-                    const originalBuyPrice = scoreDateData
-                        ? (scoreDateData.high + scoreDateData.low) / 2
-                        : stock.target;
+                    const gainLossOriginalBuyPrice = this.getBuyPrice(stockSymbol, scoreDate) * gainLossBuyPriceSplitAdjustment;
                     return header +
                         `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
-                        } + $${totalDividends.toFixed(2)} - $${
-                            buyPrice.toFixed(2)
-                        }) / $${buyPrice.toFixed(2)}) × 100\n= ($${
-                            (gainLossCurrentPrice + totalDividends).toFixed(2)
-                        } - $${buyPrice.toFixed(2)}) / $${
-                            buyPrice.toFixed(2)
+                        } + $${gainLossTotalDividends.toFixed(2)} - $${
+                            gainLossBuyPrice.toFixed(2)
+                        }) / $${gainLossBuyPrice.toFixed(2)}) × 100\n= ($${
+                            (gainLossCurrentPrice + gainLossTotalDividends).toFixed(2)
+                        } - $${gainLossBuyPrice.toFixed(2)}) / $${
+                            gainLossBuyPrice.toFixed(2)
                         } × 100\n= $${
-                            (gainLossCurrentPrice + totalDividends - buyPrice)
-                                .toFixed(2)
-                        } / $${buyPrice.toFixed(2)} × 100\n= ${
-                            ((gainLossCurrentPrice + totalDividends -
-                                buyPrice) / buyPrice * 100).toFixed(1)
+                            (gainLossCurrentPrice + gainLossTotalDividends - gainLossBuyPrice).toFixed(2)
+                        } / $${gainLossBuyPrice.toFixed(2)} × 100\n= ${
+                            gainLossPerformance.toFixed(1)
                         }%\n\nSplit Adjustments:\n- Buy Price: $${
-                            originalBuyPrice.toFixed(2)
+                            gainLossOriginalBuyPrice.toFixed(2)
                         } ÷ ${gainLossBuyPriceSplitAdjustment} = $${
-                            buyPrice.toFixed(2)
-                        } (adjusted to current price level)\n- Current Price: $${
+                            gainLossBuyPrice.toFixed(2)
+                        }\n- Current Price: $${
                             gainLossCurrentPrice.toFixed(2)
                         } (already post-split, no adjustment needed)`;
                 } else {
                     return header +
                         `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
-                        } + $${totalDividends.toFixed(2)} - $${
-                            buyPrice.toFixed(2)
-                        }) / $${buyPrice.toFixed(2)}) × 100\n= ($${
-                            (gainLossCurrentPrice + totalDividends).toFixed(2)
-                        } - $${buyPrice.toFixed(2)}) / $${
-                            buyPrice.toFixed(2)
+                        } + $${gainLossTotalDividends.toFixed(2)} - $${
+                            gainLossBuyPrice.toFixed(2)
+                        }) / $${gainLossBuyPrice.toFixed(2)}) × 100\n= ($${
+                            (gainLossCurrentPrice + gainLossTotalDividends).toFixed(2)
+                        } - $${gainLossBuyPrice.toFixed(2)}) / $${
+                            gainLossBuyPrice.toFixed(2)
                         } × 100\n= $${
-                            (gainLossCurrentPrice + totalDividends - buyPrice)
-                                .toFixed(2)
-                        } / $${buyPrice.toFixed(2)} × 100\n= ${
-                            ((gainLossCurrentPrice + totalDividends -
-                                buyPrice) / buyPrice * 100).toFixed(1)
+                            (gainLossCurrentPrice + gainLossTotalDividends - gainLossBuyPrice).toFixed(2)
+                        } / $${gainLossBuyPrice.toFixed(2)} × 100\n= ${
+                            gainLossPerformance.toFixed(1)
                         }%`;
                 }
             case "progress-vs-cost":
@@ -2544,6 +2438,50 @@ class GRQValidator {
         const chartTitle = this.selectedStock
             ? `${this.selectedStock} Performance`
             : "Portfolio Performance";
+    }
+
+    // Centralized method to calculate target percentage with proper stock dilution handling
+    calculateTargetPercentage(stock, scoreDate) {
+        const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+        const adjustedTarget = this.adjustHistoricalPriceToCurrent(
+            stock.target,
+            stock.stock,
+            scoreDate
+        );
+        
+        if (buyPrice > 0 && adjustedTarget !== null) {
+            return ((adjustedTarget - buyPrice) / buyPrice) * 100;
+        }
+        return null;
+    }
+
+    // Centralized method to calculate stock performance with proper dilution handling
+    calculateStockPerformanceWithDilution(stock, scoreDate) {
+        const marketData = this.marketData[stock.stock];
+        if (!marketData || marketData.length === 0) return null;
+
+        const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
+        
+        // Find the last price within 90 days
+        const within90Days = marketData.filter((point) => point.date <= ninetyDayDate);
+        if (within90Days.length === 0) return null;
+
+        const lastData = within90Days[within90Days.length - 1];
+        const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
+        
+        const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+        
+        if (buyPrice <= 0) return null;
+
+        // Calculate price return
+        const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+
+        // Add dividend return within 90 days
+        const dividends = this.getDividendsWithin90Days(stock.stock);
+        const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+        const dividendReturn = (totalDividends / buyPrice) * 100;
+
+        return priceReturn + dividendReturn;
     }
 }
 
