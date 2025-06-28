@@ -339,14 +339,20 @@ class GRQValidator {
                 s.stock === this.selectedStock
             );
             if (stock) {
-                chartTitle = `${this.selectedStock} Performance (Score: ${
+                chartTitle = `Stock Performance: ${this.selectedStock} (Score: ${
                     stock.score.toFixed(3)
                 }, Target: $${stock.target.toFixed(2)})`;
             } else {
-                chartTitle = `${this.selectedStock} Performance`;
+                chartTitle = `Stock Performance: ${this.selectedStock}`;
             }
         } else {
             chartTitle = "Portfolio Performance Over Time";
+        }
+
+        // Update the HTML title element as well
+        const htmlTitleElement = document.getElementById("chartTitle");
+        if (htmlTitleElement) {
+            htmlTitleElement.textContent = chartTitle;
         }
 
         const breakpoint = this.getBootstrapBreakpoint();
@@ -370,7 +376,14 @@ class GRQValidator {
                         text: chartTitle,
                         font: {
                             size: isMobile ? 14 : 16,
+                            weight: 'bold',
                         },
+                        color: '#333',
+                        padding: {
+                            top: 10,
+                            bottom: 10,
+                        },
+                        align: 'start',
                     },
                     legend: {
                         display: !isMobile, // This should hide the legend on mobile
@@ -726,7 +739,7 @@ class GRQValidator {
                     // Add before 90 days data (normal color)
                     if (before90Days.length > 0) {
                         datasets.push({
-                            label: stock.stock,
+                            label: "Performance",
                             data: before90Days,
                             borderColor: "rgba(102, 126, 234, 1)",
                             backgroundColor: "rgba(102, 126, 234, 0.1)",
@@ -742,11 +755,11 @@ class GRQValidator {
                             ),
                         });
                     }
-
+                    
                     // Add after 90 days data (ghosted/gray) - only if not mobile
                     if (after90Days.length > 0 && !isMobile) {
                         datasets.push({
-                            label: `${stock.stock} (After 90 Days)`,
+                            label: "Performance (After 90 Days)",
                             data: after90Days,
                             borderColor: "rgba(108, 117, 125, 0.5)",
                             backgroundColor: "rgba(108, 117, 125, 0.1)",
@@ -879,7 +892,7 @@ class GRQValidator {
             // Add before 90 days data (normal color)
             if (before90Days.length > 0) {
                 datasets.push({
-                    label: "Portfolio Performance",
+                    label: "Performance",
                     data: before90Days,
                     borderColor: "rgba(102, 126, 234, 1)",
                     backgroundColor: "rgba(102, 126, 234, 0.1)",
@@ -892,7 +905,7 @@ class GRQValidator {
             // Add after 90 days data (ghosted/gray) - only if not mobile
             if (after90Days.length > 0 && !isMobile) {
                 datasets.push({
-                    label: "Portfolio Performance (After 90 Days)",
+                    label: "Performance (After 90 Days)",
                     data: after90Days,
                     borderColor: "rgba(108, 117, 125, 0.5)",
                     backgroundColor: "rgba(108, 117, 125, 0.1)",
@@ -906,7 +919,7 @@ class GRQValidator {
             const portfolioTarget = this.calculatePortfolioTargetPercentage();
             if (portfolioTarget !== null) {
                 datasets.push({
-                    label: "Portfolio Target",
+                    label: "Target",
                     data: [{
                         x: new Date(ninetyDayDate.getTime()),
                         y: portfolioTarget,

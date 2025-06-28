@@ -35,11 +35,17 @@
   position: relative;
   height: 600px; /* Increased from 400px to 600px */
   margin-bottom: 2rem;
+  padding-top: 20px; /* Add padding to ensure title is visible */
 }
 
-/* Ensure legend appears at bottom */
+/* Ensure Chart.js title is visible */
 .chart-container canvas {
   margin-bottom: 0;
+}
+
+/* Chart.js title styling */
+.chart-container canvas + div {
+  margin-top: 10px;
 }
 
 /* Chart.js legend positioning */
