@@ -45,6 +45,13 @@
     {
       "year": "2025",
       "month": "April",
+      "day": "4",
+      "file": "2025/April/4.tsv",
+      "date": "2025-04-04"
+    },
+    {
+      "year": "2025",
+      "month": "April",
       "day": "15",
       "file": "2025/April/15.tsv",
       "date": "2025-04-15"
