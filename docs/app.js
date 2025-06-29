@@ -935,6 +935,42 @@ class GRQValidator {
             }
         }
 
+        // Add trend line for stocks that haven't reached 90 days yet
+        if (this.selectedStock) {
+            const stock = this.scoreData.find((s) => s.stock === this.selectedStock);
+            if (stock) {
+                const daysElapsed = this.getDaysElapsed(scoreDate);
+                if (daysElapsed < 90) {
+                    const trendLine = this.calculateTrendLine(stock, scoreDate);
+                    if (trendLine && trendLine.rSquared > 0.3) {
+                        // Create trend line data points
+                        const trendData = [];
+                        const maxDays = Math.min(90, maxDays); // Don't extend beyond chart limit
+                        
+                        for (let day = 0; day <= maxDays; day += 7) { // Weekly points for smooth line
+                            const predictedPerformance = trendLine.slope * day + trendLine.intercept;
+                            trendData.push({
+                                x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
+                                y: predictedPerformance
+                            });
+                        }
+                        
+                        datasets.push({
+                            label: "Trend Prediction",
+                            data: trendData,
+                            borderColor: "rgba(255, 140, 0, 0.8)",
+                            backgroundColor: "rgba(255, 140, 0, 0.1)",
+                            borderWidth: 2,
+                            borderDash: [5, 5], // Dashed line
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.1,
+                        });
+                    }
+                }
+            }
+        }
+
         // Add cost of capital line (remove dots)
         const costOfCapitalData = this.calculateCostOfCapitalData();
         if (costOfCapitalData.length > 0) {
@@ -1450,7 +1486,7 @@ class GRQValidator {
           <th>Current Price</th>
           <th>Gain/Loss (%)</th>
           <th>Progress vs Cost of Capital</th>
-          <th>Judgement (90-day)</th>
+          <th>Status/Projection</th>
           <th>Dividends</th>
         `;
 
@@ -1556,7 +1592,7 @@ class GRQValidator {
                         performance,
                     )
                 }</span></td>
-            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Judgement - ${stock.stock}" data-field="judgement" data-stock="${stock.stock}"><span class="badge ${
+            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Status/Projection - ${stock.stock}" data-field="status-projection" data-stock="${stock.stock}"><span class="badge ${
                     this.getJudgementClass(judgement)
                 }">${judgement}</span></span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${stock.stock}" data-field="dividend-info" data-stock="${stock.stock}">${dividendInfo}</span></td>
@@ -1710,15 +1746,69 @@ class GRQValidator {
     calculateJudgement(stock, performance) {
         if (performance === null) return "Pending";
 
-        const targetReturn = 20; // 20% target
-        const threshold = targetReturn * 0.8; // 80% of target
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        const daysElapsed = this.getDaysElapsed(scoreDate);
+        const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
 
-        if (performance >= threshold) {
-            return "Hit Target";
-        } else if (performance > 0) {
-            return "Partial Success";
+        // If we haven't reached 90 days yet, use trend prediction
+        if (daysElapsed < 90) {
+            const trendLine = this.calculateTrendLine(stock, scoreDate);
+            
+            if (trendLine && trendLine.rSquared > 0.3) { // Only use if trend is reasonably reliable
+                const predicted = trendLine.predicted90DayPerformance;
+                const target = targetPercentage || 20; // Default to 20% if no target
+                
+                if (predicted >= target * 0.8) {
+                    return `On Track (${predicted.toFixed(1)}%)`;
+                } else if (predicted > 0) {
+                    return `Below Target (${predicted.toFixed(1)}%)`;
+                } else {
+                    return `Declining (${predicted.toFixed(1)}%)`;
+                }
+            } else {
+                // Not enough data for reliable prediction - use current performance with context
+                const target = targetPercentage || 20; // Default to 20% if no target
+                const threshold = target * 0.8; // 80% of target
+                
+                if (daysElapsed < 30) {
+                    // First 30 days - truly early
+                    if (performance > 0) {
+                        return `Early Days (+${performance.toFixed(1)}%)`;
+                    } else {
+                        return `Early Days (${performance.toFixed(1)}%)`;
+                    }
+                } else if (daysElapsed < 60) {
+                    // 30-60 days - mid period
+                    if (performance >= threshold) {
+                        return `On Track (${performance.toFixed(1)}%)`;
+                    } else if (performance > 0) {
+                        return `Below Target (${performance.toFixed(1)}%)`;
+                    } else {
+                        return `Declining (${performance.toFixed(1)}%)`;
+                    }
+                } else {
+                    // 60+ days - late period, should have good data
+                    if (performance >= threshold) {
+                        return `On Track (${performance.toFixed(1)}%)`;
+                    } else if (performance > 0) {
+                        return `Below Target (${performance.toFixed(1)}%)`;
+                    } else {
+                        return `Declining (${performance.toFixed(1)}%)`;
+                    }
+                }
+            }
         } else {
-            return "Missed Target";
+            // 90 days or more elapsed - use actual performance
+            const target = targetPercentage || 20; // Default to 20% if no target
+            const threshold = target * 0.8; // 80% of target
+
+            if (performance >= threshold) {
+                return "Hit Target";
+            } else if (performance > 0) {
+                return "Partial Success";
+            } else {
+                return "Missed Target";
+            }
         }
     }
 
@@ -1730,15 +1820,25 @@ class GRQValidator {
     }
 
     getJudgementClass(judgement) {
-        switch (judgement) {
-            case "Hit Target":
-                return "judgement-hit";
-            case "Partial Success":
-                return "judgement-partial";
-            case "Missed Target":
-                return "judgement-miss";
-            default:
-                return "bg-secondary";
+        if (judgement.startsWith("On Track")) {
+            return "judgement-hit";
+        } else if (judgement.startsWith("Hit Target")) {
+            return "judgement-hit";
+        } else if (judgement.startsWith("Below Target") || judgement.startsWith("Partial Success")) {
+            return "judgement-partial";
+        } else if (judgement.startsWith("Declining") || judgement.startsWith("Missed Target")) {
+            return "judgement-miss";
+        } else if (judgement.startsWith("Early Days")) {
+            // Check if the performance is positive or negative
+            if (judgement.includes("(-")) {
+                return "judgement-miss"; // Red for negative performance
+            } else if (judgement.includes("(+")) {
+                return "judgement-hit"; // Green for positive performance
+            } else {
+                return "bg-info"; // Blue for neutral/unknown
+            }
+        } else {
+            return "bg-secondary";
         }
     }
 
@@ -2201,6 +2301,32 @@ class GRQValidator {
                             ? judgementPerformance.toFixed(1) + "%"
                             : "N/A"
                     }\n= Target: 20%\n= Judgement: ${judgement}`;
+            case "status-projection":
+                const statusPerformance = this.calculateStockPerformance(stock);
+                const statusJudgement = this.calculateJudgement(stock, statusPerformance);
+                const statusScoreDate = this.getScoreDate(this.selectedFile);
+                const statusDaysElapsed = this.getDaysElapsed(statusScoreDate);
+                const statusTargetPercentage = this.calculateTargetPercentage(stock, statusScoreDate);
+                
+                if (statusDaysElapsed < 90) {
+                    const trendLine = this.calculateTrendLine(stock, statusScoreDate);
+                    if (trendLine && trendLine.rSquared > 0.3) {
+                        return header +
+                            `Status/Projection working:\n= Days elapsed: ${statusDaysElapsed}\n= Current performance: ${
+                                statusPerformance !== null ? statusPerformance.toFixed(1) + "%" : "N/A"
+                            }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Trend line R²: ${trendLine.rSquared.toFixed(3)}\n= Predicted 90-day performance: ${trendLine.predicted90DayPerformance.toFixed(1)}%\n= Status: ${statusJudgement}`;
+                    } else {
+                        return header +
+                            `Status/Projection working:\n= Days elapsed: ${statusDaysElapsed}\n= Current performance: ${
+                                statusPerformance !== null ? statusPerformance.toFixed(1) + "%" : "N/A"
+                            }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Insufficient data for reliable trend prediction\n= Status: ${statusJudgement}`;
+                    }
+                } else {
+                    return header +
+                        `Status/Projection working:\n= Days elapsed: ${statusDaysElapsed} (90-day period complete)\n= Final performance: ${
+                            statusPerformance !== null ? statusPerformance.toFixed(1) + "%" : "N/A"
+                        }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Final judgement: ${statusJudgement}`;
+                }
             case "intrinsic-basic":
                 if (stock.intrinsicValuePerShareBasic === null) {
                     return "Intrinsic Value (Basic) working:\nNo data available";
@@ -2427,6 +2553,86 @@ class GRQValidator {
         const dividendReturn = (totalDividends / buyPrice) * 100;
 
         return priceReturn + dividendReturn;
+    }
+
+    // Calculate linear regression for trend prediction
+    calculateTrendLine(stock, scoreDate) {
+        const marketData = this.marketData[stock.stock];
+        if (!marketData || marketData.length === 0) return null;
+
+        const scoreDateTimestamp = scoreDate.getTime();
+        const today = new Date();
+        
+        // Get data points from score date to today (but only if we have at least 3 data points)
+        const dataPoints = [];
+        const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+        
+        if (buyPrice <= 0) return null;
+
+        marketData.forEach((point) => {
+            if (point.date >= scoreDate && point.date <= today) {
+                const daysSinceScore = (point.date.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24);
+                const currentPrice = this.adjustHistoricalPriceToCurrent(
+                    (point.high + point.low) / 2,
+                    stock.stock,
+                    point.date
+                );
+                
+                // Calculate performance including dividends up to this point
+                const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+                const dividends = this.getDividendsWithin90Days(stock.stock);
+                const dividendsUpToDate = dividends.filter((d) => d.exDivDate <= point.date);
+                const totalDividends = dividendsUpToDate.reduce((sum, div) => sum + div.amount, 0);
+                const dividendReturn = (totalDividends / buyPrice) * 100;
+                const totalReturn = priceReturn + dividendReturn;
+                
+                dataPoints.push({
+                    x: daysSinceScore,
+                    y: totalReturn
+                });
+            }
+        });
+
+        // Need at least 3 data points for meaningful regression
+        if (dataPoints.length < 3) return null;
+
+        // Calculate linear regression (y = mx + b)
+        const n = dataPoints.length;
+        const sumX = dataPoints.reduce((sum, point) => sum + point.x, 0);
+        const sumY = dataPoints.reduce((sum, point) => sum + point.y, 0);
+        const sumXY = dataPoints.reduce((sum, point) => sum + point.x * point.y, 0);
+        const sumXX = dataPoints.reduce((sum, point) => sum + point.x * point.x, 0);
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        // Predict performance at 90 days
+        const predicted90DayPerformance = slope * 90 + intercept;
+
+        return {
+            slope,
+            intercept,
+            predicted90DayPerformance,
+            dataPoints,
+            rSquared: this.calculateRSquared(dataPoints, slope, intercept)
+        };
+    }
+
+    // Calculate R-squared for trend line quality
+    calculateRSquared(dataPoints, slope, intercept) {
+        const n = dataPoints.length;
+        const meanY = dataPoints.reduce((sum, point) => sum + point.y, 0) / n;
+        
+        let ssRes = 0; // Sum of squared residuals
+        let ssTot = 0; // Total sum of squares
+        
+        dataPoints.forEach((point) => {
+            const predicted = slope * point.x + intercept;
+            ssRes += Math.pow(point.y - predicted, 2);
+            ssTot += Math.pow(point.y - meanY, 2);
+        });
+        
+        return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
     }
 }
 
