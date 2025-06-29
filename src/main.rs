@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use log::info;
+use chrono::{NaiveDate, Utc};
 use utils::{
     create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
     extract_ticker_codes_from_score_file, read_index_json,
@@ -19,6 +20,10 @@ struct Args {
     /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
+
+    /// Process all score files, including those more than 180 days old
+    #[arg(long)]
+    process_all: bool,
 }
 
 fn main() -> Result<()> {
@@ -38,10 +43,37 @@ fn main() -> Result<()> {
     let index_data = read_index_json(&args.docs_path)?;
     info!("Found {} score files to process", index_data.scores.len());
 
+    // Filter out score files that are more than 180 days old (unless --process-all is specified)
+    let scores_to_process = if args.process_all {
+        info!("Processing all score files (including old ones)");
+        index_data.scores.iter().collect()
+    } else {
+        let today = Utc::now().naive_utc().date();
+        let cutoff_date = today - chrono::Duration::days(180);
+        
+        let recent_scores: Vec<_> = index_data.scores
+            .iter()
+            .filter(|score| {
+                if let Ok(score_date) = NaiveDate::parse_from_str(&score.date, "%Y-%m-%d") {
+                    score_date >= cutoff_date
+                } else {
+                    false
+                }
+            })
+            .collect();
+        
+        info!("Filtered to {} recent score files (within 180 days)", recent_scores.len());
+        if recent_scores.len() < index_data.scores.len() {
+            info!("Skipped {} old score files (more than 180 days old)", 
+                  index_data.scores.len() - recent_scores.len());
+        }
+        recent_scores
+    };
+
     let mut processed_count = 0;
     let mut error_count = 0;
 
-    for (i, score_entry) in index_data.scores.iter().enumerate() {
+    for (i, score_entry) in scores_to_process.iter().enumerate() {
         let score_file_path = format!("{}/scores/{}", args.docs_path, score_entry.file);
 
         info!(
