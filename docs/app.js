@@ -221,8 +221,11 @@ class GRQValidator {
                     this.marketData[ticker] = [];
                 }
 
+                // Set market data dates to noon to avoid timezone issues
+                const marketDate = this.setDateToMidnight(new Date(date));
+
                 this.marketData[ticker].push({
-                    date: new Date(date),
+                    date: marketDate,
                     high,
                     low,
                     open,
@@ -276,8 +279,11 @@ class GRQValidator {
                     this.dividendData[ticker] = [];
                 }
 
+                // Set dividend dates to noon to avoid timezone issues
+                const dividendDate = this.setDateToMidnight(new Date(exDivDate));
+
                 this.dividendData[ticker].push({
-                    exDivDate: new Date(exDivDate),
+                    exDivDate: dividendDate,
                     amount,
                 });
             });
@@ -556,8 +562,8 @@ class GRQValidator {
                         annotations: {
                             line1: {
                                 type: "line",
-                                xMin: this.getScoreDate(this.selectedFile),
-                                xMax: this.getScoreDate(this.selectedFile),
+                                xMin: this.setDateToMidnight(this.getScoreDate(this.selectedFile)),
+                                xMax: this.setDateToMidnight(this.getScoreDate(this.selectedFile)),
                                 borderColor: "rgba(255, 193, 7, 0.8)",
                                 borderWidth: 2,
                                 label: {
@@ -578,16 +584,16 @@ class GRQValidator {
                             // Add 90-day target line
                             line3: {
                                 type: "line",
-                                xMin: new Date(
+                                xMin: this.setDateToMidnight(new Date(
                                     this.getScoreDate(this.selectedFile)
                                         .getTime() +
                                         (90 * 24 * 60 * 60 * 1000),
-                                ),
-                                xMax: new Date(
+                                )),
+                                xMax: this.setDateToMidnight(new Date(
                                     this.getScoreDate(this.selectedFile)
                                         .getTime() +
                                         (90 * 24 * 60 * 60 * 1000),
-                                ),
+                                )),
                                 borderColor: "rgba(220, 53, 69, 0.8)",
                                 borderWidth: 2,
                                 label: {
@@ -640,9 +646,9 @@ class GRQValidator {
         
         // On mobile, limit to 90 days for better readability
         const maxDays = isMobile ? 90 : 180;
-        const maxDate = new Date(
+        const maxDate = this.setDateToMidnight(new Date(
             this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
-        );
+        ));
 
         // Debug logging for mobile data limitation
         if (isMobile) {
@@ -653,9 +659,9 @@ class GRQValidator {
         const datasets = [];
         const scoreDate = this.getScoreDate(this.selectedFile);
         const daysElapsed = this.getDaysElapsed(scoreDate);
-        const ninetyDayDate = new Date(
+        const ninetyDayDate = this.setDateToMidnight(new Date(
             scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
+        ));
 
         console.log("prepareChartData - selectedStock:", this.selectedStock);
         console.log("prepareChartData - scoreDate:", scoreDate.toISOString().split('T')[0]);
@@ -867,8 +873,9 @@ class GRQValidator {
                     if (lastPointDay !== 90) {
                         // Add the exact 90-day point
                         const predictedPerformance90 = trendLine.slope * 90 + trendLine.intercept;
+                        const tendDate=this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
                         trendData.push({
-                            x: new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)),
+                            x: tendDate,
                             y: predictedPerformance90
                         });
                     }
@@ -904,6 +911,72 @@ class GRQValidator {
                     });
                 } else {
                     console.log("Trend line not generated - R-squared:", trendLine ? trendLine.rSquared : "null");
+                }
+            }
+        } else {
+            // Portfolio view - add trend line if we haven't reached 90 days yet
+            if (daysElapsed < 90) {
+                console.log("Attempting to generate portfolio trend line");
+                const portfolioTrendLine = this.calculatePortfolioTrendLine();
+                console.log("Portfolio trend line result:", portfolioTrendLine);
+                if (portfolioTrendLine && portfolioTrendLine.rSquared > 0.3) {
+                    console.log("Portfolio trend line R-squared:", portfolioTrendLine.rSquared, "- generating trend data");
+                    // Create trend line data points - extend to exactly 90 days
+                    const trendData = [];
+                    
+                    for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
+                        const predictedPerformance = portfolioTrendLine.slope * day + portfolioTrendLine.intercept;
+                        trendData.push({
+                            x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
+                            y: predictedPerformance
+                        });
+                    }
+                    
+                    // Ensure we have exactly 90 days as the last point
+                    const lastPoint = trendData[trendData.length - 1];
+                    const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+                    
+                    if (lastPointDay !== 90) {
+                        // Add the exact 90-day point
+                        const predictedPerformance90 = portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept;
+                        const trendDate = this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
+                        trendData.push({
+                            x: trendDate,
+                            y: predictedPerformance90
+                        });
+                    }
+                    
+                    console.log("Generated portfolio trend data points:", trendData.length);
+                    console.log("First portfolio trend point:", trendData[0]);
+                    console.log("Last portfolio trend point:", trendData[trendData.length - 1]);
+                    
+                    datasets.push({
+                        label: "Portfolio Trend Prediction",
+                        data: trendData,
+                        borderColor: "rgba(138, 43, 226, 0.8)", // Purple color to distinguish from gold target dot
+                        backgroundColor: "rgba(138, 43, 226, 0.1)",
+                        borderWidth: 2,
+                        borderDash: [5, 5], // Dashed line
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1,
+                    });
+                    
+                    // Add a visible dot at the 90-day mark
+                    const ninetyDayPoint = trendData[trendData.length - 1]; // Last point is at 90 days
+                    datasets.push({
+                        label: "Portfolio Trend 90-Day Point",
+                        data: [ninetyDayPoint],
+                        borderColor: "rgba(138, 43, 226, 1)", // Solid purple
+                        backgroundColor: "rgba(138, 43, 226, 1)",
+                        borderWidth: 0,
+                        fill: false,
+                        pointRadius: 6,
+                        pointStyle: "circle",
+                        showLine: false, // Only show the point, not a line
+                    });
+                } else {
+                    console.log("Portfolio trend line not generated - R-squared:", portfolioTrendLine ? portfolioTrendLine.rSquared : "null");
                 }
             }
         }
@@ -1767,9 +1840,18 @@ class GRQValidator {
             const [, year, month, day] = match;
             const monthIndex = new Date(`${month} 1, ${year}`)
                 .getMonth();
-            return new Date(parseInt(year), monthIndex, parseInt(day));
+            const date = new Date(parseInt(year), monthIndex, parseInt(day));
+            return this.setDateToMidnight(date);
         }
-        return new Date();
+        throw new Error("Invalid score file: " + scoreFile);
+    }
+
+    // Helper function to set dates to midnight to avoid timezone issues
+    setDateToMidnight(date) {
+        // return date;
+        const newDate = new Date(date);
+        newDate.setHours(0, 0, 0, 0);
+        return newDate;
     }
 
     getDaysElapsed(scoreDate) {
@@ -2482,6 +2564,51 @@ class GRQValidator {
         });
         
         return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+    }
+
+    // Calculate linear regression for portfolio trend prediction
+    calculatePortfolioTrendLine() {
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        const scoreDateTimestamp = scoreDate.getTime();
+        const today = new Date();
+        
+        // Get portfolio data points from score date to today (but only if we have at least 3 data points)
+        const portfolioData = this.calculatePortfolioData();
+        const dataPoints = [];
+        
+        portfolioData.forEach((point) => {
+            if (point.x >= scoreDate && point.x <= today) {
+                const daysSinceScore = (point.x.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24);
+                dataPoints.push({
+                    x: daysSinceScore,
+                    y: point.y
+                });
+            }
+        });
+
+        // Need at least 3 data points for meaningful regression
+        if (dataPoints.length < 3) return null;
+
+        // Calculate linear regression (y = mx + b)
+        const n = dataPoints.length;
+        const sumX = dataPoints.reduce((sum, point) => sum + point.x, 0);
+        const sumY = dataPoints.reduce((sum, point) => sum + point.y, 0);
+        const sumXY = dataPoints.reduce((sum, point) => sum + point.x * point.y, 0);
+        const sumXX = dataPoints.reduce((sum, point) => sum + point.x * point.x, 0);
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        // Predict performance at 90 days
+        const predicted90DayPerformance = slope * 90 + intercept;
+
+        return {
+            slope,
+            intercept,
+            predicted90DayPerformance,
+            dataPoints,
+            rSquared: this.calculateRSquared(dataPoints, slope, intercept)
+        };
     }
 
     getNextExDividendDate(stockSymbol) {
