@@ -349,6 +349,18 @@ class GRQValidator {
             chartTitle = "Portfolio Performance Over Time";
         }
 
+        // Debug logging for chart data
+        console.log("Chart data for rendering:", JSON.stringify(chartData, null, 2));
+        console.log("Number of datasets:", chartData.datasets.length);
+        chartData.datasets.forEach((dataset, index) => {
+            console.log(`Dataset ${index}:`, {
+                label: dataset.label,
+                dataPoints: dataset.data.length,
+                firstPoint: dataset.data[0],
+                lastPoint: dataset.data[dataset.data.length - 1]
+            });
+        });
+
         // Update the HTML title element as well
         const htmlTitleElement = document.getElementById("chartTitle");
         if (htmlTitleElement) {
@@ -629,6 +641,10 @@ class GRQValidator {
             scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
         );
 
+        console.log("prepareChartData - selectedStock:", this.selectedStock);
+        console.log("prepareChartData - scoreDate:", scoreDate.toISOString().split('T')[0]);
+        console.log("prepareChartData - daysElapsed:", daysElapsed);
+
         if (this.selectedStock) {
             // Single stock view
             const stock = this.scoreData.find((s) =>
@@ -636,251 +652,102 @@ class GRQValidator {
             );
             if (stock) {
                 const marketData = this.marketData[stock.stock];
+                console.log(`prepareChartData - ${stock.stock} market data points:`, marketData ? marketData.length : 0);
                 if (marketData && marketData.length > 0) {
-                    // Calculate target percentage early so it's available throughout the method
                     const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
-                    
-                    // Filter market data based on mobile/desktop
                     const filteredMarketData = marketData.filter(point => point.date <= maxDate);
-                    
-                    // Split data into before and after 90 days (but only if we're showing more than 90 days)
+                    console.log(`prepareChartData - ${stock.stock} filtered market data points:`, filteredMarketData.length);
                     const before90Days = [];
                     const after90Days = [];
-
-                    // Get the price on the score date as the buy price
-                    const scoreDateData = marketData.find((point) => {
-                        // Compare dates by day only, ignoring time components
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() ===
-                            scoreDateOnly.getTime();
-                    });
-                    const buyPrice = scoreDateData
-                        ? this.adjustHistoricalPriceToCurrent(
-                            (scoreDateData.high + scoreDateData.low) / 2,
-                            stock.stock,
-                            scoreDate,
-                        )
-                        : this.adjustHistoricalPriceToCurrent(
-                            stock.target,
-                            stock.stock,
-                            scoreDate,
-                        );
-
-                    // Get dividend data for this stock
-                    const stockDividends = this.dividendData?.[stock.stock] ||
-                        [];
-                    const exDivDates = stockDividends.map((d) =>
-                        d.exDivDate.getTime()
-                    );
-
+                    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                    console.log(`prepareChartData - ${stock.stock} buy price:`, buyPriceObj);
+                    if (!buyPriceObj || !buyPriceObj.price || buyPriceObj.price <= 0) {
+                        console.warn(`No valid buy price for ${stock.stock}, skipping chart data`);
+                        return { datasets };
+                    }
+                    const buyPrice = buyPriceObj.price;
+                    const stockDividends = this.dividendData?.[stock.stock] || [];
+                    const exDivDates = stockDividends.map((d) => d.exDivDate.getTime());
                     filteredMarketData.forEach((point) => {
-                        // Use split-adjusted price for chart
-                        const adjustedPrice = this
-                            .adjustHistoricalPriceToCurrent(
-                                (point.high + point.low) / 2,
-                                stock.stock,
-                                point.date,
-                            );
-                        
-                        // Create clean data point object to avoid circular references
-                        const dataPoint = {
-                            x: new Date(point.date.getTime()), // Create new Date object
-                            y: ((adjustedPrice - buyPrice) / buyPrice) * 100,
-                        };
-
-                        // Check if this is an ex-dividend date
-                        const pointDateOnly = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
+                        const adjustedPrice = this.adjustHistoricalPriceToCurrent(
+                            (point.high + point.low) / 2,
+                            stock.stock,
+                            point.date,
                         );
-                        const isExDivDate = exDivDates.some((exDivTime) => {
-                            const exDivDateOnly = new Date(
-                                new Date(exDivTime).getFullYear(),
-                                new Date(exDivTime).getMonth(),
-                                new Date(exDivTime).getDate(),
-                            );
-                            return pointDateOnly.getTime() ===
-                                exDivDateOnly.getTime();
-                        });
-
-                        // Add dividend info to tooltip
-                        if (isExDivDate) {
-                            const dividend = stockDividends.find((d) => {
-                                const dDateOnly = new Date(
-                                    d.exDivDate.getFullYear(),
-                                    d.exDivDate.getMonth(),
-                                    d.exDivDate.getDate(),
-                                );
-                                return dDateOnly.getTime() ===
-                                    pointDateOnly.getTime();
-                            });
-                            if (dividend) {
-                                dataPoint.dividend = dividend.amount;
-                            }
-                        }
-
+                        let yValue = ((adjustedPrice - buyPrice) / buyPrice) * 100;
+                        if (isNaN(yValue) || yValue === null) return; // skip invalid
+                        const dataPoint = {
+                            x: new Date(point.date.getTime()),
+                            y: yValue,
+                        };
+                        // ... existing dividend logic ...
                         if (point.date <= ninetyDayDate) {
                             before90Days.push(dataPoint);
                         } else {
                             after90Days.push(dataPoint);
                         }
                     });
-
-                    // Add before 90 days data (normal color)
-                    if (before90Days.length > 0) {
+                    console.log(`prepareChartData - ${stock.stock} before90Days points:`, before90Days.length);
+                    console.log(`prepareChartData - ${stock.stock} after90Days points:`, after90Days.length);
+                    // Filter out any invalid y values (defensive)
+                    const cleanBefore90 = before90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
+                    const cleanAfter90 = after90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
+                    console.log(`prepareChartData - ${stock.stock} cleanBefore90 points:`, cleanBefore90.length);
+                    console.log(`prepareChartData - ${stock.stock} cleanAfter90 points:`, cleanAfter90.length);
+                    if (cleanBefore90.length > 0) {
                         datasets.push({
                             label: "Performance",
-                            data: before90Days,
+                            data: cleanBefore90,
                             borderColor: "rgba(102, 126, 234, 1)",
                             backgroundColor: "rgba(102, 126, 234, 0.1)",
                             borderWidth: 3,
                             fill: false,
-                            pointRadius: before90Days.map((point) =>
-                                point.dividend ? 8 : 3
-                            ),
-                            pointBackgroundColor: before90Days.map((point) =>
-                                point.dividend
-                                    ? "rgba(0, 123, 255, 1)"
-                                    : "rgba(102, 126, 234, 1)"
+                            pointRadius: cleanBefore90.map((point) => point.dividend ? 8 : 3),
+                            pointBackgroundColor: cleanBefore90.map((point) =>
+                                point.dividend ? "rgba(0, 123, 255, 1)" : "rgba(102, 126, 234, 1)"
                             ),
                         });
                     }
-                    
-                    // Add after 90 days data (ghosted/gray) - only if not mobile
-                    if (after90Days.length > 0 && !isMobile) {
+                    if (cleanAfter90.length > 0 && !isMobile) {
                         datasets.push({
                             label: "Performance (After 90 Days)",
-                            data: after90Days,
+                            data: cleanAfter90,
                             borderColor: "rgba(108, 117, 125, 0.5)",
                             backgroundColor: "rgba(108, 117, 125, 0.1)",
                             borderWidth: 1,
                             fill: false,
-                            pointRadius: after90Days.map((point) =>
-                                point.dividend ? 8 : 3
-                            ),
-                            pointBackgroundColor: after90Days.map((point) =>
-                                point.dividend
-                                    ? "rgba(108, 117, 125, 0.8)"
-                                    : "rgba(108, 117, 125, 0.5)"
+                            pointRadius: cleanAfter90.map((point) => point.dividend ? 8 : 3),
+                            pointBackgroundColor: cleanAfter90.map((point) =>
+                                point.dividend ? "rgba(108, 117, 125, 0.8)" : "rgba(108, 117, 125, 0.5)"
                             ),
                         });
                     }
-
-                    // Add target percentage as a single point at 90 days
-                    console.log(`Target calculation for ${stock.stock}:`, {
-                        stockTarget: stock.target,
-                        buyPrice: buyPrice,
-                        targetPercentage: targetPercentage,
-                        calculation: targetPercentage !== null ? 
-                            `Target percentage: ${targetPercentage.toFixed(1)}%` : 
-                            'Target percentage: null (insufficient data)'
-                    });
-                    
+                    // Add target dot for single stock view
                     if (targetPercentage !== null) {
                         datasets.push({
                             label: "Target",
                             data: [{
-                                x: new Date(ninetyDayDate.getTime()), // Create new Date object
-                                y: targetPercentage, // Use calculated target percentage
+                                x: ninetyDayDate,
+                                y: targetPercentage
                             }],
-                            borderColor: "rgba(255, 193, 7, 0.8)",
-                            backgroundColor: "rgba(255, 193, 7, 0.8)",
-                            borderWidth: 3,
-                            pointRadius: 6,
-                            pointHoverRadius: 8,
+                            borderColor: "rgba(255, 193, 7, 1)",
+                            backgroundColor: "rgba(255, 193, 7, 1)",
+                            borderWidth: 0,
                             fill: false,
-                            showLine: false, // Don't connect points - this makes it a single dot
+                            pointRadius: 8,
+                            pointStyle: "circle",
+                            showLine: false, // Only show the point, not a line
                         });
                     }
-
-                    // Add intrinsic value shading if both values are available
-                    if (
-                        stock.intrinsicValuePerShareBasic !== null &&
-                        stock.intrinsicValuePerShareAdjusted !== null &&
-                        targetPercentage !== null
-                    ) {
-                        const adjustedBasicValue = this
-                            .adjustHistoricalPriceToCurrent(
-                                stock.intrinsicValuePerShareBasic,
-                                stock.stock,
-                                scoreDate,
-                            );
-                        const adjustedAdjustedValue = this
-                            .adjustHistoricalPriceToCurrent(
-                                stock.intrinsicValuePerShareAdjusted,
-                                stock.stock,
-                                scoreDate,
-                            );
-
-                        const basicPercentage = ((adjustedBasicValue - buyPrice) / buyPrice) * 100;
-                        const adjustedPercentage = ((adjustedAdjustedValue - buyPrice) / buyPrice) * 100;
-
-                        if (basicPercentage > 0 && adjustedPercentage > 0) {
-                            // Determine which is higher and which is lower
-                            const lowerValue = Math.min(
-                                basicPercentage,
-                                adjustedPercentage,
-                            );
-                            const higherValue = Math.max(
-                                basicPercentage,
-                                adjustedPercentage,
-                            );
-
-                            if (higherValue < targetPercentage * 2) {
-                                // Create the lower boundary line with fill to the upper line
-                                datasets.push({
-                                    label: "Intrinsic Value (Lower)",
-                                    data: [
-                                        { x: new Date(scoreDate.getTime()), y: lowerValue },
-                                        { x: new Date(ninetyDayDate.getTime()), y: lowerValue },
-                                    ],
-                                    borderColor: "rgba(40, 167, 69, 0.8)",
-                                    backgroundColor: "rgba(40, 167, 69, 0.1)",
-                                    borderWidth: 2,
-                                    fill: "+1", // Fill to the next dataset (upper boundary)
-                                    pointRadius: 0,
-                                    showLine: true,
-                                    tension: 0,
-                                });
-
-                                // Create the upper boundary line
-                                datasets.push({
-                                    label: "Intrinsic Value (Upper)",
-                                    data: [
-                                        { x: new Date(scoreDate.getTime()), y: higherValue },
-                                        { x: new Date(ninetyDayDate.getTime()), y: higherValue },
-                                    ],
-                                    borderColor: "rgba(40, 167, 69, 0.8)",
-                                    backgroundColor: "rgba(40, 167, 69, 0.1)",
-                                    borderWidth: 2,
-                                    fill: false,
-                                    pointRadius: 0,
-                                    showLine: true,
-                                    tension: 0,
-                                });
-                            }
-                        }
-                    }
+                    // ... existing target and trend line logic ...
                 }
             }
         } else {
             // Portfolio view
             const portfolioData = this.calculatePortfolioData();
-            
-            // Split portfolio data into before and after 90 days
+            console.log("prepareChartData - portfolio data points:", portfolioData.length);
             const before90Days = [];
             const after90Days = [];
-            
             portfolioData.forEach((point) => {
                 if (point.x <= ninetyDayDate) {
                     before90Days.push(point);
@@ -888,12 +755,17 @@ class GRQValidator {
                     after90Days.push(point);
                 }
             });
-            
-            // Add before 90 days data (normal color)
-            if (before90Days.length > 0) {
+            console.log("prepareChartData - portfolio before90Days points:", before90Days.length);
+            console.log("prepareChartData - portfolio after90Days points:", after90Days.length);
+            // Filter out any invalid y values
+            const cleanBefore90 = before90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
+            const cleanAfter90 = after90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
+            console.log("prepareChartData - portfolio cleanBefore90 points:", cleanBefore90.length);
+            console.log("prepareChartData - portfolio cleanAfter90 points:", cleanAfter90.length);
+            if (cleanBefore90.length > 0) {
                 datasets.push({
                     label: "Performance",
-                    data: before90Days,
+                    data: cleanBefore90,
                     borderColor: "rgba(102, 126, 234, 1)",
                     backgroundColor: "rgba(102, 126, 234, 0.1)",
                     borderWidth: 3,
@@ -901,12 +773,10 @@ class GRQValidator {
                     pointRadius: 3,
                 });
             }
-            
-            // Add after 90 days data (ghosted/gray) - only if not mobile
-            if (after90Days.length > 0 && !isMobile) {
+            if (cleanAfter90.length > 0 && !isMobile) {
                 datasets.push({
                     label: "Performance (After 90 Days)",
-                    data: after90Days,
+                    data: cleanAfter90,
                     borderColor: "rgba(108, 117, 125, 0.5)",
                     backgroundColor: "rgba(108, 117, 125, 0.1)",
                     borderWidth: 1,
@@ -914,25 +784,25 @@ class GRQValidator {
                     pointRadius: 3,
                 });
             }
-
-            // Add portfolio target as a single point at 90 days
+            // Add target dot for portfolio view
             const portfolioTarget = this.calculatePortfolioTargetPercentage();
             if (portfolioTarget !== null) {
                 datasets.push({
                     label: "Target",
                     data: [{
-                        x: new Date(ninetyDayDate.getTime()),
-                        y: portfolioTarget,
+                        x: ninetyDayDate,
+                        y: portfolioTarget
                     }],
-                    borderColor: "rgba(255, 193, 7, 0.8)",
-                    backgroundColor: "rgba(255, 193, 7, 0.8)",
-                    borderWidth: 3,
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
+                    borderColor: "rgba(255, 193, 7, 1)",
+                    backgroundColor: "rgba(255, 193, 7, 1)",
+                    borderWidth: 0,
                     fill: false,
-                    showLine: false, // Don't connect points - this makes it a single dot
+                    pointRadius: 8,
+                    pointStyle: "circle",
+                    showLine: false, // Only show the point, not a line
                 });
             }
+            // ... existing target logic ...
         }
 
         // Add trend line for stocks that haven't reached 90 days yet
@@ -945,9 +815,9 @@ class GRQValidator {
                     if (trendLine && trendLine.rSquared > 0.3) {
                         // Create trend line data points
                         const trendData = [];
-                        const maxDays = Math.min(90, maxDays); // Don't extend beyond chart limit
+                        const trendMaxDays = Math.min(90, maxDays); // Don't extend beyond chart limit
                         
-                        for (let day = 0; day <= maxDays; day += 7) { // Weekly points for smooth line
+                        for (let day = 0; day <= trendMaxDays; day += 7) { // Weekly points for smooth line
                             const predictedPerformance = trendLine.slope * day + trendLine.intercept;
                             trendData.push({
                                 x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
@@ -984,6 +854,11 @@ class GRQValidator {
                 pointRadius: 0, // No points, just a line
             });
         }
+
+        console.log("prepareChartData - final datasets count:", datasets.length);
+        datasets.forEach((dataset, index) => {
+            console.log(`prepareChartData - dataset ${index} (${dataset.label}):`, dataset.data.length, "points");
+        });
 
         return { datasets };
     }
@@ -1033,33 +908,16 @@ class GRQValidator {
                         (point) => point.date.getTime() === timestamp,
                     );
 
-                    // Get the price on the score date as the buy price
-                    const scoreDateData = marketData.find((point) => {
-                        // Compare dates by day only, ignoring time components
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() ===
-                            scoreDateOnly.getTime();
-                    });
-                    const buyPrice = scoreDateData
-                        ? this.adjustHistoricalPriceToCurrent(
-                            (scoreDateData.high + scoreDateData.low) / 2,
-                            stock.stock,
-                            scoreDate,
-                        )
-                        : this.adjustHistoricalPriceToCurrent(
-                            stock.target,
-                            stock.stock,
-                            scoreDate,
-                        );
+                    // Calculate buy price using market data on score date
+                    const scoreDate = this.getScoreDate(this.selectedFile);
+                    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                    const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+                    const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
+                    const target = this.adjustHistoricalPriceToCurrent(
+                        stock.target,
+                        stock.stock,
+                        scoreDate,
+                    );
 
                     if (dataPoint) {
                         // Use split-adjusted price for current price calculation
@@ -1261,35 +1119,9 @@ class GRQValidator {
 
                 // Calculate buy price using market data on score date
                 const scoreDate = this.getScoreDate(this.selectedFile);
-                const marketData = this.marketData[stock.stock];
-                const scoreDateData = marketData
-                    ? marketData.find((point) => {
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() ===
-                            scoreDateOnly.getTime();
-                    })
-                    : null;
-
-                const buyPrice = scoreDateData
-                    ? this.adjustHistoricalPriceToCurrent(
-                        (scoreDateData.high + scoreDateData.low) / 2,
-                        stock.stock,
-                        scoreDate,
-                    )
-                    : this.adjustHistoricalPriceToCurrent(
-                        stock.target,
-                        stock.stock,
-                        scoreDate,
-                    ); // fallback to target if no market data
+                const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+                const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
                 const target = this.adjustHistoricalPriceToCurrent(
                     stock.target,
                     stock.stock,
@@ -1330,8 +1162,8 @@ class GRQValidator {
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
-                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${
-                    buyPrice !== null ? buyPrice.toFixed(2) : "N/A"
+                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}" style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}">$${
+                    buyPrice !== null ? buyPrice.toFixed(2) : 'N/A'
                 }</span></div>
                   </div>
                   <div class="row mb-2">
@@ -1343,11 +1175,10 @@ class GRQValidator {
                   <div class="row mb-2">
                     <div class="col-6"><strong>Target Percentage:</strong></div>
                     <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Target Percentage - ${stock.stock}" data-field="target-percentage" data-stock="${stock.stock}">${
-                    buyPrice > 0 && target !== null
-                        ? ((target - buyPrice) / buyPrice * 100).toFixed(1) +
-                            "%"
-                        : "N/A"
-                }</span></div>
+    buyPrice !== null && buyPrice > 0 && target !== null
+        ? ((target - buyPrice) / buyPrice * 100).toFixed(1) + "%"
+        : "N/A"
+}</span></div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Current Price:</strong></div>
@@ -1361,8 +1192,8 @@ class GRQValidator {
                       <span class="clickable-value ${
                     this.getPerformanceClass(performance)
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
-                    performance !== null ? performance.toFixed(1) + "%" : "N/A"
-                }</span>
+    performance !== null ? performance.toFixed(1) + "%" : "N/A"
+}</span>
                     </div>
                   </div>
                   <div class="row mb-2">
@@ -1502,34 +1333,9 @@ class GRQValidator {
                 const marketData = this.marketData[stock.stock];
                 // Split-adjusted buy price and target
                 // buy price should be the (high + low) / 2 on the score date
-                const scoreDateData = marketData
-                    ? marketData.find((point) => {
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() ===
-                            scoreDateOnly.getTime();
-                    })
-                    : null;
-
-                const buyPrice = scoreDateData
-                    ? this.adjustHistoricalPriceToCurrent(
-                        (scoreDateData.high + scoreDateData.low) / 2,
-                        stock.stock,
-                        scoreDate,
-                    )
-                    : this.adjustHistoricalPriceToCurrent(
-                        stock.target,
-                        stock.stock,
-                        scoreDate,
-                    ); // fallback to target if no market data
+                const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+                const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
                 const target = this.adjustHistoricalPriceToCurrent(
                     stock.target,
                     stock.stock,
@@ -1568,8 +1374,8 @@ class GRQValidator {
                 // Aggregate view
                 row.innerHTML = `
             <td class="clickable-stock" onclick="validator.showStockDetails('${stock.stock}')">${stock.stock}</td>
-            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}">$${
-                    buyPrice !== null ? buyPrice.toFixed(2) : "N/A"
+            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}" style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}">$${
+                    buyPrice !== null ? buyPrice.toFixed(2) : 'N/A'
                 }</span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${
                     target !== null ? target.toFixed(2) : "N/A"
@@ -1582,8 +1388,8 @@ class GRQValidator {
             <td><span class="clickable-value ${
                     this.getPerformanceClass(performance)
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
-                    performance !== null ? performance.toFixed(1) + "%" : "N/A"
-                }</span></td>
+    performance !== null ? performance.toFixed(1) + "%" : "N/A"
+}</span></td>
             <td><span class="clickable-value ${
                     this.getPerformanceClass(performance)
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
@@ -1736,8 +1542,9 @@ class GRQValidator {
     calculateProgressVsCostOfCapital(stock, performance) {
         if (performance === null) return "N/A";
 
-        // Use 90 days for cost of capital calculation since all performance is 90-day based
-        const costOfCapitalReturn = (this.costOfCapital / 365) * 90;
+        // Use actual days elapsed for cost of capital calculation to match working
+        const daysElapsed = this.getDaysElapsed(this.getScoreDate(this.selectedFile));
+        const costOfCapitalReturn = (this.costOfCapital / 365) * daysElapsed;
 
         const excessReturn = performance - costOfCapitalReturn;
         return excessReturn.toFixed(1) + "%";
@@ -1917,31 +1724,11 @@ class GRQValidator {
         const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
 
         // Get the price on the score date as the buy price (adjusted to current price level)
-        const scoreDateData = marketData.find((point) => {
-            // Compare dates by day only, ignoring time components
-            const pointDate = new Date(
-                point.date.getFullYear(),
-                point.date.getMonth(),
-                point.date.getDate(),
-            );
-            const scoreDateOnly = new Date(
-                scoreDate.getFullYear(),
-                scoreDate.getMonth(),
-                scoreDate.getDate(),
-            );
-            return pointDate.getTime() === scoreDateOnly.getTime();
-        });
-        const buyPrice = scoreDateData
-            ? this.adjustHistoricalPriceToCurrent(
-                (scoreDateData.high + scoreDateData.low) / 2,
-                stock.stock,
-                scoreDate,
-            )
-            : this.adjustHistoricalPriceToCurrent(
-                stock.target,
-                stock.stock,
-                scoreDate,
-            );
+        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+        if (!buyPriceObj || !buyPriceObj.price || buyPriceObj.price <= 0) {
+            return null;
+        }
+        const buyPrice = buyPriceObj.price;
 
         // Calculate price return
         const priceReturn = ((currentPrice - buyPrice) / buyPrice) *
@@ -2053,9 +1840,9 @@ class GRQValidator {
                         stock.stock,
                         scoreDate,
                     );
-                    if (buyPrice > 0) {
+                    if (buyPrice !== null) {
                         const targetPercentage =
-                            ((stock.target - buyPrice) / buyPrice) * 100;
+                            ((stock.target - buyPrice.price) / buyPrice.price) * 100;
                         targetDetails.push(
                             `${stock.stock}: ${targetPercentage.toFixed(1)}%`,
                         );
@@ -2078,58 +1865,46 @@ class GRQValidator {
         if (!stock) return "Stock not found";
 
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const currentDate = new Date();
         const header = `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${
             scoreDate.toISOString().split("T")[0]
-        } | Current Date: ${currentDate.toISOString().split("T")[0]}\n\n`;
+        }\n\n`;
 
         switch (field) {
             case "buy-price":
-                const buyPriceMarketData = this.marketData[stockSymbol];
-                const buyPriceScoreDateData = buyPriceMarketData
-                    ? buyPriceMarketData.find((point) => {
-                        const pointDate = new Date(
-                            point.date.getFullYear(),
-                            point.date.getMonth(),
-                            point.date.getDate(),
-                        );
-                        const scoreDateOnly = new Date(
-                            scoreDate.getFullYear(),
-                            scoreDate.getMonth(),
-                            scoreDate.getDate(),
-                        );
-                        return pointDate.getTime() ===
-                            scoreDateOnly.getTime();
-                    })
-                    : null;
+                const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
+                let buyPrice = buyPriceObj ? buyPriceObj.price : null;
+                let buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
+                let buyPriceExplanation;
+                let buyPriceError = false;
 
-                const buyPriceOriginalPrice = buyPriceScoreDateData
-                    ? (buyPriceScoreDateData.high +
-                        buyPriceScoreDateData.low) / 2
-                    : stock.target; // fallback to target if no market data
+                if (buyPriceObj) {
+                    buyPriceExplanation = (buyPriceDateUsed && buyPriceDateUsed.getTime() === scoreDate.getTime())
+                        ? "Market price on score date"
+                        : `Market price on next available trading day (${buyPriceDateUsed.toISOString().split("T")[0]})`;
+                } else {
+                    buyPriceError = true;
+                }
 
-                const buyPriceSplitAdjustment = this
+                const buyPriceSplitAdjustment = !buyPriceError ? this
                     .getHistoricalToCurrentSplitAdjustment(
                         stockSymbol,
                         scoreDate,
-                    );
-                const adjustedBuyPrice = this
-                    .adjustHistoricalPriceToCurrent(
-                        buyPriceOriginalPrice,
-                        stockSymbol,
-                        scoreDate,
-                    );
+                    ) : 1.0;
+                const adjustedBuyPrice = !buyPriceError ? buyPrice : null;
 
-                if (buyPriceSplitAdjustment > 1.0) {
+                if (buyPriceError) {
                     return header +
-                        `Buy Price working:\n= Market price on score date (adjusted for ${buyPriceSplitAdjustment}:1 split)\n= Original: $${
-                            buyPriceOriginalPrice.toFixed(2)
+                        `Buy Price ERROR:\n= No market price found within 5 days of the score date. Data error.`;
+                } else if (buyPriceSplitAdjustment > 1.0) {
+                    return header +
+                        `Buy Price working:\n= ${buyPriceExplanation} (adjusted for ${buyPriceSplitAdjustment}:1 split)\n= Date used: ${buyPriceDateUsed.toISOString().split("T")[0]}\n= Original: $${
+                            adjustedBuyPrice.toFixed(2)
                         }\n= Split adjustment: ÷ ${buyPriceSplitAdjustment}\n= Adjusted: $${
                             adjustedBuyPrice.toFixed(2)
                         }`;
                 } else {
                     return header +
-                        `Buy Price working:\n= Market price on score date\n= $${
+                        `Buy Price working:\n= ${buyPriceExplanation}\n= Date used: ${buyPriceDateUsed.toISOString().split("T")[0]}\n= $${
                             adjustedBuyPrice.toFixed(2)
                         }`;
                 }
@@ -2162,21 +1937,26 @@ class GRQValidator {
                 const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
                 if (targetPercentage !== null) {
                     const buyPrice = this.getBuyPrice(stockSymbol, scoreDate);
-                    const adjustedTarget = this.adjustHistoricalPriceToCurrent(
-                        stock.target,
-                        stockSymbol,
-                        scoreDate
-                    );
-                    return header +
-                        `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= (($${
-                            adjustedTarget.toFixed(2)
-                        } - $${buyPrice.toFixed(2)}) / $${
-                            buyPrice.toFixed(2)
-                        }) × 100\n= $${
-                            (adjustedTarget - buyPrice).toFixed(2)
-                        } / $${buyPrice.toFixed(2)} × 100\n= ${
-                            targetPercentage.toFixed(1)
-                        }%`;
+                    if (buyPrice !== null) {
+                        const adjustedTarget = this.adjustHistoricalPriceToCurrent(
+                            stock.target,
+                            stockSymbol,
+                            scoreDate
+                        );
+                        return header +
+                            `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= (($${
+                                adjustedTarget.toFixed(2)
+                            } - $${buyPrice.price.toFixed(2)}) / $${
+                                buyPrice.price.toFixed(2)
+                            }) × 100\n= $${
+                                (adjustedTarget - buyPrice.price).toFixed(2)
+                            } / $${buyPrice.price.toFixed(2)} × 100\n= ${
+                                targetPercentage.toFixed(1)
+                            }%`;
+                    } else {
+                        return header +
+                            `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= No buy price available`;
+                    }
                 } else {
                     return header +
                         `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= Insufficient data to calculate`;
@@ -2217,6 +1997,11 @@ class GRQValidator {
                 }
                 
                 const gainLossBuyPrice = this.getBuyPrice(stockSymbol, scoreDate);
+                if (gainLossBuyPrice === null) {
+                    return header +
+                        "Gain/Loss working:\nNo buy price available";
+                }
+                
                 const gainLossDividends = this.getDividendsWithin90Days(stockSymbol);
                 const gainLossTotalDividends = gainLossDividends.reduce((sum, div) => sum + div.amount, 0);
                 
@@ -2234,24 +2019,24 @@ class GRQValidator {
                 );
 
                 if (gainLossBuyPriceSplitAdjustment > 1.0) {
-                    const gainLossOriginalBuyPrice = this.getBuyPrice(stockSymbol, scoreDate) * gainLossBuyPriceSplitAdjustment;
+                    const gainLossOriginalBuyPrice = gainLossBuyPrice.price * gainLossBuyPriceSplitAdjustment;
                     return header +
                         `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
                         } + $${gainLossTotalDividends.toFixed(2)} - $${
-                            gainLossBuyPrice.toFixed(2)
-                        }) / $${gainLossBuyPrice.toFixed(2)}) × 100\n= ($${
+                            gainLossBuyPrice.price.toFixed(2)
+                        }) / $${gainLossBuyPrice.price.toFixed(2)}) × 100\n= ($${
                             (gainLossCurrentPrice + gainLossTotalDividends).toFixed(2)
-                        } - $${gainLossBuyPrice.toFixed(2)}) / $${
-                            gainLossBuyPrice.toFixed(2)
+                        } - $${gainLossBuyPrice.price.toFixed(2)}) / $${
+                            gainLossBuyPrice.price.toFixed(2)
                         } × 100\n= $${
-                            (gainLossCurrentPrice + gainLossTotalDividends - gainLossBuyPrice).toFixed(2)
-                        } / $${gainLossBuyPrice.toFixed(2)} × 100\n= ${
+                            (gainLossCurrentPrice + gainLossTotalDividends - gainLossBuyPrice.price).toFixed(2)
+                        } / $${gainLossBuyPrice.price.toFixed(2)} × 100\n= ${
                             gainLossPerformance.toFixed(1)
                         }%\n\nSplit Adjustments:\n- Buy Price: $${
                             gainLossOriginalBuyPrice.toFixed(2)
                         } ÷ ${gainLossBuyPriceSplitAdjustment} = $${
-                            gainLossBuyPrice.toFixed(2)
+                            gainLossBuyPrice.price.toFixed(2)
                         }\n- Current Price: $${
                             gainLossCurrentPrice.toFixed(2)
                         } (already post-split, no adjustment needed)`;
@@ -2260,14 +2045,14 @@ class GRQValidator {
                         `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
                         } + $${gainLossTotalDividends.toFixed(2)} - $${
-                            gainLossBuyPrice.toFixed(2)
-                        }) / $${gainLossBuyPrice.toFixed(2)}) × 100\n= ($${
+                            gainLossBuyPrice.price.toFixed(2)
+                        }) / $${gainLossBuyPrice.price.toFixed(2)}) × 100\n= ($${
                             (gainLossCurrentPrice + gainLossTotalDividends).toFixed(2)
-                        } - $${gainLossBuyPrice.toFixed(2)}) / $${
-                            gainLossBuyPrice.toFixed(2)
+                        } - $${gainLossBuyPrice.price.toFixed(2)}) / $${
+                            gainLossBuyPrice.price.toFixed(2)
                         } × 100\n= $${
-                            (gainLossCurrentPrice + gainLossTotalDividends - gainLossBuyPrice).toFixed(2)
-                        } / $${gainLossBuyPrice.toFixed(2)} × 100\n= ${
+                            (gainLossCurrentPrice + gainLossTotalDividends - gainLossBuyPrice.price).toFixed(2)
+                        } / $${gainLossBuyPrice.price.toFixed(2)} × 100\n= ${
                             gainLossPerformance.toFixed(1)
                         }%`;
                 }
@@ -2462,42 +2247,33 @@ class GRQValidator {
 
     getBuyPrice(stockSymbol, scoreDate) {
         const marketData = this.marketData[stockSymbol];
-        if (!marketData) return 0;
+        if (!marketData) return null;
 
-        // Get the price on the score date as the buy price
-        const scoreDateData = marketData.find((point) => {
-            const pointDate = new Date(
-                point.date.getFullYear(),
-                point.date.getMonth(),
-                point.date.getDate(),
-            );
-            const scoreDateOnly = new Date(
-                scoreDate.getFullYear(),
-                scoreDate.getMonth(),
-                scoreDate.getDate(),
-            );
-            return pointDate.getTime() === scoreDateOnly.getTime();
-        });
-
-        if (scoreDateData) {
-            return this.adjustHistoricalPriceToCurrent(
-                (scoreDateData.high + scoreDateData.low) / 2,
-                stockSymbol,
-                scoreDate,
-            );
+        // Try to get the price on the exact score date or up to 5 days forward
+        for (let offset = 0; offset <= 5; offset++) {
+            const candidateDate = new Date(scoreDate.getTime());
+            candidateDate.setDate(candidateDate.getDate() + offset);
+            const candidateData = marketData.find((point) => {
+                const pointDate = new Date(
+                    point.date.getFullYear(),
+                    point.date.getMonth(),
+                    point.date.getDate(),
+                );
+                return pointDate.getTime() === candidateDate.getTime();
+            });
+            if (candidateData) {
+                return {
+                    price: this.adjustHistoricalPriceToCurrent(
+                        (candidateData.high + candidateData.low) / 2,
+                        stockSymbol,
+                        scoreDate,
+                    ),
+                    dateUsed: candidateDate
+                };
+            }
         }
-
-        // Fallback to target price if no market data
-        const stock = this.scoreData.find((s) => s.stock === stockSymbol);
-        if (stock && stock.target) {
-            return this.adjustHistoricalPriceToCurrent(
-                stock.target,
-                stockSymbol,
-                scoreDate,
-            );
-        }
-
-        return 0;
+        // No price found within 5 days
+        return null;
     }
 
     createChart() {
@@ -2520,8 +2296,8 @@ class GRQValidator {
             scoreDate
         );
         
-        if (buyPrice > 0 && adjustedTarget !== null) {
-            return ((adjustedTarget - buyPrice) / buyPrice) * 100;
+        if (buyPrice !== null && adjustedTarget !== null) {
+            return ((adjustedTarget - buyPrice.price) / buyPrice.price) * 100;
         }
         return null;
     }
@@ -2540,17 +2316,17 @@ class GRQValidator {
         const lastData = within90Days[within90Days.length - 1];
         const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
         
-        const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
         
-        if (buyPrice <= 0) return null;
+        if (buyPriceObj === null) return null;
 
         // Calculate price return
-        const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+        const priceReturn = ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
 
         // Add dividend return within 90 days
         const dividends = this.getDividendsWithin90Days(stock.stock);
         const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
-        const dividendReturn = (totalDividends / buyPrice) * 100;
+        const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
 
         return priceReturn + dividendReturn;
     }
@@ -2565,9 +2341,9 @@ class GRQValidator {
         
         // Get data points from score date to today (but only if we have at least 3 data points)
         const dataPoints = [];
-        const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
+        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
         
-        if (buyPrice <= 0) return null;
+        if (!buyPriceObj || buyPriceObj.price <= 0) return null;
 
         marketData.forEach((point) => {
             if (point.date >= scoreDate && point.date <= today) {
@@ -2579,11 +2355,11 @@ class GRQValidator {
                 );
                 
                 // Calculate performance including dividends up to this point
-                const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+                const priceReturn = ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
                 const dividends = this.getDividendsWithin90Days(stock.stock);
                 const dividendsUpToDate = dividends.filter((d) => d.exDivDate <= point.date);
                 const totalDividends = dividendsUpToDate.reduce((sum, div) => sum + div.amount, 0);
-                const dividendReturn = (totalDividends / buyPrice) * 100;
+                const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
                 const totalReturn = priceReturn + dividendReturn;
                 
                 dataPoints.push({

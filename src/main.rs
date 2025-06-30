@@ -1,7 +1,7 @@
 use anyhow::Result;
+use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use log::info;
-use chrono::{NaiveDate, Utc};
 use utils::{
     create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
     extract_ticker_codes_from_score_file, read_index_json,
@@ -50,8 +50,9 @@ fn main() -> Result<()> {
     } else {
         let today = Utc::now().naive_utc().date();
         let cutoff_date = today - chrono::Duration::days(180);
-        
-        let recent_scores: Vec<_> = index_data.scores
+
+        let recent_scores: Vec<_> = index_data
+            .scores
             .iter()
             .filter(|score| {
                 if let Ok(score_date) = NaiveDate::parse_from_str(&score.date, "%Y-%m-%d") {
@@ -61,11 +62,16 @@ fn main() -> Result<()> {
                 }
             })
             .collect();
-        
-        info!("Filtered to {} recent score files (within 180 days)", recent_scores.len());
+
+        info!(
+            "Filtered to {} recent score files (within 180 days)",
+            recent_scores.len()
+        );
         if recent_scores.len() < index_data.scores.len() {
-            info!("Skipped {} old score files (more than 180 days old)", 
-                  index_data.scores.len() - recent_scores.len());
+            info!(
+                "Skipped {} old score files (more than 180 days old)",
+                index_data.scores.len() - recent_scores.len()
+            );
         }
         recent_scores
     };
