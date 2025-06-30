@@ -696,7 +696,26 @@ class GRQValidator {
                             x: new Date(point.date.getTime()),
                             y: yValue,
                         };
-                        // ... existing dividend logic ...
+                        
+                        // Check if this is an ex-dividend date
+                        const pointDateOnly = new Date(
+                            point.date.getFullYear(),
+                            point.date.getMonth(),
+                            point.date.getDate(),
+                        );
+                        const isExDivDate = stockDividends.some((dividend) => {
+                            const divDateOnly = new Date(
+                                dividend.exDivDate.getFullYear(),
+                                dividend.exDivDate.getMonth(),
+                                dividend.exDivDate.getDate(),
+                            );
+                            return divDateOnly.getTime() === pointDateOnly.getTime();
+                        });
+                        
+                        if (isExDivDate) {
+                            dataPoint.dividend = true;
+                        }
+                        
                         if (point.date <= ninetyDayDate) {
                             before90Days.push(dataPoint);
                         } else {
@@ -2216,8 +2235,7 @@ class GRQValidator {
                     (sum, div) => sum + div.amount,
                     0,
                 );
-                const avgDividend = avgTotalDividends /
-                    avgDividends.length;
+                const avgDividend = avgTotalDividends / avgDividends.length;
                 return header +
                     `Average Dividend (90-day) working:\n= Total Dividends / Number of Dividends\n= $${
                         avgTotalDividends.toFixed(2)
