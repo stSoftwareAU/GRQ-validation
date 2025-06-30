@@ -1248,7 +1248,7 @@ class GRQValidator {
                     <div class="col-6"><strong>Progress vs Cost of Capital:</strong></div>
                     <div class="col-6">
                       <span class="clickable-value ${
-                    this.getPerformanceClass(performance)
+                    this.getPerformanceClass(this.calculateProgressVsCostOfCapitalValue(stock, performance))
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
                     this.calculateProgressVsCostOfCapital(
                         stock,
@@ -1439,7 +1439,7 @@ class GRQValidator {
     performance !== null ? performance.toFixed(1) + "%" : "N/A"
 }</span></td>
             <td><span class="clickable-value ${
-                    this.getPerformanceClass(performance)
+                    this.getPerformanceClass(this.calculateProgressVsCostOfCapitalValue(stock, performance))
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${stock.stock}" data-field="progress-vs-cost" data-stock="${stock.stock}">${
                     this.calculateProgressVsCostOfCapital(
                         stock,
@@ -1590,12 +1590,19 @@ class GRQValidator {
     calculateProgressVsCostOfCapital(stock, performance) {
         if (performance === null) return "N/A";
 
+        const value = this.calculateProgressVsCostOfCapitalValue(stock, performance);
+        return value.toFixed(1) + "%";
+    }
+
+    calculateProgressVsCostOfCapitalValue(stock, performance) {
+        if (performance === null) return null;
+
         // Use actual days elapsed for cost of capital calculation to match working
         const daysElapsed = this.getDaysElapsed(this.getScoreDate(this.selectedFile));
         const costOfCapitalReturn = (this.costOfCapital / 365) * daysElapsed;
 
         const excessReturn = performance - costOfCapitalReturn;
-        return excessReturn.toFixed(1) + "%";
+        return excessReturn;
     }
 
     calculateJudgement(stock, performance) {
