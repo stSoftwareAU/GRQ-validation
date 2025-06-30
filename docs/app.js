@@ -1296,7 +1296,7 @@ class GRQValidator {
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Ex-Dividend Date:</strong></div>
-                    <div class="col-6">${stock.exDividendDate || "N/A"}</div>
+                    <div class="col-6">${this.getNextExDividendDate(stock.stock)}</div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Average Dividend (90-day):</strong></div>
@@ -2464,6 +2464,24 @@ class GRQValidator {
         });
         
         return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+    }
+
+    getNextExDividendDate(stockSymbol) {
+        const dividends = this.dividendData?.[stockSymbol] || [];
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+        );
+
+        const nextExDividend = dividends.find((dividend) =>
+            dividend.exDivDate > scoreDate && dividend.exDivDate <= ninetyDayDate
+        );
+
+        if (nextExDividend) {
+            return nextExDividend.exDivDate.toISOString().split('T')[0];
+        } else {
+            return "N/A";
+        }
     }
 }
 
