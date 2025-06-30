@@ -853,7 +853,7 @@ class GRQValidator {
                 console.log("Attempting to generate trend line for:", this.selectedStock);
                 const trendLine = this.calculateTrendLine(stock, scoreDate);
                 console.log("Trend line result:", trendLine);
-                if (trendLine && trendLine.rSquared > 0.3) {
+                if (trendLine && trendLine.rSquared > 0.05) {
                     console.log("Trend line R-squared:", trendLine.rSquared, "- generating trend data");
                     // Create trend line data points - extend to exactly 90 days
                     const trendData = [];
@@ -915,11 +915,12 @@ class GRQValidator {
             }
         } else {
             // Portfolio view - add trend line if we haven't reached 90 days yet
+            console.log("Portfolio view - days elapsed:", daysElapsed);
             if (daysElapsed < 90) {
                 console.log("Attempting to generate portfolio trend line");
                 const portfolioTrendLine = this.calculatePortfolioTrendLine();
                 console.log("Portfolio trend line result:", portfolioTrendLine);
-                if (portfolioTrendLine && portfolioTrendLine.rSquared > 0.3) {
+                if (portfolioTrendLine && portfolioTrendLine.rSquared > 0.05) {
                     console.log("Portfolio trend line R-squared:", portfolioTrendLine.rSquared, "- generating trend data");
                     // Create trend line data points - extend to exactly 90 days
                     const trendData = [];
@@ -978,6 +979,8 @@ class GRQValidator {
                 } else {
                     console.log("Portfolio trend line not generated - R-squared:", portfolioTrendLine ? portfolioTrendLine.rSquared : "null");
                 }
+            } else {
+                console.log("Portfolio view - 90 days or more elapsed, no trend line needed");
             }
         }
 
@@ -1708,7 +1711,7 @@ class GRQValidator {
         if (daysElapsed < 90) {
             const trendLine = this.calculateTrendLine(stock, scoreDate);
             
-            if (trendLine && trendLine.rSquared > 0.3) { // Only use if trend is reasonably reliable
+            if (trendLine && trendLine.rSquared > 0.05) { // Only use if trend is reasonably reliable
                 const predicted = trendLine.predicted90DayPerformance;
                 const target = targetPercentage || 20; // Default to 20% if no target
                 
@@ -2537,15 +2540,20 @@ class GRQValidator {
         const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
         const intercept = (sumY - slope * sumX) / n;
 
-        // Predict performance at 90 days
-        const predicted90DayPerformance = slope * 90 + intercept;
+        // Force the trend line to start at zero on the score date
+        // Adjust the intercept so that when x=0 (score date), y=0
+        const adjustedIntercept = 0;
+        const adjustedSlope = slope;
+
+        // Predict performance at 90 days using the adjusted line
+        const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
 
         return {
-            slope,
-            intercept,
+            slope: adjustedSlope,
+            intercept: adjustedIntercept,
             predicted90DayPerformance,
             dataPoints,
-            rSquared: this.calculateRSquared(dataPoints, slope, intercept)
+            rSquared: this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept)
         };
     }
 
@@ -2576,6 +2584,8 @@ class GRQValidator {
         const portfolioData = this.calculatePortfolioData();
         const dataPoints = [];
         
+        console.log("Portfolio trend line - total portfolio data points:", portfolioData.length);
+        
         portfolioData.forEach((point) => {
             if (point.x >= scoreDate && point.x <= today) {
                 const daysSinceScore = (point.x.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24);
@@ -2586,8 +2596,17 @@ class GRQValidator {
             }
         });
 
+        console.log("Portfolio trend line - filtered data points:", dataPoints.length);
+        if (dataPoints.length > 0) {
+            console.log("Portfolio trend line - first point:", dataPoints[0]);
+            console.log("Portfolio trend line - last point:", dataPoints[dataPoints.length - 1]);
+        }
+
         // Need at least 3 data points for meaningful regression
-        if (dataPoints.length < 3) return null;
+        if (dataPoints.length < 3) {
+            console.log("Portfolio trend line - insufficient data points:", dataPoints.length);
+            return null;
+        }
 
         // Calculate linear regression (y = mx + b)
         const n = dataPoints.length;
@@ -2599,15 +2618,24 @@ class GRQValidator {
         const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
         const intercept = (sumY - slope * sumX) / n;
 
-        // Predict performance at 90 days
-        const predicted90DayPerformance = slope * 90 + intercept;
+        // Force the trend line to start at zero on the score date
+        // Adjust the intercept so that when x=0 (score date), y=0
+        const adjustedIntercept = 0;
+        const adjustedSlope = slope;
+
+        // Predict performance at 90 days using the adjusted line
+        const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
+
+        const rSquared = this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept);
+        
+        console.log("Portfolio trend line - slope:", adjustedSlope, "intercept:", adjustedIntercept, "R²:", rSquared);
 
         return {
-            slope,
-            intercept,
+            slope: adjustedSlope,
+            intercept: adjustedIntercept,
             predicted90DayPerformance,
             dataPoints,
-            rSquared: this.calculateRSquared(dataPoints, slope, intercept)
+            rSquared: rSquared
         };
     }
 
