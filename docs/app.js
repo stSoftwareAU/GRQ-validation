@@ -382,6 +382,14 @@ class GRQValidator {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 20,
+                        left: 10,
+                        right: 30
+                    }
+                },
                 plugins: {
                     title: {
                         display: true,
@@ -488,6 +496,9 @@ class GRQValidator {
                                 size: isMobile ? 8 : 10,
                             },
                         },
+                        // Extend x-axis to show full 90-day period when trend line is present
+                        min: this.selectedStock ? this.getScoreDate(this.selectedFile) : undefined,
+                        max: this.selectedStock ? new Date(this.getScoreDate(this.selectedFile).getTime() + (95 * 24 * 60 * 60 * 1000)) : undefined,
                     },
                     y: {
                         type: "linear",
@@ -508,6 +519,11 @@ class GRQValidator {
                             callback: function (value) {
                                 return value + "%";
                             },
+                        },
+                        // Add padding to ensure target dot is fully visible
+                        afterFit: function(axis) {
+                            axis.paddingTop = 20;
+                            axis.paddingBottom = 20;
                         },
                     },
                     y1: {
@@ -809,34 +825,66 @@ class GRQValidator {
         if (this.selectedStock) {
             const stock = this.scoreData.find((s) => s.stock === this.selectedStock);
             if (stock) {
-                const daysElapsed = this.getDaysElapsed(scoreDate);
-                if (daysElapsed < 90) {
-                    const trendLine = this.calculateTrendLine(stock, scoreDate);
-                    if (trendLine && trendLine.rSquared > 0.3) {
-                        // Create trend line data points
-                        const trendData = [];
-                        const trendMaxDays = Math.min(90, maxDays); // Don't extend beyond chart limit
-                        
-                        for (let day = 0; day <= trendMaxDays; day += 7) { // Weekly points for smooth line
-                            const predictedPerformance = trendLine.slope * day + trendLine.intercept;
-                            trendData.push({
-                                x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
-                                y: predictedPerformance
-                            });
-                        }
-                        
-                        datasets.push({
-                            label: "Trend Prediction",
-                            data: trendData,
-                            borderColor: "rgba(255, 140, 0, 0.8)",
-                            backgroundColor: "rgba(255, 140, 0, 0.1)",
-                            borderWidth: 2,
-                            borderDash: [5, 5], // Dashed line
-                            fill: false,
-                            pointRadius: 0,
-                            tension: 0.1,
+                console.log("Attempting to generate trend line for:", this.selectedStock);
+                const trendLine = this.calculateTrendLine(stock, scoreDate);
+                console.log("Trend line result:", trendLine);
+                if (trendLine && trendLine.rSquared > 0.3) {
+                    console.log("Trend line R-squared:", trendLine.rSquared, "- generating trend data");
+                    // Create trend line data points - extend to exactly 90 days
+                    const trendData = [];
+                    
+                    for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
+                        const predictedPerformance = trendLine.slope * day + trendLine.intercept;
+                        trendData.push({
+                            x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
+                            y: predictedPerformance
                         });
                     }
+                    
+                    // Ensure we have exactly 90 days as the last point
+                    const lastPoint = trendData[trendData.length - 1];
+                    const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+                    
+                    if (lastPointDay !== 90) {
+                        // Add the exact 90-day point
+                        const predictedPerformance90 = trendLine.slope * 90 + trendLine.intercept;
+                        trendData.push({
+                            x: new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)),
+                            y: predictedPerformance90
+                        });
+                    }
+                    
+                    console.log("Generated trend data points:", trendData.length);
+                    console.log("First trend point:", trendData[0]);
+                    console.log("Last trend point:", trendData[trendData.length - 1]);
+                    
+                    datasets.push({
+                        label: "Trend Prediction",
+                        data: trendData,
+                        borderColor: "rgba(138, 43, 226, 0.8)", // Purple color to distinguish from gold target dot
+                        backgroundColor: "rgba(138, 43, 226, 0.1)",
+                        borderWidth: 2,
+                        borderDash: [5, 5], // Dashed line
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1,
+                    });
+                    
+                    // Add a visible dot at the 90-day mark
+                    const ninetyDayPoint = trendData[trendData.length - 1]; // Last point is at 90 days
+                    datasets.push({
+                        label: "Trend 90-Day Point",
+                        data: [ninetyDayPoint],
+                        borderColor: "rgba(138, 43, 226, 1)", // Solid purple
+                        backgroundColor: "rgba(138, 43, 226, 1)",
+                        borderWidth: 0,
+                        fill: false,
+                        pointRadius: 6,
+                        pointStyle: "circle",
+                        showLine: false, // Only show the point, not a line
+                    });
+                } else {
+                    console.log("Trend line not generated - R-squared:", trendLine ? trendLine.rSquared : "null");
                 }
             }
         }
