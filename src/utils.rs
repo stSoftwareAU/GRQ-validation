@@ -239,7 +239,7 @@ pub fn create_market_data_csv(
     }
 
     writer.flush()?;
-    println!("CSV file created: {}", output_path);
+    println!("CSV file created: {output_path}");
 
     Ok(())
 }
@@ -397,10 +397,7 @@ pub fn create_dividend_csv(
     let end_date = score_date + Duration::days(180);
     let end_date_str = end_date.format("%Y-%m-%d").to_string();
 
-    println!(
-        "Reading dividend data from {} to {}",
-        score_file_date, end_date_str
-    );
+    println!("Reading dividend data from {score_file_date} to {end_date_str}");
 
     let file = File::create(output_path)?;
     let mut writer = Writer::from_writer(file);
@@ -471,9 +468,7 @@ mod tests {
         let actual = calculate_average_score(&scores);
         assert!(
             (actual - expected).abs() < 0.0001,
-            "Expected {expected}, got {actual}",
-            expected = expected,
-            actual = actual
+            "Expected {expected}, got {actual}"
         );
 
         let empty_scores: Vec<f64> = vec![];
