@@ -862,49 +862,47 @@ class GRQValidator {
             // ... existing target logic ...
         }
 
-        // Add trend line for stocks that haven't reached 90 days yet
+        // Add hybrid projection for stocks that haven't reached 90 days yet
         if (this.selectedStock) {
             const stock = this.scoreData.find((s) => s.stock === this.selectedStock);
             if (stock) {
-                console.log("Attempting to generate trend line for:", this.selectedStock);
-                const trendLine = this.calculateTrendLine(stock, scoreDate);
-                console.log("Trend line result:", trendLine);
-                if (trendLine && trendLine.rSquared > 0.05) {
-                    console.log("Trend line R-squared:", trendLine.rSquared, "- generating trend data");
-                    // Create trend line data points - extend to exactly 90 days
-                    const trendData = [];
+                console.log("Attempting to generate hybrid projection for:", this.selectedStock);
+                const hybridData = this.calculateHybridProjectionData(stock, scoreDate);
+                console.log("Hybrid projection result:", hybridData);
+                
+                if (hybridData && hybridData.projection.confidence > 0.2) {
+                    console.log("Hybrid projection confidence:", hybridData.projection.confidence, "- generating projection data");
                     
-                    for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
-                        const predictedPerformance = Math.max(trendLine.slope * day + trendLine.intercept, -100);
-                        trendData.push({
-                            x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
-                            y: predictedPerformance
-                        });
+                    const trendData = hybridData.data;
+                    const projection = hybridData.projection;
+                    
+                    console.log("Generated hybrid projection data points:", trendData.length);
+                    console.log("First projection point:", trendData[0]);
+                    console.log("Last projection point:", trendData[trendData.length - 1]);
+                    
+                    // Choose color based on projection method and direction
+                    let borderColor, backgroundColor, label;
+                    if (projection.projectionMethod === "dampened_trend") {
+                        if (projection.projected90DayPerformance > 0) {
+                            borderColor = "rgba(40, 167, 69, 0.8)"; // Green for upward
+                            backgroundColor = "rgba(40, 167, 69, 0.1)";
+                            label = "Hybrid Projection (Upward)";
+                        } else {
+                            borderColor = "rgba(220, 53, 69, 0.8)"; // Red for downward
+                            backgroundColor = "rgba(220, 53, 69, 0.1)";
+                            label = "Hybrid Projection (Downward)";
+                        }
+                    } else {
+                        borderColor = "rgba(138, 43, 226, 0.8)"; // Purple for target-based
+                        backgroundColor = "rgba(138, 43, 226, 0.1)";
+                        label = "Hybrid Projection (Target-Based)";
                     }
-                    
-                    // Ensure we have exactly 90 days as the last point
-                    const lastPoint = trendData[trendData.length - 1];
-                    const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
-                    
-                    if (lastPointDay !== 90) {
-                        // Add the exact 90-day point
-                        const predictedPerformance90 = Math.max(trendLine.slope * 90 + trendLine.intercept, -100);
-                        const tendDate=this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
-                        trendData.push({
-                            x: tendDate,
-                            y: predictedPerformance90
-                        });
-                    }
-                    
-                    console.log("Generated trend data points:", trendData.length);
-                    console.log("First trend point:", trendData[0]);
-                    console.log("Last trend point:", trendData[trendData.length - 1]);
                     
                     datasets.push({
-                        label: "Trend Prediction",
+                        label: label,
                         data: trendData,
-                        borderColor: "rgba(138, 43, 226, 0.8)", // Purple color to distinguish from gold target dot
-                        backgroundColor: "rgba(138, 43, 226, 0.1)",
+                        borderColor: borderColor,
+                        backgroundColor: backgroundColor,
                         borderWidth: 2,
                         borderDash: [5, 5], // Dashed line
                         fill: false,
@@ -915,10 +913,10 @@ class GRQValidator {
                     // Add a visible dot at the 90-day mark
                     const ninetyDayPoint = trendData[trendData.length - 1]; // Last point is at 90 days
                     datasets.push({
-                        label: "Trend 90-Day Point",
+                        label: "Hybrid 90-Day Point",
                         data: [ninetyDayPoint],
-                        borderColor: "rgba(138, 43, 226, 1)", // Solid purple
-                        backgroundColor: "rgba(138, 43, 226, 1)",
+                        borderColor: borderColor.replace("0.8", "1"), // Solid color
+                        backgroundColor: backgroundColor.replace("0.1", "1"),
                         borderWidth: 0,
                         fill: false,
                         pointRadius: 6,
@@ -926,69 +924,10 @@ class GRQValidator {
                         showLine: false, // Only show the point, not a line
                     });
                 } else {
-                    if (!trendLine) {
-                        console.log("Trend line not generated - calculateTrendLine returned null");
+                    if (!hybridData) {
+                        console.log("Hybrid projection not generated - calculateHybridProjectionData returned null");
                     } else {
-                        console.log("Trend line not generated - R-squared too low:", trendLine.rSquared, "(threshold: 0.05)");
-                        // For downward trends, be more lenient with R-squared
-                        if (trendLine.slope < 0 && (trendLine.rSquared > 0.01 || trendLine.rSquared < 0)) {
-                            console.log("But slope is negative (downward trend), showing trend line despite R-squared:", trendLine.rSquared);
-                            
-                            // Create trend line data points - extend to exactly 90 days
-                            const trendData = [];
-                            
-                            for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
-                                const predictedPerformance = Math.max(trendLine.slope * day + trendLine.intercept, -100);
-                                trendData.push({
-                                    x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
-                                    y: predictedPerformance
-                                });
-                            }
-                            
-                            // Ensure we have exactly 90 days as the last point
-                            const lastPoint = trendData[trendData.length - 1];
-                            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
-                            
-                            if (lastPointDay !== 90) {
-                                // Add the exact 90-day point
-                                const predictedPerformance90 = Math.max(trendLine.slope * 90 + trendLine.intercept, -100);
-                                const tendDate=this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
-                                trendData.push({
-                                    x: tendDate,
-                                    y: predictedPerformance90
-                                });
-                            }
-                            
-                            console.log("Generated trend data points (downward trend):", trendData.length);
-                            console.log("First trend point:", trendData[0]);
-                            console.log("Last trend point:", trendData[trendData.length - 1]);
-                            
-                            datasets.push({
-                                label: "Trend Prediction (Downward)",
-                                data: trendData,
-                                borderColor: "rgba(220, 53, 69, 0.8)", // Red color for downward trend
-                                backgroundColor: "rgba(220, 53, 69, 0.1)",
-                                borderWidth: 2,
-                                borderDash: [5, 5], // Dashed line
-                                fill: false,
-                                pointRadius: 0,
-                                tension: 0.1,
-                            });
-                            
-                            // Add a visible dot at the 90-day mark
-                            const ninetyDayPoint = trendData[trendData.length - 1]; // Last point is at 90 days
-                            datasets.push({
-                                label: "Trend 90-Day Point (Downward)",
-                                data: [ninetyDayPoint],
-                                borderColor: "rgba(220, 53, 69, 1)", // Solid red
-                                backgroundColor: "rgba(220, 53, 69, 1)",
-                                borderWidth: 0,
-                                fill: false,
-                                pointRadius: 6,
-                                pointStyle: "circle",
-                                showLine: false, // Only show the point, not a line
-                            });
-                        }
+                        console.log("Hybrid projection not generated - confidence too low:", hybridData.projection.confidence, "(threshold: 0.2)");
                     }
                 }
             }
@@ -1831,12 +1770,12 @@ class GRQValidator {
         const daysElapsed = this.getDaysElapsed(scoreDate);
         const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
 
-        // If we haven't reached 90 days yet, use trend prediction
+        // If we haven't reached 90 days yet, use hybrid projection
         if (daysElapsed < 90) {
-            const trendLine = this.calculateTrendLine(stock, scoreDate);
+            const hybridProjection = this.calculateHybridProjection(stock, scoreDate);
             
-            if (trendLine && trendLine.rSquared > 0.05) { // Only use if trend is reasonably reliable
-                const predicted = trendLine.predicted90DayPerformance;
+            if (hybridProjection && hybridProjection.confidence > 0.2) {
+                const predicted = hybridProjection.projected90DayPerformance;
                 const target = targetPercentage || 20; // Default to 20% if no target
                 
                 if (predicted >= target * 0.8) {
@@ -2361,12 +2300,29 @@ class GRQValidator {
                     stock,
                     judgementPerformance,
                 );
-                return header +
-                    `Judgement (90-day) working:\n= Based on performance vs 20% target\n= Performance: ${
-                        judgementPerformance !== null
-                            ? judgementPerformance.toFixed(1) + "%"
-                            : "N/A"
-                    }\n= Target: 20%\n= Judgement: ${judgement}`;
+                const judgementScoreDate = this.getScoreDate(this.selectedFile);
+                const judgementDaysElapsed = this.getDaysElapsed(judgementScoreDate);
+                const judgementTargetPercentage = this.calculateTargetPercentage(stock, judgementScoreDate);
+                
+                if (judgementDaysElapsed < 90) {
+                    const hybridProjection = this.calculateHybridProjection(stock, judgementScoreDate);
+                    if (hybridProjection && hybridProjection.confidence > 0.2) {
+                        return header +
+                            `Judgement (90-day) working:\n= Days elapsed: ${judgementDaysElapsed}\n= Current performance: ${
+                                judgementPerformance !== null ? judgementPerformance.toFixed(1) + "%" : "N/A"
+                            }\n= Target: ${judgementTargetPercentage !== null ? judgementTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Hybrid projection method: ${hybridProjection.projectionMethod}\n= Confidence: ${hybridProjection.confidence.toFixed(3)}\n= Predicted 90-day performance: ${hybridProjection.projected90DayPerformance.toFixed(1)}%\n= Judgement: ${judgement}`;
+                    } else {
+                        return header +
+                            `Judgement (90-day) working:\n= Days elapsed: ${judgementDaysElapsed}\n= Current performance: ${
+                                judgementPerformance !== null ? judgementPerformance.toFixed(1) + "%" : "N/A"
+                            }\n= Target: ${judgementTargetPercentage !== null ? judgementTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Insufficient data for reliable hybrid projection\n= Judgement: ${judgement}`;
+                    }
+                } else {
+                    return header +
+                        `Judgement (90-day) working:\n= Days elapsed: ${judgementDaysElapsed} (90-day period complete)\n= Final performance: ${
+                            judgementPerformance !== null ? judgementPerformance.toFixed(1) + "%" : "N/A"
+                        }\n= Target: ${judgementTargetPercentage !== null ? judgementTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Final judgement: ${judgement}`;
+                }
             case "status-projection":
                 const statusPerformance = this.calculateStockPerformance(stock);
                 const statusJudgement = this.calculateJudgement(stock, statusPerformance);
@@ -2375,17 +2331,17 @@ class GRQValidator {
                 const statusTargetPercentage = this.calculateTargetPercentage(stock, statusScoreDate);
                 
                 if (statusDaysElapsed < 90) {
-                    const trendLine = this.calculateTrendLine(stock, statusScoreDate);
-                    if (trendLine && trendLine.rSquared > 0.3) {
+                    const hybridProjection = this.calculateHybridProjection(stock, statusScoreDate);
+                    if (hybridProjection && hybridProjection.confidence > 0.2) {
                         return header +
                             `Status/Projection working:\n= Days elapsed: ${statusDaysElapsed}\n= Current performance: ${
                                 statusPerformance !== null ? statusPerformance.toFixed(1) + "%" : "N/A"
-                            }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Trend line R²: ${trendLine.rSquared.toFixed(3)}\n= Predicted 90-day performance: ${trendLine.predicted90DayPerformance.toFixed(1)}%\n= Status: ${statusJudgement}`;
+                            }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Hybrid projection method: ${hybridProjection.projectionMethod}\n= Confidence: ${hybridProjection.confidence.toFixed(3)}\n= Predicted 90-day performance: ${hybridProjection.projected90DayPerformance.toFixed(1)}%\n= Status: ${statusJudgement}`;
                     } else {
                         return header +
                             `Status/Projection working:\n= Days elapsed: ${statusDaysElapsed}\n= Current performance: ${
                                 statusPerformance !== null ? statusPerformance.toFixed(1) + "%" : "N/A"
-                            }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Insufficient data for reliable trend prediction\n= Status: ${statusJudgement}`;
+                            }\n= Target: ${statusTargetPercentage !== null ? statusTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Insufficient data for reliable hybrid projection\n= Status: ${statusJudgement}`;
                     }
                 } else {
                     return header +
@@ -2816,6 +2772,218 @@ class GRQValidator {
         } else {
             return "N/A";
         }
+    }
+
+    // Calculate hybrid projection for 90-day performance
+    calculateHybridProjection(stock, scoreDate) {
+        const marketData = this.marketData[stock.stock];
+        if (!marketData || marketData.length === 0) {
+            console.log(`calculateHybridProjection - ${stock.stock}: No market data available`);
+            return null;
+        }
+
+        const scoreDateTimestamp = scoreDate.getTime();
+        const today = new Date();
+        const daysElapsed = Math.floor((today.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24));
+        
+        console.log(`calculateHybridProjection - ${stock.stock}: Days elapsed: ${daysElapsed}`);
+        
+        // Get buy price
+        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+        if (!buyPriceObj || buyPriceObj.price <= 0) {
+            console.log(`calculateHybridProjection - ${stock.stock}: No valid buy price`);
+            return null;
+        }
+
+        // Calculate current performance
+        const currentPerformance = this.calculateStockPerformance(stock);
+        if (currentPerformance === null) {
+            console.log(`calculateHybridProjection - ${stock.stock}: Cannot calculate current performance`);
+            return null;
+        }
+
+        // Get target percentage
+        const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+        
+        console.log(`calculateHybridProjection - ${stock.stock}: Current performance: ${currentPerformance.toFixed(1)}%, Target: ${targetPercentage ? targetPercentage.toFixed(1) : 'N/A'}%`);
+
+        // Hybrid approach based on days elapsed
+        let projected90DayPerformance;
+        let projectionMethod;
+        let confidence;
+
+        if (daysElapsed < 30) {
+            // Short-term: Use dampened trend (reduce early volatility)
+            projectionMethod = "dampened_trend";
+            const trendLine = this.calculateTrendLine(stock, scoreDate);
+            
+            if (trendLine && trendLine.rSquared > 0.1) {
+                // Dampen the trend by 70% to account for mean reversion
+                const dampenedSlope = trendLine.slope * 0.3;
+                projected90DayPerformance = Math.max(dampenedSlope * 90, -100);
+                confidence = Math.min(trendLine.rSquared * 0.7, 0.8); // Reduce confidence for early projections
+                console.log(`calculateHybridProjection - ${stock.stock}: Using dampened trend (slope: ${trendLine.slope.toFixed(4)} → ${dampenedSlope.toFixed(4)})`);
+            } else {
+                // Fall back to target-based projection
+                projectionMethod = "target_based";
+                projected90DayPerformance = targetPercentage || -5; // Default to -5% if no target
+                confidence = 0.3; // Low confidence for early projections
+                console.log(`calculateHybridProjection - ${stock.stock}: Using target-based projection (insufficient trend data)`);
+            }
+        } else if (daysElapsed < 60) {
+            // Medium-term: Use dampened trend with higher confidence
+            projectionMethod = "dampened_trend";
+            const trendLine = this.calculateTrendLine(stock, scoreDate);
+            
+            if (trendLine && trendLine.rSquared > 0.05) {
+                // Dampen the trend by 50% for medium-term
+                const dampenedSlope = trendLine.slope * 0.5;
+                projected90DayPerformance = Math.max(dampenedSlope * 90, -100);
+                confidence = Math.min(trendLine.rSquared * 0.8, 0.9);
+                console.log(`calculateHybridProjection - ${stock.stock}: Using dampened trend (slope: ${trendLine.slope.toFixed(4)} → ${dampenedSlope.toFixed(4)})`);
+            } else {
+                // Fall back to target-based projection
+                projectionMethod = "target_based";
+                projected90DayPerformance = targetPercentage || -5;
+                confidence = 0.5;
+                console.log(`calculateHybridProjection - ${stock.stock}: Using target-based projection (insufficient trend data)`);
+            }
+        } else {
+            // Long-term: Use target-based projection or mean reversion
+            projectionMethod = "target_based";
+            
+            if (targetPercentage !== null) {
+                // Use current performance as primary indicator, with modest target influence
+                if (currentPerformance > 0) {
+                    // If positive, project slight improvement (20% of remaining gap)
+                    const gap = targetPercentage - currentPerformance;
+                    projected90DayPerformance = currentPerformance + (gap * 0.2);
+                } else {
+                    // If negative, project slight recovery toward zero
+                    projected90DayPerformance = currentPerformance * 0.6; // Move 40% toward zero
+                }
+                confidence = 0.5; // Lower confidence for long-term projections
+                console.log(`calculateHybridProjection - ${stock.stock}: Using conservative target-based projection`);
+            } else {
+                // Use mean reversion (move toward 0% performance)
+                const reversionRate = 0.4; // 40% reversion toward mean
+                projected90DayPerformance = currentPerformance * (1 - reversionRate);
+                confidence = 0.3;
+                console.log(`calculateHybridProjection - ${stock.stock}: Using mean reversion projection`);
+            }
+        }
+
+        // Ensure projection is within realistic bounds
+        projected90DayPerformance = Math.max(Math.min(projected90DayPerformance, 200), -100);
+
+        console.log(`calculateHybridProjection - ${stock.stock}: Final projection: ${projected90DayPerformance.toFixed(1)}% (method: ${projectionMethod}, confidence: ${confidence.toFixed(2)})`);
+
+        return {
+            projected90DayPerformance,
+            projectionMethod,
+            confidence,
+            daysElapsed,
+            currentPerformance,
+            targetPercentage
+        };
+    }
+
+    // Calculate hybrid projection data points for chart
+    calculateHybridProjectionData(stock, scoreDate) {
+        const projection = this.calculateHybridProjection(stock, scoreDate);
+        if (!projection) return null;
+
+        const trendData = [];
+        const scoreDateTimestamp = scoreDate.getTime();
+
+        // Helper to get midnight date
+        const getDayDate = (base, day) => this.setDateToMidnight(new Date(base.getTime() + day * 24 * 60 * 60 * 1000));
+
+        if (projection.projectionMethod === "dampened_trend") {
+            const trendLine = this.calculateTrendLine(stock, scoreDate);
+            if (trendLine) {
+                const dampenFactor = projection.daysElapsed < 30 ? 0.3 : 0.5;
+                const dampenedSlope = trendLine.slope * dampenFactor;
+                // Generate weekly points up to 90 days, starting at zero
+                for (let day = 0; day <= 90; day += 7) {
+                    trendData.push({
+                        x: getDayDate(scoreDate, day),
+                        y: Math.max(dampenedSlope * day, -100)
+                    });
+                }
+                // Ensure we have exactly 90 days as the last point
+                const lastPoint = trendData[trendData.length - 1];
+                const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+                if (lastPointDay !== 90) {
+                    trendData.push({
+                        x: getDayDate(scoreDate, 90),
+                        y: Math.max(dampenedSlope * 90, -100)
+                    });
+                }
+            }
+        } else {
+            // Target-based or mean reversion - use actual market data
+            const target = projection.targetPercentage || 0;
+            const current = projection.currentPerformance;
+            
+            // Calculate projection based on actual market performance
+            let projected90DayPerformance;
+            if (projection.projectionMethod === "target_based" && projection.targetPercentage !== null) {
+                // Use actual current performance as the primary indicator
+                // Only project modest improvement if current performance is positive
+                if (current > 0) {
+                    // If currently positive, project slight improvement (10% of remaining gap)
+                    const gap = target - current;
+                    projected90DayPerformance = current + (gap * 0.1);
+                } else {
+                    // If currently negative, project slight recovery toward zero
+                    projected90DayPerformance = current * 0.5; // Move halfway toward zero
+                }
+                
+                // Cap at reasonable bounds
+                projected90DayPerformance = Math.max(Math.min(projected90DayPerformance, target), -100);
+            } else {
+                // Mean reversion - move toward zero
+                const reversionRate = 0.5;
+                projected90DayPerformance = current * (1 - reversionRate);
+                projected90DayPerformance = Math.max(projected90DayPerformance, -100);
+            }
+            
+            // Generate weekly points up to 90 days, starting at zero
+            for (let day = 0; day <= 90; day += 7) {
+                let predictedPerformance;
+                if (projection.projectionMethod === "target_based" && projection.targetPercentage !== null) {
+                    // Linear interpolation from zero to the realistic projection
+                    const progress = Math.min(day / 90, 1);
+                    predictedPerformance = projected90DayPerformance * progress;
+                } else {
+                    // Mean reversion from zero
+                    const reversionProgress = Math.min(day / 90, 1);
+                    predictedPerformance = projected90DayPerformance * reversionProgress;
+                }
+                
+                predictedPerformance = Math.max(Math.min(predictedPerformance, 200), -100);
+                trendData.push({
+                    x: getDayDate(scoreDate, day),
+                    y: predictedPerformance
+                });
+            }
+            
+            // Ensure we have exactly 90 days as the last point
+            const lastPoint = trendData[trendData.length - 1];
+            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+            if (lastPointDay !== 90) {
+                trendData.push({
+                    x: getDayDate(scoreDate, 90),
+                    y: projected90DayPerformance
+                });
+            }
+        }
+        
+        return {
+            data: trendData,
+            projection: projection
+        };
     }
 }
 

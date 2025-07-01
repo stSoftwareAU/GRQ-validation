@@ -1,4 +1,4 @@
-import { assertEquals, assertExists, assertNotEquals, assertAlmostEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertExists, assertNotEquals, assertAlmostEquals } from "@std/assert";
 
 // Mock the GRQValidator class for integration testing
 class MockGRQValidator {
