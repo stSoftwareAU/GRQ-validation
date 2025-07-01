@@ -1,10 +1,17 @@
 use anyhow::Result;
 use grq_validation::utils::{
     create_dividend_csv_for_score_file, extract_ticker_codes_from_score_file,
+    DIVIDEND_DATA_BASE_PATH,
 };
 
 #[test]
 fn test_create_dividend_csv_for_first_score_file() -> Result<()> {
+    // Skip test if external data repository is not available
+    if !std::path::Path::new(DIVIDEND_DATA_BASE_PATH).exists() {
+        println!("Skipping test_create_dividend_csv_for_first_score_file: external data repository not available");
+        return Ok(());
+    }
+
     // Test with the March 5 score file which is older and should have dividends
     let score_file_path = "docs/scores/2025/March/5.tsv";
     let score_file_date = "2025-03-05";
