@@ -7,6 +7,10 @@ use chrono::{Duration, NaiveDate};
 use std::collections::HashMap;
 use std::path::Path;
 
+// Constants for external data paths
+pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2025Q1";
+pub const DIVIDEND_DATA_BASE_PATH: &str = "../GRQ-dividends";
+
 #[allow(dead_code)]
 pub fn validate_stock_symbol(symbol: &str) -> bool {
     // Basic validation for stock symbols
@@ -50,9 +54,8 @@ pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
 
 #[allow(dead_code)]
 pub fn get_market_data_path(ticker: &str) -> String {
-    // Convert "SEM" -> "data/S/SEM.json"
     let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
-    format!("../GRQ-shareprices2025Q1/data/{first_letter}/{ticker}.json")
+    format!("{MARKET_DATA_BASE_PATH}/data/{first_letter}/{ticker}.json")
 }
 
 #[allow(dead_code)]
@@ -98,12 +101,11 @@ pub fn extract_symbol_from_ticker(ticker: &str) -> String {
     symbol.replace('.', "-")
 }
 
-#[allow(dead_code)]
 pub fn read_market_data(symbol: &str) -> Result<MarketData> {
     use std::fs::File;
 
     let first_letter = symbol.chars().next().unwrap_or('X').to_uppercase();
-    let market_data_path = format!("../GRQ-shareprices2025Q1/data/{first_letter}/{symbol}.json");
+    let market_data_path = format!("{MARKET_DATA_BASE_PATH}/data/{first_letter}/{symbol}.json");
 
     let file = File::open(&market_data_path)?;
     let market_data: MarketData = serde_json::from_reader(file)?;
@@ -327,7 +329,7 @@ pub fn create_market_data_long_csv_for_score_file(
 /// For example: "SEM" -> "../GRQ-dividends/data/S/SEM.json"
 pub fn get_dividend_data_path(ticker: &str) -> String {
     let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
-    format!("../GRQ-dividends/data/{first_letter}/{ticker}.json")
+    format!("{DIVIDEND_DATA_BASE_PATH}/data/{first_letter}/{ticker}.json")
 }
 
 /// Reads dividend data for a given ticker
@@ -514,15 +516,15 @@ mod tests {
     fn test_get_market_data_path() {
         assert_eq!(
             get_market_data_path("SEM"),
-            "../GRQ-shareprices2025Q1/data/S/SEM.json"
+            format!("{MARKET_DATA_BASE_PATH}/data/S/SEM.json")
         );
         assert_eq!(
             get_market_data_path("AAPL"),
-            "../GRQ-shareprices2025Q1/data/A/AAPL.json"
+            format!("{MARKET_DATA_BASE_PATH}/data/A/AAPL.json")
         );
         assert_eq!(
             get_market_data_path("TSLA"),
-            "../GRQ-shareprices2025Q1/data/T/TSLA.json"
+            format!("{MARKET_DATA_BASE_PATH}/data/T/TSLA.json")
         );
     }
 
@@ -616,6 +618,12 @@ mod tests {
 
     #[test]
     fn test_read_market_data() {
+        // Skip test if external data repository is not available
+        if !std::path::Path::new(MARKET_DATA_BASE_PATH).exists() {
+            println!("Skipping test_read_market_data: external data repository not available");
+            return;
+        }
+
         let result = read_market_data("SEM");
         assert!(
             result.is_ok(),
@@ -634,6 +642,12 @@ mod tests {
 
     #[test]
     fn test_filter_market_data_by_date_range() {
+        // Skip test if external data repository is not available
+        if !std::path::Path::new(MARKET_DATA_BASE_PATH).exists() {
+            println!("Skipping test_filter_market_data_by_date_range: external data repository not available");
+            return;
+        }
+
         let result = read_market_data("SEM");
         if result.is_err() {
             println!("Market data file not found, skipping test");
@@ -667,13 +681,16 @@ mod tests {
     fn test_get_dividend_data_path() {
         assert_eq!(
             get_dividend_data_path("SEM"),
-            "../GRQ-dividends/data/S/SEM.json"
+            format!("{DIVIDEND_DATA_BASE_PATH}/data/S/SEM.json")
         );
         assert_eq!(
             get_dividend_data_path("AAPL"),
-            "../GRQ-dividends/data/A/AAPL.json"
+            format!("{DIVIDEND_DATA_BASE_PATH}/data/A/AAPL.json")
         );
-        assert_eq!(get_dividend_data_path(""), "../GRQ-dividends/data/X/.json");
+        assert_eq!(
+            get_dividend_data_path(""),
+            format!("{DIVIDEND_DATA_BASE_PATH}/data/X/.json")
+        );
     }
 
     #[test]
