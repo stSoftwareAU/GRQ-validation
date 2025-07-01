@@ -10,6 +10,28 @@ MAX_STALE_SECONDS=14400 # Four hours
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
 }
+setup_rust_environment() {
+    # Set up PATH for Rust/cargo
+    local cargo_paths=(
+        "$HOME/.cargo/bin"
+        "/usr/local/cargo/bin"
+        "/opt/cargo/bin"
+    )
+    
+    for path in "${cargo_paths[@]}"; do
+        if [[ -d "$path" ]]; then
+            export PATH="$path:$PATH"
+            break
+        fi
+    done
+    
+    # Source cargo environment if it exists
+    if [[ -f "$HOME/.cargo/env" ]]; then
+        source "$HOME/.cargo/env"
+    fi
+}
+
+setup_rust_environment
 
 # Change to repository directory
 cd "$REPO_DIR" || exit 1
