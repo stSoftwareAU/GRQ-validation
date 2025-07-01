@@ -875,7 +875,7 @@ class GRQValidator {
                     const trendData = [];
                     
                     for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
-                        const predictedPerformance = trendLine.slope * day + trendLine.intercept;
+                        const predictedPerformance = Math.max(trendLine.slope * day + trendLine.intercept, -100);
                         trendData.push({
                             x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
                             y: predictedPerformance
@@ -888,7 +888,7 @@ class GRQValidator {
                     
                     if (lastPointDay !== 90) {
                         // Add the exact 90-day point
-                        const predictedPerformance90 = trendLine.slope * 90 + trendLine.intercept;
+                        const predictedPerformance90 = Math.max(trendLine.slope * 90 + trendLine.intercept, -100);
                         const tendDate=this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
                         trendData.push({
                             x: tendDate,
@@ -938,7 +938,7 @@ class GRQValidator {
                             const trendData = [];
                             
                             for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
-                                const predictedPerformance = trendLine.slope * day + trendLine.intercept;
+                                const predictedPerformance = Math.max(trendLine.slope * day + trendLine.intercept, -100);
                                 trendData.push({
                                     x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
                                     y: predictedPerformance
@@ -951,7 +951,7 @@ class GRQValidator {
                             
                             if (lastPointDay !== 90) {
                                 // Add the exact 90-day point
-                                const predictedPerformance90 = trendLine.slope * 90 + trendLine.intercept;
+                                const predictedPerformance90 = Math.max(trendLine.slope * 90 + trendLine.intercept, -100);
                                 const tendDate=this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
                                 trendData.push({
                                     x: tendDate,
@@ -1005,7 +1005,7 @@ class GRQValidator {
                     const trendData = [];
                     
                     for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
-                        const predictedPerformance = portfolioTrendLine.slope * day + portfolioTrendLine.intercept;
+                        const predictedPerformance = Math.max(portfolioTrendLine.slope * day + portfolioTrendLine.intercept, -100);
                         trendData.push({
                             x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
                             y: predictedPerformance
@@ -1018,7 +1018,7 @@ class GRQValidator {
                     
                     if (lastPointDay !== 90) {
                         // Add the exact 90-day point
-                        const predictedPerformance90 = portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept;
+                        const predictedPerformance90 = Math.max(portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept, -100);
                         const trendDate = this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
                         trendData.push({
                             x: trendDate,
@@ -1068,7 +1068,7 @@ class GRQValidator {
                             const trendData = [];
                             
                             for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
-                                const predictedPerformance = portfolioTrendLine.slope * day + portfolioTrendLine.intercept;
+                                const predictedPerformance = Math.max(portfolioTrendLine.slope * day + portfolioTrendLine.intercept, -100);
                                 trendData.push({
                                     x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
                                     y: predictedPerformance
@@ -1081,7 +1081,7 @@ class GRQValidator {
                             
                             if (lastPointDay !== 90) {
                                 // Add the exact 90-day point
-                                const predictedPerformance90 = portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept;
+                                const predictedPerformance90 = Math.max(portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept, -100);
                                 const trendDate = this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
                                 trendData.push({
                                     x: trendDate,
@@ -2699,14 +2699,17 @@ class GRQValidator {
         // Predict performance at 90 days using the adjusted line
         const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
 
+        // Cap the prediction at -100% since you can't lose more than 100% of your investment
+        const cappedPredicted90DayPerformance = Math.max(predicted90DayPerformance, -100);
+
         const rSquared = this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept);
         
-        console.log(`calculateTrendLine - ${stock.stock}: Slope: ${adjustedSlope.toFixed(4)}, Intercept: ${adjustedIntercept}, R²: ${rSquared.toFixed(4)}, Predicted 90-day: ${predicted90DayPerformance.toFixed(1)}%`);
+        console.log(`calculateTrendLine - ${stock.stock}: Slope: ${adjustedSlope.toFixed(4)}, Intercept: ${adjustedIntercept}, R²: ${rSquared.toFixed(4)}, Predicted 90-day: ${cappedPredicted90DayPerformance.toFixed(1)}% (original: ${predicted90DayPerformance.toFixed(1)}%)`);
 
         return {
             slope: adjustedSlope,
             intercept: adjustedIntercept,
-            predicted90DayPerformance,
+            predicted90DayPerformance: cappedPredicted90DayPerformance,
             dataPoints,
             rSquared: rSquared
         };
@@ -2781,14 +2784,17 @@ class GRQValidator {
         // Predict performance at 90 days using the adjusted line
         const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
 
+        // Cap the prediction at -100% since you can't lose more than 100% of your investment
+        const cappedPredicted90DayPerformance = Math.max(predicted90DayPerformance, -100);
+
         const rSquared = this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept);
         
-        console.log("Portfolio trend line - slope:", adjustedSlope, "intercept:", adjustedIntercept, "R²:", rSquared);
+        console.log("Portfolio trend line - slope:", adjustedSlope, "intercept:", adjustedIntercept, "R²:", rSquared, "Predicted 90-day:", cappedPredicted90DayPerformance, "(original:", predicted90DayPerformance, ")");
 
         return {
             slope: adjustedSlope,
             intercept: adjustedIntercept,
-            predicted90DayPerformance,
+            predicted90DayPerformance: cappedPredicted90DayPerformance,
             dataPoints,
             rSquared: rSquared
         };
