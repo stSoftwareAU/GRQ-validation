@@ -40,7 +40,7 @@ echo "🔍 Running DenoJS tests..."
 deno test tests/*.ts
 
 echo "📝 Formatting JS, HTML, and CSS files with deno fmt..."
-deno fmt docs/*.js docs/*.html docs/*.css tests/*.ts
+deno fmt docs/*.js docs/*.html docs/*.css tests/*.ts helpers/*.ts
 
 echo "🔍 Running Deno lint..."
 deno lint tests/*.ts

@@ -13,6 +13,22 @@ class GRQValidator {
         this.loadIndex();
     }
 
+
+    // Helper function to format currency values with thousand separators
+    formatCurrency(value) {
+        if (value === null || value === undefined || isNaN(value)) {
+            return "N/A";
+        }
+        const money= new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value);
+        console.log(value, "->", money);
+        return money;
+    }
+
     // Centralized method to get Bootstrap breakpoint
     getBootstrapBreakpoint() {
         const width = window.innerWidth;
@@ -1305,15 +1321,27 @@ class GRQValidator {
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
-                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}" style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}">$${
-                    buyPrice !== null ? buyPrice.toFixed(2) : 'N/A'
-                }</span></div>
+                    <div class="col-6">
+                        <span class="clickable-value" 
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
+                            data-bs-title="Buy Price - ${stock.stock}" 
+                            data-field="buy-price" 
+                            data-stock="${stock.stock}"
+                            style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
+                        >${this.formatCurrency(buyPrice)}</span>
+                    </div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>90-Day Target:</strong></div>
-                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${
-                    target !== null ? target.toFixed(2) : "N/A"
-                }</span></div>
+                    <div class="col-6">
+                        <span class="clickable-value" 
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
+                            data-bs-title="90-Day Target - ${stock.stock}" 
+                            data-field="target" 
+                            data-stock="${stock.stock}"
+                            style="${target === null ? 'color: #c00; font-weight: bold;' : ''}"
+                        >${this.formatCurrency(target)}</span>
+                    </div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Target Percentage:</strong></div>
@@ -1325,9 +1353,14 @@ class GRQValidator {
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Current Price:</strong></div>
-                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${
-                    this.getCurrentPrice(stock.stock)
-                }</span></div>
+                    <div class="col-6">
+                        <span class="clickable-value" 
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
+                            data-bs-title="Current Price - ${stock.stock}" 
+                            data-field="current-price" 
+                            data-stock="${stock.stock}"
+                        >${this.formatCurrency(this.getCurrentPrice(stock.stock))}</span>
+                    </div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Performance:</strong></div>
@@ -1365,29 +1398,15 @@ class GRQValidator {
                   <h6 class="text-muted text-uppercase mb-3">Valuation & Dividends</h6>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Intrinsic Value (Basic):</strong></div>
-                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${
-                    stock.intrinsicValuePerShareBasic !== null
-                        ? "$" +
-                            this.adjustHistoricalPriceToCurrent(
-                                stock.intrinsicValuePerShareBasic,
-                                stock.stock,
-                                this.getScoreDate(this.selectedFile),
-                            ).toFixed(2)
-                        : "N/A"
-                }</span></div>
+                    <div class="col-6">
+                        <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
+                        data-bs-title="Intrinsic Value (Basic) - ${stock.stock}" data-field="intrinsic-basic" data-stock="${stock.stock}">${this.formatCurrency(this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareBasic, stock.stock, this.getScoreDate(this.selectedFile)))}</span></div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Intrinsic Value (Adjusted):</strong></div>
-                    <div class="col-6"><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${
-                    stock.intrinsicValuePerShareAdjusted !== null
-                        ? "$" +
-                            this.adjustHistoricalPriceToCurrent(
-                                stock.intrinsicValuePerShareAdjusted,
-                                stock.stock,
-                                this.getScoreDate(this.selectedFile),
-                            ).toFixed(2)
-                        : "N/A"
-                }</span></div>
+                    <div class="col-6">
+                        <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
+                        data-bs-title="Intrinsic Value (Adjusted) - ${stock.stock}" data-field="intrinsic-adjusted" data-stock="${stock.stock}">${this.formatCurrency(this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareAdjusted, stock.stock, this.getScoreDate(this.selectedFile)))}</span></div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Ex-Dividend Date:</strong></div>
@@ -1517,17 +1536,20 @@ class GRQValidator {
                 // Aggregate view
                 row.innerHTML = `
             <td class="clickable-stock" onclick="validator.showStockDetails('${stock.stock}')">${stock.stock}</td>
-            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" data-field="buy-price" data-stock="${stock.stock}" style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}">$${
-                    buyPrice !== null ? buyPrice.toFixed(2) : 'N/A'
+            <td>
+                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${stock.stock}" 
+                    data-field="buy-price" data-stock="${stock.stock}" 
+                    style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
+                >${this.formatCurrency(buyPrice)}</span>
+            </td>
+            <td>
+            <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">${this.formatCurrency(target)
                 }</span></td>
-            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">$${
-                    target !== null ? target.toFixed(2) : "N/A"
-                }</span></td>
-            <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${
-                    currentPrice !== null
-                        ? "$" + currentPrice.toFixed(2)
-                        : "N/A"
-                }</span></td>
+            <td>
+                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
+                   data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${this.formatCurrency(currentPrice)}
+                </span>
+            </td>
             <td><span class="clickable-value ${
                     this.getPerformanceClass(performance)
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Gain/Loss - ${stock.stock}" data-field="gain-loss" data-stock="${stock.stock}">${
@@ -1624,30 +1646,6 @@ class GRQValidator {
             });
         });
 
-        // Add document click handler to close popovers when clicking outside
-        // Temporarily disabled to fix popover issues
-        /*
-      document.addEventListener('click', (event) => {
-        const clickableValues = document.querySelectorAll('.clickable-value');
-        let clickedOnPopover = false;
-
-        clickableValues.forEach(element => {
-          if (element.contains(event.target) || event.target.closest('.popover')) {
-            clickedOnPopover = true;
-          }
-        });
-
-        if (!clickedOnPopover) {
-          // Close all open popovers
-          clickableValues.forEach(element => {
-            const popover = bootstrap.Popover.getInstance(element);
-            if (popover && popover._isShown()) {
-              popover.hide();
-            }
-          });
-        }
-      });
-      */
     }
 
     getDividendsWithin90Days(stockSymbol) {
@@ -2088,9 +2086,7 @@ class GRQValidator {
                         }`;
                 } else {
                     return header +
-                        `90-Day Target working:\n= Target price from score file\n= $${
-                            stock.target.toFixed(2)
-                        }\n= $${adjustedTarget.toFixed(2)}`;
+                        `90-Day Target working:\n= Target price from score file\n= ${this.formatCurrency(stock.target)}\n= ${this.formatCurrency(adjustedTarget)}`;
                 }
             case "target-percentage":
                 const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
