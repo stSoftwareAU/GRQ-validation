@@ -195,7 +195,10 @@ pub fn create_market_data_csv(
                             all_dates.insert(date.clone());
                         }
                         all_market_data.insert(symbol.clone(), filtered_data);
-                        println!("  {symbol}: {} data points", all_market_data[symbol].len());
+                        println!(
+                            "  {symbol}: {count} data points",
+                            count = all_market_data[symbol].len()
+                        );
                     }
                     Err(e) => {
                         println!("  {symbol}: Error filtering data: {e}");
@@ -552,7 +555,11 @@ mod tests {
         // Check that all records have valid stock symbols
         for (i, record) in stock_records.iter().enumerate() {
             if !validate_stock_symbol(&record.stock) {
-                println!("Invalid stock symbol at row {}: {}", i + 2, record.stock);
+                println!(
+                    "Invalid stock symbol at row {row}: {symbol}",
+                    row = i + 2,
+                    symbol = record.stock
+                );
             }
             assert!(validate_stock_symbol(&record.stock));
         }

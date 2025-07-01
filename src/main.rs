@@ -103,7 +103,7 @@ fn main() -> Result<()> {
                     None,
                 ) {
                     Ok(output_path) => {
-                        info!("Successfully created market data CSV: {}", output_path);
+                        info!("Successfully created market data CSV: {output_path}");
 
                         // Also create dividend CSV file
                         match create_dividend_csv_for_score_file(
@@ -112,13 +112,11 @@ fn main() -> Result<()> {
                             &score_entry.date,
                         ) {
                             Ok(_) => {
-                                info!("Successfully created dividend CSV for {}", score_file_path);
+                                info!("Successfully created dividend CSV for {score_file_path}");
                             }
                             Err(e) => {
                                 log::warn!(
-                                    "Failed to create dividend CSV for {}: {}",
-                                    score_file_path,
-                                    e
+                                    "Failed to create dividend CSV for {score_file_path}: {e}"
                                 );
                             }
                         }
@@ -126,26 +124,19 @@ fn main() -> Result<()> {
                         processed_count += 1;
                     }
                     Err(e) => {
-                        log::error!("Failed to create CSV for {}: {}", score_file_path, e);
+                        log::error!("Failed to create CSV for {score_file_path}: {e}");
                         error_count += 1;
                     }
                 }
             }
             Err(e) => {
-                log::error!(
-                    "Failed to read ticker codes from {}: {}",
-                    score_file_path,
-                    e
-                );
+                log::error!("Failed to read ticker codes from {score_file_path}: {e}");
                 error_count += 1;
             }
         }
     }
 
-    info!(
-        "Processing completed: {} successful, {} errors",
-        processed_count, error_count
-    );
+    info!("Processing completed: {processed_count} successful, {error_count} errors");
 
     if error_count > 0 {
         log::warn!("Some files had errors, but processing continued");

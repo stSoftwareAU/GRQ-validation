@@ -14,11 +14,11 @@ echo "🔍 Checking code formatting..."
 cargo fmt --all -- --check
 
 echo "🔧 Running linter..."
-cargo clippy --all-targets --all-features -- -D warnings --deny warnings
+cargo clippy --all-targets --all-features -- -D warnings -D clippy::uninlined_format_args
 
 # Also run clippy on test files specifically
 echo "🔍 Checking test files for clippy warnings..."
-cargo clippy --tests --all-features -- -D warnings --deny warnings
+cargo clippy --tests --all-features -- -D warnings -D clippy::uninlined_format_args
 
 echo "✅ Running type checks..."
 cargo check --all-targets --all-features
