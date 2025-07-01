@@ -29,7 +29,7 @@ fn test_create_market_data_long_csv_for_first_score_file() -> Result<()> {
         Some(output_dir),
     )?;
 
-    println!("Created market data CSV: {}", output_path);
+    println!("Created market data CSV: {output_path}");
 
     // Verify the file was created and has content
     let content = std::fs::read_to_string(&output_path)?;

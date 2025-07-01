@@ -16,15 +16,12 @@ cargo fmt --all -- --check
 echo "🔧 Running linter..."
 cargo clippy --all-targets --all-features -- -D warnings --deny warnings
 
+# Also run clippy on test files specifically
+echo "🔍 Checking test files for clippy warnings..."
+cargo clippy --tests --all-features -- -D warnings --deny warnings
+
 echo "✅ Running type checks..."
 cargo check --all-targets --all-features
-
-# Additional clippy check to ensure no warnings
-echo "🔍 Double-checking clippy warnings..."
-cargo clippy --all-targets --all-features -- -D warnings || {
-    echo "❌ Clippy warnings found! Please fix them before committing."
-    exit 1
-}
 
 echo "🧪 Running tests..."
 cargo test --all-targets --all-features --verbose
