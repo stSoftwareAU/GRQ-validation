@@ -25,7 +25,7 @@ class GRQValidator {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(value);
-        console.log(value, "->", money);
+
         return money;
     }
 
@@ -926,7 +926,70 @@ class GRQValidator {
                         showLine: false, // Only show the point, not a line
                     });
                 } else {
-                    console.log("Trend line not generated - R-squared:", trendLine ? trendLine.rSquared : "null");
+                    if (!trendLine) {
+                        console.log("Trend line not generated - calculateTrendLine returned null");
+                    } else {
+                        console.log("Trend line not generated - R-squared too low:", trendLine.rSquared, "(threshold: 0.05)");
+                        // For downward trends, be more lenient with R-squared
+                        if (trendLine.slope < 0 && (trendLine.rSquared > 0.01 || trendLine.rSquared < 0)) {
+                            console.log("But slope is negative (downward trend), showing trend line despite R-squared:", trendLine.rSquared);
+                            
+                            // Create trend line data points - extend to exactly 90 days
+                            const trendData = [];
+                            
+                            for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
+                                const predictedPerformance = trendLine.slope * day + trendLine.intercept;
+                                trendData.push({
+                                    x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
+                                    y: predictedPerformance
+                                });
+                            }
+                            
+                            // Ensure we have exactly 90 days as the last point
+                            const lastPoint = trendData[trendData.length - 1];
+                            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+                            
+                            if (lastPointDay !== 90) {
+                                // Add the exact 90-day point
+                                const predictedPerformance90 = trendLine.slope * 90 + trendLine.intercept;
+                                const tendDate=this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
+                                trendData.push({
+                                    x: tendDate,
+                                    y: predictedPerformance90
+                                });
+                            }
+                            
+                            console.log("Generated trend data points (downward trend):", trendData.length);
+                            console.log("First trend point:", trendData[0]);
+                            console.log("Last trend point:", trendData[trendData.length - 1]);
+                            
+                            datasets.push({
+                                label: "Trend Prediction (Downward)",
+                                data: trendData,
+                                borderColor: "rgba(220, 53, 69, 0.8)", // Red color for downward trend
+                                backgroundColor: "rgba(220, 53, 69, 0.1)",
+                                borderWidth: 2,
+                                borderDash: [5, 5], // Dashed line
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1,
+                            });
+                            
+                            // Add a visible dot at the 90-day mark
+                            const ninetyDayPoint = trendData[trendData.length - 1]; // Last point is at 90 days
+                            datasets.push({
+                                label: "Trend 90-Day Point (Downward)",
+                                data: [ninetyDayPoint],
+                                borderColor: "rgba(220, 53, 69, 1)", // Solid red
+                                backgroundColor: "rgba(220, 53, 69, 1)",
+                                borderWidth: 0,
+                                fill: false,
+                                pointRadius: 6,
+                                pointStyle: "circle",
+                                showLine: false, // Only show the point, not a line
+                            });
+                        }
+                    }
                 }
             }
         } else {
@@ -993,7 +1056,70 @@ class GRQValidator {
                         showLine: false, // Only show the point, not a line
                     });
                 } else {
-                    console.log("Portfolio trend line not generated - R-squared:", portfolioTrendLine ? portfolioTrendLine.rSquared : "null");
+                    if (!portfolioTrendLine) {
+                        console.log("Portfolio trend line not generated - calculatePortfolioTrendLine returned null");
+                    } else {
+                        console.log("Portfolio trend line not generated - R-squared too low:", portfolioTrendLine.rSquared, "(threshold: 0.05)");
+                        // For downward trends, be more lenient with R-squared
+                        if (portfolioTrendLine.slope < 0 && (portfolioTrendLine.rSquared > 0.01 || portfolioTrendLine.rSquared < 0)) {
+                            console.log("But portfolio slope is negative (downward trend), showing trend line despite R-squared:", portfolioTrendLine.rSquared);
+                            
+                            // Create trend line data points - extend to exactly 90 days
+                            const trendData = [];
+                            
+                            for (let day = 0; day <= 90; day += 7) { // Weekly points for smooth line, extend to 90 days
+                                const predictedPerformance = portfolioTrendLine.slope * day + portfolioTrendLine.intercept;
+                                trendData.push({
+                                    x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
+                                    y: predictedPerformance
+                                });
+                            }
+                            
+                            // Ensure we have exactly 90 days as the last point
+                            const lastPoint = trendData[trendData.length - 1];
+                            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+                            
+                            if (lastPointDay !== 90) {
+                                // Add the exact 90-day point
+                                const predictedPerformance90 = portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept;
+                                const trendDate = this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
+                                trendData.push({
+                                    x: trendDate,
+                                    y: predictedPerformance90
+                                });
+                            }
+                            
+                            console.log("Generated portfolio trend data points (downward trend):", trendData.length);
+                            console.log("First portfolio trend point:", trendData[0]);
+                            console.log("Last portfolio trend point:", trendData[trendData.length - 1]);
+                            
+                            datasets.push({
+                                label: "Portfolio Trend Prediction (Downward)",
+                                data: trendData,
+                                borderColor: "rgba(220, 53, 69, 0.8)", // Red color for downward trend
+                                backgroundColor: "rgba(220, 53, 69, 0.1)",
+                                borderWidth: 2,
+                                borderDash: [5, 5], // Dashed line
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1,
+                            });
+                            
+                            // Add a visible dot at the 90-day mark
+                            const ninetyDayPoint = trendData[trendData.length - 1]; // Last point is at 90 days
+                            datasets.push({
+                                label: "Portfolio Trend 90-Day Point (Downward)",
+                                data: [ninetyDayPoint],
+                                borderColor: "rgba(220, 53, 69, 1)", // Solid red
+                                backgroundColor: "rgba(220, 53, 69, 1)",
+                                borderWidth: 0,
+                                fill: false,
+                                pointRadius: 6,
+                                pointStyle: "circle",
+                                showLine: false, // Only show the point, not a line
+                            });
+                        }
+                    }
                 }
             } else {
                 console.log("Portfolio view - 90 days or more elapsed, no trend line needed");
@@ -2401,7 +2527,13 @@ class GRQValidator {
 
     getBuyPrice(stockSymbol, scoreDate) {
         const marketData = this.marketData[stockSymbol];
-        if (!marketData) return null;
+        if (!marketData) {
+            console.log(`getBuyPrice - ${stockSymbol}: No market data available`);
+            return null;
+        }
+
+        console.log(`getBuyPrice - ${stockSymbol}: Looking for price on or after ${scoreDate.toISOString().split('T')[0]}`);
+        console.log(`getBuyPrice - ${stockSymbol}: Available market data dates:`, marketData.map(p => p.date.toISOString().split('T')[0]).slice(0, 5), "...");
 
         // Try to get the price on the exact score date or up to 5 days forward
         for (let offset = 0; offset <= 5; offset++) {
@@ -2416,17 +2548,20 @@ class GRQValidator {
                 return pointDate.getTime() === candidateDate.getTime();
             });
             if (candidateData) {
+                const adjustedPrice = this.adjustHistoricalPriceToCurrent(
+                    (candidateData.high + candidateData.low) / 2,
+                    stockSymbol,
+                    scoreDate,
+                );
+                console.log(`getBuyPrice - ${stockSymbol}: Found price on ${candidateDate.toISOString().split('T')[0]}: $${adjustedPrice.toFixed(2)}`);
                 return {
-                    price: this.adjustHistoricalPriceToCurrent(
-                        (candidateData.high + candidateData.low) / 2,
-                        stockSymbol,
-                        scoreDate,
-                    ),
+                    price: adjustedPrice,
                     dateUsed: candidateDate
                 };
             }
         }
         // No price found within 5 days
+        console.log(`getBuyPrice - ${stockSymbol}: No price found within 5 days of score date`);
         return null;
     }
 
@@ -2488,16 +2623,27 @@ class GRQValidator {
     // Calculate linear regression for trend prediction
     calculateTrendLine(stock, scoreDate) {
         const marketData = this.marketData[stock.stock];
-        if (!marketData || marketData.length === 0) return null;
+        if (!marketData || marketData.length === 0) {
+            console.log(`calculateTrendLine - ${stock.stock}: No market data available`);
+            return null;
+        }
 
         const scoreDateTimestamp = scoreDate.getTime();
         const today = new Date();
+        
+        console.log(`calculateTrendLine - ${stock.stock}: Score date: ${scoreDate.toISOString().split('T')[0]}, Today: ${today.toISOString().split('T')[0]}`);
+        console.log(`calculateTrendLine - ${stock.stock}: Total market data points: ${marketData.length}`);
         
         // Get data points from score date to today (but only if we have at least 3 data points)
         const dataPoints = [];
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
         
-        if (!buyPriceObj || buyPriceObj.price <= 0) return null;
+        if (!buyPriceObj || buyPriceObj.price <= 0) {
+            console.log(`calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
+            return null;
+        }
+
+        console.log(`calculateTrendLine - ${stock.stock}: Buy price: $${buyPriceObj.price.toFixed(2)}`);
 
         marketData.forEach((point) => {
             if (point.date >= scoreDate && point.date <= today) {
@@ -2523,8 +2669,17 @@ class GRQValidator {
             }
         });
 
+        console.log(`calculateTrendLine - ${stock.stock}: Data points collected: ${dataPoints.length}`);
+        if (dataPoints.length > 0) {
+            console.log(`calculateTrendLine - ${stock.stock}: First data point:`, dataPoints[0]);
+            console.log(`calculateTrendLine - ${stock.stock}: Last data point:`, dataPoints[dataPoints.length - 1]);
+        }
+
         // Need at least 3 data points for meaningful regression
-        if (dataPoints.length < 3) return null;
+        if (dataPoints.length < 3) {
+            console.log(`calculateTrendLine - ${stock.stock}: Insufficient data points (${dataPoints.length} < 3)`);
+            return null;
+        }
 
         // Calculate linear regression (y = mx + b)
         const n = dataPoints.length;
@@ -2544,12 +2699,16 @@ class GRQValidator {
         // Predict performance at 90 days using the adjusted line
         const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
 
+        const rSquared = this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept);
+        
+        console.log(`calculateTrendLine - ${stock.stock}: Slope: ${adjustedSlope.toFixed(4)}, Intercept: ${adjustedIntercept}, R²: ${rSquared.toFixed(4)}, Predicted 90-day: ${predicted90DayPerformance.toFixed(1)}%`);
+
         return {
             slope: adjustedSlope,
             intercept: adjustedIntercept,
             predicted90DayPerformance,
             dataPoints,
-            rSquared: this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept)
+            rSquared: rSquared
         };
     }
 
