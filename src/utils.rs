@@ -52,10 +52,7 @@ pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
 pub fn get_market_data_path(ticker: &str) -> String {
     // Convert "SEM" -> "data/S/SEM.json"
     let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
-    format!(
-        "../GRQ-shareprices2025Q1/data/{}/{}.json",
-        first_letter, ticker
-    )
+    format!("../GRQ-shareprices2025Q1/data/{first_letter}/{ticker}.json")
 }
 
 #[allow(dead_code)]
@@ -106,10 +103,7 @@ pub fn read_market_data(symbol: &str) -> Result<MarketData> {
     use std::fs::File;
 
     let first_letter = symbol.chars().next().unwrap_or('X').to_uppercase();
-    let market_data_path = format!(
-        "../GRQ-shareprices2025Q1/data/{}/{}.json",
-        first_letter, symbol
-    );
+    let market_data_path = format!("../GRQ-shareprices2025Q1/data/{first_letter}/{symbol}.json");
 
     let file = File::open(&market_data_path)?;
     let market_data: MarketData = serde_json::from_reader(file)?;
@@ -185,10 +179,7 @@ pub fn create_market_data_csv(
     let end_date = score_date + Duration::days(180);
     let end_date_str = end_date.format("%Y-%m-%d").to_string();
 
-    println!(
-        "Reading market data from {} to {}",
-        score_file_date, end_date_str
-    );
+    println!("Reading market data from {score_file_date} to {end_date_str}");
 
     // Collect all market data
     let mut all_market_data: HashMap<String, Vec<(String, f64)>> = HashMap::new();
@@ -204,19 +195,15 @@ pub fn create_market_data_csv(
                             all_dates.insert(date.clone());
                         }
                         all_market_data.insert(symbol.clone(), filtered_data);
-                        println!(
-                            "  {}: {} data points",
-                            symbol,
-                            all_market_data[symbol].len()
-                        );
+                        println!("  {symbol}: {} data points", all_market_data[symbol].len());
                     }
                     Err(e) => {
-                        println!("  {}: Error filtering data: {}", symbol, e);
+                        println!("  {symbol}: Error filtering data: {e}");
                     }
                 }
             }
             Err(e) => {
-                println!("  {}: Error reading market data: {}", symbol, e);
+                println!("  {symbol}: Error reading market data: {e}");
             }
         }
     }
@@ -241,12 +228,12 @@ pub fn create_market_data_csv(
                         }
                     }
                     Err(e) => {
-                        println!("  {}: Error filtering data: {}", symbol, e);
+                        println!("  {symbol}: Error filtering data: {e}");
                     }
                 }
             }
             Err(e) => {
-                println!("  {}: Error reading market data: {}", symbol, e);
+                println!("  {symbol}: Error reading market data: {e}");
             }
         }
     }
@@ -337,7 +324,7 @@ pub fn create_market_data_long_csv_for_score_file(
 /// For example: "SEM" -> "../GRQ-dividends/data/S/SEM.json"
 pub fn get_dividend_data_path(ticker: &str) -> String {
     let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
-    format!("../GRQ-dividends/data/{}/{}.json", first_letter, ticker)
+    format!("../GRQ-dividends/data/{first_letter}/{ticker}.json")
 }
 
 /// Reads dividend data for a given ticker
@@ -436,24 +423,18 @@ pub fn create_dividend_csv(
                         }
                     }
                     Err(e) => {
-                        println!(
-                            "Warning: Could not filter dividend data for {}: {}",
-                            symbol, e
-                        );
+                        println!("Warning: Could not filter dividend data for {symbol}: {e}");
                     }
                 }
             }
             Err(e) => {
-                println!(
-                    "Warning: Could not read dividend data for {}: {}",
-                    symbol, e
-                );
+                println!("Warning: Could not read dividend data for {symbol}: {e}");
             }
         }
     }
 
     writer.flush()?;
-    println!("Dividend CSV file created: {}", output_path);
+    println!("Dividend CSV file created: {output_path}");
 
     Ok(())
 }
@@ -490,9 +471,9 @@ mod tests {
         let actual = calculate_average_score(&scores);
         assert!(
             (actual - expected).abs() < 0.0001,
-            "Expected {}, got {}",
-            expected,
-            actual
+            "Expected {expected}, got {actual}",
+            expected = expected,
+            actual = actual
         );
 
         let empty_scores: Vec<f64> = vec![];
@@ -634,10 +615,11 @@ mod tests {
     #[test]
     fn test_read_market_data() {
         let result = read_market_data("SEM");
-        if result.is_err() {
-            println!("Market data file not found, skipping test");
-            return;
-        }
+        assert!(
+            result.is_ok(),
+            "Failed to read market data: {:?}",
+            result.err()
+        );
 
         let market_data = result.unwrap();
         assert_eq!(market_data.meta_data.symbol, "SEM");
