@@ -108,11 +108,18 @@ class MockGRQValidator {
     return Math.min(diffDays, 90);
   }
 
-  getBuyPrice(_stockSymbol: string, _scoreDate: Date): { price: number; dateUsed: Date } | null {
+  getBuyPrice(
+    _stockSymbol: string,
+    _scoreDate: Date,
+  ): { price: number; dateUsed: Date } | null {
     return { price: 15.0, dateUsed: new Date("2025-02-18") };
   }
 
-  adjustHistoricalPriceToCurrent(price: number, _stockSymbol: string, _historicalDate: Date): number {
+  adjustHistoricalPriceToCurrent(
+    price: number,
+    _stockSymbol: string,
+    _historicalDate: Date,
+  ): number {
     return price;
   }
 
@@ -145,7 +152,9 @@ class MockGRQValidator {
   prepareChartData(): { datasets: Dataset[] } {
     const datasets: Dataset[] = [];
     const scoreDate = this.getScoreDate();
-    const ninetyDayDate = new Date(scoreDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const ninetyDayDate = new Date(
+      scoreDate.getTime() + 90 * 24 * 60 * 60 * 1000,
+    );
 
     if (this.selectedStock) {
       // Single stock view
@@ -153,7 +162,10 @@ class MockGRQValidator {
       if (stock) {
         const marketData = this.marketData[stock.stock];
         if (marketData && marketData.length > 0) {
-          const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+          const targetPercentage = this.calculateTargetPercentage(
+            stock,
+            scoreDate,
+          );
           const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
 
           if (!buyPriceObj || !buyPriceObj.price || buyPriceObj.price <= 0) {
@@ -183,7 +195,9 @@ class MockGRQValidator {
             });
 
             // Filter out any invalid y values
-            const cleanBefore90 = before90Days.filter((p) => typeof p.y === "number" && !isNaN(p.y));
+            const cleanBefore90 = before90Days.filter((p) =>
+              typeof p.y === "number" && !isNaN(p.y)
+            );
 
             if (cleanBefore90.length > 0) {
               datasets.push({
@@ -237,7 +251,9 @@ class MockGRQValidator {
             before90Days.push(point);
           }
         });
-        const cleanBefore90 = before90Days.filter((p) => typeof p.y === "number" && !isNaN(p.y));
+        const cleanBefore90 = before90Days.filter((p) =>
+          typeof p.y === "number" && !isNaN(p.y)
+        );
         if (cleanBefore90.length > 0) {
           datasets.push({
             label: "Performance",
@@ -297,8 +313,16 @@ Deno.test("Chart Data Preparation - Invalid Y Values", async (t) => {
     const chartData = validator.prepareChartData();
 
     // Should return empty datasets when no buy price
-    assertEquals(chartData.datasets.length, 1, "Should only have cost of capital line");
-    assertEquals(chartData.datasets[0].label, "Cost of Capital", "Should have cost of capital line");
+    assertEquals(
+      chartData.datasets.length,
+      1,
+      "Should only have cost of capital line",
+    );
+    assertEquals(
+      chartData.datasets[0].label,
+      "Cost of Capital",
+      "Should have cost of capital line",
+    );
   });
 
   await t.step("should handle zero buy price gracefully", () => {
@@ -307,13 +331,24 @@ Deno.test("Chart Data Preparation - Invalid Y Values", async (t) => {
     const chartData = validator.prepareChartData();
 
     // Should return empty datasets when buy price is zero
-    assertEquals(chartData.datasets.length, 1, "Should only have cost of capital line");
-    assertEquals(chartData.datasets[0].label, "Cost of Capital", "Should have cost of capital line");
+    assertEquals(
+      chartData.datasets.length,
+      1,
+      "Should only have cost of capital line",
+    );
+    assertEquals(
+      chartData.datasets[0].label,
+      "Cost of Capital",
+      "Should have cost of capital line",
+    );
   });
 
   await t.step("should filter out invalid y values", () => {
     // Restore valid buy price
-    validator.getBuyPrice = () => ({ price: 15.0, dateUsed: new Date("2025-02-18") });
+    validator.getBuyPrice = () => ({
+      price: 15.0,
+      dateUsed: new Date("2025-02-18"),
+    });
     const chartData = validator.prepareChartData();
 
     // Check that all data points have valid y values
@@ -325,4 +360,4 @@ Deno.test("Chart Data Preparation - Invalid Y Values", async (t) => {
       });
     });
   });
-}); 
+});
