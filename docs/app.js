@@ -322,11 +322,24 @@ class GRQValidator {
             !this.marketData ||
             Object.keys(this.marketData).length === 0
         ) {
-            this.showNoData();
+            this.showBasicScoreTable();
             return;
         }
 
         this.hideMessages();
+        
+        // Show the chart since we have market data
+        const chartContainer = document.getElementById("performanceChart").parentElement;
+        if (chartContainer) {
+            chartContainer.style.display = "block";
+        }
+
+        // Remove the no-market-data message if it exists
+        const existingMessage = document.querySelector(".no-market-data-message");
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+
         this.updateChart();
         this.updateStockTable();
 
@@ -1671,6 +1684,73 @@ class GRQValidator {
 
     }
 
+    updateBasicStockTable() {
+        const tbody = document.getElementById("stockTableBody");
+        tbody.innerHTML = "";
+
+        // Remove any existing summary elements first
+        const existingSummary = document.querySelector(".portfolio-summary");
+        if (existingSummary) {
+            existingSummary.remove();
+        }
+
+        // Show the table container
+        const tableContainer = document.querySelector(".table-responsive");
+        tableContainer.style.display = "block";
+
+        // Remove stock detail card if it exists
+        const stockCard = document.getElementById("stockDetailCard");
+        if (stockCard) {
+            stockCard.remove();
+        }
+
+        // Update table headers for basic view (no market data)
+        const thead = document.querySelector("#stockTable thead tr");
+        thead.innerHTML = `
+            <th>Stock</th>
+            <th>Score</th>
+            <th>90-Day Target</th>
+            <th>Ex-Dividend Date</th>
+            <th>Dividend Per Share</th>
+            <th>Intrinsic Value (Basic)</th>
+            <th>Intrinsic Value (Adjusted)</th>
+            <th>Notes</th>
+        `;
+
+        // Show all stocks with basic score data
+        this.scoreData.forEach((stock) => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${stock.stock}</td>
+                <td>${stock.score.toFixed(3)}</td>
+                <td>${this.formatCurrency(stock.target)}</td>
+                <td>${stock.exDividendDate || "N/A"}</td>
+                <td>${stock.dividendPerShare ? this.formatCurrency(stock.dividendPerShare) : "N/A"}</td>
+                <td>${stock.intrinsicValuePerShareBasic ? this.formatCurrency(stock.intrinsicValuePerShareBasic) : "N/A"}</td>
+                <td>${stock.intrinsicValuePerShareAdjusted ? this.formatCurrency(stock.intrinsicValuePerShareAdjusted) : "N/A"}</td>
+                <td>${stock.notes || ""}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Add summary row
+        const summaryRow = document.createElement("tr");
+        summaryRow.classList.add("table-info", "fw-bold");
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        const daysElapsed = this.getDaysElapsed(scoreDate);
+        summaryRow.innerHTML = `
+            <td>Score Date: ${scoreDate.toISOString().split('T')[0]} (${daysElapsed} days ago)</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+        `;
+        tbody.appendChild(summaryRow);
+    }
+
     getDividendsWithin90Days(stockSymbol) {
         const dividends = this.dividendData?.[stockSymbol] || [];
         const scoreDate = this.getScoreDate(this.selectedFile);
@@ -1848,6 +1928,47 @@ class GRQValidator {
         document.getElementById("summary").style.display = "none";
         document.getElementById("error").style.display = "none";
         document.getElementById("noData").style.display = "block";
+    }
+
+    showBasicScoreTable() {
+        // Hide loading and error messages, show summary
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("error").style.display = "none";
+        document.getElementById("noData").style.display = "none";
+        document.getElementById("summary").style.display = "block";
+
+        // Hide the chart since we don't have market data
+        const chartContainer = document.getElementById("performanceChart").parentElement;
+        if (chartContainer) {
+            chartContainer.style.display = "none";
+        }
+
+        // Show a message about market data
+        const summaryElement = document.getElementById("summary");
+        const existingMessage = summaryElement.querySelector(".no-market-data-message");
+        if (!existingMessage) {
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "alert alert-info no-market-data-message mb-3";
+            messageDiv.innerHTML = `
+                <i class="fas fa-info-circle"></i>
+                <strong>Market data not yet available.</strong> 
+                The chart and performance calculations will appear once market data becomes available. 
+                Below is the score data from the selected date.
+            `;
+            summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
+        }
+
+        // Update the stock table with basic information only
+        this.updateBasicStockTable();
+
+        // Hide back button since we're in aggregate view
+        document.getElementById("backToAggregate").style.display = "none";
+
+        // Remove stock detail view class
+        const tableContainer = document.querySelector(".table-responsive");
+        if (tableContainer) {
+            tableContainer.classList.remove("stock-detail-view");
+        }
     }
 
     hideMessages() {
