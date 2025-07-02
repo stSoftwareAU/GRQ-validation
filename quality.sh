@@ -41,7 +41,7 @@ echo "🏗️ Building release version..."
 cargo build --release
 
 echo "🔍 Running DenoJS tests..."
-deno test tests/*.ts
+deno test --allow-read tests/*.ts
 
 echo "📝 Formatting JS, HTML, and CSS files with deno fmt..."
 deno fmt docs/*.js docs/*.html docs/*.css tests/*.ts

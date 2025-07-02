@@ -2897,10 +2897,11 @@ class GRQValidator {
         }
 
         const scoreDateTimestamp = scoreDate.getTime();
-        const today = new Date();
-        const daysElapsed = Math.floor((today.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24));
+        // Use the latest market data date instead of today's date
+        const latestMarketDate = marketData && marketData.length > 0 ? marketData[marketData.length - 1].date : new Date();
+        const daysElapsed = Math.floor((latestMarketDate.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24));
         
-        console.log(`calculateHybridProjection - ${stock.stock}: Days elapsed: ${daysElapsed}`);
+        console.log(`calculateHybridProjection - ${stock.stock}: Days elapsed: ${daysElapsed} (using latest market data date: ${latestMarketDate.toISOString().split('T')[0]})`);
         
         // Get buy price
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
@@ -3013,10 +3014,17 @@ class GRQValidator {
                     confidence = 0.7; // High confidence we're missing target
                     console.log(`calculateHybridProjection - ${stock.stock}: Projecting to miss target (required daily rate: ${requiredDailyRate.toFixed(2)}% is unrealistic)`);
                 } else {
-                    // Still possible to hit target, but be conservative
-                    projected90DayPerformance = Math.min(trajectoryProjection, targetPercentage * 0.8);
-                    confidence = 0.6;
-                    console.log(`calculateHybridProjection - ${stock.stock}: Projecting conservative improvement toward target`);
+                    // If current performance is already above target, use trajectory projection
+                    if (currentPerformance > targetPercentage) {
+                        projected90DayPerformance = trajectoryProjection;
+                        confidence = 0.7;
+                        console.log(`calculateHybridProjection - ${stock.stock}: Current performance (${currentPerformance.toFixed(1)}%) already above target (${targetPercentage.toFixed(1)}%), using trajectory projection`);
+                    } else {
+                        // Still possible to hit target, but be conservative
+                        projected90DayPerformance = Math.min(trajectoryProjection, targetPercentage * 0.8);
+                        confidence = 0.6;
+                        console.log(`calculateHybridProjection - ${stock.stock}: Projecting conservative improvement toward target`);
+                    }
                 }
             } else {
                 // Use mean reversion (move toward 0% performance)
