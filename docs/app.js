@@ -1815,10 +1815,12 @@ class GRQValidator {
             if (hybridProjection && hybridProjection.confidence > 0.2) {
                 const predicted = hybridProjection.projected90DayPerformance;
                 const target = targetPercentage || 20; // Default to 20% if no target
-                
-                if (predicted >= target * 0.8) {
+                const pctOfTarget = target === 0 ? 0 : predicted / target;
+                if (predicted < 0 || pctOfTarget < 0.2) {
+                    return `Declining (${predicted.toFixed(1)}%)`;
+                } else if (pctOfTarget >= 0.95) {
                     return `On Track (${predicted.toFixed(1)}%)`;
-                } else if (predicted > 0) {
+                } else if (pctOfTarget >= 0.2) {
                     return `Below Target (${predicted.toFixed(1)}%)`;
                 } else {
                     return `Declining (${predicted.toFixed(1)}%)`;
@@ -1827,7 +1829,6 @@ class GRQValidator {
                 // Not enough data for reliable prediction - use current performance with context
                 const target = targetPercentage || 20; // Default to 20% if no target
                 const threshold = target * 0.8; // 80% of target
-                
                 if (daysElapsed < 30) {
                     // First 30 days - truly early
                     if (performance > 0) {
@@ -2931,11 +2932,25 @@ class GRQValidator {
                 confidence = Math.min(trendLine.rSquared * 0.7, 0.8); // Reduce confidence for early projections
                 console.log(`calculateHybridProjection - ${stock.stock}: Using dampened trend (slope: ${trendLine.slope.toFixed(4)} → ${dampenedSlope.toFixed(4)})`);
             } else {
-                // Fall back to target-based projection
+                // Fall back to realistic projection based on current performance
                 projectionMethod = "target_based";
-                projected90DayPerformance = targetPercentage || -5; // Default to -5% if no target
+                if (targetPercentage !== null) {
+                    // Use current performance as base, project modest improvement if positive
+                    if (currentPerformance > 0) {
+                        // If currently positive, project slight improvement (10% of remaining gap)
+                        const gap = targetPercentage - currentPerformance;
+                        projected90DayPerformance = currentPerformance + (gap * 0.1);
+                    } else {
+                        // If currently negative, project slight recovery toward zero
+                        projected90DayPerformance = currentPerformance * 0.5; // Move halfway toward zero
+                    }
+                    // Cap at reasonable bounds
+                    projected90DayPerformance = Math.max(Math.min(projected90DayPerformance, targetPercentage), -100);
+                } else {
+                    projected90DayPerformance = -5; // Default to -5% if no target
+                }
                 confidence = 0.3; // Low confidence for early projections
-                console.log(`calculateHybridProjection - ${stock.stock}: Using target-based projection (insufficient trend data)`);
+                console.log(`calculateHybridProjection - ${stock.stock}: Using realistic projection (insufficient trend data)`);
             }
         } else if (daysElapsed < 60) {
             // Medium-term: Use dampened trend with higher confidence
@@ -2949,28 +2964,54 @@ class GRQValidator {
                 confidence = Math.min(trendLine.rSquared * 0.8, 0.9);
                 console.log(`calculateHybridProjection - ${stock.stock}: Using dampened trend (slope: ${trendLine.slope.toFixed(4)} → ${dampenedSlope.toFixed(4)})`);
             } else {
-                // Fall back to target-based projection
+                // Fall back to realistic projection based on current performance
                 projectionMethod = "target_based";
-                projected90DayPerformance = targetPercentage || -5;
+                if (targetPercentage !== null) {
+                    // Use current performance as base, project modest improvement if positive
+                    if (currentPerformance > 0) {
+                        // If currently positive, project slight improvement (15% of remaining gap)
+                        const gap = targetPercentage - currentPerformance;
+                        projected90DayPerformance = currentPerformance + (gap * 0.15);
+                    } else {
+                        // If currently negative, project slight recovery toward zero
+                        projected90DayPerformance = currentPerformance * 0.6; // Move 60% toward zero
+                    }
+                    // Cap at reasonable bounds
+                    projected90DayPerformance = Math.max(Math.min(projected90DayPerformance, targetPercentage), -100);
+                } else {
+                    projected90DayPerformance = -5; // Default to -5% if no target
+                }
                 confidence = 0.5;
-                console.log(`calculateHybridProjection - ${stock.stock}: Using target-based projection (insufficient trend data)`);
+                console.log(`calculateHybridProjection - ${stock.stock}: Using realistic projection (insufficient trend data)`);
             }
         } else {
-            // Long-term: Use target-based projection or mean reversion
-            projectionMethod = "target_based";
+            // Long-term: Use realistic projection based on current trajectory
+            projectionMethod = "realistic_trajectory";
             
             if (targetPercentage !== null) {
-                // Use current performance as primary indicator, with modest target influence
-                if (currentPerformance > 0) {
-                    // If positive, project slight improvement (20% of remaining gap)
-                    const gap = targetPercentage - currentPerformance;
-                    projected90DayPerformance = currentPerformance + (gap * 0.2);
+                // Calculate what the current trajectory suggests for 90 days
+                const currentRate = currentPerformance / daysElapsed; // % per day
+                let trajectoryProjection = currentRate * 90;
+                
+                // If we're significantly behind target, be realistic about missing it
+                const targetThreshold = targetPercentage * 0.8; // 80% of target
+                const remainingDays = 90 - daysElapsed;
+                const remainingGap = targetPercentage - currentPerformance;
+                const requiredDailyRate = remainingGap / remainingDays;
+                
+                // If required rate is unrealistic (>2% per day), project missing target
+                if (requiredDailyRate > 2.0) {
+                    // Project based on current trajectory, but cap at a realistic maximum
+                    const realisticProjection = Math.min(trajectoryProjection, targetPercentage * 0.6);
+                    projected90DayPerformance = Math.max(realisticProjection, currentPerformance * 1.2); // At least some improvement
+                    confidence = 0.7; // High confidence we're missing target
+                    console.log(`calculateHybridProjection - ${stock.stock}: Projecting to miss target (required daily rate: ${requiredDailyRate.toFixed(2)}% is unrealistic)`);
                 } else {
-                    // If negative, project slight recovery toward zero
-                    projected90DayPerformance = currentPerformance * 0.6; // Move 40% toward zero
+                    // Still possible to hit target, but be conservative
+                    projected90DayPerformance = Math.min(trajectoryProjection, targetPercentage * 0.8);
+                    confidence = 0.6;
+                    console.log(`calculateHybridProjection - ${stock.stock}: Projecting conservative improvement toward target`);
                 }
-                confidence = 0.5; // Lower confidence for long-term projections
-                console.log(`calculateHybridProjection - ${stock.stock}: Using conservative target-based projection`);
             } else {
                 // Use mean reversion (move toward 0% performance)
                 const reversionRate = 0.4; // 40% reversion toward mean
@@ -3028,51 +3069,52 @@ class GRQValidator {
                     });
                 }
             }
-        } else {
-            // Target-based or mean reversion - use actual market data
-            const target = projection.targetPercentage || 0;
+        } else if (projection.projectionMethod === "realistic_trajectory") {
+            // Realistic trajectory based on current performance rate
             const current = projection.currentPerformance;
-            
-            // Calculate projection based on actual market performance
-            let projected90DayPerformance;
-            if (projection.projectionMethod === "target_based" && projection.targetPercentage !== null) {
-                // Use actual current performance as the primary indicator
-                // Only project modest improvement if current performance is positive
-                if (current > 0) {
-                    // If currently positive, project slight improvement (10% of remaining gap)
-                    const gap = target - current;
-                    projected90DayPerformance = current + (gap * 0.1);
-                } else {
-                    // If currently negative, project slight recovery toward zero
-                    projected90DayPerformance = current * 0.5; // Move halfway toward zero
-                }
-                
-                // Cap at reasonable bounds
-                projected90DayPerformance = Math.max(Math.min(projected90DayPerformance, target), -100);
-            } else {
-                // Mean reversion - move toward zero
-                const reversionRate = 0.5;
-                projected90DayPerformance = current * (1 - reversionRate);
-                projected90DayPerformance = Math.max(projected90DayPerformance, -100);
-            }
+            const daysElapsed = projection.daysElapsed;
+            const currentRate = current / daysElapsed; // % per day
             
             // Generate weekly points up to 90 days, starting at zero
             for (let day = 0; day <= 90; day += 7) {
                 let predictedPerformance;
-                if (projection.projectionMethod === "target_based" && projection.targetPercentage !== null) {
-                    // Linear interpolation from zero to the realistic projection
-                    const progress = Math.min(day / 90, 1);
-                    predictedPerformance = projected90DayPerformance * progress;
+                if (day <= daysElapsed) {
+                    // For days up to current, use linear interpolation
+                    predictedPerformance = (current / daysElapsed) * day;
                 } else {
-                    // Mean reversion from zero
-                    const reversionProgress = Math.min(day / 90, 1);
-                    predictedPerformance = projected90DayPerformance * reversionProgress;
+                    // For future days, use the projection
+                    predictedPerformance = projection.projected90DayPerformance * (day / 90);
                 }
                 
                 predictedPerformance = Math.max(Math.min(predictedPerformance, 200), -100);
                 trendData.push({
                     x: getDayDate(scoreDate, day),
                     y: predictedPerformance
+                });
+            }
+            
+            // Ensure we have exactly 90 days as the last point
+            const lastPoint = trendData[trendData.length - 1];
+            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
+            if (lastPointDay !== 90) {
+                trendData.push({
+                    x: getDayDate(scoreDate, 90),
+                    y: projection.projected90DayPerformance
+                });
+            }
+        } else {
+            // Target-based or mean reversion - use the projection value from calculateHybridProjection
+            const projected90DayPerformance = projection.projected90DayPerformance;
+            
+            // Generate weekly points up to 90 days, starting at zero
+            for (let day = 0; day <= 90; day += 7) {
+                // Linear interpolation from zero to the projection
+                const progress = Math.min(day / 90, 1);
+                const predictedPerformance = projected90DayPerformance * progress;
+                
+                trendData.push({
+                    x: getDayDate(scoreDate, day),
+                    y: Math.max(Math.min(predictedPerformance, 200), -100)
                 });
             }
             

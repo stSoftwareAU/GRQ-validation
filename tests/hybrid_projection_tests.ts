@@ -297,22 +297,42 @@ class MockHybridProjectionSystem {
         confidence = 0.5;
       }
     } else {
-      // Long-term: Use target-based projection or mean reversion
-      projectionMethod = "target_based";
+      // Long-term: Use realistic projection based on current trajectory
+      projectionMethod = "realistic_trajectory";
 
       if (targetPercentage !== null) {
-        // Use current performance as primary indicator, with modest target influence
-        if (currentPerformance > 0) {
-          // If positive, project slight improvement (20% of remaining gap)
-          const gap = targetPercentage - currentPerformance;
-          projected90DayPerformance = currentPerformance + (gap * 0.2);
+        // Calculate what the current trajectory suggests for 90 days
+        const currentRate = currentPerformance / daysElapsed; // % per day
+        const trajectoryProjection = currentRate * 90;
+
+        // If we're significantly behind target, be realistic about missing it
+        const remainingDays = 90 - daysElapsed;
+        const remainingGap = targetPercentage - currentPerformance;
+        const requiredDailyRate = remainingGap / remainingDays;
+
+        // If required rate is unrealistic (>2% per day), project missing target
+        if (requiredDailyRate > 2.0) {
+          // Project based on current trajectory, but cap at a realistic maximum
+          const realisticProjection = Math.min(
+            trajectoryProjection,
+            targetPercentage * 0.6,
+          );
+          projected90DayPerformance = Math.max(
+            realisticProjection,
+            currentPerformance * 1.2,
+          ); // At least some improvement
+          confidence = 0.7; // High confidence we're missing target
         } else {
-          // If negative, project slight recovery toward zero
-          projected90DayPerformance = currentPerformance * 0.6; // Move 40% toward zero
+          // Still possible to hit target, but be conservative
+          projected90DayPerformance = Math.min(
+            trajectoryProjection,
+            targetPercentage * 0.8,
+          );
+          confidence = 0.6;
         }
-        confidence = 0.5; // Lower confidence for long-term projections
       } else {
-        const reversionRate = 0.4;
+        // Use mean reversion (move toward 0% performance)
+        const reversionRate = 0.4; // 40% reversion toward mean
         projected90DayPerformance = currentPerformance * (1 - reversionRate);
         confidence = 0.3;
       }
