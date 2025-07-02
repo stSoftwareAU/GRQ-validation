@@ -55,18 +55,18 @@ class MockGRQValidator {
     if (value === null || value === undefined || isNaN(value)) {
       return "N/A";
     }
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(value);
   }
 
   updateBasicStockTable(): string {
     // Simulate the table generation
     let tableHTML = "";
-    
+
     // Table headers
     tableHTML += `
       <th>Stock</th>
@@ -86,9 +86,21 @@ class MockGRQValidator {
         <td>${stock.score.toFixed(3)}</td>
         <td>${this.formatCurrency(stock.target)}</td>
         <td>${stock.exDividendDate || "N/A"}</td>
-        <td>${stock.dividendPerShare ? this.formatCurrency(stock.dividendPerShare) : "N/A"}</td>
-        <td>${stock.intrinsicValuePerShareBasic ? this.formatCurrency(stock.intrinsicValuePerShareBasic) : "N/A"}</td>
-        <td>${stock.intrinsicValuePerShareAdjusted ? this.formatCurrency(stock.intrinsicValuePerShareAdjusted) : "N/A"}</td>
+        <td>${
+        stock.dividendPerShare
+          ? this.formatCurrency(stock.dividendPerShare)
+          : "N/A"
+      }</td>
+        <td>${
+        stock.intrinsicValuePerShareBasic
+          ? this.formatCurrency(stock.intrinsicValuePerShareBasic)
+          : "N/A"
+      }</td>
+        <td>${
+        stock.intrinsicValuePerShareAdjusted
+          ? this.formatCurrency(stock.intrinsicValuePerShareAdjusted)
+          : "N/A"
+      }</td>
         <td>${stock.notes || ""}</td>
       `;
     });
@@ -97,7 +109,9 @@ class MockGRQValidator {
     const scoreDate = this.getScoreDate();
     const daysElapsed = this.getDaysElapsed();
     tableHTML += `
-      <td>Score Date: ${scoreDate.toISOString().split('T')[0]} (${daysElapsed} days ago)</td>
+      <td>Score Date: ${
+      scoreDate.toISOString().split("T")[0]
+    } (${daysElapsed} days ago)</td>
       <td>-</td>
       <td>-</td>
       <td>-</td>
@@ -117,33 +131,85 @@ Deno.test("Basic Score Table - No Market Data", async (t) => {
 
   await t.step("should generate basic score table with all score data", () => {
     const tableHTML = validator.updateBasicStockTable();
-    
+
     // Check that all stocks are included
-    assertEquals(tableHTML.includes("TEST1"), true, "Should include TEST1 stock");
-    assertEquals(tableHTML.includes("TEST2"), true, "Should include TEST2 stock");
-    
+    assertEquals(
+      tableHTML.includes("TEST1"),
+      true,
+      "Should include TEST1 stock",
+    );
+    assertEquals(
+      tableHTML.includes("TEST2"),
+      true,
+      "Should include TEST2 stock",
+    );
+
     // Check that score data is formatted correctly
-    assertEquals(tableHTML.includes("0.850"), true, "Should include TEST1 score");
-    assertEquals(tableHTML.includes("0.720"), true, "Should include TEST2 score");
-    
+    assertEquals(
+      tableHTML.includes("0.850"),
+      true,
+      "Should include TEST1 score",
+    );
+    assertEquals(
+      tableHTML.includes("0.720"),
+      true,
+      "Should include TEST2 score",
+    );
+
     // Check that target prices are formatted as currency
-    assertEquals(tableHTML.includes("$18.50"), true, "Should format TEST1 target as currency");
-    assertEquals(tableHTML.includes("$15.00"), true, "Should format TEST2 target as currency");
-    
+    assertEquals(
+      tableHTML.includes("$18.50"),
+      true,
+      "Should format TEST1 target as currency",
+    );
+    assertEquals(
+      tableHTML.includes("$15.00"),
+      true,
+      "Should format TEST2 target as currency",
+    );
+
     // Check that dividend data is handled correctly
-    assertEquals(tableHTML.includes("2025-03-15"), true, "Should include ex-dividend date");
-    assertEquals(tableHTML.includes("$0.25"), true, "Should format dividend as currency");
-    assertEquals(tableHTML.includes("N/A"), true, "Should show N/A for missing dividend data");
-    
+    assertEquals(
+      tableHTML.includes("2025-03-15"),
+      true,
+      "Should include ex-dividend date",
+    );
+    assertEquals(
+      tableHTML.includes("$0.25"),
+      true,
+      "Should format dividend as currency",
+    );
+    assertEquals(
+      tableHTML.includes("N/A"),
+      true,
+      "Should show N/A for missing dividend data",
+    );
+
     // Check that intrinsic values are handled correctly
-    assertEquals(tableHTML.includes("$20.00"), true, "Should format basic intrinsic value");
-    assertEquals(tableHTML.includes("$19.50"), true, "Should format adjusted intrinsic value");
-    
+    assertEquals(
+      tableHTML.includes("$20.00"),
+      true,
+      "Should format basic intrinsic value",
+    );
+    assertEquals(
+      tableHTML.includes("$19.50"),
+      true,
+      "Should format adjusted intrinsic value",
+    );
+
     // Check that notes are included
-    assertEquals(tableHTML.includes("Strong fundamentals"), true, "Should include notes");
-    
+    assertEquals(
+      tableHTML.includes("Strong fundamentals"),
+      true,
+      "Should include notes",
+    );
+
     // Check that summary row is included
-    assertEquals(tableHTML.includes("Score Date: 2025-02-14 (5 days ago)"), true, "Should include summary row");
+    assertEquals(
+      tableHTML.includes("Score Date: 2025-02-14 (5 days ago)"),
+      true,
+      "Should include summary row",
+    );
   });
 
   await t.step("should handle null/undefined values gracefully", () => {
@@ -160,10 +226,22 @@ Deno.test("Basic Score Table - No Market Data", async (t) => {
     });
 
     const tableHTML = validator.updateBasicStockTable();
-    
+
     // Check that null values are handled
-    assertEquals(tableHTML.includes("TEST3"), true, "Should include TEST3 stock");
-    assertEquals(tableHTML.includes("N/A"), true, "Should show N/A for null values");
-    assertEquals(tableHTML.includes("0.500"), true, "Should format score correctly");
+    assertEquals(
+      tableHTML.includes("TEST3"),
+      true,
+      "Should include TEST3 stock",
+    );
+    assertEquals(
+      tableHTML.includes("N/A"),
+      true,
+      "Should show N/A for null values",
+    );
+    assertEquals(
+      tableHTML.includes("0.500"),
+      true,
+      "Should format score correctly",
+    );
   });
-}); 
+});
