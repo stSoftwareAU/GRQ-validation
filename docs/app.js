@@ -810,6 +810,27 @@ class GRQValidator {
                         });
                     }
                     // ... existing target and trend line logic ...
+                    // Use the latest market data date for trend line, not just today
+                    const latestMarketDate = marketData && marketData.length > 0 ? marketData[marketData.length - 1].date : new Date();
+                    // ... existing code ...
+                    // When calling calculateTrendLine, pass latestMarketDate as 'today'
+                    const trendLine = this.calculateTrendLine(stock, scoreDate, latestMarketDate);
+                    if (trendLine && trendLine.dataPoints.length > 0) {
+                        datasets.push({
+                            label: "Projection (Trend Line)",
+                            data: trendLine.dataPoints.map((p) => ({
+                                x: new Date(scoreDate.getTime() + p.x * 24 * 60 * 60 * 1000),
+                                y: p.y
+                            })),
+                            borderColor: "rgba(40, 167, 69, 0.7)",
+                            borderDash: [8, 4],
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0,
+                            showLine: true,
+                        });
+                    }
+                    // ... existing code ...
                 }
             }
         } else {
@@ -1322,6 +1343,8 @@ class GRQValidator {
                     stock.stock,
                     scoreDate,
                 );
+                const currentPriceResult={rawValue:null,formattedValue:null}
+                this.getWorking("current-price",stock.stock,this.scoreData,currentPriceResult);
 
                 // Hide the table and show card
                 const tableContainer = document.querySelector(
@@ -1394,8 +1417,7 @@ class GRQValidator {
                             data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
                             data-bs-title="Current Price - ${stock.stock}" 
                             data-field="current-price" 
-                            data-stock="${stock.stock}"
-                        >${this.formatCurrency(this.getCurrentPrice(stock.stock))}</span>
+                            data-stock="${stock.stock}">${currentPriceResult.formattedValue}</span>
                     </div>
                   </div>
                   <div class="row mb-2">
@@ -1540,16 +1562,7 @@ class GRQValidator {
                     scoreDate,
                 );
                 // Current price (already post-split, no adjustment needed)
-                let currentPrice = null;
-                if (marketData && marketData.length > 0) {
-                    const within90Days = marketData.filter((point) =>
-                        point.date <= ninetyDayDate
-                    );
-                    if (within90Days.length > 0) {
-                        const lastData = within90Days[within90Days.length - 1];
-                        currentPrice = (lastData.high + lastData.low) / 2; // No split adjustment needed
-                    }
-                }
+                let currentPrice = this.getCurrentPrice(stock.stock);
                 // Gain/loss calculation (split-adjusted)
                 let performance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
                 const judgement = this.calculateJudgement(
@@ -1583,7 +1596,7 @@ class GRQValidator {
                 }</span></td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                   data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${this.formatCurrency(currentPrice)}
+                   data-bs-title="Current Price - ${stock.stock}" data-field="current-price" data-stock="${stock.stock}">${currentPrice}
                 </span>
             </td>
             <td><span class="clickable-value ${
@@ -1767,18 +1780,8 @@ class GRQValidator {
         const marketData = this.marketData[stockSymbol];
         if (!marketData || marketData.length === 0) return "N/A";
 
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
-
-        // Find the last price within 90 days
-        const within90Days = marketData.filter((point) =>
-            point.date <= ninetyDayDate
-        );
-        if (within90Days.length === 0) return "N/A";
-
-        const lastData = within90Days[within90Days.length - 1];
+        // Use the latest market data (same as getWorking method)
+        const lastData = marketData[marketData.length - 1];
         const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
         return "$" + currentPrice.toFixed(2);
     }
@@ -2152,7 +2155,7 @@ class GRQValidator {
         return validStocks > 0 ? totalPerformance / validStocks : 0;
     }
 
-    getWorking(field, stockSymbol, scoreData) {
+    getWorking(field, stockSymbol, scoreData,result={rawValue:null,formattedValue:null}) {
         // Special handling for portfolio target - no specific stock needed
         if (field === "portfolio-target") {
             const portfolioTargetValue = this
@@ -2297,6 +2300,8 @@ class GRQValidator {
                 }
                 const lastData = marketData[marketData.length - 1];
                 const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
+                result.rawValue = currentPrice;
+                result.formattedValue = this.formatCurrency(currentPrice);
                 const currentSplitAdjustment = this
                     .getHistoricalToCurrentSplitAdjustment(
                         stockSymbol,
@@ -2306,15 +2311,15 @@ class GRQValidator {
                     return header +
                         `Current Price working:\n= (High + Low) / 2 from latest market data (post-split)\n= ($${
                             lastData.high.toFixed(2)
-                        } + $${lastData.low.toFixed(2)}) / 2\n= $${
-                            currentPrice.toFixed(2)
+                        } + $${lastData.low.toFixed(2)}) / 2\n= ${
+                            result.formattedValue
                         } (already post-split, no adjustment needed)`;
                 } else {
                     return header +
                         `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${
                             lastData.high.toFixed(2)
-                        } + $${lastData.low.toFixed(2)}) / 2\n= $${
-                            currentPrice.toFixed(2)
+                        } + $${lastData.low.toFixed(2)}) / 2\n= ${
+                            result.formattedValue
                         }`;
                 }
             case "gain-loss":
@@ -2685,7 +2690,7 @@ class GRQValidator {
     }
 
     // Calculate linear regression for trend prediction
-    calculateTrendLine(stock, scoreDate) {
+    calculateTrendLine(stock, scoreDate, endDate) {
         const marketData = this.marketData[stock.stock];
         if (!marketData || marketData.length === 0) {
             console.log(`calculateTrendLine - ${stock.stock}: No market data available`);
@@ -2693,9 +2698,10 @@ class GRQValidator {
         }
 
         const scoreDateTimestamp = scoreDate.getTime();
-        const today = new Date();
+        // Use the latest market data date if no endDate is provided, not today's date
+        const trendEndDate = endDate || (marketData && marketData.length > 0 ? marketData[marketData.length - 1].date : new Date());
         
-        console.log(`calculateTrendLine - ${stock.stock}: Score date: ${scoreDate.toISOString().split('T')[0]}, Today: ${today.toISOString().split('T')[0]}`);
+        console.log(`calculateTrendLine - ${stock.stock}: Score date: ${scoreDate.toISOString().split('T')[0]}, Today: ${trendEndDate.toISOString().split('T')[0]}`);
         console.log(`calculateTrendLine - ${stock.stock}: Total market data points: ${marketData.length}`);
         
         // Get data points from score date to today (but only if we have at least 3 data points)
@@ -2710,7 +2716,7 @@ class GRQValidator {
         console.log(`calculateTrendLine - ${stock.stock}: Buy price: $${buyPriceObj.price.toFixed(2)}`);
 
         marketData.forEach((point) => {
-            if (point.date >= scoreDate && point.date <= today) {
+            if (point.date >= scoreDate && point.date <= trendEndDate) {
                 const daysSinceScore = (point.date.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24);
                 const currentPrice = this.adjustHistoricalPriceToCurrent(
                     (point.high + point.low) / 2,
@@ -2800,10 +2806,10 @@ class GRQValidator {
     calculatePortfolioTrendLine() {
         const scoreDate = this.getScoreDate(this.selectedFile);
         const scoreDateTimestamp = scoreDate.getTime();
-        const today = new Date();
-        
-        // Get portfolio data points from score date to today (but only if we have at least 3 data points)
+        // Use the latest market data date instead of today's date
         const portfolioData = this.calculatePortfolioData();
+        const today = portfolioData && portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].x : new Date();
+        // Get portfolio data points from score date to today (but only if we have at least 3 data points)
         const dataPoints = [];
         
         console.log("Portfolio trend line - total portfolio data points:", portfolioData.length);
