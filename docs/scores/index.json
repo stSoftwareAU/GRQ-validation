@@ -58,6 +58,20 @@
     },
     {
       "year": "2025",
+      "month": "April",
+      "day": "22",
+      "file": "2025/April/22.tsv",
+      "date": "2025-04-22"
+    },    
+    {
+      "year": "2025",
+      "month": "May",
+      "day": "1",
+      "file": "2025/May/1.tsv",
+      "date": "2025-05-01"
+    },
+    {
+      "year": "2025",
       "month": "May",
       "day": "15",
       "file": "2025/May/15.tsv",
