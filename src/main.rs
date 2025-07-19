@@ -21,7 +21,7 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
-    /// Process all score files, including those more than 180 days old
+    /// Process all score files, including those more than 100 days old (default: only process recent files)
     #[arg(long)]
     process_all: bool,
 }
@@ -43,13 +43,13 @@ fn main() -> Result<()> {
     let index_data = read_index_json(&args.docs_path)?;
     info!("Found {} score files to process", index_data.scores.len());
 
-    // Filter out score files that are more than 180 days old (unless --process-all is specified)
+    // Filter out score files that are more than 100 days old (unless --process-all is specified)
     let scores_to_process = if args.process_all {
         info!("Processing all score files (including old ones)");
         index_data.scores.iter().collect()
     } else {
         let today = Utc::now().naive_utc().date();
-        let cutoff_date = today - chrono::Duration::days(180);
+        let cutoff_date = today - chrono::Duration::days(100);
 
         let recent_scores: Vec<_> = index_data
             .scores
@@ -64,12 +64,12 @@ fn main() -> Result<()> {
             .collect();
 
         info!(
-            "Filtered to {} recent score files (within 180 days)",
+            "Filtered to {} recent score files (within 100 days)",
             recent_scores.len()
         );
         if recent_scores.len() < index_data.scores.len() {
             info!(
-                "Skipped {} old score files (more than 180 days old)",
+                "Skipped {} old score files (more than 100 days old)",
                 index_data.scores.len() - recent_scores.len()
             );
         }

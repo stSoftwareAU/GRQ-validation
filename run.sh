@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# GRQ Validation Processor
+# 
+# This script builds and runs the GRQ validation program.
+# 
+# Usage:
+#   ./run.sh                    # Process recent files only (within 100 days)
+#   ./run.sh --process-all      # Process all available files
+# 
+# The program validates 90-day predictions, so processing files older than 100 days
+# is typically not necessary for performance reasons.
+
 # Configuration
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -67,6 +78,8 @@ fi
 
 # Run the program
 log "Running GRQ validation program"
+# Use --process-all flag to process all dates, or omit for recent dates only (within 100 days)
+# To process all files: ./target/release/grq-validation --docs-path docs --process-all
 if ./target/release/grq-validation --docs-path docs; then
     log "Program completed successfully"
 else
