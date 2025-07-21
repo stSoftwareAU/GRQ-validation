@@ -162,8 +162,6 @@ pub struct ScoreEntry {
     pub performance_annualized: Option<f64>,
     #[serde(rename = "total_stocks", skip_serializing_if = "Option::is_none")]
     pub total_stocks: Option<i32>,
-    #[serde(rename = "stocks_with_data", skip_serializing_if = "Option::is_none")]
-    pub stocks_with_data: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -201,7 +199,6 @@ pub struct StockPerformance {
 pub struct PortfolioPerformance {
     pub score_date: String,
     pub total_stocks: i32,
-    pub stocks_with_data: i32,
     pub performance_90_day: f64,
     pub performance_annualized: f64,
     pub individual_performances: Vec<StockPerformance>,
@@ -263,7 +260,6 @@ mod tests {
             performance_90_day: None,
             performance_annualized: None,
             total_stocks: None,
-            stocks_with_data: None,
         };
 
         assert_eq!(entry.date, "2025-06-20");
@@ -281,7 +277,6 @@ mod tests {
             performance_90_day: None,
             performance_annualized: None,
             total_stocks: None,
-            stocks_with_data: None,
         };
 
         let entry2 = ScoreEntry {
@@ -293,7 +288,6 @@ mod tests {
             performance_90_day: None,
             performance_annualized: None,
             total_stocks: None,
-            stocks_with_data: None,
         };
 
         let index_data = IndexData {

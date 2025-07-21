@@ -48,18 +48,17 @@ fn main() -> Result<()> {
     info!("Starting GRQ Validation processor");
     info!("Docs path: {}", args.docs_path);
 
-    // Test mode: Calculate performance for November 15, 2024 only
+    // Test mode: Calculate performance for February 15, 2025 only
     if args.performance_only {
-        info!("Running performance calculation test for November 15, 2024");
-        let score_file_path = format!("{}/scores/2024/November/15.tsv", args.docs_path);
-        let score_file_date = "2024-11-15";
+        info!("Running performance calculation test for February 15, 2025");
+        let score_file_path = format!("{}/scores/2025/February/15.tsv", args.docs_path);
+        let score_file_date = "2025-02-15";
         
         match utils::calculate_portfolio_performance(&score_file_path, score_file_date) {
             Ok(performance) => {
-                println!("\n=== November 15, 2024 Performance Results ===");
+                println!("\n=== February 15, 2025 Performance Results ===");
                 println!("Score Date: {}", performance.score_date);
                 println!("Total Stocks: {}", performance.total_stocks);
-                println!("Stocks with Data: {}", performance.stocks_with_data);
                 println!("90-Day Performance: {:.2}%", performance.performance_90_day);
                 println!("Annualized Performance: {:.2}%", performance.performance_annualized);
                 println!();
@@ -79,11 +78,10 @@ fn main() -> Result<()> {
                 // Update the index.json with this performance data
                 let mut index_data = utils::read_index_json(&args.docs_path)?;
                 for score_entry in &mut index_data.scores {
-                    if score_entry.date == "2024-11-15" {
+                    if score_entry.date == "2025-02-15" {
                         score_entry.performance_90_day = Some(performance.performance_90_day);
                         score_entry.performance_annualized = Some(performance.performance_annualized);
                         score_entry.total_stocks = Some(performance.total_stocks);
-                        score_entry.stocks_with_data = Some(performance.stocks_with_data);
                         break;
                     }
                 }
@@ -92,7 +90,7 @@ fn main() -> Result<()> {
                 let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
                 let json_content = serde_json::to_string_pretty(&index_data)?;
                 std::fs::write(index_path, json_content)?;
-                println!("\nUpdated index.json with performance data for November 15, 2024");
+                println!("\nUpdated index.json with performance data for February 15, 2025");
             }
             Err(e) => {
                 log::error!("Failed to calculate performance: {}", e);

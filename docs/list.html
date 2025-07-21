@@ -291,7 +291,6 @@
                           <th>Date</th>
                           <th>File</th>
                           <th>Total Stocks</th>
-                          <th>Stocks with Data</th>
                           <th>90-Day Performance</th>
                           <th>Annualized Performance</th>
                           <th>Actions</th>
@@ -449,13 +448,7 @@
                                 },
                                 type: 'num'
                             },
-                            { 
-                                data: 'stocks_with_data',
-                                render: function(data, type, row) {
-                                    return data || '-';
-                                },
-                                type: 'num'
-                            },
+
                             { 
                                 data: 'performance_90_day',
                                 render: function(data, type, row) {
@@ -498,7 +491,7 @@
                                 }
                             }
                         ],
-                        order: [[0, 'desc']], // Sort by date descending
+                        order: [[0, 'asc']], // Sort by date ascending (oldest first)
                         pageLength: 50,
                         dom: '<"row"<"col-sm-12 col-md-6"B><"col-sm-12 col-md-6"f>>rtip',
                         buttons: [

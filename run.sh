@@ -80,7 +80,7 @@ fi
 log "Running GRQ validation program"
 # Use --process-all flag to process all dates, or omit for recent dates only (within 100 days)
 # To process all files: ./target/release/grq-validation --docs-path docs --process-all
-if ./target/release/grq-validation --docs-path docs; then
+if ./target/release/grq-validation --docs-path docs --calculate-performance; then
     log "Program completed successfully"
 else
     log "ERROR: Program failed"
