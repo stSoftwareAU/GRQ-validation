@@ -275,73 +275,7 @@
                   </div>
                 </div>
 
-                <!-- Score Files Table -->
-                <div class="table-container">
-                  <div class="table-header">
-                    <h5 class="card-title mb-0">
-                      <i class="fas fa-table me-2"></i>
-                      Score Files Performance Summary
-                    </h5>
-                    <div class="alert alert-info mt-3 mb-0">
-                      <small>
-                        <i class="fas fa-info-circle me-1"></i>
-                        <strong>Filter Tips:</strong> Use the date range and performance filters above to find specific data. Click column headers to sort.
-                      </small>
-                    </div>
-                  </div>
-                  <div class="table-responsive">
-                    <table
-                      class="table table-hover score-files-table mb-0"
-                      id="scoreFilesTable"
-                    >
-                      <thead class="table-dark">
-                        <tr>
-                          <th>Date</th>
-                          <th>File</th>
-                          <th>Total Stocks</th>
-                          <th>90-Day Performance</th>
-                          <th>Annualized Performance</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody id="scoreFilesTableBody"></tbody>
-                    </table>
-                  </div>
-                </div>
 
-                <!-- Summary Statistics -->
-                <div class="summary-stats">
-                  <h4 class="text-center mb-4">
-                    <i class="fas fa-chart-line me-2"></i>
-                    Performance Summary for Selected Files
-                  </h4>
-                  <div class="row">
-                    <div class="col-md-3">
-                      <div class="summary-stat">
-                        <div class="summary-stat-value" id="avg90Day">-</div>
-                        <div class="summary-stat-label">Avg 90-Day Performance</div>
-                      </div>
-                    </div>
-                    <div class="col-md-3">
-                      <div class="summary-stat">
-                        <div class="summary-stat-value" id="avgAnnualized">-</div>
-                        <div class="summary-stat-label">Avg Annualized Performance</div>
-                      </div>
-                    </div>
-                    <div class="col-md-3">
-                      <div class="summary-stat">
-                        <div class="summary-stat-value" id="totalFiles">-</div>
-                        <div class="summary-stat-label">Total Files</div>
-                      </div>
-                    </div>
-                    <div class="col-md-3">
-                      <div class="summary-stat">
-                        <div class="summary-stat-value" id="positiveCount">-</div>
-                        <div class="summary-stat-label">Positive Performance</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -386,10 +320,7 @@
             async init() {
                 try {
                     await this.loadScoreFiles();
-                    this.setupDataTable();
-                    this.setupFilters();
                     this.showContent();
-                    this.updateSummaryStats();
                 } catch (error) {
                     console.error('Initialization error:', error);
                     this.showError('Failed to load score files: ' + error.message);
@@ -416,7 +347,7 @@
                 }
             }
             
-            setupDataTable() {
+            // setupDataTable() {
                 try {
                     // Check if DataTables is available
                     if (typeof $.fn.DataTable === 'undefined') {
@@ -547,7 +478,7 @@
                 }
             }
             
-            setupFilters() {
+            // setupFilters() {
                 try {
                     // Date filters
                     $('#startDate, #endDate').on('change', () => {
@@ -566,13 +497,13 @@
                         this.applyFilters();
                     });
                     
-                    console.log('Filters setup completed');
-                } catch (error) {
-                    console.error('Error setting up filters:', error);
-                }
-            }
+                    // console.log('Filters setup completed');
+                // } catch (error) {
+                //     console.error('Error setting up filters:', error);
+                // }
+            // }
             
-            applyFilters() {
+            // applyFilters() {
                 try {
                     if (!this.dataTable) {
                         console.warn('DataTable not initialized, skipping filters');
@@ -622,11 +553,11 @@
                     // Remove the filter function after drawing
                     $.fn.dataTable.ext.search.pop();
                 } catch (error) {
-                    console.error('Error applying filters:', error);
-                }
-            }
+                    // console.error('Error applying filters:', error);
+                // }
+            // }
             
-            updateSummaryStats() {
+            // updateSummaryStats() {
                 try {
                     if (!this.dataTable) {
                         console.warn('DataTable not initialized, skipping summary stats');
@@ -684,10 +615,10 @@
                     if (positiveCountElement) {
                         positiveCountElement.textContent = `${positiveCount} (${validCount > 0 ? (positiveCount / validCount * 100).toFixed(1) : 0}%)`;
                     }
-                } catch (error) {
-                    console.error('Error updating summary stats:', error);
-                }
-            }
+                // } catch (error) {
+                //     console.error('Error updating summary stats:', error);
+                // }
+            // }
             
             showContent() {
                 document.getElementById('loading').style.display = 'none';
