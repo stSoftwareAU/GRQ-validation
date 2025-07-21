@@ -363,11 +363,13 @@ class GRQValidator {
                 sp500Data = JSON.parse(responseText);
                 console.log('SP500 raw data:', sp500Data);
             } catch (sp500Error) {
-                console.warn('SP500 fetch failed, trying alternative source:', sp500Error);
-                // Try alternative source or use mock data
-                sp500Data = this.getMockSP500Data(startDate, endDate);
+                console.warn('SP500 fetch failed:', sp500Error);
+                sp500Data = null;
             }
 
+            // Add delay between API calls to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
             console.log('Fetching NASDAQ data from Yahoo Finance...');
             // Fetch NASDAQ data with timeout and retry
             let nasdaqData = null;
@@ -394,16 +396,26 @@ class GRQValidator {
                 nasdaqData = JSON.parse(responseText);
                 console.log('NASDAQ raw data:', nasdaqData);
             } catch (nasdaqError) {
-                console.warn('NASDAQ fetch failed, trying alternative source:', nasdaqError);
-                // Try alternative source or use mock data
-                nasdaqData = this.getMockNASDAQData(startDate, endDate);
+                console.warn('NASDAQ fetch failed:', nasdaqError);
+                nasdaqData = null;
             }
 
-            // Process the data
-            this.marketIndexData = {
-                sp500: this.processYahooFinanceData(sp500Data, 'SP500'),
-                nasdaq: this.processYahooFinanceData(nasdaqData, 'NASDAQ')
-            };
+            // Process the data - only include valid data
+            this.marketIndexData = {};
+            
+            if (sp500Data) {
+                const sp500Processed = this.processYahooFinanceData(sp500Data, 'SP500');
+                if (sp500Processed && sp500Processed.initialPrice && sp500Processed.currentPrice) {
+                    this.marketIndexData.sp500 = sp500Processed;
+                }
+            }
+            
+            if (nasdaqData) {
+                const nasdaqProcessed = this.processYahooFinanceData(nasdaqData, 'NASDAQ');
+                if (nasdaqProcessed && nasdaqProcessed.initialPrice && nasdaqProcessed.currentPrice) {
+                    this.marketIndexData.nasdaq = nasdaqProcessed;
+                }
+            }
 
             console.log('Market index data loaded:', this.marketIndexData);
         } catch (error) {
@@ -412,75 +424,7 @@ class GRQValidator {
         }
     }
 
-    getMockSP500Data(startDate, endDate) {
-        // Mock SP500 data for testing when API is unavailable
-        const data = [];
-        const currentDate = new Date(startDate);
-        let basePrice = 4500; // Approximate SP500 level
-        
-        while (currentDate <= endDate) {
-            // Simulate some market movement
-            const dayOfWeek = currentDate.getDay();
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Weekdays only
-                const randomChange = (Math.random() - 0.5) * 0.02; // ±1% daily change
-                basePrice *= (1 + randomChange);
-                
-                data.push({
-                    timestamp: Math.floor(currentDate.getTime() / 1000),
-                    close: basePrice
-                });
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return {
-            chart: {
-                result: [{
-                    timestamp: data.map(d => d.timestamp),
-                    indicators: {
-                        quote: [{
-                            close: data.map(d => d.close)
-                        }]
-                    }
-                }]
-            }
-        };
-    }
 
-    getMockNASDAQData(startDate, endDate) {
-        // Mock NASDAQ data for testing when API is unavailable
-        const data = [];
-        const currentDate = new Date(startDate);
-        let basePrice = 14000; // Approximate NASDAQ level
-        
-        while (currentDate <= endDate) {
-            // Simulate some market movement
-            const dayOfWeek = currentDate.getDay();
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Weekdays only
-                const randomChange = (Math.random() - 0.5) * 0.025; // ±1.25% daily change (NASDAQ is more volatile)
-                basePrice *= (1 + randomChange);
-                
-                data.push({
-                    timestamp: Math.floor(currentDate.getTime() / 1000),
-                    close: basePrice
-                });
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return {
-            chart: {
-                result: [{
-                    timestamp: data.map(d => d.timestamp),
-                    indicators: {
-                        quote: [{
-                            close: data.map(d => d.close)
-                        }]
-                    }
-                }]
-            }
-        };
-    }
 
     processYahooFinanceData(yahooData, indexName) {
         if (!yahooData.chart || !yahooData.chart.result || !yahooData.chart.result[0]) {
@@ -570,7 +514,7 @@ class GRQValidator {
                     sp500Element.className = `h5 mb-0 ${performanceClass}`;
                     
                     sp500DetailsElement.textContent = 
-                        `$${marketPerformance.sp500.initialPrice.toFixed(2)} → $${marketPerformance.sp500.currentPrice.toFixed(2)}`;
+                        `${Math.round(marketPerformance.sp500.initialPrice)} → ${Math.round(marketPerformance.sp500.currentPrice)}`;
                 } else {
                     console.log('SP500 display elements not found');
                 }
@@ -591,7 +535,7 @@ class GRQValidator {
                     nasdaqElement.className = `h5 mb-0 ${performanceClass}`;
                     
                     nasdaqDetailsElement.textContent = 
-                        `$${marketPerformance.nasdaq.initialPrice.toFixed(2)} → $${marketPerformance.nasdaq.currentPrice.toFixed(2)}`;
+                        `${Math.round(marketPerformance.nasdaq.initialPrice)} → ${Math.round(marketPerformance.nasdaq.currentPrice)}`;
                 } else {
                     console.log('NASDAQ display elements not found');
                 }
