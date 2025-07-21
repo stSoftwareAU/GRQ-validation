@@ -608,7 +608,7 @@ pub fn calculate_portfolio_performance(
 }
 
 /// Calculates hybrid projection for scores less than 90 days old
-fn calculate_hybrid_projection(
+pub fn calculate_hybrid_projection(
     stock_records: &[StockRecord],
     score_file_date: &str,
     market_data_csv: &HashMap<String, HashMap<String, f64>>,

@@ -206,6 +206,26 @@
             background-color: #667eea;
             border-color: #667eea;
         }
+        
+        /* Enhanced search box styling */
+        .dataTables_filter input {
+            border-radius: 20px !important;
+            border: 2px solid #e9ecef !important;
+            padding: 8px 15px !important;
+            font-size: 14px !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .dataTables_filter input:focus {
+            border-color: #667eea !important;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25) !important;
+            outline: none !important;
+        }
+        
+        .dataTables_filter label {
+            font-weight: 600 !important;
+            color: #495057 !important;
+        }
     </style>
 
   </head>
@@ -280,6 +300,12 @@
                       <i class="fas fa-table me-2"></i>
                       Score Files Performance Summary
                     </h5>
+                    <div class="alert alert-info mt-3 mb-0">
+                      <small>
+                        <i class="fas fa-info-circle me-1"></i>
+                        <strong>Search Tips:</strong> You can search by date (e.g., "2025-06" for June 2025), file name, or use the filters above for more specific results.
+                      </small>
+                    </div>
                   </div>
                   <div class="table-responsive">
                     <table
@@ -517,7 +543,7 @@
                             }
                         ],
                         language: {
-                            search: "Search score files:",
+                            search: "Search dates or files:",
                             lengthMenu: "Show _MENU_ files per page",
                             info: "Showing _START_ to _END_ of _TOTAL_ files",
                             paginate: {
@@ -527,12 +553,33 @@
                                 previous: "Previous"
                             }
                         },
+                        search: {
+                            smart: true,
+                            regex: false,
+                            caseInsensitive: true
+                        },
                         drawCallback: () => {
                             this.updateSummaryStats();
                         }
                     });
                     
                     console.log('DataTable initialized successfully');
+                    
+                    // Add placeholder to search box
+                    setTimeout(() => {
+                        const searchInput = $('.dataTables_filter input');
+                        if (searchInput.length > 0) {
+                            searchInput.attr('placeholder', 'Search by date (e.g., "2025-06") or file name...');
+                            
+                            // Add search functionality hints
+                            searchInput.on('input', function() {
+                                const searchTerm = $(this).val().toLowerCase();
+                                if (searchTerm.length > 0) {
+                                    console.log(`Searching for: "${searchTerm}"`);
+                                }
+                            });
+                        }
+                    }, 100);
                 } catch (error) {
                     console.error('Error setting up DataTable:', error);
                     throw error;

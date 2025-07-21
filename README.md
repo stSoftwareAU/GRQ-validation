@@ -64,6 +64,31 @@ Process a specific file:
 cargo run -- --file docs/scores/2025/June/20.tsv
 ```
 
+Process a specific date:
+```bash
+cargo run -- --date 2025-06-05
+```
+
+Or use the convenience script:
+```bash
+./process_date.sh 2025-06-05
+```
+
+### Using the run.sh Script
+
+The `run.sh` script provides a convenient way to build and run the application:
+
+```bash
+# Process recent files only (within 100 days)
+./run.sh
+
+# Process all files (including those past 100 days)
+./run.sh --process-all
+
+# Full reload of all data (same as --process-all)
+./run.sh --full-reload
+```
+
 Enable verbose logging:
 ```bash
 cargo run -- --verbose
@@ -75,6 +100,16 @@ cargo run -- --verbose
 - `--recursive, -r`: Process all TSV files recursively
 - `--file, -f`: Process a specific TSV file
 - `--verbose, -v`: Enable verbose logging
+- `--date`: Process a specific date (format: YYYY-MM-DD)
+- `--calculate-performance`: Calculate performance metrics for all score files
+- `--performance-only`: Only calculate performance metrics (skip CSV generation)
+- `--process-all`: Process all score files, including those more than 180 days old
+
+### run.sh Script Options
+
+- `./run.sh`: Process recent files only (within 100 days)
+- `./run.sh --process-all`: Process all files (including those past 100 days)
+- `./run.sh --full-reload`: Full reload of all data (same as --process-all)
 
 ### Web Dashboard
 

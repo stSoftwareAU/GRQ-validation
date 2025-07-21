@@ -7,6 +7,7 @@
 # Usage:
 #   ./run.sh                    # Process recent files only (within 100 days)
 #   ./run.sh --process-all      # Process all available files
+#   ./run.sh --full-reload      # Process all files (same as --process-all)
 # 
 # The program validates 90-day predictions, so processing files older than 100 days
 # is typically not necessary for performance reasons.
@@ -78,13 +79,42 @@ fi
 
 # Run the program
 log "Running GRQ validation program"
-# Use --process-all flag to process all dates, or omit for recent dates only (within 100 days)
-# To process all files: ./target/release/grq-validation --docs-path docs --process-all
-if ./target/release/grq-validation --docs-path docs --calculate-performance; then
-    log "Program completed successfully"
+
+# Check for command line arguments
+PROCESS_ALL=false
+if [[ "$1" == "--process-all" || "$1" == "--full-reload" ]]; then
+    PROCESS_ALL=true
+    log "Processing all files (including those past 100 days)"
 else
-    log "ERROR: Program failed"
-    exit 1
+    log "Processing recent files only (within 100 days)"
+fi
+
+# Use --process-all flag to process all dates, or omit for recent dates only (within 100 days)
+if [ "$PROCESS_ALL" = true ]; then
+    # For full reload, first process all files to generate CSVs, then calculate performance
+    log "Step 1: Processing all TSV files to generate CSV data..."
+    if ./target/release/grq-validation --docs-path docs --process-all; then
+        log "File processing completed successfully"
+    else
+        log "ERROR: File processing failed"
+        exit 1
+    fi
+    
+    log "Step 2: Calculating performance metrics..."
+    if ./target/release/grq-validation --docs-path docs --calculate-performance; then
+        log "Performance calculation completed successfully"
+    else
+        log "ERROR: Performance calculation failed"
+        exit 1
+    fi
+else
+    # For recent files only, just calculate performance (CSVs should already exist)
+    if ./target/release/grq-validation --docs-path docs --calculate-performance; then
+        log "Program completed successfully"
+    else
+        log "ERROR: Program failed"
+        exit 1
+    fi
 fi
 
 log "Automated run completed successfully" 
