@@ -284,6 +284,35 @@ fn main() -> Result<()> {
                         log::error!("Failed to create dividend CSV: {}", e);
                     }
                 }
+                
+                // Calculate performance for this score file immediately after creating CSVs
+                info!("Calculating performance for {}", score_entry.date);
+                match utils::calculate_portfolio_performance(&score_file_path, &score_entry.date) {
+                    Ok(performance) => {
+                        info!("Performance for {}: {:.2}% (90-day), {:.2}% (annualized)", 
+                              score_entry.date, performance.performance_90_day, performance.performance_annualized);
+                        
+                        // Update the index.json with this performance data
+                        let mut index_data = utils::read_index_json(&args.docs_path)?;
+                        for score_entry_update in &mut index_data.scores {
+                            if score_entry_update.date == score_entry.date {
+                                score_entry_update.performance_90_day = Some(performance.performance_90_day);
+                                score_entry_update.performance_annualized = Some(performance.performance_annualized);
+                                score_entry_update.total_stocks = Some(performance.total_stocks);
+                                break;
+                            }
+                        }
+                        
+                        // Write updated index back to file
+                        let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+                        let json_content = serde_json::to_string_pretty(&index_data)?;
+                        std::fs::write(index_path, json_content)?;
+                        info!("Updated index.json with performance data for {}", score_entry.date);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to calculate performance for {}: {}", score_entry.date, e);
+                    }
+                }
             }
             Err(e) => {
                 log::error!("Failed to read ticker codes from {}: {}", score_file_path, e);
@@ -291,17 +320,11 @@ fn main() -> Result<()> {
         }
     }
 
-    // Calculate performance metrics if requested
+    // Note: Performance is now calculated inline for each score file
+    // The --calculate-performance flag is kept for backward compatibility
     if args.calculate_performance {
-        info!("Calculating performance metrics for all score files...");
-        match update_index_with_performance(&args.docs_path) {
-            Ok(_) => {
-                info!("Successfully updated index.json with performance metrics");
-            }
-            Err(e) => {
-                log::error!("Failed to update performance metrics: {}", e);
-            }
-        }
+        info!("Performance calculation is now done inline for each score file");
+        info!("The --calculate-performance flag is no longer needed for normal operation");
     }
 
     info!("GRQ Validation processor completed successfully");

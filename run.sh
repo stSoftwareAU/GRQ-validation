@@ -91,25 +91,16 @@ fi
 
 # Use --process-all flag to process all dates, or omit for recent dates only (within 100 days)
 if [ "$PROCESS_ALL" = true ]; then
-    # For full reload, first process all files to generate CSVs, then calculate performance
-    log "Step 1: Processing all TSV files to generate CSV data..."
+    # For full reload, process all files (performance is calculated inline)
     if ./target/release/grq-validation --docs-path docs --process-all; then
-        log "File processing completed successfully"
+        log "Program completed successfully"
     else
-        log "ERROR: File processing failed"
-        exit 1
-    fi
-    
-    log "Step 2: Calculating performance metrics..."
-    if ./target/release/grq-validation --docs-path docs --calculate-performance; then
-        log "Performance calculation completed successfully"
-    else
-        log "ERROR: Performance calculation failed"
+        log "ERROR: Program failed"
         exit 1
     fi
 else
-    # For recent files only, just calculate performance (CSVs should already exist)
-    if ./target/release/grq-validation --docs-path docs --calculate-performance; then
+    # For recent files only, process files (performance is calculated inline)
+    if ./target/release/grq-validation --docs-path docs; then
         log "Program completed successfully"
     else
         log "ERROR: Program failed"
