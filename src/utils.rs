@@ -594,6 +594,50 @@ mod tests {
     }
 
     #[test]
+    fn test_read_tsv_score_file_with_currency() {
+        let result = read_tsv_score_file("docs/scores/2025/May/27.tsv");
+        assert!(
+            result.is_ok(),
+            "Failed to read TSV file with currency values: {:?}",
+            result.err()
+        );
+
+        let stock_records = result.unwrap();
+        assert!(!stock_records.is_empty());
+
+        // Check that we have the expected number of records (22 in the file)
+        assert_eq!(stock_records.len(), 22);
+
+        // Check first record with currency values
+        let first_record = &stock_records[0];
+        assert_eq!(first_record.stock, "NYSE:SEM");
+        assert_eq!(first_record.score, 1.0);
+        assert_eq!(first_record.target, 21.99); // Should parse "$21.99" correctly
+        assert_eq!(
+            first_record.ex_dividend_date,
+            Some("15 May 2025".to_string())
+        );
+        assert_eq!(first_record.dividend_per_share, Some(0.09375));
+
+        // Check a record with negative currency values
+        let record_with_negative = stock_records.iter().find(|r| r.stock == "NYSE:SHG").unwrap();
+        assert_eq!(record_with_negative.intrinsic_value_per_share_basic, Some(-555.69)); // Should parse "-$555.69" correctly
+        assert_eq!(record_with_negative.intrinsic_value_per_share_adjusted, Some(-538.38)); // Should parse "-$538.38" correctly
+
+        // Check that all records have valid stock symbols
+        for (i, record) in stock_records.iter().enumerate() {
+            if !validate_stock_symbol(&record.stock) {
+                println!(
+                    "Invalid stock symbol at row {row}: {symbol}",
+                    row = i + 2,
+                    symbol = record.stock
+                );
+            }
+            assert!(validate_stock_symbol(&record.stock));
+        }
+    }
+
+    #[test]
     fn test_extract_symbol_from_ticker() {
         assert_eq!(extract_symbol_from_ticker("NASDAQ:CALM"), "CALM");
         assert_eq!(extract_symbol_from_ticker("NYSE:SEM"), "SEM");
