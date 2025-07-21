@@ -140,6 +140,11 @@ pub struct MarketData {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct IndexData {
+    pub scores: Vec<ScoreEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ScoreEntry {
     #[serde(rename = "year")]
     pub year: String,
@@ -151,11 +156,14 @@ pub struct ScoreEntry {
     pub file: String,
     #[serde(rename = "date")]
     pub date: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IndexData {
-    pub scores: Vec<ScoreEntry>,
+    #[serde(rename = "performance_90_day", skip_serializing_if = "Option::is_none")]
+    pub performance_90_day: Option<f64>,
+    #[serde(rename = "performance_annualized", skip_serializing_if = "Option::is_none")]
+    pub performance_annualized: Option<f64>,
+    #[serde(rename = "total_stocks", skip_serializing_if = "Option::is_none")]
+    pub total_stocks: Option<i32>,
+    #[serde(rename = "stocks_with_data", skip_serializing_if = "Option::is_none")]
+    pub stocks_with_data: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -176,6 +184,27 @@ pub struct DividendRecord {
 pub struct DividendData {
     pub symbol: String,
     pub data: Vec<DividendRecord>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StockPerformance {
+    pub ticker: String,
+    pub buy_price: f64,
+    pub target_price: f64,
+    pub current_price: f64,
+    pub gain_loss_percent: f64,
+    pub dividends_total: f64,
+    pub total_return_percent: f64,
+}
+
+#[derive(Debug)]
+pub struct PortfolioPerformance {
+    pub score_date: String,
+    pub total_stocks: i32,
+    pub stocks_with_data: i32,
+    pub performance_90_day: f64,
+    pub performance_annualized: f64,
+    pub individual_performances: Vec<StockPerformance>,
 }
 
 #[cfg(test)]
@@ -231,6 +260,10 @@ mod tests {
             day: "20".to_string(),
             file: "2025/June/20.tsv".to_string(),
             date: "2025-06-20".to_string(),
+            performance_90_day: None,
+            performance_annualized: None,
+            total_stocks: None,
+            stocks_with_data: None,
         };
 
         assert_eq!(entry.date, "2025-06-20");
@@ -245,6 +278,10 @@ mod tests {
             day: "20".to_string(),
             file: "2025/June/20.tsv".to_string(),
             date: "2025-06-20".to_string(),
+            performance_90_day: None,
+            performance_annualized: None,
+            total_stocks: None,
+            stocks_with_data: None,
         };
 
         let entry2 = ScoreEntry {
@@ -253,6 +290,10 @@ mod tests {
             day: "21".to_string(),
             file: "2025/June/21.tsv".to_string(),
             date: "2025-06-21".to_string(),
+            performance_90_day: None,
+            performance_annualized: None,
+            total_stocks: None,
+            stocks_with_data: None,
         };
 
         let index_data = IndexData {

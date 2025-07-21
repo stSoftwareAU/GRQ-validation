@@ -5,7 +5,11 @@
       "month": "November",
       "day": "15",
       "file": "2024/November/15.tsv",
-      "date": "2024-11-15"
+      "date": "2024-11-15",
+      "performance_90_day": 6.563410657545587,
+      "performance_annualized": 29.406185772286932,
+      "total_stocks": 20,
+      "stocks_with_data": 20
     },
     {
       "year": "2024",
@@ -90,14 +94,15 @@
       "day": "5",
       "file": "2025/June/05.tsv",
       "date": "2025-06-05"
-    },   
+    },
     {
       "year": "2025",
       "month": "June",
       "day": "11",
       "file": "2025/June/11.tsv",
       "date": "2025-06-11"
-    },    {
+    },
+    {
       "year": "2025",
       "month": "June",
       "day": "20",

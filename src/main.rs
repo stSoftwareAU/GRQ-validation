@@ -4,8 +4,9 @@ use clap::Parser;
 use log::info;
 use utils::{
     create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
-    extract_ticker_codes_from_score_file, read_index_json,
+    extract_ticker_codes_from_score_file, read_index_json, update_index_with_performance,
 };
+use std::path::Path;
 
 pub mod models;
 pub mod utils;
@@ -21,9 +22,17 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
-    /// Process all score files, including those more than 100 days old (default: only process recent files)
+    /// Process all score files, including those more than 180 days old
     #[arg(long)]
     process_all: bool,
+
+    /// Calculate performance metrics for score files
+    #[arg(long)]
+    calculate_performance: bool,
+
+    /// Only calculate performance metrics (skip CSV generation)
+    #[arg(long)]
+    performance_only: bool,
 }
 
 fn main() -> Result<()> {
@@ -39,46 +48,108 @@ fn main() -> Result<()> {
     info!("Starting GRQ Validation processor");
     info!("Docs path: {}", args.docs_path);
 
+    // Test mode: Calculate performance for November 15, 2024 only
+    if args.performance_only {
+        info!("Running performance calculation test for November 15, 2024");
+        let score_file_path = format!("{}/scores/2024/November/15.tsv", args.docs_path);
+        let score_file_date = "2024-11-15";
+        
+        match utils::calculate_portfolio_performance(&score_file_path, score_file_date) {
+            Ok(performance) => {
+                println!("\n=== November 15, 2024 Performance Results ===");
+                println!("Score Date: {}", performance.score_date);
+                println!("Total Stocks: {}", performance.total_stocks);
+                println!("Stocks with Data: {}", performance.stocks_with_data);
+                println!("90-Day Performance: {:.2}%", performance.performance_90_day);
+                println!("Annualized Performance: {:.2}%", performance.performance_annualized);
+                println!();
+                
+                println!("Individual Stock Performances:");
+                for stock_perf in &performance.individual_performances {
+                    println!("  {}: Buy=${:.2}, Current=${:.2}, Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
+                        stock_perf.ticker,
+                        stock_perf.buy_price,
+                        stock_perf.current_price,
+                        stock_perf.gain_loss_percent,
+                        stock_perf.dividends_total,
+                        stock_perf.total_return_percent
+                    );
+                }
+                
+                // Update the index.json with this performance data
+                let mut index_data = utils::read_index_json(&args.docs_path)?;
+                for score_entry in &mut index_data.scores {
+                    if score_entry.date == "2024-11-15" {
+                        score_entry.performance_90_day = Some(performance.performance_90_day);
+                        score_entry.performance_annualized = Some(performance.performance_annualized);
+                        score_entry.total_stocks = Some(performance.total_stocks);
+                        score_entry.stocks_with_data = Some(performance.stocks_with_data);
+                        break;
+                    }
+                }
+                
+                // Write updated index back to file
+                let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+                let json_content = serde_json::to_string_pretty(&index_data)?;
+                std::fs::write(index_path, json_content)?;
+                println!("\nUpdated index.json with performance data for November 15, 2024");
+            }
+            Err(e) => {
+                log::error!("Failed to calculate performance: {}", e);
+                return Err(e);
+            }
+        }
+        
+        info!("Performance calculation test completed");
+        return Ok(());
+    }
+
+    // Calculate performance for all score files that are at least 90 days old
+    if args.calculate_performance {
+        info!("Calculating performance metrics for all score files...");
+        match utils::update_index_with_performance(&args.docs_path) {
+            Ok(_) => {
+                info!("Successfully updated index.json with performance metrics");
+            }
+            Err(e) => {
+                log::error!("Failed to update performance metrics: {}", e);
+            }
+        }
+        return Ok(());
+    }
+
     // Read the index to get all score files
     let index_data = read_index_json(&args.docs_path)?;
     info!("Found {} score files to process", index_data.scores.len());
 
-    // Filter out score files that are more than 100 days old (unless --process-all is specified)
-    let scores_to_process = if args.process_all {
-        info!("Processing all score files (including old ones)");
+    // Filter out score files that are more than 180 days old (unless --process-all is specified)
+    let current_date = Utc::now().naive_utc().date();
+    let scores_to_process: Vec<_> = if args.process_all {
         index_data.scores.iter().collect()
     } else {
-        let today = Utc::now().naive_utc().date();
-        let cutoff_date = today - chrono::Duration::days(100);
-
-        let recent_scores: Vec<_> = index_data
-            .scores
+        index_data.scores
             .iter()
-            .filter(|score| {
-                if let Ok(score_date) = NaiveDate::parse_from_str(&score.date, "%Y-%m-%d") {
-                    score_date >= cutoff_date
+            .filter(|score_entry| {
+                if let Ok(score_date) = NaiveDate::parse_from_str(&score_entry.date, "%Y-%m-%d") {
+                    let days_since_score = (current_date - score_date).num_days();
+                    days_since_score <= 180
                 } else {
                     false
                 }
             })
-            .collect();
-
-        info!(
-            "Filtered to {} recent score files (within 100 days)",
-            recent_scores.len()
-        );
-        if recent_scores.len() < index_data.scores.len() {
-            info!(
-                "Skipped {} old score files (more than 100 days old)",
-                index_data.scores.len() - recent_scores.len()
-            );
-        }
-        recent_scores
+            .collect()
     };
 
-    let mut processed_count = 0;
-    let mut error_count = 0;
+    info!(
+        "Filtered to {} recent score files (within 180 days)",
+        scores_to_process.len()
+    );
+    info!(
+        "Skipped {} old score files (more than 180 days old)",
+        index_data.scores.len() - scores_to_process.len()
+    );
 
+    // Process each score file
     for (i, score_entry) in scores_to_process.iter().enumerate() {
         let score_file_path = format!("{}/scores/{}", args.docs_path, score_entry.file);
 
@@ -103,44 +174,48 @@ fn main() -> Result<()> {
                     None,
                 ) {
                     Ok(output_path) => {
-                        info!("Successfully created market data CSV: {output_path}");
-
-                        // Also create dividend CSV file
-                        match create_dividend_csv_for_score_file(
-                            &score_file_path,
-                            &ticker_codes,
-                            &score_entry.date,
-                        ) {
-                            Ok(_) => {
-                                info!("Successfully created dividend CSV for {score_file_path}");
-                            }
-                            Err(e) => {
-                                log::warn!(
-                                    "Failed to create dividend CSV for {score_file_path}: {e}"
-                                );
-                            }
-                        }
-
-                        processed_count += 1;
+                        info!("Successfully created market data CSV: {}", output_path);
                     }
                     Err(e) => {
-                        log::error!("Failed to create CSV for {score_file_path}: {e}");
-                        error_count += 1;
+                        log::error!("Failed to create market data CSV: {}", e);
+                    }
+                }
+
+                // Create dividend CSV file
+                match create_dividend_csv_for_score_file(
+                    &score_file_path,
+                    &ticker_codes,
+                    &score_entry.date,
+                ) {
+                    Ok(_) => {
+                        info!("Successfully created dividend CSV for {}", score_file_path);
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create dividend CSV: {}", e);
                     }
                 }
             }
             Err(e) => {
-                log::error!("Failed to read ticker codes from {score_file_path}: {e}");
-                error_count += 1;
+                log::error!("Failed to read ticker codes from {}: {}", score_file_path, e);
             }
         }
     }
 
-    info!("Processing completed: {processed_count} successful, {error_count} errors");
-
-    if error_count > 0 {
-        log::warn!("Some files had errors, but processing continued");
+    // Calculate performance metrics if requested
+    if args.calculate_performance {
+        info!("Calculating performance metrics for all score files...");
+        match update_index_with_performance(&args.docs_path) {
+            Ok(_) => {
+                info!("Successfully updated index.json with performance metrics");
+            }
+            Err(e) => {
+                log::error!("Failed to update performance metrics: {}", e);
+            }
+        }
     }
 
+    info!("GRQ Validation processor completed successfully");
     Ok(())
 }
+
+

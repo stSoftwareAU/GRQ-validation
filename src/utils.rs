@@ -2,6 +2,8 @@ use crate::models::DividendData;
 use crate::models::IndexData;
 use crate::models::MarketData;
 use crate::models::StockRecord;
+use crate::models::StockPerformance;
+use crate::models::PortfolioPerformance;
 use anyhow::Result;
 use chrono::{Duration, NaiveDate};
 use std::collections::HashMap;
@@ -451,6 +453,178 @@ pub fn create_dividend_csv_for_score_file(
     create_dividend_csv(symbols, score_file_date, &output_path)
 }
 
+/// Calculates portfolio performance for a given score file
+pub fn calculate_portfolio_performance(
+    score_file_path: &str,
+    score_file_date: &str,
+) -> Result<PortfolioPerformance> {
+    // Read the score file
+    let stock_records = read_tsv_score_file(score_file_path)?;
+    let total_stocks = stock_records.len() as i32;
+    
+    // Calculate the 90-day end date
+    let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
+    let end_date = score_date + Duration::days(90);
+    let end_date_str = end_date.format("%Y-%m-%d").to_string();
+    
+    let mut individual_performances = Vec::new();
+    let mut stocks_with_data = 0;
+    
+    for record in &stock_records {
+        // Extract symbol from ticker (e.g., "NYSE:SEM" -> "SEM")
+        let symbol = extract_symbol_from_ticker(&record.stock);
+        
+        // Try to read market data for this stock
+        match read_market_data(&symbol) {
+            Ok(market_data) => {
+                // Get the buy price (first day close)
+                let buy_price = if let Some(first_day) = market_data.time_series_daily.get(score_file_date) {
+                    first_day.close.parse::<f64>().unwrap_or(0.0)
+                } else {
+                    continue; // Skip if no data for score date
+                };
+                
+                // Get the current price (90-day end date or latest available)
+                let current_price = if let Some(end_day) = market_data.time_series_daily.get(&end_date_str) {
+                    end_day.close.parse::<f64>().unwrap_or(0.0)
+                } else {
+                    // Find the latest available price within 90 days
+                    let mut latest_price = 0.0;
+                    let mut latest_date = score_date;
+                    
+                    for (date_str, daily_data) in &market_data.time_series_daily {
+                        if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                            if date >= score_date && date <= end_date {
+                                if date >= latest_date {
+                                    latest_date = date;
+                                    latest_price = daily_data.close.parse::<f64>().unwrap_or(0.0);
+                                }
+                            }
+                        }
+                    }
+                    latest_price
+                };
+                
+                if buy_price > 0.0 && current_price > 0.0 {
+                    // Calculate price gain/loss
+                    let gain_loss_percent = ((current_price - buy_price) / buy_price) * 100.0;
+                    
+                    // Calculate dividends for the 90-day period
+                    let dividends_total = calculate_dividends_for_period(
+                        &symbol,
+                        score_file_date,
+                        &end_date_str,
+                    ).unwrap_or(0.0);
+                    
+                    // Calculate total return (price + dividends)
+                    let total_return_percent = gain_loss_percent + (dividends_total / buy_price * 100.0);
+                    
+                    individual_performances.push(StockPerformance {
+                        ticker: record.stock.clone(),
+                        buy_price,
+                        target_price: record.target,
+                        current_price,
+                        gain_loss_percent,
+                        dividends_total,
+                        total_return_percent,
+                    });
+                    
+                    stocks_with_data += 1;
+                }
+            }
+            Err(_) => {
+                // Skip stocks without market data
+                continue;
+            }
+        }
+    }
+    
+    // Calculate portfolio performance
+    let performance_90_day = if !individual_performances.is_empty() {
+        let total_return: f64 = individual_performances.iter()
+            .map(|p| p.total_return_percent)
+            .sum();
+        total_return / individual_performances.len() as f64
+    } else {
+        0.0
+    };
+    
+    // Calculate annualized performance (90 days = 0.2466 years)
+    let performance_annualized = if performance_90_day != 0.0 {
+        ((1.0 + performance_90_day / 100.0).powf(1.0 / 0.2466) - 1.0) * 100.0
+    } else {
+        0.0
+    };
+    
+    Ok(PortfolioPerformance {
+        score_date: score_file_date.to_string(),
+        total_stocks,
+        stocks_with_data,
+        performance_90_day,
+        performance_annualized,
+        individual_performances,
+    })
+}
+
+/// Calculates total dividends for a stock in a given date range
+fn calculate_dividends_for_period(
+    symbol: &str,
+    start_date: &str,
+    end_date: &str,
+) -> Result<f64> {
+    match read_dividend_data(symbol) {
+        Ok(dividend_data) => {
+            let filtered_data = filter_dividend_data_by_date_range(
+                &dividend_data,
+                start_date,
+                end_date,
+            )?;
+            
+            let total_dividends: f64 = filtered_data.iter()
+                .map(|(_, amount)| amount)
+                .sum();
+            
+            Ok(total_dividends)
+        }
+        Err(_) => Ok(0.0), // Return 0 if no dividend data available
+    }
+}
+
+/// Updates the index.json file with performance metrics
+pub fn update_index_with_performance(docs_path: &str) -> Result<()> {
+    let mut index_data = read_index_json(docs_path)?;
+    
+    for score_entry in &mut index_data.scores {
+        let score_file_path = format!("{}/scores/{}", docs_path, score_entry.file);
+        
+        // Only calculate performance for files that are at least 90 days old
+        let score_date = NaiveDate::parse_from_str(&score_entry.date, "%Y-%m-%d")?;
+        let current_date = chrono::Utc::now().naive_utc().date();
+        let days_since_score = (current_date - score_date).num_days();
+        
+        if days_since_score >= 90 {
+            match calculate_portfolio_performance(&score_file_path, &score_entry.date) {
+                Ok(performance) => {
+                    score_entry.performance_90_day = Some(performance.performance_90_day);
+                    score_entry.performance_annualized = Some(performance.performance_annualized);
+                    score_entry.total_stocks = Some(performance.total_stocks);
+                    score_entry.stocks_with_data = Some(performance.stocks_with_data);
+                }
+                Err(e) => {
+                    println!("Warning: Could not calculate performance for {}: {}", score_entry.file, e);
+                }
+            }
+        }
+    }
+    
+    // Write updated index back to file
+    let index_path = Path::new(docs_path).join("scores").join("index.json");
+    let json_content = serde_json::to_string_pretty(&index_data)?;
+    std::fs::write(index_path, json_content)?;
+    
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -747,5 +921,61 @@ mod tests {
             derive_dividend_csv_output_path("test.tsv"),
             "test-dividends.csv"
         );
+    }
+
+    #[test]
+    fn test_calculate_performance_november_15_2024() {
+        // Skip test if external data repository is not available
+        if !std::path::Path::new(MARKET_DATA_BASE_PATH).exists() {
+            println!("Skipping test_calculate_performance_november_15_2024: external data repository not available");
+            return;
+        }
+
+        let score_file_path = "docs/scores/2024/November/15.tsv";
+        let score_file_date = "2024-11-15";
+
+        let result = calculate_portfolio_performance(score_file_path, score_file_date);
+        assert!(
+            result.is_ok(),
+            "Failed to calculate performance: {:?}",
+            result.err()
+        );
+
+        let performance = result.unwrap();
+        
+        println!("=== November 15, 2024 Performance Results ===");
+        println!("Score Date: {}", performance.score_date);
+        println!("Total Stocks: {}", performance.total_stocks);
+        println!("Stocks with Data: {}", performance.stocks_with_data);
+        println!("90-Day Performance: {:.2}%", performance.performance_90_day);
+        println!("Annualized Performance: {:.2}%", performance.performance_annualized);
+        println!();
+        
+        println!("Individual Stock Performances:");
+        for stock_perf in &performance.individual_performances {
+            println!("  {}: Buy=${:.2}, Current=${:.2}, Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
+                stock_perf.ticker,
+                stock_perf.buy_price,
+                stock_perf.current_price,
+                stock_perf.gain_loss_percent,
+                stock_perf.dividends_total,
+                stock_perf.total_return_percent
+            );
+        }
+
+        // Basic assertions
+        assert_eq!(performance.score_date, "2024-11-15");
+        assert!(performance.total_stocks > 0);
+        assert!(performance.stocks_with_data > 0);
+        assert!(performance.stocks_with_data <= performance.total_stocks);
+        
+        // The 90-day period should be from 2024-11-15 to 2025-02-13
+        // Since this is historical data, we should have results
+        assert!(performance.performance_90_day != 0.0 || performance.stocks_with_data == 0);
+        
+        // Annualized performance should be calculated if we have 90-day performance
+        if performance.performance_90_day != 0.0 {
+            assert!(performance.performance_annualized != 0.0);
+        }
     }
 }
