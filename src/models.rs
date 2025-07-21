@@ -1,12 +1,48 @@
 use serde::{Deserialize, Serialize};
 
+/// Custom deserializer for currency values that may contain dollar signs and commas
+fn deserialize_currency<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    
+    // Remove dollar sign and commas, then parse as float
+    let cleaned = s.replace('$', "").replace(',', "");
+    
+    cleaned.parse::<f64>().map_err(serde::de::Error::custom)
+}
+
+/// Custom deserializer for optional currency values
+fn deserialize_optional_currency<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Deserialize::deserialize(deserializer)?;
+    
+    match s {
+        Some(s) => {
+            if s.trim().is_empty() {
+                Ok(None)
+            } else {
+                // Remove dollar sign and commas, then parse as float
+                let cleaned = s.replace('$', "").replace(',', "");
+                cleaned.parse::<f64>()
+                    .map(Some)
+                    .map_err(serde::de::Error::custom)
+            }
+        }
+        None => Ok(None),
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StockRecord {
     #[serde(rename = "Stock")]
     pub stock: String,
     #[serde(rename = "Score")]
     pub score: f64,
-    #[serde(rename = "Target")]
+    #[serde(rename = "Target", deserialize_with = "deserialize_currency")]
     pub target: f64,
     #[serde(rename = "ExDividendDate")]
     pub ex_dividend_date: Option<String>,
@@ -14,9 +50,9 @@ pub struct StockRecord {
     pub dividend_per_share: Option<f64>,
     #[serde(rename = "Notes")]
     pub notes: Option<String>,
-    #[serde(rename = "intrinsicValuePerShareBasic")]
+    #[serde(rename = "intrinsicValuePerShareBasic", deserialize_with = "deserialize_optional_currency")]
     pub intrinsic_value_per_share_basic: Option<f64>,
-    #[serde(rename = "intrinsicValuePerShareAdjusted")]
+    #[serde(rename = "intrinsicValuePerShareAdjusted", deserialize_with = "deserialize_optional_currency")]
     pub intrinsic_value_per_share_adjusted: Option<f64>,
 }
 
