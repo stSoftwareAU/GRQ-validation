@@ -21,195 +21,167 @@
       rel="stylesheet"
     >
 
-    <!-- DataTables CSS -->
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/datetime/1.5.0/css/dataTables.dateTime.min.css">
-
     <!-- Custom styles -->
-    <link rel="stylesheet" href="styles.css">
-
     <style>
+        .header-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
         .performance-positive {
             color: #10b981 !important;
-            font-weight: 600;
         }
+        
         .performance-negative {
             color: #ef4444 !important;
-            font-weight: 600;
         }
+        
         .performance-neutral {
             color: #6b7280 !important;
         }
+        
         .date-filter-container {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 25px;
-            color: white;
-        }
-        .date-filter-container label {
-            color: white;
-            font-weight: 600;
-        }
-        .date-filter-container .form-control,
-        .date-filter-container .form-select {
-            background: rgba(255, 255, 255, 0.9);
-            border: none;
+            background: #f8f9fa;
             border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
         }
+        
+        .date-filter-container label {
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .date-filter-container .form-select {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+        }
+        
         .summary-stats {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            border-radius: 12px;
-            padding: 25px;
-            margin-top: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
         }
+        
         .summary-stat {
             text-align: center;
-            padding: 15px;
         }
+        
         .summary-stat-value {
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: 700;
             margin-bottom: 5px;
         }
+        
         .summary-stat-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        .table-container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
-        .table-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .table-header h5 {
-            color: white;
-            margin: 0;
-        }
-        .dataTables_wrapper {
-            padding: 20px;
-        }
-        .dataTables_wrapper .dataTables_filter {
-            margin-bottom: 20px;
-        }
-        .dataTables_wrapper .dataTables_length {
-            margin-bottom: 20px;
-        }
-        .dataTables_wrapper .dataTables_buttons {
-            margin-bottom: 20px;
-        }
-        .dataTables_wrapper .dt-buttons {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .dataTables_wrapper .dt-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 8px !important;
-            padding: 8px 16px !important;
-            font-size: 0.9rem !important;
-            font-weight: 500 !important;
-            transition: all 0.3s ease !important;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
-            text-decoration: none !important;
-        }
-        .dataTables_wrapper .dt-button:hover {
-            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
-            transform: translateY(-1px) !important;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
-            color: white !important;
-            text-decoration: none !important;
-        }
-        .dataTables_wrapper .dt-button:focus {
-            color: white !important;
-            text-decoration: none !important;
-        }
-        .dataTables_wrapper .dt-button:active {
-            color: white !important;
-            text-decoration: none !important;
-        }
-        .dataTables_wrapper .dt-button span {
-            color: white !important;
-        }
-        .dataTables_wrapper .dt-button i {
-            color: white !important;
-        }
-        .btn-view {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            border: none;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .btn-view:hover {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            color: white;
-        }
-        .btn-clear-filters {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .btn-clear-filters:hover {
-            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            color: white;
-        }
-        .table {
-            width: 100% !important;
-        }
-        .table th {
-            background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-            color: white;
-            font-weight: 600;
-            border: none;
-            padding: 15px 10px;
-        }
-        .table td {
-            padding: 12px 10px;
-            vertical-align: middle;
-        }
-        .table tbody tr:hover {
-            background-color: #f8fafc;
-        }
-        .card-header.header-gradient {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .btn-outline-primary {
-            border-color: #667eea;
-            color: #667eea;
-        }
-        .btn-outline-primary:hover {
-            background-color: #667eea;
-            border-color: #667eea;
+            font-size: 0.875rem;
+            color: #6b7280;
         }
         
-
+        .btn-view {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+        
+        .btn-view:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+            color: white;
+            text-decoration: none;
+        }
+        
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+        
+        .error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .table-container {
+            width: 100%;
+        }
+        
+        .table-responsive {
+            width: 100%;
+        }
+        
+        .score-files-table {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper {
+            width: 100%;
+        }
+        
+        .dataTables_wrapper .dataTables_scroll {
+            width: 100%;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollBody {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollHead {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper table {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollHeadInner {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollHeadInner table {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollBody table {
+            width: 100% !important;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollHead table,
+        .dataTables_wrapper .dataTables_scrollBody table {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollHead th,
+        .dataTables_wrapper .dataTables_scrollBody td {
+            box-sizing: border-box;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollHeadInner {
+            width: 100% !important;
+            box-sizing: border-box;
+        }
+        
+        .dataTables_wrapper .dataTables_scrollBody {
+            width: 100% !important;
+            box-sizing: border-box;
+        }
+        
+        .container-fluid {
+            max-width: 100%;
+            padding-left: 15px;
+            padding-right: 15px;
+        }
     </style>
-
   </head>
   <body class="bg-light">
     <div class="container-fluid">
@@ -217,31 +189,22 @@
         <div class="col-12">
           <div class="card shadow-sm border-0">
             <div class="card-header header-gradient text-white text-center py-4">
-              <h1 class="display-4 mb-2">GRQ Score Files Performance</h1>
+              <h1 class="display-4 mb-2">GRQ Score Files List</h1>
               <p class="lead mb-0">
-                Track 90-day performance across all score files
+                Browse and filter score files by date and performance
               </p>
             </div>
 
             <div class="card-body p-4">
-              <!-- Navigation -->
-              <div class="row mb-4">
-                <div class="col-12">
-                  <a href="index.html" class="btn btn-outline-primary">
-                    ← Back to Dashboard
-                  </a>
-                </div>
-              </div>
-
               <!-- Loading and Error Messages -->
-              <div id="loading" class="loading text-center py-5">
+              <div id="loading" class="loading">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
                 <p class="mt-3">Loading score files...</p>
               </div>
 
-              <div id="error" class="alert alert-danger" style="display: none">
+              <div id="error" class="error" style="display: none">
               </div>
 
               <!-- Content -->
@@ -250,15 +213,15 @@
                 <div class="date-filter-container">
                   <div class="row">
                     <div class="col-md-3">
-                      <label for="startDate" class="form-label fw-bold">Start Date:</label>
-                      <input type="date" id="startDate" class="form-control">
+                      <label for="startDate" class="form-label">Start Date:</label>
+                      <input type="date" id="startDate" class="form-select">
                     </div>
                     <div class="col-md-3">
-                      <label for="endDate" class="form-label fw-bold">End Date:</label>
-                      <input type="date" id="endDate" class="form-control">
+                      <label for="endDate" class="form-label">End Date:</label>
+                      <input type="date" id="endDate" class="form-select">
                     </div>
                     <div class="col-md-3">
-                      <label for="performanceFilter" class="form-label fw-bold">Performance Filter:</label>
+                      <label for="performanceFilter" class="form-label">Performance Filter:</label>
                       <select id="performanceFilter" class="form-select">
                         <option value="">All Performance</option>
                         <option value="positive">Positive Only</option>
@@ -268,14 +231,80 @@
                       </select>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
-                      <button id="clearFilters" class="btn btn-clear-filters w-100">
-                        <i class="fas fa-eraser me-1"></i>Clear Filters
+                      <button id="clearFilters" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i>Clear Filters
                       </button>
                     </div>
                   </div>
                 </div>
 
+                <!-- Score Files Table -->
+                <div class="table-container">
+                  <div class="table-header">
+                    <h5 class="card-title mb-0">
+                      <i class="fas fa-table me-2"></i>
+                      Score Files Performance Summary
+                    </h5>
+                    <div class="alert alert-info mt-3 mb-0">
+                      <small>
+                        <i class="fas fa-info-circle me-1"></i>
+                        <strong>Filter Tips:</strong> Use the date range and performance filters above to find specific data. Click column headers to sort.
+                      </small>
+                    </div>
+                  </div>
+                  <div class="table-responsive">
+                    <table
+                      class="table table-hover score-files-table mb-0"
+                      id="scoreFilesTable"
+                    >
+                      <thead class="table-dark">
+                        <tr>
+                          <th>Date</th>
+                          <th>File</th>
+                          <th>Total Stocks</th>
+                          <th>90-Day Performance</th>
+                          <th>Annualized Performance</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="scoreFilesTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
 
+                <!-- Summary Statistics -->
+                <div class="summary-stats">
+                  <h4 class="text-center mb-4">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Performance Summary for Selected Files
+                  </h4>
+                  <div class="row">
+                    <div class="col-md-3">
+                      <div class="summary-stat">
+                        <div class="summary-stat-value" id="avg90Day">-</div>
+                        <div class="summary-stat-label">Avg 90-Day Performance</div>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="summary-stat">
+                        <div class="summary-stat-value" id="avgAnnualized">-</div>
+                        <div class="summary-stat-label">Avg Annualized Performance</div>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="summary-stat">
+                        <div class="summary-stat-value" id="totalFiles">-</div>
+                        <div class="summary-stat-label">Total Files</div>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="summary-stat">
+                        <div class="summary-stat-value" id="positiveCount">-</div>
+                        <div class="summary-stat-label">Positive Performance</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -320,34 +349,33 @@
             async init() {
                 try {
                     await this.loadScoreFiles();
+                    this.setupDataTable();
+                    this.setupFilters();
                     this.showContent();
+                    this.updateSummaryStats();
                 } catch (error) {
                     console.error('Initialization error:', error);
-                    this.showError('Failed to load score files: ' + error.message);
+                    this.showError('Failed to initialize: ' + error.message);
                 }
             }
             
             async loadScoreFiles() {
                 try {
+                    console.log('Loading score files...');
                     const response = await fetch('scores/index.json');
                     if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                    
                     const data = await response.json();
                     this.scoreFiles = data.scores || [];
-                    
-                    // Sort by date (newest first)
-                    this.scoreFiles.sort((a, b) => new Date(b.date) - new Date(a.date));
-                    
-                    console.log(`Loaded ${this.scoreFiles.length} score files`);
+                    console.log('Loaded score files:', this.scoreFiles.length);
                 } catch (error) {
                     console.error('Error loading score files:', error);
                     throw error;
                 }
             }
             
-            // setupDataTable() {
+            setupDataTable() {
                 try {
                     // Check if DataTables is available
                     if (typeof $.fn.DataTable === 'undefined') {
@@ -356,6 +384,10 @@
                     
                     this.dataTable = $('#scoreFilesTable').DataTable({
                         data: this.scoreFiles,
+                        autoWidth: false,
+                        scrollX: true,
+                        scrollCollapse: true,
+                        fixedHeader: true,
                         columns: [
                             { 
                                 data: 'date',
@@ -387,7 +419,6 @@
                                 },
                                 type: 'num'
                             },
-
                             { 
                                 data: 'performance_90_day',
                                 render: function(data, type, row) {
@@ -399,7 +430,6 @@
                                         }
                                         return '<span class="performance-neutral">-</span>';
                                     }
-                                    // Return raw data for sorting and filtering
                                     return data !== null && data !== undefined ? data : -999999;
                                 },
                                 type: 'num'
@@ -415,7 +445,6 @@
                                         }
                                         return '<span class="performance-neutral">-</span>';
                                     }
-                                    // Return raw data for sorting and filtering
                                     return data !== null && data !== undefined ? data : -999999;
                                 },
                                 type: 'num'
@@ -445,29 +474,28 @@
                                 className: 'dt-button'
                             },
                             {
-                                extend: 'excel',
-                                text: '<i class="fas fa-file-excel me-1"></i>Excel',
-                                className: 'dt-button'
-                            },
-                            {
                                 extend: 'print',
                                 text: '<i class="fas fa-print me-1"></i>Print',
                                 className: 'dt-button'
                             }
                         ],
                         language: {
-                            lengthMenu: "Show _MENU_ files per page",
-                            info: "Showing _START_ to _END_ of _TOTAL_ files",
+                            info: 'Showing _START_ to _END_ of _TOTAL_ score files',
+                            lengthMenu: 'Show _MENU_ score files per page',
                             paginate: {
-                                first: "First",
-                                last: "Last",
-                                next: "Next",
-                                previous: "Previous"
+                                first: 'First',
+                                last: 'Last',
+                                next: 'Next',
+                                previous: 'Previous'
                             }
                         },
-
+                        responsive: true,
+                        scrollX: true,
+                        scrollCollapse: true,
                         drawCallback: () => {
                             this.updateSummaryStats();
+                            // Ensure header alignment
+                            this.adjustHeaderAlignment();
                         }
                     });
                     
@@ -478,7 +506,7 @@
                 }
             }
             
-            // setupFilters() {
+            setupFilters() {
                 try {
                     // Date filters
                     $('#startDate, #endDate').on('change', () => {
@@ -497,13 +525,13 @@
                         this.applyFilters();
                     });
                     
-                    // console.log('Filters setup completed');
-                // } catch (error) {
-                //     console.error('Error setting up filters:', error);
-                // }
-            // }
+                    console.log('Filters setup completed');
+                } catch (error) {
+                    console.error('Error setting up filters:', error);
+                }
+            }
             
-            // applyFilters() {
+            applyFilters() {
                 try {
                     if (!this.dataTable) {
                         console.warn('DataTable not initialized, skipping filters');
@@ -516,7 +544,7 @@
                     
                     $.fn.dataTable.ext.search.push((settings, data, dataIndex) => {
                         const date = data[0]; // Date column
-                        const performance90Day = data[4]; // 90-day performance column (raw data)
+                        const performance90Day = data[3]; // 90-day performance column (raw data)
                         
                         // Date range filter
                         if (startDate && new Date(date) < new Date(startDate)) {
@@ -528,7 +556,6 @@
                         
                         // Performance filter
                         if (performanceFilter) {
-                            // Skip null/undefined values for performance filtering
                             if (performance90Day === null || performance90Day === undefined || performance90Day === -999999) {
                                 return false;
                             }
@@ -553,11 +580,11 @@
                     // Remove the filter function after drawing
                     $.fn.dataTable.ext.search.pop();
                 } catch (error) {
-                    // console.error('Error applying filters:', error);
-                // }
-            // }
+                    console.error('Error applying filters:', error);
+                }
+            }
             
-            // updateSummaryStats() {
+            updateSummaryStats() {
                 try {
                     if (!this.dataTable) {
                         console.warn('DataTable not initialized, skipping summary stats');
@@ -615,10 +642,10 @@
                     if (positiveCountElement) {
                         positiveCountElement.textContent = `${positiveCount} (${validCount > 0 ? (positiveCount / validCount * 100).toFixed(1) : 0}%)`;
                     }
-                // } catch (error) {
-                //     console.error('Error updating summary stats:', error);
-                // }
-            // }
+                } catch (error) {
+                    console.error('Error updating summary stats:', error);
+                }
+            }
             
             showContent() {
                 document.getElementById('loading').style.display = 'none';
@@ -631,6 +658,28 @@
                 errorDiv.textContent = message;
                 errorDiv.style.display = 'block';
                 console.error('Error displayed to user:', message);
+            }
+            
+            adjustHeaderAlignment() {
+                try {
+                    if (!this.dataTable) return;
+                    
+                    // Force header and body to have the same width
+                    const headerTable = this.dataTable.table().header();
+                    const bodyTable = this.dataTable.table().body();
+                    
+                    if (headerTable && bodyTable) {
+                        const headerWidth = $(headerTable).width();
+                        const bodyWidth = $(bodyTable).width();
+                        
+                        if (headerWidth !== bodyWidth) {
+                            $(headerTable).width(bodyWidth);
+                            $(headerTable).find('thead').width(bodyWidth);
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Error adjusting header alignment:', error);
+                }
             }
         }
         
