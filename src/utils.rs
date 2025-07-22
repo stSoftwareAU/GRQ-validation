@@ -728,9 +728,9 @@ pub fn calculate_hybrid_projection(
         0.0
     };
     
-    // Calculate annualized performance (90 days = 0.2466 years)
+    // Calculate annualized performance
     let performance_annualized = if performance_90_day != 0.0 {
-        ((1.0 + performance_90_day / 100.0).powf(1.0 / 0.2466) - 1.0) * 100.0
+        ((1.0 + performance_90_day / 100.0).powf(365.25/90) - 1.0) * 100.0
     } else {
         0.0
     };
