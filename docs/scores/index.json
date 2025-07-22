@@ -9,6 +9,16 @@
       "performance_90_day": -10.596468152538296,
       "performance_annualized": -36.5055286870994,
       "total_stocks": 23
+    },  
+    {
+      "year": "2024",
+      "month": "November",
+      "day": "2",
+      "file": "2024/November/2.tsv",
+      "date": "2024-11-02",
+      "performance_90_day": 0.47843554050118575,
+      "performance_annualized": 1.954353783927787,
+      "total_stocks": 23
     },
     {
       "year": "2024",
@@ -20,16 +30,7 @@
       "performance_annualized": 26.997824148901415,
       "total_stocks": 20
     },
-    {
-      "year": "2024",
-      "month": "November",
-      "day": "2",
-      "file": "2024/November/2.tsv",
-      "date": "2024-11-02",
-      "performance_90_day": 0.47843554050118575,
-      "performance_annualized": 1.954353783927787,
-      "total_stocks": 23
-    },
+
     {
       "year": "2024",
       "month": "December",
