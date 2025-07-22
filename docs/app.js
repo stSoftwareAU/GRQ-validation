@@ -3,6 +3,7 @@ class GRQValidator {
         this.scoreData = null;
         this.marketData = null;
         this.dividendData = null;
+        this.marketIndexData = null; // SP500 and NASDAQ data
         this.selectedFile = null;
         this.filteredStocks = [];
         this.selectedStock = null; // Track selected stock for single view
@@ -159,11 +160,33 @@ class GRQValidator {
 
     async loadScoreFile() {
         this.showLoading();
+        console.log('loadScoreFile called for:', this.selectedFile);
 
         try {
+            console.log('Loading score data...');
             await this.loadScoreData();
+            console.log('Score data loaded, stocks:', this.scoreData?.length);
+            
+            console.log('Loading market data...');
             await this.loadMarketData();
+            console.log('Market data loaded, available stocks:', this.marketData ? Object.keys(this.marketData).length : 0);
+            
+            // Show the main chart immediately
+            console.log('Calling updateDisplay...');
             this.updateDisplay();
+            
+            // Load market index data asynchronously (don't block the main display)
+            this.loadMarketIndexData().then(() => {
+                console.log('Market index data loaded successfully, updating UI...');
+                // Update the market comparison section when data is ready
+                this.updateMarketComparison();
+                // Also update the chart to include SP500 and NASDAQ lines
+                console.log('Updating chart with market index data...');
+                this.updateChart();
+            }).catch(error => {
+                console.warn('Market index data failed to load:', error);
+                // Don't show error to user - just log it
+            });
         } catch (error) {
             this.showError("Failed to load data: " + error.message);
         }
@@ -204,65 +227,81 @@ class GRQValidator {
 
     async loadMarketData() {
         const csvFile = this.selectedFile.replace(".tsv", ".csv");
+        console.log('Loading market data from:', csvFile);
+        console.log('Selected file:', this.selectedFile);
+        console.log('CSV file path:', `scores/${csvFile}`);
 
         try {
-            // Try multiple approaches to load the market data
-            let text = null;
-            let lines = null;
+            // Add cache-busting parameter
+            const timestamp = new Date().getTime();
+            const fullUrl = `scores/${csvFile}?t=${timestamp}`;
+            console.log('Full URL for market data:', fullUrl);
             
-            // First attempt: with cache-busting
-            try {
-                const timestamp = new Date().getTime();
-                const response = await fetch(`scores/${csvFile}?t=${timestamp}`);
-                text = await response.text();
-                
-                if (text.trim()) {
-                    lines = text.split("\n").filter((line) => line.trim());
-                    console.log(`Market data file loaded (with cache-busting): ${lines.length} lines, ${text.length} characters`);
+            // Try multiple times with different cache-busting strategies
+            let response = null;
+            let text = null;
+            
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const attemptUrl = `${fullUrl}&attempt=${attempt}`;
+                    console.log(`Attempt ${attempt} to fetch market data from:`, attemptUrl);
                     
-                    // Check if the file appears to be truncated
-                    if (lines.length > 1) {
-                        console.log('Market data loaded successfully with cache-busting');
-                    } else {
-                        console.warn('Market data file appears to be truncated with cache-busting, trying without...');
-                        text = null;
-                        lines = null;
+                    response = await fetch(attemptUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        console.error(`Attempt ${attempt} failed to load market data file:`, response.status, response.statusText);
+                        continue;
                     }
+                    
+                    text = await response.text();
+                    console.log(`Attempt ${attempt} successful, file size:`, text.length, 'characters');
+                    
+                    // If we got a reasonable amount of data, break
+                    if (text.length > 1000) {
+                        break;
+                    } else {
+                        console.warn(`Attempt ${attempt} returned suspiciously small file size:`, text.length);
+                    }
+                } catch (fetchError) {
+                    console.error(`Attempt ${attempt} fetch error:`, fetchError);
                 }
-            } catch (error) {
-                console.warn('Failed to load market data with cache-busting:', error);
             }
             
-            // Second attempt: without cache-busting
-            if (!text || !lines || lines.length <= 1) {
-                try {
-                    const response = await fetch(`scores/${csvFile}`);
-                    text = await response.text();
-                    
-                    if (text.trim()) {
-                        lines = text.split("\n").filter((line) => line.trim());
-                        console.log(`Market data file loaded (without cache-busting): ${lines.length} lines, ${text.length} characters`);
-                        
-                        if (lines.length <= 1) {
-                            console.warn('Market data file appears to be truncated without cache-busting as well');
-                            this.marketData = null;
-                            return;
-                        }
-                    } else {
-                        console.warn('Market data file is empty');
-                        this.marketData = null;
-                        return;
-                    }
-                } catch (error) {
-                    console.warn('Failed to load market data without cache-busting:', error);
-                    this.marketData = null;
-                    return;
-                }
+            if (!response || !response.ok) {
+                console.error('All attempts to load market data file failed');
+                this.marketData = null;
+                return;
+            }
+            console.log('Market data file loaded, size:', text.length, 'characters');
+            console.log('First 200 characters of market data:', text.substring(0, 200));
+
+            if (!text.trim()) {
+                console.warn('Market data file is empty');
+                this.marketData = null;
+                return;
             }
 
+            const lines = text.split("\n").filter((line) => line.trim());
+            console.log("Market data file lines:", lines.length);
+            if (lines.length > 0) {
+                console.log("First line:", lines[0]);
+                if (lines.length > 1) {
+                    console.log("Second line:", lines[1]);
+                }
+            }
+            
             this.marketData = {};
 
-            lines.slice(1).forEach((line) => {
+            lines.slice(1).forEach((line, index) => {
+                if (index < 3) { // Debug first 3 lines
+                    console.log(`Processing line ${index + 1}:`, line);
+                }
                 const values = line.split(",");
                 const date = values[0];
                 const ticker = values[1];
@@ -271,6 +310,10 @@ class GRQValidator {
                 const open = parseFloat(values[4]);
                 const close = parseFloat(values[5]);
                 const splitCoefficient = parseFloat(values[6]);
+
+                if (index < 3) { // Debug first 3 lines
+                    console.log(`Parsed values: date=${date}, ticker=${ticker}, high=${high}, low=${low}, open=${open}, close=${close}, split=${splitCoefficient}`);
+                }
 
                 if (!this.marketData[ticker]) {
                     this.marketData[ticker] = [];
@@ -288,6 +331,9 @@ class GRQValidator {
                     splitCoefficient,
                 });
             });
+            
+            console.log("Market data loaded for stocks:", Object.keys(this.marketData));
+            console.log("Total market data entries:", Object.values(this.marketData).reduce((sum, data) => sum + data.length, 0));
 
             // Load dividend data
             await this.loadDividendData();
@@ -351,8 +397,352 @@ class GRQValidator {
         }
     }
 
+    async loadMarketIndexData() {
+        try {
+            console.log('Starting to load market index data...');
+            
+            // Check if market data loading is disabled (for debugging)
+            const skipMarketData = localStorage.getItem('skipMarketData') === 'true';
+            if (skipMarketData) {
+                console.log('Market data loading disabled by user preference');
+                this.marketIndexData = null;
+                return;
+            }
+            
+            const scoreDate = this.getScoreDate(this.selectedFile);
+            if (!scoreDate) {
+                console.warn('Could not determine score date for market index data');
+                return;
+            }
+
+            console.log('Score date for market data:', scoreDate.toISOString().split('T')[0]);
+
+            // Calculate date range (from score date to now)
+            const endDate = new Date();
+            const startDate = new Date(scoreDate);
+            
+            // Format dates for Yahoo Finance API
+            const startTimestamp = Math.floor(startDate.getTime() / 1000);
+            const endTimestamp = Math.floor(endDate.getTime() / 1000);
+
+            console.log('Fetching SP500 data from Yahoo Finance via CORS proxy...');
+            
+            // Fetch SP500 data with multiple proxy options and better error handling
+            let sp500Data = null;
+            const sp500Proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
+                `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
+                `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`
+            ];
+            
+            for (let i = 0; i < sp500Proxies.length; i++) {
+                try {
+                    console.log(`Attempting SP500 fetch with proxy ${i + 1}/${sp500Proxies.length}...`);
+                    const sp500Response = await Promise.race([
+                        fetch(sp500Proxies[i], { method: 'GET' }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('SP500 request timeout')), 8000))
+                    ]);
+                    
+                    if (!sp500Response.ok) {
+                        throw new Error(`SP500 API request failed: ${sp500Response.status} ${sp500Response.statusText}`);
+                    }
+                    
+                    const responseText = await sp500Response.text();
+                    if (responseText.includes('Too Many Requests') || responseText.includes('rate limit')) {
+                        throw new Error('Yahoo Finance rate limit exceeded');
+                    }
+                    
+                    sp500Data = JSON.parse(responseText);
+                    console.log('SP500 raw data (proxy', i + 1, '):', sp500Data);
+                    break; // Success, exit the loop
+                } catch (sp500Error) {
+                    console.warn(`SP500 fetch failed with proxy ${i + 1}:`, sp500Error);
+                    if (i === sp500Proxies.length - 1) {
+                        console.warn('SP500 fetch failed with all proxies, continuing without market data');
+                        sp500Data = null;
+                    }
+                }
+            }
+
+            // Add delay between API calls to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            console.log('Fetching NASDAQ data from Yahoo Finance via CORS proxy...');
+            // Fetch NASDAQ data with multiple proxy options and better error handling
+            let nasdaqData = null;
+            const nasdaqProxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
+                `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
+                `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`
+            ];
+            
+            for (let i = 0; i < nasdaqProxies.length; i++) {
+                try {
+                    console.log(`Attempting NASDAQ fetch with proxy ${i + 1}/${nasdaqProxies.length}...`);
+                    const nasdaqResponse = await Promise.race([
+                        fetch(nasdaqProxies[i], { method: 'GET' }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('NASDAQ request timeout')), 8000))
+                    ]);
+                    
+                    if (!nasdaqResponse.ok) {
+                        throw new Error(`NASDAQ API request failed: ${nasdaqResponse.status} ${nasdaqResponse.statusText}`);
+                    }
+                    
+                    const responseText = await nasdaqResponse.text();
+                    if (responseText.includes('Too Many Requests') || responseText.includes('rate limit')) {
+                        throw new Error('Yahoo Finance rate limit exceeded');
+                    }
+                    
+                    nasdaqData = JSON.parse(responseText);
+                    console.log('NASDAQ raw data (proxy', i + 1, '):', nasdaqData);
+                    break; // Success, exit the loop
+                } catch (nasdaqError) {
+                    console.warn(`NASDAQ fetch failed with proxy ${i + 1}:`, nasdaqError);
+                    if (i === nasdaqProxies.length - 1) {
+                        console.warn('NASDAQ fetch failed with all proxies, continuing without market data');
+                        nasdaqData = null;
+                    }
+                }
+            }
+
+            // Process the data - only include valid data
+            this.marketIndexData = {};
+            
+            if (sp500Data) {
+                console.log('Processing SP500 data...');
+                const sp500Processed = this.processYahooFinanceData(sp500Data, 'SP500');
+                if (sp500Processed && sp500Processed.initialPrice && sp500Processed.currentPrice) {
+                    this.marketIndexData.sp500 = sp500Processed;
+                    console.log('SP500 data processed successfully:', {
+                        initialPrice: sp500Processed.initialPrice,
+                        currentPrice: sp500Processed.currentPrice,
+                        dataPoints: sp500Processed.data.length
+                    });
+                } else {
+                    console.warn('SP500 data processing failed - missing required fields');
+                }
+            } else {
+                console.warn('No SP500 data available');
+            }
+            
+            if (nasdaqData) {
+                console.log('Processing NASDAQ data...');
+                const nasdaqProcessed = this.processYahooFinanceData(nasdaqData, 'NASDAQ');
+                if (nasdaqProcessed && nasdaqProcessed.initialPrice && nasdaqProcessed.currentPrice) {
+                    this.marketIndexData.nasdaq = nasdaqProcessed;
+                    console.log('NASDAQ data processed successfully:', {
+                        initialPrice: nasdaqProcessed.initialPrice,
+                        currentPrice: nasdaqProcessed.currentPrice,
+                        dataPoints: nasdaqProcessed.data.length
+                    });
+                } else {
+                    console.warn('NASDAQ data processing failed - missing required fields');
+                }
+            } else {
+                console.warn('No NASDAQ data available');
+            }
+
+            console.log('Final market index data:', this.marketIndexData);
+            
+            // Show user-friendly message if market data failed
+            if (!this.marketIndexData || (!this.marketIndexData.sp500 && !this.marketIndexData.nasdaq)) {
+                console.warn('Market comparison data unavailable - CORS proxies may be down');
+                // Optionally show a user notification
+                const marketComparisonDiv = document.getElementById('marketComparison');
+                if (marketComparisonDiv) {
+                    marketComparisonDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Market Comparison Unavailable:</strong> 
+                            SP500 and NASDAQ data cannot be loaded due to CORS restrictions. 
+                            The chart will still display portfolio performance data.
+                        </div>
+                    `;
+                    marketComparisonDiv.style.display = 'block';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading market index data:', error);
+            this.marketIndexData = null;
+            
+            // Show user-friendly error message
+            const marketComparisonDiv = document.getElementById('marketComparison');
+            if (marketComparisonDiv) {
+                marketComparisonDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Market Comparison Unavailable:</strong> 
+                        Unable to load market index data. The chart will still display portfolio performance data.
+                    </div>
+                `;
+                marketComparisonDiv.style.display = 'block';
+            }
+        }
+    }
+
+
+
+    processYahooFinanceData(yahooData, indexName) {
+        if (!yahooData.chart || !yahooData.chart.result || !yahooData.chart.result[0]) {
+            console.warn(`No data available for ${indexName}`);
+            return null;
+        }
+
+        const result = yahooData.chart.result[0];
+        const timestamps = result.timestamp;
+        const quotes = result.indicators.quote[0];
+        const closes = quotes.close;
+
+        const data = [];
+        for (let i = 0; i < timestamps.length; i++) {
+            if (closes[i] !== null && closes[i] !== undefined) {
+                const date = this.setDateToMidnight(new Date(timestamps[i] * 1000));
+                data.push({
+                    date: date,
+                    close: closes[i]
+                });
+            }
+        }
+
+        return {
+            name: indexName,
+            data: data,
+            initialPrice: data.length > 0 ? data[0].close : null,
+            currentPrice: data.length > 0 ? data[data.length - 1].close : null
+        };
+    }
+
+    calculateMarketPerformance(indexData) {
+        if (!indexData || !indexData.initialPrice || !indexData.currentPrice) {
+            return null;
+        }
+
+        const performance = ((indexData.currentPrice - indexData.initialPrice) / indexData.initialPrice) * 100;
+        return {
+            performance: performance,
+            initialPrice: indexData.initialPrice,
+            currentPrice: indexData.currentPrice
+        };
+    }
+
+    getMarketPerformanceData() {
+        const marketPerformance = {};
+        
+        if (this.marketIndexData) {
+            if (this.marketIndexData.sp500) {
+                marketPerformance.sp500 = this.calculateMarketPerformance(this.marketIndexData.sp500);
+            }
+            if (this.marketIndexData.nasdaq) {
+                marketPerformance.nasdaq = this.calculateMarketPerformance(this.marketIndexData.nasdaq);
+            }
+        }
+
+        return marketPerformance;
+    }
+
+    showMarketComparisonLoading() {
+        console.log('Showing market comparison loading state...');
+        const marketComparison = document.getElementById('marketComparison');
+        if (!marketComparison) {
+            console.log('Market comparison element not found');
+            return;
+        }
+        
+        // Show the section with loading state
+        marketComparison.style.display = 'block';
+        
+        // Update SP500 with loading indicator
+        const sp500Element = document.getElementById('sp500Performance');
+        const sp500DetailsElement = document.getElementById('sp500Details');
+        if (sp500Element && sp500DetailsElement) {
+            sp500Element.textContent = 'Loading...';
+            sp500Element.className = 'h5 mb-0 text-muted';
+            sp500DetailsElement.textContent = 'Fetching data...';
+        }
+        
+        // Update NASDAQ with loading indicator
+        const nasdaqElement = document.getElementById('nasdaqPerformance');
+        const nasdaqDetailsElement = document.getElementById('nasdaqDetails');
+        if (nasdaqElement && nasdaqDetailsElement) {
+            nasdaqElement.textContent = 'Loading...';
+            nasdaqElement.className = 'h5 mb-0 text-muted';
+            nasdaqDetailsElement.textContent = 'Fetching data...';
+        }
+    }
+
+    updateMarketComparison() {
+        console.log('Updating market comparison...');
+        const marketComparison = document.getElementById('marketComparison');
+        if (!marketComparison) {
+            console.log('Market comparison element not found');
+            return;
+        }
+
+        const marketPerformance = this.getMarketPerformanceData();
+        console.log('Market performance data:', marketPerformance);
+        
+        if (marketPerformance.sp500 || marketPerformance.nasdaq) {
+            console.log('Showing market comparison section');
+            marketComparison.style.display = 'block';
+            
+            // Update SP500
+            if (marketPerformance.sp500) {
+                console.log('Updating SP500 display:', marketPerformance.sp500);
+                const sp500Element = document.getElementById('sp500Performance');
+                const sp500DetailsElement = document.getElementById('sp500Details');
+                
+                if (sp500Element && sp500DetailsElement) {
+                    const performance = marketPerformance.sp500.performance;
+                    const sign = performance >= 0 ? '+' : '';
+                    const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
+                    
+                    sp500Element.textContent = `${sign}${performance.toFixed(2)}%`;
+                    sp500Element.className = `h5 mb-0 ${performanceClass}`;
+                    
+                    sp500DetailsElement.textContent = 
+                        `${Math.round(marketPerformance.sp500.initialPrice)} → ${Math.round(marketPerformance.sp500.currentPrice)}`;
+                } else {
+                    console.log('SP500 display elements not found');
+                }
+            }
+            
+            // Update NASDAQ
+            if (marketPerformance.nasdaq) {
+                console.log('Updating NASDAQ display:', marketPerformance.nasdaq);
+                const nasdaqElement = document.getElementById('nasdaqPerformance');
+                const nasdaqDetailsElement = document.getElementById('nasdaqDetails');
+                
+                if (nasdaqElement && nasdaqDetailsElement) {
+                    const performance = marketPerformance.nasdaq.performance;
+                    const sign = performance >= 0 ? '+' : '';
+                    const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
+                    
+                    nasdaqElement.textContent = `${sign}${performance.toFixed(2)}%`;
+                    nasdaqElement.className = `h5 mb-0 ${performanceClass}`;
+                    
+                    nasdaqDetailsElement.textContent = 
+                        `${Math.round(marketPerformance.nasdaq.initialPrice)} → ${Math.round(marketPerformance.nasdaq.currentPrice)}`;
+                } else {
+                    console.log('NASDAQ display elements not found');
+                }
+            }
+        } else {
+            console.log('No market performance data available, hiding comparison section');
+            marketComparison.style.display = 'none';
+        }
+    }
+
     updateDisplay() {
+        console.log('updateDisplay called');
+        console.log('scoreData available:', !!this.scoreData);
+        console.log('marketData available:', !!this.marketData);
+        if (this.marketData) {
+            console.log('marketData keys:', Object.keys(this.marketData));
+            console.log('marketData length:', Object.keys(this.marketData).length);
+        }
+        
         if (!this.scoreData) {
+            console.log('No score data available, showing error');
             this.showError("No score data available");
             return;
         }
@@ -361,7 +751,45 @@ class GRQValidator {
             !this.marketData ||
             Object.keys(this.marketData).length === 0
         ) {
-            this.showBasicScoreTable();
+            console.warn('No market data available, attempting to show basic chart with score data only');
+            
+            // Try to show a basic chart with just score data
+            this.hideMessages();
+            
+            // Show the chart container
+            const chartContainer = document.getElementById("performanceChart").parentElement;
+            if (chartContainer) {
+                chartContainer.style.display = "block";
+            }
+            
+            // Show a message about limited data
+            const summaryElement = document.getElementById("summary");
+            const existingMessage = summaryElement.querySelector(".limited-data-message");
+            if (!existingMessage) {
+                const messageDiv = document.createElement("div");
+                messageDiv.className = "alert alert-warning limited-data-message mb-3";
+                messageDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Limited data mode.</strong> 
+                    Market data is not available, so the chart shows only score data. 
+                    Performance calculations and trend lines are not available without market data.
+                `;
+                summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
+            }
+            
+            // Try to create a basic chart with score data only
+            this.updateChart();
+            this.updateStockTable();
+            
+            // Hide back button since we're in aggregate view
+            document.getElementById("backToAggregate").style.display = "none";
+            
+            // Remove stock detail view class
+            const tableContainer = document.querySelector(".table-responsive");
+            if (tableContainer) {
+                tableContainer.classList.remove("stock-detail-view");
+            }
+            
             return;
         }
 
@@ -381,6 +809,9 @@ class GRQValidator {
 
         this.updateChart();
         this.updateStockTable();
+        
+        // Show loading state for market comparison
+        this.showMarketComparisonLoading();
 
         // Show/hide back button based on view mode
         document.getElementById("backToAggregate").style.display =
@@ -398,6 +829,14 @@ class GRQValidator {
     }
 
     updateChart() {
+        console.log('updateChart called - marketIndexData available:', !!this.marketIndexData);
+        if (this.marketIndexData) {
+            console.log('Market index data in updateChart:', {
+                sp500: this.marketIndexData.sp500 ? 'available' : 'not available',
+                nasdaq: this.marketIndexData.nasdaq ? 'available' : 'not available'
+            });
+        }
+        
         const ctx = document
             .getElementById("performanceChart")
             .getContext("2d");
@@ -734,6 +1173,16 @@ class GRQValidator {
         console.log("prepareChartData - selectedStock:", this.selectedStock);
         console.log("prepareChartData - scoreDate:", scoreDate.toISOString().split('T')[0]);
         console.log("prepareChartData - daysElapsed:", daysElapsed);
+        console.log("prepareChartData - marketData available:", !!this.marketData);
+        if (this.marketData) {
+            console.log("prepareChartData - marketData stocks:", Object.keys(this.marketData));
+        }
+
+        // If no market data is available, create a basic chart with just score data
+        if (!this.marketData || Object.keys(this.marketData).length === 0) {
+            console.log("No market data available, creating basic chart with score data only");
+            return this.prepareBasicChartData();
+        }
 
         if (this.selectedStock) {
             // Single stock view
@@ -874,6 +1323,13 @@ class GRQValidator {
             }
         } else {
             // Portfolio view
+            console.log("prepareChartData - entering portfolio view");
+            console.log("prepareChartData - marketData available for portfolio:", !!this.marketData);
+            if (this.marketData) {
+                console.log("prepareChartData - marketData stocks count:", Object.keys(this.marketData).length);
+                console.log("prepareChartData - marketData stocks:", Object.keys(this.marketData));
+            }
+            
             const portfolioData = this.calculatePortfolioData();
             console.log("prepareChartData - portfolio data points:", portfolioData.length);
             const before90Days = [];
@@ -1045,7 +1501,9 @@ class GRQValidator {
                     
                     // Adjust confidence threshold based on days elapsed
                     let confidenceThreshold = 0.05; // Default threshold
-                    if (daysElapsed >= 60) {
+                    if (daysElapsed >= 80) {
+                        confidenceThreshold = 0.001; // Extremely lenient for very late-stage predictions (80+ days)
+                    } else if (daysElapsed >= 60) {
                         confidenceThreshold = 0.01; // Much more lenient for late-stage predictions
                     } else if (daysElapsed >= 30) {
                         confidenceThreshold = 0.03; // Moderate threshold for mid-stage
@@ -1108,15 +1566,207 @@ class GRQValidator {
             });
         }
 
+        // Add market indices data
+        console.log('Checking for market index data in chart preparation...');
+        console.log('this.marketIndexData:', this.marketIndexData);
+        
+        if (this.marketIndexData) {
+            const scoreDate = this.getScoreDate(this.selectedFile);
+            console.log('Score date for chart:', scoreDate.toISOString().split('T')[0]);
+            
+            // Add SP500 data
+            if (this.marketIndexData.sp500 && this.marketIndexData.sp500.data.length > 0) {
+                console.log('SP500 data available:', this.marketIndexData.sp500.data.length, 'points');
+                console.log('SP500 initial price:', this.marketIndexData.sp500.initialPrice);
+                console.log('SP500 current price:', this.marketIndexData.sp500.currentPrice);
+                
+                const sp500Data = this.marketIndexData.sp500.data
+                    .filter(point => point.date <= maxDate)
+                    .map(point => {
+                        const initialPrice = this.marketIndexData.sp500.initialPrice;
+                        const performance = ((point.close - initialPrice) / initialPrice) * 100;
+                        return {
+                            x: new Date(point.date.getTime()),
+                            y: performance
+                        };
+                    });
+                
+                console.log('SP500 chart data points:', sp500Data.length);
+                if (sp500Data.length > 0) {
+                    console.log('Adding SP500 to chart datasets');
+                    datasets.push({
+                        label: "SP500",
+                        data: sp500Data,
+                        borderColor: "rgba(255, 99, 132, 0.8)",
+                        backgroundColor: "rgba(255, 99, 132, 0.1)",
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1,
+                    });
+                }
+            } else {
+                console.log('No SP500 data available');
+            }
+
+            // Add NASDAQ data
+            if (this.marketIndexData.nasdaq && this.marketIndexData.nasdaq.data.length > 0) {
+                console.log('NASDAQ data available:', this.marketIndexData.nasdaq.data.length, 'points');
+                console.log('NASDAQ initial price:', this.marketIndexData.nasdaq.initialPrice);
+                console.log('NASDAQ current price:', this.marketIndexData.nasdaq.currentPrice);
+                
+                const nasdaqData = this.marketIndexData.nasdaq.data
+                    .filter(point => point.date <= maxDate)
+                    .map(point => {
+                        const initialPrice = this.marketIndexData.nasdaq.initialPrice;
+                        const performance = ((point.close - initialPrice) / initialPrice) * 100;
+                        return {
+                            x: new Date(point.date.getTime()),
+                            y: performance
+                        };
+                    });
+                
+                console.log('NASDAQ chart data points:', nasdaqData.length);
+                if (nasdaqData.length > 0) {
+                    console.log('Adding NASDAQ to chart datasets');
+                    datasets.push({
+                        label: "NASDAQ",
+                        data: nasdaqData,
+                        borderColor: "rgba(54, 162, 235, 0.8)",
+                        backgroundColor: "rgba(54, 162, 235, 0.1)",
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1,
+                    });
+                }
+            } else {
+                console.log('No NASDAQ data available');
+            }
+        } else {
+            console.log('No market index data available');
+        }
+
         console.log("prepareChartData - final datasets count:", datasets.length);
         datasets.forEach((dataset, index) => {
             console.log(`prepareChartData - dataset ${index} (${dataset.label}):`, dataset.data.length, "points");
         });
 
+        // If no datasets were created (no market data), create a fallback chart
+        if (datasets.length === 0) {
+            console.log("No chart datasets available, creating fallback chart with portfolio structure");
+            
+            // Create a simple chart showing portfolio structure (target percentages)
+            const portfolioStructureData = this.scoreData.map((stock, index) => ({
+                x: new Date(scoreDate.getTime()),
+                y: stock.target
+            }));
+            
+            datasets.push({
+                label: "Portfolio Targets (No Market Data)",
+                data: portfolioStructureData,
+                borderColor: "rgba(75, 192, 192, 0.8)",
+                backgroundColor: "rgba(75, 192, 192, 0.1)",
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 4,
+                tension: 0.1,
+            });
+            
+            console.log("Fallback chart created with", portfolioStructureData.length, "data points");
+        }
+        
+
+
+        return { datasets };
+    }
+
+    prepareBasicChartData() {
+        console.log("prepareBasicChartData called - creating basic chart with score data only");
+        
+        const datasets = [];
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        
+        // Create a simple dataset showing just the score data
+        if (this.selectedStock) {
+            // Single stock view - show just the score and target
+            const stock = this.scoreData.find((s) => s.stock === this.selectedStock);
+            if (stock) {
+                // Create a simple line showing the target
+                const targetData = [
+                    { x: scoreDate, y: 0 },
+                    { x: new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)), y: 100 }
+                ];
+                
+                datasets.push({
+                    label: `${this.selectedStock} Target (90 days)`,
+                    data: targetData,
+                    borderColor: this.getColor(0, 0.8),
+                    backgroundColor: this.getColor(0, 0.1),
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0,
+                    borderDash: [5, 5]
+                });
+                
+                // Add a point for the current score
+                datasets.push({
+                    label: `${this.selectedStock} Score`,
+                    data: [{ x: scoreDate, y: 0 }],
+                    borderColor: this.getColor(0, 1),
+                    backgroundColor: this.getColor(0, 0.8),
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    showLine: false
+                });
+            }
+        } else {
+            // Portfolio view - show all stocks as individual points
+            this.scoreData.forEach((stock, index) => {
+                const targetData = [
+                    { x: scoreDate, y: 0 },
+                    { x: new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)), y: 100 }
+                ];
+                
+                datasets.push({
+                    label: `${stock.stock} Target`,
+                    data: targetData,
+                    borderColor: this.getColor(index, 0.3),
+                    backgroundColor: this.getColor(index, 0.05),
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0,
+                    borderDash: [3, 3]
+                });
+                
+                // Add a point for each stock's current position
+                datasets.push({
+                    label: `${stock.stock} Score`,
+                    data: [{ x: scoreDate, y: 0 }],
+                    borderColor: this.getColor(index, 1),
+                    backgroundColor: this.getColor(index, 0.8),
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
+                });
+            });
+        }
+        
+        console.log("Basic chart data created with", datasets.length, "datasets");
         return { datasets };
     }
 
     calculatePortfolioData() {
+        console.log("calculatePortfolioData called");
+        console.log("calculatePortfolioData - marketData available:", !!this.marketData);
+        if (this.marketData) {
+            console.log("calculatePortfolioData - marketData stocks:", Object.keys(this.marketData));
+        }
+        
         const scoreDate = this.getScoreDate(this.selectedFile);
         const ninetyDayDate = new Date(
             scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
@@ -1125,20 +1775,25 @@ class GRQValidator {
 
         // Get all unique dates from market data (include all dates, not just 90 days)
         const allDates = new Set();
-        this.scoreData.forEach((stock) => {
-            const marketData = this.marketData[stock.stock];
-            if (marketData) {
-                marketData.forEach((point) => {
-                    // Include all dates, not just within 90 days
-                    allDates.add(point.date.getTime());
-                });
-            }
-        });
+        if (this.marketData) {
+            this.scoreData.forEach((stock) => {
+                const marketData = this.marketData[stock.stock];
+                if (marketData) {
+                    marketData.forEach((point) => {
+                        // Include all dates, not just within 90 days
+                        allDates.add(point.date.getTime());
+                    });
+                }
+            });
+        } else {
+            console.log("calculatePortfolioData - no marketData available, cannot calculate portfolio performance");
+        }
 
         // Add the score date to ensure we start at zero
         allDates.add(scoreDate.getTime());
 
         const sortedDates = Array.from(allDates).sort((a, b) => a - b);
+        console.log("calculatePortfolioData - unique dates found:", sortedDates.length);
 
         // Simple debug: Check if dividend data is loaded
         console.log("Dividend data loaded:", !!this.dividendData);
@@ -1991,15 +2646,15 @@ class GRQValidator {
         const existingMessage = summaryElement.querySelector(".no-market-data-message");
         if (!existingMessage) {
             const messageDiv = document.createElement("div");
-            messageDiv.className = "alert alert-warning no-market-data-message mb-3";
+            messageDiv.className = "alert alert-info no-market-data-message mb-3";
             messageDiv.innerHTML = `
-                <i class="fas fa-exclamation-triangle"></i>
+                <i class="fas fa-info-circle"></i>
                 <strong>Market data loading issue detected.</strong> 
-                The CSV files appear to be truncated when accessed via GitHub Pages. This is a known issue with large files on GitHub Pages.
+                The chart and performance calculations require market data that appears to be unavailable or not loading properly. 
+                This may be due to network issues or the data not being fully processed yet. 
+                Below is the score data from the selected date.
                 <br><br>
-                <strong>Workaround:</strong> Try refreshing the page or accessing the dashboard locally where the files load correctly.
-                <br><br>
-                <small>Technical details: CSV files are being served with only headers, suggesting GitHub Pages file size or caching issues.</small>
+                <small>Technical details: The system attempted to load market data but received insufficient data or encountered an error.</small>
             `;
             summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
         }

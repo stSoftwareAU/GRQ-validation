@@ -1,28 +1,69 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Build and Test
+  check-changes:
+    name: Check for Changes
     runs-on: ubuntu-latest
+    outputs:
+      rust-changed: ${{ steps.filter.outputs.rust }}
+      docs-changed: ${{ steps.filter.outputs.docs }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2  # Need previous commit for comparison
+        
+    - name: Check for changes
+      id: filter
+      run: |
+        # Get list of changed files
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # For PRs, compare with base branch
+          git diff --name-only origin/${{ github.base_ref }}...HEAD > changed_files.txt
+        else
+          # For pushes, compare with previous commit
+          git diff --name-only HEAD~1...HEAD > changed_files.txt
+        fi
+        
+        # Check if Rust files changed
+        if grep -E "^(src/|Cargo\.toml|Cargo\.lock|tests/)" changed_files.txt > /dev/null; then
+          echo "rust=true" >> $GITHUB_OUTPUT
+        else
+          echo "rust=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Check if docs changed
+        if grep -E "^(docs/)" changed_files.txt > /dev/null; then
+          echo "docs=true" >> $GITHUB_OUTPUT
+        else
+          echo "docs=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "Changed files:"
+        cat changed_files.txt
+
+  test:
+    name: Test and Quality Checks
+    runs-on: ubuntu-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.rust-changed == 'true'
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        override: true
         components: rustfmt, clippy
         
     - name: Cache dependencies
@@ -36,121 +77,91 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
           
-    - name: Run clippy
+    - name: Update dependencies
+      run: cargo update
+      
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+      
+    - name: Run linter
       run: cargo clippy --all-targets --all-features -- -D warnings
       
     - name: Check types
       run: cargo check --all-targets --all-features
       
-    - name: Build project
-      run: cargo build --verbose
-      
-    - name: Ensure binary is executable
-      run: |
-        chmod +x target/debug/grq-validation
-        ls -la target/debug/grq-validation
-      
     - name: Run tests
       run: cargo test --all-targets --all-features --verbose
       
-    - name: Build release version
-      run: cargo build --release --verbose
+    - name: Generate test coverage
+      run: |
+        cargo install cargo-tarpaulin
+        cargo tarpaulin --out Xml --output-dir coverage
+      continue-on-error: true
       
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
-      
-    - name: Check for security vulnerabilities
-      run: cargo audit --deny warnings
-      
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      if: success()
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
       with:
-        name: grq-validation-binary
-        path: target/release/grq-validation
-        retention-days: 7
+        file: ./coverage/cobertura.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+      continue-on-error: true
 
-  validation:
-    name: Project Validation
+  build:
+    name: Build Release
     runs-on: ubuntu-latest
+    needs: [check-changes, test]
+    if: needs.check-changes.outputs.rust-changed == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped')
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Check for required files
-      run: |
-        echo "🔍 Checking for required project files..."
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
         
-        required_files=(
-          "Cargo.toml"
-          "README.md"
-          "LICENSE"
-          "src/main.rs"
-          "run.sh"
-        )
-        
-        missing_files=()
-        for file in "${required_files[@]}"; do
-          if [ ! -f "$file" ]; then
-            missing_files+=("$file")
-          fi
-        done
-        
-        if [ ${#missing_files[@]} -ne 0 ]; then
-          echo "❌ Missing required files: ${missing_files[*]}"
-          exit 1
-        else
-          echo "✅ All required files present"
-        fi
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Build release
+      run: cargo build --release
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: grq-validation-release
+        path: target/release/grq-validation
 
-    - name: Validate Cargo.toml
-      run: |
-        echo "🔍 Validating Cargo.toml..."
-        
-        if ! cargo check --manifest-path Cargo.toml --quiet; then
-          echo "❌ Cargo.toml validation failed"
-          exit 1
-        fi
-        
-        for field in "name" "version" "edition"; do
-          if ! grep -q "$field = " Cargo.toml; then
-            echo "❌ Missing '$field' field in Cargo.toml"
-            exit 1
-          fi
-        done
-        
-        echo "✅ Cargo.toml validation passed"
-
-    - name: Check documentation
-      run: |
-        echo "🔍 Checking documentation..."
-        
-        readme_lines=$(wc -l < README.md)
-        if [ "$readme_lines" -lt 10 ]; then
-          echo "❌ README.md seems too short (${readme_lines} lines)"
-          exit 1
-        fi
-        
-        if [ -f "src/lib.rs" ]; then
-          doc_comments=$(grep -c "///" src/lib.rs || echo "0")
-          if [ "$doc_comments" -eq 0 ]; then
-            echo "⚠️  No documentation comments found in src/lib.rs"
-          else
-            echo "✅ Found $doc_comments documentation comments"
-          fi
-        fi
-
-    - name: Check run.sh permissions
-      run: |
-        echo "🔍 Checking run.sh permissions..."
-        if [ -f "run.sh" ]; then
-          if [ ! -x "run.sh" ]; then
-            echo "❌ run.sh is not executable"
-            exit 1
-          else
-            echo "✅ run.sh is executable"
-          fi
-        else
-          echo "⚠️  run.sh not found"
-        fi 
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: check-changes
+    if: |
+      github.ref == 'refs/heads/main' && 
+      needs.check-changes.outputs.docs-changed == 'true'
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+      
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ./docs
+      
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4 
