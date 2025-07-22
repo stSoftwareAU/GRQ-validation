@@ -228,13 +228,15 @@ class GRQValidator {
     async loadMarketData() {
         const csvFile = this.selectedFile.replace(".tsv", ".csv");
         console.log('Loading market data from:', csvFile);
+        console.log('Selected file:', this.selectedFile);
+        console.log('CSV file path:', `scores/${csvFile}`);
 
         try {
             // Add cache-busting parameter
             const timestamp = new Date().getTime();
-            const response = await fetch(
-                `scores/${csvFile}?t=${timestamp}`,
-            );
+            const fullUrl = `scores/${csvFile}?t=${timestamp}`;
+            console.log('Full URL for market data:', fullUrl);
+            const response = await fetch(fullUrl);
             
             if (!response.ok) {
                 console.error('Failed to load market data file:', response.status, response.statusText);
@@ -289,10 +291,24 @@ class GRQValidator {
             // Load dividend data
             await this.loadDividendData();
         } catch (error) {
-            console.warn(
-                "No market data available yet:",
+            console.error(
+                "Market data loading failed:",
                 error.message,
+                error.stack
             );
+            console.error("Error details:", {
+                selectedFile: this.selectedFile,
+                csvFile: this.selectedFile ? this.selectedFile.replace(".tsv", ".csv") : "undefined",
+                errorType: error.constructor.name
+            });
+            
+            // Check if this is a network/CORS issue (likely GitHub Pages)
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || 
+                error.message.includes('CORS') || error.message.includes('404')) {
+                console.warn("Market data loading failed - likely due to CORS/network issues when served from GitHub Pages");
+                console.warn("This is expected behavior when accessing from stsoftwareau.github.io");
+            }
+            
             this.marketData = null;
         }
     }
@@ -725,8 +741,10 @@ class GRQValidator {
                     messageDiv.innerHTML = `
                         <i class="fas fa-exclamation-triangle"></i>
                         <strong>Limited Functionality:</strong> 
-                        Individual stock market data could not be loaded, so portfolio performance calculations and current prices are not available. 
+                        Individual stock market data could not be loaded (likely due to GitHub Pages limitations), so portfolio performance calculations and current prices are not available. 
                         The chart will show basic portfolio structure only. Market index data (SP500/NASDAQ) may still be available.
+                        <br><br>
+                        <small><strong>Note:</strong> For full functionality, run the application locally with <code>python -m http.server 8000</code> in the project directory.</small>
                     `;
                     summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
                 }
