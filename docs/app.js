@@ -206,20 +206,59 @@ class GRQValidator {
         const csvFile = this.selectedFile.replace(".tsv", ".csv");
 
         try {
-            // Add cache-busting parameter
-            const timestamp = new Date().getTime();
-            const response = await fetch(
-                `scores/${csvFile}?t=${timestamp}`,
-            );
-            const text = await response.text();
-
-            if (!text.trim()) {
-                this.marketData = null;
-                return;
+            // Try multiple approaches to load the market data
+            let text = null;
+            let lines = null;
+            
+            // First attempt: with cache-busting
+            try {
+                const timestamp = new Date().getTime();
+                const response = await fetch(`scores/${csvFile}?t=${timestamp}`);
+                text = await response.text();
+                
+                if (text.trim()) {
+                    lines = text.split("\n").filter((line) => line.trim());
+                    console.log(`Market data file loaded (with cache-busting): ${lines.length} lines, ${text.length} characters`);
+                    
+                    // Check if the file appears to be truncated
+                    if (lines.length > 1) {
+                        console.log('Market data loaded successfully with cache-busting');
+                    } else {
+                        console.warn('Market data file appears to be truncated with cache-busting, trying without...');
+                        text = null;
+                        lines = null;
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to load market data with cache-busting:', error);
             }
-
-            const lines = text.split("\n").filter((line) => line.trim());
-            // Remove unused headers variable
+            
+            // Second attempt: without cache-busting
+            if (!text || !lines || lines.length <= 1) {
+                try {
+                    const response = await fetch(`scores/${csvFile}`);
+                    text = await response.text();
+                    
+                    if (text.trim()) {
+                        lines = text.split("\n").filter((line) => line.trim());
+                        console.log(`Market data file loaded (without cache-busting): ${lines.length} lines, ${text.length} characters`);
+                        
+                        if (lines.length <= 1) {
+                            console.warn('Market data file appears to be truncated without cache-busting as well');
+                            this.marketData = null;
+                            return;
+                        }
+                    } else {
+                        console.warn('Market data file is empty');
+                        this.marketData = null;
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load market data without cache-busting:', error);
+                    this.marketData = null;
+                    return;
+                }
+            }
 
             this.marketData = {};
 
@@ -1952,12 +1991,15 @@ class GRQValidator {
         const existingMessage = summaryElement.querySelector(".no-market-data-message");
         if (!existingMessage) {
             const messageDiv = document.createElement("div");
-            messageDiv.className = "alert alert-info no-market-data-message mb-3";
+            messageDiv.className = "alert alert-warning no-market-data-message mb-3";
             messageDiv.innerHTML = `
-                <i class="fas fa-info-circle"></i>
-                <strong>Market data not yet available.</strong> 
-                The chart and performance calculations will appear once market data becomes available. 
-                Below is the score data from the selected date.
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Market data loading issue detected.</strong> 
+                The CSV files appear to be truncated when accessed via GitHub Pages. This is a known issue with large files on GitHub Pages.
+                <br><br>
+                <strong>Workaround:</strong> Try refreshing the page or accessing the dashboard locally where the files load correctly.
+                <br><br>
+                <small>Technical details: CSV files are being served with only headers, suggesting GitHub Pages file size or caching issues.</small>
             `;
             summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
         }
