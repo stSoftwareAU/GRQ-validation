@@ -1,0 +1,68 @@
+name: Auto-format Code
+
+on:
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  auto-format:
+    name: Auto-format Code
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Format Code
+      run: cargo fmt
+
+    - name: Check for Changes
+      id: check_changes
+      run: |
+        if git diff --quiet; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "No formatting changes needed"
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Formatting changes detected"
+          git diff --stat
+        fi
+
+    - name: Commit Changes
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .
+        git commit -m "chore: apply rust fmt fixes [skip ci]"
+
+    - name: Push Changes
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: git push origin
+
+ 
