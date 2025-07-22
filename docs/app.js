@@ -285,7 +285,6 @@ class GRQValidator {
             
             console.log("Market data loaded for stocks:", Object.keys(this.marketData));
             console.log("Total market data entries:", Object.values(this.marketData).reduce((sum, data) => sum + data.length, 0));
-            });
 
             // Load dividend data
             await this.loadDividendData();
