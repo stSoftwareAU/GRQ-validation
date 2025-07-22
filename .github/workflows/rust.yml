@@ -38,7 +38,7 @@ jobs:
         components: rustfmt, clippy
         
     - name: Cache dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -74,7 +74,7 @@ jobs:
       run: cargo audit --deny warnings
       
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: success()
       with:
         name: grq-validation-${{ matrix.rust }}
