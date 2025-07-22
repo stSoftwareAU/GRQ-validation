@@ -252,8 +252,8 @@ class GRQValidator {
             }
 
             const lines = text.split("\n").filter((line) => line.trim());
-            // Remove unused headers variable
-
+            console.log("Market data file lines:", lines.length);
+            
             this.marketData = {};
 
             lines.slice(1).forEach((line) => {
@@ -281,6 +281,10 @@ class GRQValidator {
                     close,
                     splitCoefficient,
                 });
+            });
+            
+            console.log("Market data loaded for stocks:", Object.keys(this.marketData));
+            console.log("Total market data entries:", Object.values(this.marketData).reduce((sum, data) => sum + data.length, 0));
             });
 
             // Load dividend data
@@ -722,8 +726,8 @@ class GRQValidator {
                     messageDiv.innerHTML = `
                         <i class="fas fa-exclamation-triangle"></i>
                         <strong>Limited Functionality:</strong> 
-                        Market data could not be loaded, so performance calculations and current prices are not available. 
-                        The chart will show basic portfolio structure only.
+                        Individual stock market data could not be loaded, so portfolio performance calculations and current prices are not available. 
+                        The chart will show basic portfolio structure only. Market index data (SP500/NASDAQ) may still be available.
                     `;
                     summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
                 }
@@ -1261,6 +1265,13 @@ class GRQValidator {
             }
         } else {
             // Portfolio view
+            console.log("prepareChartData - entering portfolio view");
+            console.log("prepareChartData - marketData available for portfolio:", !!this.marketData);
+            if (this.marketData) {
+                console.log("prepareChartData - marketData stocks count:", Object.keys(this.marketData).length);
+                console.log("prepareChartData - marketData stocks:", Object.keys(this.marketData));
+            }
+            
             const portfolioData = this.calculatePortfolioData();
             console.log("prepareChartData - portfolio data points:", portfolioData.length);
             const before90Days = [];
@@ -1606,11 +1617,23 @@ class GRQValidator {
             
             console.log("Fallback chart created with", portfolioStructureData.length, "data points");
         }
+        
+        // If we have market index data but no portfolio data, show a message
+        if (this.marketIndexData && (this.marketIndexData.sp500 || this.marketIndexData.nasdaq) && 
+            (!this.marketData || Object.keys(this.marketData).length === 0)) {
+            console.log("Market index data available but portfolio data missing - this indicates a market data loading issue");
+        }
 
         return { datasets };
     }
 
     calculatePortfolioData() {
+        console.log("calculatePortfolioData called");
+        console.log("calculatePortfolioData - marketData available:", !!this.marketData);
+        if (this.marketData) {
+            console.log("calculatePortfolioData - marketData stocks:", Object.keys(this.marketData));
+        }
+        
         const scoreDate = this.getScoreDate(this.selectedFile);
         const ninetyDayDate = new Date(
             scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
@@ -1619,20 +1642,25 @@ class GRQValidator {
 
         // Get all unique dates from market data (include all dates, not just 90 days)
         const allDates = new Set();
-        this.scoreData.forEach((stock) => {
-            const marketData = this.marketData[stock.stock];
-            if (marketData) {
-                marketData.forEach((point) => {
-                    // Include all dates, not just within 90 days
-                    allDates.add(point.date.getTime());
-                });
-            }
-        });
+        if (this.marketData) {
+            this.scoreData.forEach((stock) => {
+                const marketData = this.marketData[stock.stock];
+                if (marketData) {
+                    marketData.forEach((point) => {
+                        // Include all dates, not just within 90 days
+                        allDates.add(point.date.getTime());
+                    });
+                }
+            });
+        } else {
+            console.log("calculatePortfolioData - no marketData available, cannot calculate portfolio performance");
+        }
 
         // Add the score date to ensure we start at zero
         allDates.add(scoreDate.getTime());
 
         const sortedDates = Array.from(allDates).sort((a, b) => a - b);
+        console.log("calculatePortfolioData - unique dates found:", sortedDates.length);
 
         // Simple debug: Check if dividend data is loaded
         console.log("Dividend data loaded:", !!this.dividendData);
