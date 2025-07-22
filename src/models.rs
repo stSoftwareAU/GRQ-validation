@@ -6,7 +6,7 @@ where
     S: serde::Serializer,
 {
     // Format with dollar sign and commas for thousands
-    let formatted = format!("${:.2}", value);
+    let formatted = format!("${value:.2}");
     serializer.serialize_str(&formatted)
 }
 
@@ -16,10 +16,10 @@ where
     D: serde::Deserializer<'de>,
 {
     let s: String = Deserialize::deserialize(deserializer)?;
-    
+
     // Remove dollar sign and commas, then parse as float
-    let cleaned = s.replace('$', "").replace(',', "");
-    
+    let cleaned = s.replace(['$', ','], "");
+
     cleaned.parse::<f64>().map_err(serde::de::Error::custom)
 }
 
@@ -31,7 +31,7 @@ where
     match value {
         Some(v) => {
             // Format with dollar sign and commas for thousands
-            let formatted = format!("${:.2}", v);
+            let formatted = format!("${v:.2}");
             serializer.serialize_str(&formatted)
         }
         None => serializer.serialize_none(),
@@ -44,15 +44,16 @@ where
     D: serde::Deserializer<'de>,
 {
     let s: Option<String> = Deserialize::deserialize(deserializer)?;
-    
+
     match s {
         Some(s) => {
             if s.trim().is_empty() {
                 Ok(None)
             } else {
                 // Remove dollar sign and commas, then parse as float
-                let cleaned = s.replace('$', "").replace(',', "");
-                cleaned.parse::<f64>()
+                let cleaned = s.replace(['$', ','], "");
+                cleaned
+                    .parse::<f64>()
                     .map(Some)
                     .map_err(serde::de::Error::custom)
             }
@@ -67,7 +68,11 @@ pub struct StockRecord {
     pub stock: String,
     #[serde(rename = "Score")]
     pub score: f64,
-    #[serde(rename = "Target", serialize_with = "serialize_currency", deserialize_with = "deserialize_currency")]
+    #[serde(
+        rename = "Target",
+        serialize_with = "serialize_currency",
+        deserialize_with = "deserialize_currency"
+    )]
     pub target: f64,
     #[serde(rename = "ExDividendDate")]
     pub ex_dividend_date: Option<String>,
@@ -75,9 +80,17 @@ pub struct StockRecord {
     pub dividend_per_share: Option<f64>,
     #[serde(rename = "Notes")]
     pub notes: Option<String>,
-    #[serde(rename = "intrinsicValuePerShareBasic", serialize_with = "serialize_optional_currency", deserialize_with = "deserialize_optional_currency")]
+    #[serde(
+        rename = "intrinsicValuePerShareBasic",
+        serialize_with = "serialize_optional_currency",
+        deserialize_with = "deserialize_optional_currency"
+    )]
     pub intrinsic_value_per_share_basic: Option<f64>,
-    #[serde(rename = "intrinsicValuePerShareAdjusted", serialize_with = "serialize_optional_currency", deserialize_with = "deserialize_optional_currency")]
+    #[serde(
+        rename = "intrinsicValuePerShareAdjusted",
+        serialize_with = "serialize_optional_currency",
+        deserialize_with = "deserialize_optional_currency"
+    )]
     pub intrinsic_value_per_share_adjusted: Option<f64>,
 }
 
@@ -158,7 +171,10 @@ pub struct ScoreEntry {
     pub date: String,
     #[serde(rename = "performance_90_day", skip_serializing_if = "Option::is_none")]
     pub performance_90_day: Option<f64>,
-    #[serde(rename = "performance_annualized", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "performance_annualized",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub performance_annualized: Option<f64>,
     #[serde(rename = "total_stocks", skip_serializing_if = "Option::is_none")]
     pub total_stocks: Option<i32>,
@@ -243,7 +259,7 @@ mod tests {
         assert_eq!(deserialized.ex_dividend_date, record.ex_dividend_date);
         assert_eq!(deserialized.dividend_per_share, record.dividend_per_share);
         assert_eq!(deserialized.notes, record.notes);
-        
+
         // Currency values are rounded to 2 decimal places during serialization
         assert!((deserialized.intrinsic_value_per_share_basic.unwrap() - 19.45).abs() < 0.01);
         assert!((deserialized.intrinsic_value_per_share_adjusted.unwrap() - 28.69).abs() < 0.01);

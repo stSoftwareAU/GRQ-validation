@@ -1,12 +1,12 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use log::info;
+use std::path::Path;
 use utils::{
     create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
-    extract_ticker_codes_from_score_file, read_index_json, update_index_with_performance,
+    extract_ticker_codes_from_score_file, read_index_json,
 };
-use std::path::Path;
 
 pub mod models;
 pub mod utils;
@@ -54,48 +54,63 @@ fn main() -> Result<()> {
 
     // Process a specific date if provided
     if let Some(date) = args.date {
-        info!("Processing specific date: {}", date);
-        
+        info!("Processing specific date: {date}");
+
         // Parse the date to extract year, month, day
         let date_parts: Vec<&str> = date.split('-').collect();
         if date_parts.len() != 3 {
             return Err(anyhow!("Invalid date format. Use YYYY-MM-DD"));
         }
-        
+
         let year = date_parts[0];
         let month = date_parts[1];
         let day = date_parts[2];
-        
+
         // Convert month number to month name
         let month_name = match month {
-            "01" => "January", "02" => "February", "03" => "March", "04" => "April",
-            "05" => "May", "06" => "June", "07" => "July", "08" => "August",
-            "09" => "September", "10" => "October", "11" => "November", "12" => "December",
-            _ => return Err(anyhow!("Invalid month: {}", month))
+            "01" => "January",
+            "02" => "February",
+            "03" => "March",
+            "04" => "April",
+            "05" => "May",
+            "06" => "June",
+            "07" => "July",
+            "08" => "August",
+            "09" => "September",
+            "10" => "October",
+            "11" => "November",
+            "12" => "December",
+            _ => return Err(anyhow!("Invalid month: {}", month)),
         };
-        
-        let score_file_path = format!("{}/scores/{}/{}/{}.tsv", args.docs_path, year, month_name, day);
+
+        let score_file_path = format!(
+            "{}/scores/{}/{}/{}.tsv",
+            args.docs_path, year, month_name, day
+        );
         let score_file_date = &date;
-        
+
         // Check if the date is less than 90 days old
         let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
         let current_date = Utc::now().naive_utc().date();
         let days_since_score = (current_date - score_date).num_days();
-        
+
         if days_since_score >= 90 {
             // Use regular performance calculation
             match utils::calculate_portfolio_performance(&score_file_path, score_file_date) {
-            Ok(performance) => {
-                println!("\n=== {} Performance Results ===", date);
-                println!("Score Date: {}", performance.score_date);
-                println!("Total Stocks: {}", performance.total_stocks);
-                println!("90-Day Performance: {:.2}%", performance.performance_90_day);
-                println!("Annualized Performance: {:.2}%", performance.performance_annualized);
-                println!();
-                
-                println!("Individual Stock Performances:");
-                for stock_perf in &performance.individual_performances {
-                    println!("  {}: Buy=${:.2}, Current=${:.2}, Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
+                Ok(performance) => {
+                    println!("\n=== {date} Performance Results ===");
+                    println!("Score Date: {}", performance.score_date);
+                    println!("Total Stocks: {}", performance.total_stocks);
+                    println!("90-Day Performance: {:.2}%", performance.performance_90_day);
+                    println!(
+                        "Annualized Performance: {:.2}%",
+                        performance.performance_annualized
+                    );
+                    println!();
+
+                    println!("Individual Stock Performances:");
+                    for stock_perf in &performance.individual_performances {
+                        println!("  {}: Buy=${:.2}, Current=${:.2}, Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
                         stock_perf.ticker,
                         stock_perf.buy_price,
                         stock_perf.current_price,
@@ -103,45 +118,58 @@ fn main() -> Result<()> {
                         stock_perf.dividends_total,
                         stock_perf.total_return_percent
                     );
-                }
-                
-                // Update the index.json with this performance data
-                let mut index_data = utils::read_index_json(&args.docs_path)?;
-                for score_entry in &mut index_data.scores {
-                    if score_entry.date == date {
-                        score_entry.performance_90_day = Some(performance.performance_90_day);
-                        score_entry.performance_annualized = Some(performance.performance_annualized);
-                        score_entry.total_stocks = Some(performance.total_stocks);
-                        break;
                     }
+
+                    // Update the index.json with this performance data
+                    let mut index_data = utils::read_index_json(&args.docs_path)?;
+                    for score_entry in &mut index_data.scores {
+                        if score_entry.date == date {
+                            score_entry.performance_90_day = Some(performance.performance_90_day);
+                            score_entry.performance_annualized =
+                                Some(performance.performance_annualized);
+                            score_entry.total_stocks = Some(performance.total_stocks);
+                            break;
+                        }
+                    }
+
+                    // Write updated index back to file
+                    let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+                    let json_content = serde_json::to_string_pretty(&index_data)?;
+                    std::fs::write(index_path, json_content)?;
+                    println!("\nUpdated index.json with performance data for {date}");
                 }
-                
-                // Write updated index back to file
-                let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
-                let json_content = serde_json::to_string_pretty(&index_data)?;
-                std::fs::write(index_path, json_content)?;
-                println!("\nUpdated index.json with performance data for {}", date);
+                Err(e) => {
+                    log::error!("Failed to calculate performance: {e}");
+                    return Err(e);
+                }
             }
-            Err(e) => {
-                log::error!("Failed to calculate performance: {}", e);
-                return Err(e);
-            }
-        }
         } else {
             // Use hybrid projection for dates less than 90 days old
             match utils::read_tsv_score_file(&score_file_path) {
                 Ok(stock_records) => {
-                    match utils::read_market_data_from_csv(&utils::derive_csv_output_path(&score_file_path)) {
+                    match utils::read_market_data_from_csv(&utils::derive_csv_output_path(
+                        &score_file_path,
+                    )) {
                         Ok(market_data_csv) => {
-                            match utils::calculate_hybrid_projection(&stock_records, score_file_date, &market_data_csv) {
+                            match utils::calculate_hybrid_projection(
+                                &stock_records,
+                                score_file_date,
+                                &market_data_csv,
+                            ) {
                                 Ok(performance) => {
-                                    println!("\n=== {} Projection Results ===", date);
+                                    println!("\n=== {date} Projection Results ===");
                                     println!("Score Date: {}", performance.score_date);
                                     println!("Total Stocks: {}", performance.total_stocks);
-                                    println!("Projected 90-Day Performance: {:.2}%", performance.performance_90_day);
-                                    println!("Projected Annualized Performance: {:.2}%", performance.performance_annualized);
+                                    println!(
+                                        "Projected 90-Day Performance: {:.2}%",
+                                        performance.performance_90_day
+                                    );
+                                    println!(
+                                        "Projected Annualized Performance: {:.2}%",
+                                        performance.performance_annualized
+                                    );
                                     println!();
-                                    
+
                                     println!("Individual Stock Projections:");
                                     for stock_perf in &performance.individual_performances {
                                         println!("  {}: Buy=${:.2}, Current=${:.2}, Projected Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
@@ -153,43 +181,50 @@ fn main() -> Result<()> {
                                             stock_perf.total_return_percent
                                         );
                                     }
-                                    
+
                                     // Update the index.json with this projection data
                                     let mut index_data = utils::read_index_json(&args.docs_path)?;
                                     for score_entry in &mut index_data.scores {
                                         if score_entry.date == date {
-                                            score_entry.performance_90_day = Some(performance.performance_90_day);
-                                            score_entry.performance_annualized = Some(performance.performance_annualized);
-                                            score_entry.total_stocks = Some(performance.total_stocks);
+                                            score_entry.performance_90_day =
+                                                Some(performance.performance_90_day);
+                                            score_entry.performance_annualized =
+                                                Some(performance.performance_annualized);
+                                            score_entry.total_stocks =
+                                                Some(performance.total_stocks);
                                             break;
                                         }
                                     }
-                                    
+
                                     // Write updated index back to file
-                                    let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+                                    let index_path = Path::new(&args.docs_path)
+                                        .join("scores")
+                                        .join("index.json");
                                     let json_content = serde_json::to_string_pretty(&index_data)?;
                                     std::fs::write(index_path, json_content)?;
-                                    println!("\nUpdated index.json with projection data for {}", date);
+                                    println!(
+                                        "\nUpdated index.json with projection data for {date}"
+                                    );
                                 }
                                 Err(e) => {
-                                    log::error!("Failed to calculate projection: {}", e);
+                                    log::error!("Failed to calculate projection: {e}");
                                     return Err(e);
                                 }
                             }
                         }
                         Err(e) => {
-                            log::error!("Failed to read market data CSV: {}", e);
+                            log::error!("Failed to read market data CSV: {e}");
                             return Err(e);
                         }
                     }
                 }
                 Err(e) => {
-                    log::error!("Failed to read TSV file: {}", e);
+                    log::error!("Failed to read TSV file: {e}");
                     return Err(e);
                 }
             }
         }
-        
+
         info!("Single date processing completed");
         return Ok(());
     }
@@ -202,7 +237,7 @@ fn main() -> Result<()> {
                 info!("Successfully updated index.json with performance metrics");
             }
             Err(e) => {
-                log::error!("Failed to update performance metrics: {}", e);
+                log::error!("Failed to update performance metrics: {e}");
             }
         }
         return Ok(());
@@ -217,7 +252,8 @@ fn main() -> Result<()> {
     let scores_to_process: Vec<_> = if args.process_all {
         index_data.scores.iter().collect()
     } else {
-        index_data.scores
+        index_data
+            .scores
             .iter()
             .filter(|score_entry| {
                 if let Ok(score_date) = NaiveDate::parse_from_str(&score_entry.date, "%Y-%m-%d") {
@@ -264,10 +300,10 @@ fn main() -> Result<()> {
                     None,
                 ) {
                     Ok(output_path) => {
-                        info!("Successfully created market data CSV: {}", output_path);
+                        info!("Successfully created market data CSV: {output_path}");
                     }
                     Err(e) => {
-                        log::error!("Failed to create market data CSV: {}", e);
+                        log::error!("Failed to create market data CSV: {e}");
                     }
                 }
 
@@ -278,44 +314,58 @@ fn main() -> Result<()> {
                     &score_entry.date,
                 ) {
                     Ok(_) => {
-                        info!("Successfully created dividend CSV for {}", score_file_path);
+                        info!("Successfully created dividend CSV for {score_file_path}");
                     }
                     Err(e) => {
-                        log::error!("Failed to create dividend CSV: {}", e);
+                        log::error!("Failed to create dividend CSV: {e}");
                     }
                 }
-                
+
                 // Calculate performance for this score file immediately after creating CSVs
                 info!("Calculating performance for {}", score_entry.date);
                 match utils::calculate_portfolio_performance(&score_file_path, &score_entry.date) {
                     Ok(performance) => {
-                        info!("Performance for {}: {:.2}% (90-day), {:.2}% (annualized)", 
-                              score_entry.date, performance.performance_90_day, performance.performance_annualized);
-                        
+                        info!(
+                            "Performance for {}: {:.2}% (90-day), {:.2}% (annualized)",
+                            score_entry.date,
+                            performance.performance_90_day,
+                            performance.performance_annualized
+                        );
+
                         // Update the index.json with this performance data
                         let mut index_data = utils::read_index_json(&args.docs_path)?;
                         for score_entry_update in &mut index_data.scores {
                             if score_entry_update.date == score_entry.date {
-                                score_entry_update.performance_90_day = Some(performance.performance_90_day);
-                                score_entry_update.performance_annualized = Some(performance.performance_annualized);
+                                score_entry_update.performance_90_day =
+                                    Some(performance.performance_90_day);
+                                score_entry_update.performance_annualized =
+                                    Some(performance.performance_annualized);
                                 score_entry_update.total_stocks = Some(performance.total_stocks);
                                 break;
                             }
                         }
-                        
+
                         // Write updated index back to file
-                        let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+                        let index_path =
+                            Path::new(&args.docs_path).join("scores").join("index.json");
                         let json_content = serde_json::to_string_pretty(&index_data)?;
                         std::fs::write(index_path, json_content)?;
-                        info!("Updated index.json with performance data for {}", score_entry.date);
+                        info!(
+                            "Updated index.json with performance data for {}",
+                            score_entry.date
+                        );
                     }
                     Err(e) => {
-                        log::error!("Failed to calculate performance for {}: {}", score_entry.date, e);
+                        log::error!(
+                            "Failed to calculate performance for {}: {}",
+                            score_entry.date,
+                            e
+                        );
                     }
                 }
             }
             Err(e) => {
-                log::error!("Failed to read ticker codes from {}: {}", score_file_path, e);
+                log::error!("Failed to read ticker codes from {score_file_path}: {e}");
             }
         }
     }
@@ -330,5 +380,3 @@ fn main() -> Result<()> {
     info!("GRQ Validation processor completed successfully");
     Ok(())
 }
-
-
