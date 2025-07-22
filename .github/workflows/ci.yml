@@ -51,6 +51,9 @@ jobs:
     - name: Build release version
       run: cargo build --release --verbose
       
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+      
     - name: Check for security vulnerabilities
       run: cargo audit --deny warnings
       
