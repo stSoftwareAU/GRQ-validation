@@ -291,24 +291,10 @@ class GRQValidator {
             // Load dividend data
             await this.loadDividendData();
         } catch (error) {
-            console.error(
-                "Market data loading failed:",
+            console.warn(
+                "No market data available yet:",
                 error.message,
-                error.stack
             );
-            console.error("Error details:", {
-                selectedFile: this.selectedFile,
-                csvFile: this.selectedFile ? this.selectedFile.replace(".tsv", ".csv") : "undefined",
-                errorType: error.constructor.name
-            });
-            
-            // Check if this is a network/CORS issue (likely GitHub Pages)
-            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || 
-                error.message.includes('CORS') || error.message.includes('404')) {
-                console.warn("Market data loading failed - likely due to CORS/network issues when served from GitHub Pages");
-                console.warn("This is expected behavior when accessing from stsoftwareau.github.io");
-            }
-            
             this.marketData = null;
         }
     }
@@ -718,42 +704,6 @@ class GRQValidator {
             !this.marketData ||
             Object.keys(this.marketData).length === 0
         ) {
-            console.log('No market data available, showing basic score table');
-            console.log('This might be due to a loading issue. Attempting to show chart anyway...');
-            
-            // Try to show the chart even without market data as a fallback
-            if (this.scoreData && this.scoreData.length > 0) {
-                console.log('Showing chart with score data only (no market data)');
-                this.hideMessages();
-                
-                // Show the chart container
-                const chartContainer = document.getElementById("performanceChart").parentElement;
-                if (chartContainer) {
-                    chartContainer.style.display = "block";
-                }
-                
-                // Show a message about limited functionality
-                const summaryElement = document.getElementById("summary");
-                const existingMessage = summaryElement.querySelector(".limited-functionality-message");
-                if (!existingMessage) {
-                    const messageDiv = document.createElement("div");
-                    messageDiv.className = "alert alert-warning limited-functionality-message mb-3";
-                    messageDiv.innerHTML = `
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Limited Functionality:</strong> 
-                        Individual stock market data could not be loaded (likely due to GitHub Pages limitations), so portfolio performance calculations and current prices are not available. 
-                        The chart will show basic portfolio structure only. Market index data (SP500/NASDAQ) may still be available.
-                        <br><br>
-                        <small><strong>Note:</strong> For full functionality, run the application locally with <code>python -m http.server 8000</code> in the project directory.</small>
-                    `;
-                    summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
-                }
-                
-                this.updateChart();
-                this.updateBasicStockTable();
-                return;
-            }
-            
             this.showBasicScoreTable();
             return;
         }
@@ -1635,11 +1585,7 @@ class GRQValidator {
             console.log("Fallback chart created with", portfolioStructureData.length, "data points");
         }
         
-        // If we have market index data but no portfolio data, show a message
-        if (this.marketIndexData && (this.marketIndexData.sp500 || this.marketIndexData.nasdaq) && 
-            (!this.marketData || Object.keys(this.marketData).length === 0)) {
-            console.log("Market index data available but portfolio data missing - this indicates a market data loading issue");
-        }
+
 
         return { datasets };
     }
