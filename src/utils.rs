@@ -730,7 +730,7 @@ pub fn calculate_hybrid_projection(
     
     // Calculate annualized performance
     let performance_annualized = if performance_90_day != 0.0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25/90) - 1.0) * 100.0
+        ((1.0 + performance_90_day / 100.0).powf(365.25 /90.0) - 1.0) * 100.0
     } else {
         0.0
     };

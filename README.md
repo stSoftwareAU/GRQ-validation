@@ -1,167 +1,165 @@
-# GRQ Score Validation
+# GRQ Validation
 
-A Rust application for processing and analyzing daily stock scores from TSV files, with a web dashboard for visualization.
+A Rust-based system for validating AI predictions against 90-day targets and 10% annual cost of capital.
+
+## Features
+
+- **Performance Tracking**: Calculate 90-day and annualized performance for stock portfolios
+- **Market Data Integration**: Fetch and process historical stock data
+- **Dividend Tracking**: Calculate dividend income and total returns
+- **Web Dashboard**: Interactive charts and tables for performance analysis
+- **Automated Processing**: Batch processing of score files with inline performance calculation
+
+## Quick Start
+
+### Prerequisites
+- Rust (latest stable)
+- Git
+
+### Installation
+```bash
+git clone <repository-url>
+cd GRQ-validation
+cargo build --release
+```
+
+### Usage
+```bash
+# Process recent score files (within 180 days)
+./run.sh
+
+# Process all score files
+./run.sh --process-all
+
+# Process a specific date
+./target/release/grq-validation --docs-path docs --date 2025-01-15
+```
+
+### Web Interface
+```bash
+# Start the web server
+cd docs
+python3 -m http.server 8000
+# Or use any static file server
+```
+
+Visit `http://localhost:8000` to access the dashboard.
+
+## CI/CD Pipeline
+
+This repository includes comprehensive GitHub Actions workflows for continuous integration and deployment.
+
+### Workflows
+
+1. **CI** (`ci.yml`) - Main continuous integration
+   - Code formatting and linting
+   - Build and test
+   - Security audits
+   - Artifact upload
+
+2. **Rust CI** (`rust.yml`) - Extended Rust testing
+   - Multi-version testing (stable, 1.75)
+   - Additional security checks
+   - Documentation generation
+
+3. **Deploy** (`deploy.yml`) - GitHub Pages deployment
+   - Automatic deployment on main branch
+   - Data processing and web app deployment
+
+4. **Dependencies** (`dependencies.yml`) - Automated dependency updates
+   - Weekly dependency checks
+   - Automatic PR creation for updates
+
+### Setup
+1. Enable GitHub Actions in your repository
+2. Configure GitHub Pages (Settings > Pages > Source: GitHub Actions)
+3. Set up branch protection rules (recommended)
+
+See [CI_CD_SETUP.md](CI_CD_SETUP.md) for detailed setup instructions.
 
 ## Project Structure
 
 ```
 GRQ-validation/
-├── src/
-│   ├── main.rs          # Main application entry point
-│   ├── models.rs        # Data structures for stock records
-│   ├── processor.rs     # TSV file processing logic
-│   └── utils.rs         # Utility functions
-├── docs/
-│   ├── index.html       # Web dashboard (GitHub Pages)
-│   └── scores/          # TSV files organized by date
-├── Cargo.toml           # Rust project configuration
-└── README.md           # This file
+├── src/                    # Rust source code
+│   ├── main.rs            # Main application entry point
+│   ├── models.rs          # Data structures
+│   ├── utils.rs           # Utility functions
+│   └── lib.rs             # Library interface
+├── docs/                   # Web application
+│   ├── index.html         # Main dashboard
+│   ├── list.html          # Score files list
+│   ├── list.css           # List page styling
+│   ├── list.js            # List page logic
+│   ├── app.js             # Main dashboard logic
+│   ├── styles.css         # Main dashboard styling
+│   └── scores/            # Score files and data
+├── tests/                  # Test files
+├── .github/workflows/      # GitHub Actions
+├── run.sh                  # Main execution script
+└── Cargo.toml             # Rust dependencies
 ```
-
-## Features
-
-- **TSV Processing**: Read and write stock data from TSV files
-- **Data Analysis**: Calculate summaries and identify undervalued stocks
-- **Web Dashboard**: Beautiful HTML/JS interface for viewing data
-- **Date-based Organization**: Files organized by year/month/day
-- **Error Handling**: Robust error handling with detailed logging
-
-## Prerequisites
-
-- Rust (latest stable version)
-- Git
-- Deno
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone <your-repo-url>
-cd GRQ-validation
-```
-
-2. Build the project:
-```bash
-cargo build
-```
-
-3. Run the application:
-```bash
-cargo run
-```
-
-## Usage
-
-### Basic Usage
-
-Process all TSV files in the docs directory:
-```bash
-cargo run -- --docs-path docs --recursive
-```
-
-Process a specific file:
-```bash
-cargo run -- --file docs/scores/2025/June/20.tsv
-```
-
-Process a specific date:
-```bash
-cargo run -- --date 2025-06-05
-```
-
-Or use the convenience script:
-```bash
-./process_date.sh 2025-06-05
-```
-
-### Using the run.sh Script
-
-The `run.sh` script provides a convenient way to build and run the application:
-
-```bash
-# Process recent files only (within 100 days)
-./run.sh
-
-# Process all files (including those past 100 days)
-./run.sh --process-all
-
-# Full reload of all data (same as --process-all)
-./run.sh --full-reload
-```
-
-Enable verbose logging:
-```bash
-cargo run -- --verbose
-```
-
-### Command Line Options
-
-- `--docs-path, -d`: Path to the docs directory (default: "docs")
-- `--recursive, -r`: Process all TSV files recursively
-- `--file, -f`: Process a specific TSV file
-- `--verbose, -v`: Enable verbose logging
-- `--date`: Process a specific date (format: YYYY-MM-DD)
-- `--calculate-performance`: Calculate performance metrics for all score files
-- `--performance-only`: Only calculate performance metrics (skip CSV generation)
-- `--process-all`: Process all score files, including those more than 180 days old
-
-### run.sh Script Options
-
-- `./run.sh`: Process recent files only (within 100 days)
-- `./run.sh --process-all`: Process all files (including those past 100 days)
-- `./run.sh --full-reload`: Full reload of all data (same as --process-all)
-
-### Web Dashboard
-
-The web dashboard is located at `docs/index.html` and will be served by GitHub Pages. It provides:
-
-- Date-based navigation through stock data
-- Summary statistics (total stocks, average score, undervalued count)
-- Interactive table with sorting and filtering
-- Visual indicators for stock performance
-
-**🌐 Live Dashboard**: [https://stsoftwareau.github.io/GRQ-validation/](https://stsoftwareau.github.io/GRQ-validation/)
-
-## TSV File Format
-
-The application expects TSV files with the following columns:
-
-| Column | Type | Description |
-|--------|------|-------------|
-| Stock | String | Stock symbol (e.g., "NYSE:AAPL") |
-| Score | Float | Stock score (0.0 to 1.0) |
-| Target | Float | Target price |
-| ExDividendDate | Date | Ex-dividend date (optional) |
-| DividendPerShare | Float | Dividend per share (optional) |
-| Notes | String | Additional notes (optional) |
-| intrinsicValuePerShareBasic | Float | Basic intrinsic value |
-| intrinsicValuePerShareAdjusted | Float | Adjusted intrinsic value |
 
 ## Development
 
-### Adding New Features
-
-1. **Data Models**: Add new fields to `StockRecord` in `src/models.rs`
-2. **Processing Logic**: Implement new analysis in `src/processor.rs`
-3. **Web Interface**: Update the HTML/JS in `docs/index.html`
-
-### Testing
-
-Run the test suite:
+### Local Development
 ```bash
+# Format code
+cargo fmt
+
+# Run linter
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Run tests
 cargo test
-```
 
-### Building for Production
-
-Build an optimized release:
-```bash
+# Build release
 cargo build --release
 ```
 
+### Testing
+```bash
+# Run all tests
+cargo test
+
+# Run specific test
+cargo test test_name
+
+# Run with verbose output
+cargo test --verbose
+```
+
+## Configuration
+
+### Environment Variables
+- `RUST_LOG`: Logging level (default: info)
+- `CARGO_TERM_COLOR`: Terminal color output
+
+### Command Line Options
+- `--docs-path`: Path to docs directory (default: docs)
+- `--process-all`: Process all files, not just recent ones
+- `--calculate-performance`: Only calculate performance metrics
+- `--date`: Process specific date (YYYY-MM-DD format)
+- `--verbose`: Enable verbose logging
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linting
+5. Submit a pull request
+
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+[Add your license information here]
+
+## Support
+
+For issues and questions:
+1. Check the [CI_CD_SETUP.md](CI_CD_SETUP.md) for workflow issues
+2. Review existing issues
+3. Create a new issue with detailed information
 
 
 

@@ -1,0 +1,158 @@
+.header-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.performance-positive {
+    color: #10b981 !important;
+}
+
+.performance-negative {
+    color: #ef4444 !important;
+}
+
+.performance-neutral {
+    color: #6b7280 !important;
+}
+
+.date-filter-container {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.date-filter-container label {
+    font-weight: 600;
+    color: #374151;
+}
+
+.date-filter-container .form-select {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+}
+
+.summary-stats {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.summary-stat {
+    text-align: center;
+}
+
+.summary-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.summary-stat-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.btn-view {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+
+.btn-view:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    color: white;
+    text-decoration: none;
+}
+
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+.error {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.table-container {
+    width: 100%;
+}
+
+.table-responsive {
+    width: 100%;
+}
+
+.score-files-table {
+    width: 100% !important;
+}
+
+.dataTables_wrapper {
+    width: 100%;
+}
+
+.dataTables_wrapper .dataTables_scroll {
+    width: 100%;
+}
+
+.dataTables_wrapper .dataTables_scrollBody {
+    width: 100% !important;
+}
+
+.dataTables_wrapper .dataTables_scrollHead {
+    width: 100% !important;
+}
+
+.dataTables_wrapper table {
+    width: 100% !important;
+}
+
+.dataTables_wrapper .dataTables_scrollHeadInner {
+    width: 100% !important;
+}
+
+.dataTables_wrapper .dataTables_scrollHeadInner table {
+    width: 100% !important;
+}
+
+.dataTables_wrapper .dataTables_scrollBody table {
+    width: 100% !important;
+}
+
+.dataTables_wrapper .dataTables_scrollHead table,
+.dataTables_wrapper .dataTables_scrollBody table {
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+.dataTables_wrapper .dataTables_scrollHead th,
+.dataTables_wrapper .dataTables_scrollBody td {
+    box-sizing: border-box;
+}
+
+.dataTables_wrapper .dataTables_scrollHeadInner {
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+.dataTables_wrapper .dataTables_scrollBody {
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+.container-fluid {
+    max-width: 100%;
+    padding-left: 15px;
+    padding-right: 15px;
+} 
