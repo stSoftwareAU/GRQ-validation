@@ -359,7 +359,9 @@ class MockGRQValidator {
 
           // Adjust confidence threshold based on days elapsed
           let confidenceThreshold = 0.05;
-          if (daysElapsed >= 60) {
+          if (daysElapsed >= 80) {
+            confidenceThreshold = 0.001; // Extremely lenient for very late-stage predictions (80+ days)
+          } else if (daysElapsed >= 60) {
             confidenceThreshold = 0.01;
           } else if (daysElapsed >= 30) {
             confidenceThreshold = 0.03;

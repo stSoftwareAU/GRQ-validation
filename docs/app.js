@@ -1357,7 +1357,9 @@ class GRQValidator {
                     
                     // Adjust confidence threshold based on days elapsed
                     let confidenceThreshold = 0.05; // Default threshold
-                    if (daysElapsed >= 60) {
+                    if (daysElapsed >= 80) {
+                        confidenceThreshold = 0.001; // Extremely lenient for very late-stage predictions (80+ days)
+                    } else if (daysElapsed >= 60) {
                         confidenceThreshold = 0.01; // Much more lenient for late-stage predictions
                     } else if (daysElapsed >= 30) {
                         confidenceThreshold = 0.03; // Moderate threshold for mid-stage
