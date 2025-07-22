@@ -236,16 +236,50 @@ class GRQValidator {
             const timestamp = new Date().getTime();
             const fullUrl = `scores/${csvFile}?t=${timestamp}`;
             console.log('Full URL for market data:', fullUrl);
-            const response = await fetch(fullUrl);
             
-            if (!response.ok) {
-                console.error('Failed to load market data file:', response.status, response.statusText);
+            // Try multiple times with different cache-busting strategies
+            let response = null;
+            let text = null;
+            
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    const attemptUrl = `${fullUrl}&attempt=${attempt}`;
+                    console.log(`Attempt ${attempt} to fetch market data from:`, attemptUrl);
+                    
+                    response = await fetch(attemptUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        console.error(`Attempt ${attempt} failed to load market data file:`, response.status, response.statusText);
+                        continue;
+                    }
+                    
+                    text = await response.text();
+                    console.log(`Attempt ${attempt} successful, file size:`, text.length, 'characters');
+                    
+                    // If we got a reasonable amount of data, break
+                    if (text.length > 1000) {
+                        break;
+                    } else {
+                        console.warn(`Attempt ${attempt} returned suspiciously small file size:`, text.length);
+                    }
+                } catch (fetchError) {
+                    console.error(`Attempt ${attempt} fetch error:`, fetchError);
+                }
+            }
+            
+            if (!response || !response.ok) {
+                console.error('All attempts to load market data file failed');
                 this.marketData = null;
                 return;
             }
-            
-            const text = await response.text();
             console.log('Market data file loaded, size:', text.length, 'characters');
+            console.log('First 200 characters of market data:', text.substring(0, 200));
 
             if (!text.trim()) {
                 console.warn('Market data file is empty');
@@ -255,10 +289,19 @@ class GRQValidator {
 
             const lines = text.split("\n").filter((line) => line.trim());
             console.log("Market data file lines:", lines.length);
+            if (lines.length > 0) {
+                console.log("First line:", lines[0]);
+                if (lines.length > 1) {
+                    console.log("Second line:", lines[1]);
+                }
+            }
             
             this.marketData = {};
 
-            lines.slice(1).forEach((line) => {
+            lines.slice(1).forEach((line, index) => {
+                if (index < 3) { // Debug first 3 lines
+                    console.log(`Processing line ${index + 1}:`, line);
+                }
                 const values = line.split(",");
                 const date = values[0];
                 const ticker = values[1];
@@ -267,6 +310,10 @@ class GRQValidator {
                 const open = parseFloat(values[4]);
                 const close = parseFloat(values[5]);
                 const splitCoefficient = parseFloat(values[6]);
+
+                if (index < 3) { // Debug first 3 lines
+                    console.log(`Parsed values: date=${date}, ticker=${ticker}, high=${high}, low=${low}, open=${open}, close=${close}, split=${splitCoefficient}`);
+                }
 
                 if (!this.marketData[ticker]) {
                     this.marketData[ticker] = [];
@@ -704,7 +751,45 @@ class GRQValidator {
             !this.marketData ||
             Object.keys(this.marketData).length === 0
         ) {
-            this.showBasicScoreTable();
+            console.warn('No market data available, attempting to show basic chart with score data only');
+            
+            // Try to show a basic chart with just score data
+            this.hideMessages();
+            
+            // Show the chart container
+            const chartContainer = document.getElementById("performanceChart").parentElement;
+            if (chartContainer) {
+                chartContainer.style.display = "block";
+            }
+            
+            // Show a message about limited data
+            const summaryElement = document.getElementById("summary");
+            const existingMessage = summaryElement.querySelector(".limited-data-message");
+            if (!existingMessage) {
+                const messageDiv = document.createElement("div");
+                messageDiv.className = "alert alert-warning limited-data-message mb-3";
+                messageDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Limited data mode.</strong> 
+                    Market data is not available, so the chart shows only score data. 
+                    Performance calculations and trend lines are not available without market data.
+                `;
+                summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
+            }
+            
+            // Try to create a basic chart with score data only
+            this.updateChart();
+            this.updateStockTable();
+            
+            // Hide back button since we're in aggregate view
+            document.getElementById("backToAggregate").style.display = "none";
+            
+            // Remove stock detail view class
+            const tableContainer = document.querySelector(".table-responsive");
+            if (tableContainer) {
+                tableContainer.classList.remove("stock-detail-view");
+            }
+            
             return;
         }
 
@@ -1091,6 +1176,12 @@ class GRQValidator {
         console.log("prepareChartData - marketData available:", !!this.marketData);
         if (this.marketData) {
             console.log("prepareChartData - marketData stocks:", Object.keys(this.marketData));
+        }
+
+        // If no market data is available, create a basic chart with just score data
+        if (!this.marketData || Object.keys(this.marketData).length === 0) {
+            console.log("No market data available, creating basic chart with score data only");
+            return this.prepareBasicChartData();
         }
 
         if (this.selectedStock) {
@@ -1587,6 +1678,85 @@ class GRQValidator {
         
 
 
+        return { datasets };
+    }
+
+    prepareBasicChartData() {
+        console.log("prepareBasicChartData called - creating basic chart with score data only");
+        
+        const datasets = [];
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        
+        // Create a simple dataset showing just the score data
+        if (this.selectedStock) {
+            // Single stock view - show just the score and target
+            const stock = this.scoreData.find((s) => s.stock === this.selectedStock);
+            if (stock) {
+                // Create a simple line showing the target
+                const targetData = [
+                    { x: scoreDate, y: 0 },
+                    { x: new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)), y: 100 }
+                ];
+                
+                datasets.push({
+                    label: `${this.selectedStock} Target (90 days)`,
+                    data: targetData,
+                    borderColor: this.getColor(0, 0.8),
+                    backgroundColor: this.getColor(0, 0.1),
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0,
+                    borderDash: [5, 5]
+                });
+                
+                // Add a point for the current score
+                datasets.push({
+                    label: `${this.selectedStock} Score`,
+                    data: [{ x: scoreDate, y: 0 }],
+                    borderColor: this.getColor(0, 1),
+                    backgroundColor: this.getColor(0, 0.8),
+                    borderWidth: 3,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    showLine: false
+                });
+            }
+        } else {
+            // Portfolio view - show all stocks as individual points
+            this.scoreData.forEach((stock, index) => {
+                const targetData = [
+                    { x: scoreDate, y: 0 },
+                    { x: new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)), y: 100 }
+                ];
+                
+                datasets.push({
+                    label: `${stock.stock} Target`,
+                    data: targetData,
+                    borderColor: this.getColor(index, 0.3),
+                    backgroundColor: this.getColor(index, 0.05),
+                    borderWidth: 1,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0,
+                    borderDash: [3, 3]
+                });
+                
+                // Add a point for each stock's current position
+                datasets.push({
+                    label: `${stock.stock} Score`,
+                    data: [{ x: scoreDate, y: 0 }],
+                    borderColor: this.getColor(index, 1),
+                    backgroundColor: this.getColor(index, 0.8),
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
+                });
+            });
+        }
+        
+        console.log("Basic chart data created with", datasets.length, "datasets");
         return { datasets };
     }
 
@@ -2479,9 +2649,12 @@ class GRQValidator {
             messageDiv.className = "alert alert-info no-market-data-message mb-3";
             messageDiv.innerHTML = `
                 <i class="fas fa-info-circle"></i>
-                <strong>Market data not yet available.</strong> 
-                The chart and performance calculations will appear once market data becomes available. 
+                <strong>Market data loading issue detected.</strong> 
+                The chart and performance calculations require market data that appears to be unavailable or not loading properly. 
+                This may be due to network issues or the data not being fully processed yet. 
                 Below is the score data from the selected date.
+                <br><br>
+                <small>Technical details: The system attempted to load market data but received insufficient data or encountered an error.</small>
             `;
             summaryElement.insertBefore(messageDiv, summaryElement.firstChild);
         }
