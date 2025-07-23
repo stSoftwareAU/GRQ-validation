@@ -617,8 +617,6 @@ pub fn calculate_portfolio_performance(
         0.0
     };
 
-
-
     Ok(PortfolioPerformance {
         score_date: score_file_date.to_string(),
         total_stocks,
