@@ -1,4 +1,6 @@
+console.log('=== list.js START ===');
 console.log('list.js loaded successfully! Version:', typeof VERSION !== 'undefined' ? VERSION : 'undefined');
+console.log('Current time:', new Date().toISOString());
 
 // Set version display
 document.addEventListener('DOMContentLoaded', function() {
@@ -358,15 +360,19 @@ class ScoreFilesList {
 
 // Initialize when page loads and all dependencies are ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Wait a bit to ensure all scripts are loaded
-    setTimeout(() => {
-        try {
-            new ScoreFilesList();
-        } catch (error) {
-            console.error('Failed to initialize ScoreFilesList:', error);
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').textContent = 'Failed to initialize: ' + error.message;
-            document.getElementById('error').style.display = 'block';
-        }
-    }, 100);
-}); 
+    console.log('DOMContentLoaded fired');
+    console.log('jQuery available:', typeof $ !== 'undefined');
+    console.log('DataTables available:', typeof $.fn.DataTable !== 'undefined');
+    
+    // Simple initialization with error handling
+    try {
+        new ScoreFilesList();
+    } catch (error) {
+        console.error('Failed to initialize ScoreFilesList:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').textContent = 'Failed to initialize: ' + error.message;
+        document.getElementById('error').style.display = 'block';
+    }
+});
+
+console.log('=== list.js END ==='); 
