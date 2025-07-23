@@ -716,3 +716,117 @@ Deno.test("Average Annualized Performance Calculation", () => {
 
   console.log("✅ Average annualized performance calculation test passed");
 });
+
+// TEST FOR HYBRID PROJECTION FIX
+Deno.test("Hybrid Projection - Realistic Annualized Performance", () => {
+  // Test the fix for unrealistic annualized performance in hybrid projections
+  // This simulates the scenario where a small gain over a few days was giving 119,592.89% annualized
+
+  const calculateHybridProjection = (
+    gainLossPercent: number,
+    marketDaysElapsed: number,
+  ): { projected90Day: number; annualized: number } => {
+    // Simulate the new hybrid projection logic
+    if (marketDaysElapsed <= 0) {
+      return { projected90Day: 0, annualized: 0 };
+    }
+
+    // Calculate daily rate
+    const dailyRate = gainLossPercent / marketDaysElapsed;
+
+    // Apply dampening based on market data days elapsed
+    let dampeningFactor = 0.1; // Very early days: dampen by 90%
+    if (marketDaysElapsed >= 7) dampeningFactor = 0.2; // Early days: dampen by 80%
+    if (marketDaysElapsed >= 14) dampeningFactor = 0.3; // Early days: dampen by 70%
+    if (marketDaysElapsed >= 30) dampeningFactor = 0.5; // Medium term: dampen by 50%
+    if (marketDaysElapsed >= 60) dampeningFactor = 0.7; // Later days: dampen by 30%
+
+    // Calculate raw projection
+    const rawProjection = dailyRate * 90.0;
+    let projected90Day = rawProjection * dampeningFactor;
+
+    // Apply realistic bounds based on market data days elapsed
+    let maxGain = 10.0; // Very early: max 10% gain
+    let maxLoss = -5.0; // Very early: max 5% loss
+    if (marketDaysElapsed >= 7) {
+      maxGain = 20.0;
+      maxLoss = -10.0;
+    }
+    if (marketDaysElapsed >= 14) {
+      maxGain = 40.0;
+      maxLoss = -20.0;
+    }
+    if (marketDaysElapsed >= 30) {
+      maxGain = 80.0;
+      maxLoss = -40.0;
+    }
+    if (marketDaysElapsed >= 60) {
+      maxGain = 150.0;
+      maxLoss = -80.0;
+    }
+
+    projected90Day = Math.max(maxLoss, Math.min(maxGain, projected90Day));
+
+    // Use quarterly compounding for annualized performance
+    const annualized = ((1 + projected90Day / 100) ** 4 - 1) * 100;
+
+    return { projected90Day, annualized };
+  };
+
+  // Test the problematic scenario: 1.96% gain in 3 days
+  const testCase = calculateHybridProjection(1.96, 3);
+  console.log("Test Case: 1.96% gain in 3 days");
+  console.log(`Projected 90-day: ${testCase.projected90Day.toFixed(2)}%`);
+  console.log(`Annualized: ${testCase.annualized.toFixed(2)}%`);
+
+  // Verify the results are realistic
+  if (testCase.annualized > 1000) {
+    throw new Error(
+      `Annualized performance should be realistic, got ${testCase.annualized.toFixed(2)}%`
+    );
+  }
+
+  if (testCase.projected90Day > 50) {
+    throw new Error(
+      `90-day projection should be realistic, got ${testCase.projected90Day.toFixed(2)}%`
+    );
+  }
+
+  // Test different scenarios
+  const scenarios = [
+    { gain: 1.96, days: 3, description: "1.96% gain in 3 days" },
+    { gain: 5.0, days: 7, description: "5% gain in 1 week" },
+    { gain: 10.0, days: 14, description: "10% gain in 2 weeks" },
+    { gain: -2.0, days: 5, description: "2% loss in 5 days" },
+    { gain: 15.0, days: 30, description: "15% gain in 1 month" },
+  ];
+
+  console.log("\n=== Hybrid Projection Test Results ===");
+  scenarios.forEach(({ gain, days, description }) => {
+    const result = calculateHybridProjection(gain, days);
+    console.log(
+      `${description}: ${gain}% over ${days} days → 90-day: ${result.projected90Day.toFixed(2)}%, Annualized: ${result.annualized.toFixed(2)}%`
+    );
+
+    // Verify results are realistic
+    if (result.annualized > 1000) {
+      throw new Error(
+        `${description}: Annualized performance too high: ${result.annualized.toFixed(2)}%`
+      );
+    }
+
+    if (result.projected90Day > 200) {
+      throw new Error(
+        `${description}: 90-day projection too high: ${result.projected90Day.toFixed(2)}%`
+      );
+    }
+
+    if (result.projected90Day < -100) {
+      throw new Error(
+        `${description}: 90-day projection too low: ${result.projected90Day.toFixed(2)}%`
+      );
+    }
+  });
+
+  console.log("✅ Hybrid projection fix test passed");
+});

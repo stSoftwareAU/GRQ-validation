@@ -701,28 +701,57 @@ pub fn calculate_hybrid_projection(
                     let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
                     // Use market data days elapsed instead of calendar days
                     let market_days_elapsed = (latest_date - score_date).num_days();
-                    let current_rate = if market_days_elapsed > 0 {
-                        gain_loss_percent / market_days_elapsed as f64 // % per day
+                    
+                    // Calculate projected 90-day performance using a more realistic approach
+                    let mut projected_90_day = if market_days_elapsed > 0 {
+                        // Use linear projection but with realistic bounds
+                        let daily_rate = gain_loss_percent / market_days_elapsed as f64;
+                        
+                        // Apply dampening based on market data days elapsed
+                        let dampening_factor = if market_days_elapsed < 7 {
+                            0.1 // Very early days: dampen by 90%
+                        } else if market_days_elapsed < 14 {
+                            0.2 // Early days: dampen by 80%
+                        } else if market_days_elapsed < 30 {
+                            0.3 // Early days: dampen by 70%
+                        } else if market_days_elapsed < 60 {
+                            0.5 // Medium term: dampen by 50%
+                        } else {
+                            0.7 // Later days: dampen by 30%
+                        };
+                        
+                        let raw_projection = daily_rate * 90.0;
+                        raw_projection * dampening_factor
                     } else {
                         0.0
                     };
 
-                    // Calculate projected 90-day performance based on current trajectory
-                    let mut projected_90_day = current_rate * 90.0;
-
-                    // Apply dampening based on market data days elapsed
-                    let dampening_factor = if market_days_elapsed < 30 {
-                        0.3 // Early days: dampen by 70%
+                    // Apply realistic bounds based on market data days elapsed
+                    let max_gain = if market_days_elapsed < 7 {
+                        10.0 // Very early: max 10% gain
+                    } else if market_days_elapsed < 14 {
+                        20.0 // Early: max 20% gain
+                    } else if market_days_elapsed < 30 {
+                        40.0 // Early: max 40% gain
                     } else if market_days_elapsed < 60 {
-                        0.5 // Medium term: dampen by 50%
+                        80.0 // Medium: max 80% gain
                     } else {
-                        0.7 // Later days: dampen by 30%
+                        150.0 // Later: max 150% gain
                     };
-
-                    projected_90_day *= dampening_factor;
-
-                    // Cap at realistic bounds
-                    projected_90_day = projected_90_day.clamp(-100.0, 200.0);
+                    
+                    let max_loss = if market_days_elapsed < 7 {
+                        -5.0 // Very early: max 5% loss
+                    } else if market_days_elapsed < 14 {
+                        -10.0 // Early: max 10% loss
+                    } else if market_days_elapsed < 30 {
+                        -20.0 // Early: max 20% loss
+                    } else if market_days_elapsed < 60 {
+                        -40.0 // Medium: max 40% loss
+                    } else {
+                        -80.0 // Later: max 80% loss
+                    };
+                    
+                    projected_90_day = projected_90_day.clamp(max_loss, max_gain);
 
                     // Calculate dividends for the period
                     let end_date = score_date + chrono::Duration::days(90);
@@ -759,12 +788,12 @@ pub fn calculate_hybrid_projection(
         0.0
     };
 
-    // Calculate actual days elapsed from score date to latest market data date (capped at 90)
-    let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
-
-    // Calculate annualized performance using actual days elapsed instead of fixed 90 days
-    let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
+    // For hybrid projections, use quarterly compounding (4 quarters per year) instead of time-based annualization
+    // This prevents unrealistic annualized rates for very early projections
+    let performance_annualized = if performance_90_day != 0.0 {
+        // Use quarterly compounding: (1 + quarterly_return)^4 - 1
+        // Where quarterly_return is the 90-day performance
+        ((1.0 + performance_90_day / 100.0).powf(4.0) - 1.0) * 100.0
     } else {
         0.0
     };
