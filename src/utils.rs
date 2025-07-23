@@ -601,12 +601,13 @@ pub fn calculate_portfolio_performance(
         0.0
     };
 
-    // Calculate actual days elapsed from score date to latest market data date (capped at 90)
-    let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
+    // For 90-day validation, we always use 90 days for annualization
+    // This represents the intended prediction period, not the actual days elapsed
+    let days_for_annualization = 90;
 
-    // Calculate annualized performance using actual days elapsed instead of fixed 90 days
-    let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
+    let performance_annualized = if performance_90_day != 0.0 {
+        ((1.0 + performance_90_day / 100.0).powf(365.25 / days_for_annualization as f64) - 1.0)
+            * 100.0
     } else {
         0.0
     };
@@ -1254,8 +1255,7 @@ mod tests {
             };
 
             println!(
-                "Performance: {}% over {} days → Annualized: {:.1}% (expected ~{}%)",
-                performance, days, actual_annualized, expected_approx
+                "Performance: {performance}% over {days} days → Annualized: {actual_annualized:.1}% (expected ~{expected_approx}%)"
             );
 
             // Allow reasonable tolerance for approximation
@@ -1264,12 +1264,7 @@ mod tests {
 
             assert!(
                 difference < tolerance,
-                "Performance {}% over {} days: Expected ~{}%, got {:.1}%, difference: {:.1}%",
-                performance,
-                days,
-                expected_approx,
-                actual_annualized,
-                difference
+                "Performance {performance}% over {days} days: Expected ~{expected_approx}%, got {actual_annualized:.1}%, difference: {difference:.1}%"
             );
 
             // Verify edge case behaviors
@@ -1323,16 +1318,14 @@ mod tests {
                 ((1.0_f64 + performance / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
 
             println!(
-                "{}% over {} days: Actual-days method: {:.1}%, Fixed-90 method: {:.1}%",
-                performance, days, annualized_actual, annualized_fixed_90
+                "{performance}% over {days} days: Actual-days method: {annualized_actual:.1}%, Fixed-90 method: {annualized_fixed_90:.1}%"
             );
 
             if days < 90 {
                 // For early days, actual-days method should give higher annualized rate
                 assert!(
                     annualized_actual > annualized_fixed_90,
-                    "For {} days, actual-days method ({:.1}%) should be higher than fixed-90 method ({:.1}%)",
-                    days, annualized_actual, annualized_fixed_90
+                    "For {days} days, actual-days method ({annualized_actual:.1}%) should be higher than fixed-90 method ({annualized_fixed_90:.1}%)"
                 );
 
                 // The difference should be significant for very early days
@@ -1340,9 +1333,7 @@ mod tests {
                     let difference = annualized_actual - annualized_fixed_90;
                     assert!(
                         difference > 50.0,
-                        "For {} days, difference should be substantial (got {:.1}%)",
-                        days,
-                        difference
+                        "For {days} days, difference should be substantial (got {difference:.1}%)"
                     );
                 }
             } else {
@@ -1350,8 +1341,7 @@ mod tests {
                 let difference = (annualized_actual - annualized_fixed_90).abs();
                 assert!(
                     difference < 0.01,
-                    "For 90 days, both methods should give same result, difference: {:.3}%",
-                    difference
+                    "For 90 days, both methods should give same result, difference: {difference:.3}%"
                 );
             }
         }
@@ -1393,28 +1383,22 @@ mod tests {
             };
 
             println!(
-                "{}: {}% over {} calendar days ({} market days)",
-                description, performance, calendar_days, market_days
+                "{description}: {performance}% over {calendar_days} calendar days ({market_days} market days)"
             );
-            println!("  Calendar-days annualized: {:.1}%", calendar_annualized);
-            println!("  Market-days annualized: {:.1}%", market_annualized);
+            println!("  Calendar-days annualized: {calendar_annualized:.1}%");
+            println!("  Market-days annualized: {market_annualized:.1}%");
 
             // Market days should give higher annualized rate (since fewer days for same performance)
             assert!(
                 market_annualized > calendar_annualized,
-                "Market days method should give higher rate for {}: {:.1}% vs {:.1}%",
-                description,
-                market_annualized,
-                calendar_annualized
+                "Market days method should give higher rate for {description}: {market_annualized:.1}% vs {calendar_annualized:.1}%"
             );
 
             // The difference should be meaningful
             let difference = market_annualized - calendar_annualized;
             assert!(
                 difference > 1.0,
-                "Difference should be meaningful for {}: {:.1}%",
-                description,
-                difference
+                "Difference should be meaningful for {description}: {difference:.1}%"
             );
         }
     }
