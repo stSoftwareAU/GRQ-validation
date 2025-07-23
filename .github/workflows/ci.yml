@@ -20,18 +20,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 2  # Need previous commit for comparison
+        fetch-depth: 0  # Fetch full history for proper diffs
         
     - name: Check for changes
       id: filter
       run: |
         # Get list of changed files
         if [ "${{ github.event_name }}" = "pull_request" ]; then
-          # For PRs, compare with base branch
-          git diff --name-only origin/${{ github.base_ref }}...HEAD > changed_files.txt
+          # For PRs, compare with base branch using GitHub's merge-base
+          git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} > changed_files.txt
         else
           # For pushes, compare with previous commit
-          git diff --name-only HEAD~1...HEAD > changed_files.txt
+          # Handle case where before SHA might be null (first commit)
+          if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
+            git diff --name-only ${{ github.event.before }}...${{ github.sha }} > changed_files.txt
+          else
+            # For first commit, show all files
+            git ls-tree -r --name-only ${{ github.sha }} > changed_files.txt
+          fi
         fi
         
         # Check if Rust files changed
