@@ -132,7 +132,7 @@ Deno.test("Annualized Performance Edge Cases", () => {
     { input: -50, expected: -100, description: "-50% performance" }, // Should be around -100%
   ];
 
-  edgeCases.forEach(({ input, expected, description }) => {
+  edgeCases.forEach(({ input, expected: _expected, description }) => {
     const result = calculateAnnualized(input);
     console.log(`${description}: ${input}% → ${result.toFixed(2)}%`);
 
