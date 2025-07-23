@@ -128,7 +128,25 @@ class GRQValidator {
             });
 
             if (indexData.scores.length > 0) {
-                // Find the score file closest to 90 days ago
+                // Check for file parameter in URL first
+                const urlParams = new URLSearchParams(window.location.search);
+                const fileParam = urlParams.get('file');
+                
+                if (fileParam) {
+                    // Check if the file parameter matches any available score file
+                    const matchingScore = indexData.scores.find(score => score.file === fileParam);
+                    if (matchingScore) {
+                        console.log(`Auto-selecting score file from URL parameter: ${matchingScore.date} (${matchingScore.month} ${matchingScore.day})`);
+                        this.selectedFile = matchingScore.file;
+                        select.value = this.selectedFile;
+                        await this.loadScoreFile();
+                        return;
+                    } else {
+                        console.warn(`File parameter '${fileParam}' not found in available scores`);
+                    }
+                }
+                
+                // Fallback: Find the score file closest to 90 days ago
                 const targetDate = new Date();
                 targetDate.setDate(targetDate.getDate() - 90); // 90 days ago
                 
