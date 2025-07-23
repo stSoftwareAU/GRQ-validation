@@ -500,6 +500,7 @@ pub fn calculate_portfolio_performance(
     let market_data_csv = read_market_data_from_csv(&csv_file_path)?;
 
     let mut individual_performances = Vec::new();
+    let mut latest_market_date = score_date;
 
     for record in &stock_records {
         // Use the full ticker (e.g., "NYSE:SEM") to match CSV data
@@ -553,6 +554,12 @@ pub fn calculate_portfolio_performance(
                         }
                     }
                 }
+                
+                // Update the latest market date across all stocks
+                if latest_date > latest_market_date {
+                    latest_market_date = latest_date;
+                }
+                
                 latest_price
             }
         } else {
@@ -594,9 +601,12 @@ pub fn calculate_portfolio_performance(
         0.0
     };
 
-    // Calculate annualized performance (90 days = 0.2466 years)
-    let performance_annualized = if performance_90_day != 0.0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0
+    // Calculate actual days elapsed from score date to latest market data date (capped at 90)
+    let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
+    
+    // Calculate annualized performance using actual days elapsed instead of fixed 90 days
+    let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
+        ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
     } else {
         0.0
     };
@@ -629,6 +639,7 @@ pub fn calculate_hybrid_projection(
     let mut individual_performances = Vec::new();
     let mut total_projected_performance = 0.0;
     let mut valid_projections = 0;
+    let mut latest_market_date = score_date;
 
     for record in stock_records {
         let full_ticker = &record.stock;
@@ -646,6 +657,11 @@ pub fn calculate_hybrid_projection(
                         latest_price = *price;
                     }
                 }
+            }
+
+            // Update the latest market date across all stocks
+            if latest_date > latest_market_date {
+                latest_market_date = latest_date;
             }
 
             if latest_price > 0.0 {
@@ -677,15 +693,21 @@ pub fn calculate_hybrid_projection(
 
                 if buy_price > 0.0 {
                     let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
-                    let current_rate = gain_loss_percent / days_elapsed as f64; // % per day
+                    // Use market data days elapsed instead of calendar days
+                    let market_days_elapsed = (latest_date - score_date).num_days();
+                    let current_rate = if market_days_elapsed > 0 {
+                        gain_loss_percent / market_days_elapsed as f64 // % per day
+                    } else {
+                        0.0
+                    };
 
                     // Calculate projected 90-day performance based on current trajectory
                     let mut projected_90_day = current_rate * 90.0;
 
-                    // Apply dampening based on days elapsed
-                    let dampening_factor = if days_elapsed < 30 {
+                    // Apply dampening based on market data days elapsed
+                    let dampening_factor = if market_days_elapsed < 30 {
                         0.3 // Early days: dampen by 70%
-                    } else if days_elapsed < 60 {
+                    } else if market_days_elapsed < 60 {
                         0.5 // Medium term: dampen by 50%
                     } else {
                         0.7 // Later days: dampen by 30%
@@ -731,9 +753,12 @@ pub fn calculate_hybrid_projection(
         0.0
     };
 
-    // Calculate annualized performance
-    let performance_annualized = if performance_90_day != 0.0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0
+    // Calculate actual days elapsed from score date to latest market data date (capped at 90)
+    let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
+    
+    // Calculate annualized performance using actual days elapsed instead of fixed 90 days
+    let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
+        ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
     } else {
         0.0
     };

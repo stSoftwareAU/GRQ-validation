@@ -2,31 +2,37 @@
 
 ## Overview
 
-The annualized performance calculation converts 90-day performance to an annual rate using **compound interest**, not simple multiplication. This is the correct financial approach for comparing performance across different time periods.
+The annualized performance calculation converts performance to an annual rate using **compound interest**, not simple multiplication. This is the correct financial approach for comparing performance across different time periods.
+
+**IMPORTANT FIX**: When we only have a few days of market data (less than 90 days), the annualized calculation now uses the actual number of days with market data instead of assuming a full 90-day period.
 
 ## Formula
 
 The annualized performance is calculated using the compound interest formula:
 
 ```
-Annualized Performance = ((1 + 90-day_performance/100) ^ (365.25/90) - 1) × 100
+Annualized Performance = ((1 + performance/100) ^ (365.25/actual_days) - 1) × 100
 ```
 
 Where:
-- `90-day_performance` is the percentage return over 90 days
-- `365.25/90` = 4.058 (the number of 90-day periods in a year)
+- `performance` is the percentage return over the actual period
+- `actual_days` is the number of days with market data (capped at 90 days)
+- `365.25/actual_days` calculates how many such periods would occur in a year
 - The result is converted back to a percentage
 
 ## Implementation
 
 ### Rust Code (src/utils.rs)
 
-Both the regular performance calculation and hybrid projection use the same formula:
+Both the regular performance calculation and hybrid projection now calculate the actual days elapsed:
 
 ```rust
-// Calculate annualized performance
-let performance_annualized = if performance_90_day != 0.0 {
-    ((1.0 + performance_90_day / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0
+// Calculate actual days elapsed from score date to latest market data date (capped at 90)
+let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
+
+// Calculate annualized performance using actual days elapsed instead of fixed 90 days
+let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
+    ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
 } else {
     0.0
 };
@@ -35,11 +41,25 @@ let performance_annualized = if performance_90_day != 0.0 {
 ### JavaScript Equivalent
 
 ```javascript
-const calculateAnnualized = (performance90Day) => {
-    if (performance90Day === 0) return 0;
-    return ((1 + performance90Day / 100) ** (365.25 / 90) - 1) * 100;
+const calculateAnnualized = (performance, actualDays) => {
+    if (performance === 0 || actualDays <= 0) return 0;
+    return ((1 + performance / 100) ** (365.25 / actualDays) - 1) * 100;
 };
 ```
+
+## Why Use Actual Days vs Fixed 90 Days?
+
+### Problem with Fixed 90-Day Period
+When we're only 5 days into the 90-day prediction period:
+- **Wrong**: Using 90 days for annualization
+- **Annualized = ((1 + 5-day_performance/100) ^ (365.25/90) - 1) × 100**
+- This significantly understates the annualized performance
+
+### Correct Approach with Actual Days
+When we're only 5 days into the 90-day prediction period:
+- **Correct**: Using 5 days for annualization  
+- **Annualized = ((1 + 5-day_performance/100) ^ (365.25/5) - 1) × 100**
+- This properly reflects the annualized rate based on actual performance data
 
 ## Why Compound Interest vs Simple Multiplication?
 
