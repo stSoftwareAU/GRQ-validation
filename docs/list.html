@@ -176,7 +176,10 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Custom JavaScript -->
-    <script src="list.js"></script>
+    <script>
+        const script = document.createElement('script');
+        script.src = `list.js?v=${VERSION}`;
+        document.head.appendChild(script);
+    </script>
   </body>
 </html> 
