@@ -1,3 +1,5 @@
+console.log('list.js loaded successfully! Version:', typeof VERSION !== 'undefined' ? VERSION : 'undefined');
+
 // Set version display
 document.addEventListener('DOMContentLoaded', function() {
     const versionElement = document.getElementById('version');
