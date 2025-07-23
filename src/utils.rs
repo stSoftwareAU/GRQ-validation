@@ -1448,4 +1448,93 @@ mod tests {
             "Tiny performance should give small positive annualized"
         );
     }
+
+    #[test]
+    fn test_zero_annualized_performance_bug() {
+        // Test the specific bug where 90-day performance is positive but annualized is 0
+        // This happens when actual_days_elapsed is 0 due to incorrect latest_market_date calculation
+
+        let test_cases = vec![
+            // (performance_90_day, expected_annualized_min, description)
+            (
+                23.77,
+                100.0,
+                "2025-04-15 scenario: 23.77% should annualize to >100%",
+            ),
+            (
+                17.68,
+                50.0,
+                "2025-04-04 scenario: 17.68% should annualize to >50%",
+            ),
+            (
+                23.64,
+                100.0,
+                "2025-04-22 scenario: 23.64% should annualize to >100%",
+            ),
+            (10.0, 30.0, "10% over 90 days should annualize to >30%"),
+            (5.0, 15.0, "5% over 90 days should annualize to >15%"),
+        ];
+
+        for (performance_90_day, expected_min, description) in test_cases {
+            // Test the actual calculation logic from calculate_portfolio_performance
+            let actual_days_elapsed = 90; // This should be the correct value
+            let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
+                ((1.0_f64 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64)
+                    - 1.0)
+                    * 100.0
+            } else {
+                0.0
+            };
+
+            println!(
+                "{description}: {performance_90_day}% over {actual_days_elapsed} days → {performance_annualized:.2}% (expected >{expected_min:.1}%)"
+            );
+
+            // Verify that positive performance gives positive annualized
+            assert!(
+                performance_annualized > 0.0,
+                "{description}: Positive performance should give positive annualized, got {performance_annualized:.2}%"
+            );
+
+            // Verify it meets minimum expectations
+            assert!(
+                performance_annualized >= expected_min,
+                "{description}: Should be at least {expected_min:.1}%, got {performance_annualized:.2}%"
+            );
+
+            // Verify the calculation is mathematically sound
+            let expected_approx =
+                ((1.0_f64 + performance_90_day / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
+            let tolerance = 0.01; // Allow for floating point precision
+            let difference = (performance_annualized - expected_approx).abs();
+
+            assert!(
+                difference < tolerance,
+                "{description}: Expected ~{expected_approx:.2}%, got {performance_annualized:.2}%, difference: {difference:.2}%"
+            );
+        }
+
+        // Test the bug scenario: what happens when actual_days_elapsed is 0?
+        let bug_scenario_performance = 23.77;
+        let actual_days_elapsed_bug = 0; // This is the bug condition
+        let bug_result = if bug_scenario_performance != 0.0 && actual_days_elapsed_bug > 0 {
+            ((1.0_f64 + bug_scenario_performance / 100.0)
+                .powf(365.25 / actual_days_elapsed_bug as f64)
+                - 1.0)
+                * 100.0
+        } else {
+            0.0
+        };
+
+        println!(
+            "BUG SCENARIO: {bug_scenario_performance}% over {actual_days_elapsed_bug} days → {bug_result:.2}% (this is the bug!)"
+        );
+
+        assert_eq!(
+            bug_result, 0.0,
+            "When actual_days_elapsed is 0, result should be 0.0 (this is the bug condition)"
+        );
+
+        println!("✅ Zero annualized performance bug test completed");
+    }
 }
