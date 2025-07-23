@@ -701,12 +701,12 @@ pub fn calculate_hybrid_projection(
                     let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
                     // Use market data days elapsed instead of calendar days
                     let market_days_elapsed = (latest_date - score_date).num_days();
-                    
+
                     // Calculate projected 90-day performance using a more realistic approach
                     let mut projected_90_day = if market_days_elapsed > 0 {
                         // Use linear projection but with realistic bounds
                         let daily_rate = gain_loss_percent / market_days_elapsed as f64;
-                        
+
                         // Apply dampening based on market data days elapsed
                         let dampening_factor = if market_days_elapsed < 7 {
                             0.1 // Very early days: dampen by 90%
@@ -719,7 +719,7 @@ pub fn calculate_hybrid_projection(
                         } else {
                             0.7 // Later days: dampen by 30%
                         };
-                        
+
                         let raw_projection = daily_rate * 90.0;
                         raw_projection * dampening_factor
                     } else {
@@ -738,7 +738,7 @@ pub fn calculate_hybrid_projection(
                     } else {
                         150.0 // Later: max 150% gain
                     };
-                    
+
                     let max_loss = if market_days_elapsed < 7 {
                         -5.0 // Very early: max 5% loss
                     } else if market_days_elapsed < 14 {
@@ -750,7 +750,7 @@ pub fn calculate_hybrid_projection(
                     } else {
                         -80.0 // Later: max 80% loss
                     };
-                    
+
                     projected_90_day = projected_90_day.clamp(max_loss, max_gain);
 
                     // Calculate dividends for the period

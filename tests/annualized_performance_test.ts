@@ -782,13 +782,17 @@ Deno.test("Hybrid Projection - Realistic Annualized Performance", () => {
   // Verify the results are realistic
   if (testCase.annualized > 1000) {
     throw new Error(
-      `Annualized performance should be realistic, got ${testCase.annualized.toFixed(2)}%`
+      `Annualized performance should be realistic, got ${
+        testCase.annualized.toFixed(2)
+      }%`,
     );
   }
 
   if (testCase.projected90Day > 50) {
     throw new Error(
-      `90-day projection should be realistic, got ${testCase.projected90Day.toFixed(2)}%`
+      `90-day projection should be realistic, got ${
+        testCase.projected90Day.toFixed(2)
+      }%`,
     );
   }
 
@@ -805,25 +809,33 @@ Deno.test("Hybrid Projection - Realistic Annualized Performance", () => {
   scenarios.forEach(({ gain, days, description }) => {
     const result = calculateHybridProjection(gain, days);
     console.log(
-      `${description}: ${gain}% over ${days} days → 90-day: ${result.projected90Day.toFixed(2)}%, Annualized: ${result.annualized.toFixed(2)}%`
+      `${description}: ${gain}% over ${days} days → 90-day: ${
+        result.projected90Day.toFixed(2)
+      }%, Annualized: ${result.annualized.toFixed(2)}%`,
     );
 
     // Verify results are realistic
     if (result.annualized > 1000) {
       throw new Error(
-        `${description}: Annualized performance too high: ${result.annualized.toFixed(2)}%`
+        `${description}: Annualized performance too high: ${
+          result.annualized.toFixed(2)
+        }%`,
       );
     }
 
     if (result.projected90Day > 200) {
       throw new Error(
-        `${description}: 90-day projection too high: ${result.projected90Day.toFixed(2)}%`
+        `${description}: 90-day projection too high: ${
+          result.projected90Day.toFixed(2)
+        }%`,
       );
     }
 
     if (result.projected90Day < -100) {
       throw new Error(
-        `${description}: 90-day projection too low: ${result.projected90Day.toFixed(2)}%`
+        `${description}: 90-day projection too low: ${
+          result.projected90Day.toFixed(2)
+        }%`,
       );
     }
   });
