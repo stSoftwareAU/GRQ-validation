@@ -554,12 +554,12 @@ pub fn calculate_portfolio_performance(
                         }
                     }
                 }
-                
+
                 // Update the latest market date across all stocks
                 if latest_date > latest_market_date {
                     latest_market_date = latest_date;
                 }
-                
+
                 latest_price
             }
         } else {
@@ -603,7 +603,7 @@ pub fn calculate_portfolio_performance(
 
     // Calculate actual days elapsed from score date to latest market data date (capped at 90)
     let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
-    
+
     // Calculate annualized performance using actual days elapsed instead of fixed 90 days
     let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
         ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
@@ -755,7 +755,7 @@ pub fn calculate_hybrid_projection(
 
     // Calculate actual days elapsed from score date to latest market data date (capped at 90)
     let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
-    
+
     // Calculate annualized performance using actual days elapsed instead of fixed 90 days
     let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
         ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
@@ -1227,12 +1227,14 @@ mod tests {
         // Annualized performance should be calculated if we have 90-day performance
         if performance.performance_90_day != 0.0 {
             assert!(performance.performance_annualized != 0.0);
+        }
+    }
 
     #[test]
     fn test_annualized_performance_calculation_with_actual_days() {
         // Test the annualized performance calculation formula with different days elapsed
         // This tests the core fix for using actual days instead of fixed 90 days
-        
+
         let test_cases = vec![
             // (performance_pct, days_elapsed, expected_annualized_approx)
             (2.0, 5, 167.0),   // Early days: 2% over 5 days should annualize to ~167%
@@ -1246,39 +1248,57 @@ mod tests {
 
         for (performance, days, expected_approx) in test_cases {
             let actual_annualized = if performance != 0.0 && days > 0 {
-                ((1.0 + performance / 100.0).powf(365.25 / days as f64) - 1.0) * 100.0
+                ((1.0_f64 + performance / 100.0).powf(365.25 / days as f64) - 1.0) * 100.0
             } else {
                 0.0
             };
 
-            println!("Performance: {}% over {} days → Annualized: {:.1}% (expected ~{}%)",
-                performance, days, actual_annualized, expected_approx);
+            println!(
+                "Performance: {}% over {} days → Annualized: {:.1}% (expected ~{}%)",
+                performance, days, actual_annualized, expected_approx
+            );
 
             // Allow reasonable tolerance for approximation
             let tolerance = 10.0; // 10% tolerance since these are approximations
             let difference = (actual_annualized - expected_approx).abs();
-            
+
             assert!(
                 difference < tolerance,
                 "Performance {}% over {} days: Expected ~{}%, got {:.1}%, difference: {:.1}%",
-                performance, days, expected_approx, actual_annualized, difference
+                performance,
+                days,
+                expected_approx,
+                actual_annualized,
+                difference
             );
 
             // Verify edge case behaviors
             if performance == 0.0 {
-                assert_eq!(actual_annualized, 0.0, "Zero performance should return zero annualized");
+                assert_eq!(
+                    actual_annualized, 0.0,
+                    "Zero performance should return zero annualized"
+                );
             }
-            
+
             if performance > 0.0 {
-                assert!(actual_annualized > 0.0, "Positive performance should give positive annualized");
+                assert!(
+                    actual_annualized > 0.0,
+                    "Positive performance should give positive annualized"
+                );
                 // Early days should give much higher annualized rates
                 if days <= 10 {
-                    assert!(actual_annualized > 100.0, "Early positive performance should have high annualized rate");
+                    assert!(
+                        actual_annualized > 100.0,
+                        "Early positive performance should have high annualized rate"
+                    );
                 }
             }
-            
+
             if performance < 0.0 {
-                assert!(actual_annualized < 0.0, "Negative performance should give negative annualized");
+                assert!(
+                    actual_annualized < 0.0,
+                    "Negative performance should give negative annualized"
+                );
             }
         }
     }
@@ -1287,23 +1307,26 @@ mod tests {
     fn test_annualized_vs_fixed_90_day_comparison() {
         // Test that demonstrates the fix: compare actual days vs fixed 90 days
         let performance = 3.0; // 3% performance
-        
+
         let test_days = vec![5, 10, 15, 30, 60, 90];
-        
+
         for days in test_days {
             // New approach: use actual days
             let annualized_actual = if days > 0 {
-                ((1.0 + performance / 100.0).powf(365.25 / days as f64) - 1.0) * 100.0
+                ((1.0_f64 + performance / 100.0).powf(365.25 / days as f64) - 1.0) * 100.0
             } else {
                 0.0
             };
-            
+
             // Old approach: always use 90 days (what was wrong)
-            let annualized_fixed_90 = ((1.0 + performance / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
-            
-            println!("{}% over {} days: Actual-days method: {:.1}%, Fixed-90 method: {:.1}%",
-                performance, days, annualized_actual, annualized_fixed_90);
-            
+            let annualized_fixed_90 =
+                ((1.0 + performance / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
+
+            println!(
+                "{}% over {} days: Actual-days method: {:.1}%, Fixed-90 method: {:.1}%",
+                performance, days, annualized_actual, annualized_fixed_90
+            );
+
             if days < 90 {
                 // For early days, actual-days method should give higher annualized rate
                 assert!(
@@ -1311,14 +1334,15 @@ mod tests {
                     "For {} days, actual-days method ({:.1}%) should be higher than fixed-90 method ({:.1}%)",
                     days, annualized_actual, annualized_fixed_90
                 );
-                
+
                 // The difference should be significant for very early days
                 if days <= 10 {
                     let difference = annualized_actual - annualized_fixed_90;
                     assert!(
                         difference > 50.0,
                         "For {} days, difference should be substantial (got {:.1}%)",
-                        days, difference
+                        days,
+                        difference
                     );
                 }
             } else {
@@ -1337,11 +1361,11 @@ mod tests {
     fn test_market_data_days_vs_calendar_days() {
         // Test that verifies we should use market data days, not calendar days
         // This simulates the scenario where we have market data for fewer days than calendar days
-        
+
         use chrono::NaiveDate;
-        
+
         let score_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-        
+
         // Simulate different scenarios
         let scenarios = vec![
             // (calendar_days, market_data_days, description)
@@ -1350,9 +1374,9 @@ mod tests {
             (30, 22, "Month with weekends"),
             (90, 63, "90 calendar days with all weekends removed"),
         ];
-        
+
         let performance = 5.0; // 5% performance
-        
+
         for (calendar_days, market_days, description) in scenarios {
             // Calculate what we'd get with calendar days (wrong)
             let calendar_annualized = if calendar_days > 0 {
@@ -1360,32 +1384,37 @@ mod tests {
             } else {
                 0.0
             };
-            
+
             // Calculate what we should get with market days (correct)
             let market_annualized = if market_days > 0 {
                 ((1.0 + performance / 100.0).powf(365.25 / market_days as f64) - 1.0) * 100.0
             } else {
                 0.0
             };
-            
-            println!("{}: {}% over {} calendar days ({} market days)",
-                description, performance, calendar_days, market_days);
+
+            println!(
+                "{}: {}% over {} calendar days ({} market days)",
+                description, performance, calendar_days, market_days
+            );
             println!("  Calendar-days annualized: {:.1}%", calendar_annualized);
             println!("  Market-days annualized: {:.1}%", market_annualized);
-            
+
             // Market days should give higher annualized rate (since fewer days for same performance)
             assert!(
                 market_annualized > calendar_annualized,
                 "Market days method should give higher rate for {}: {:.1}% vs {:.1}%",
-                description, market_annualized, calendar_annualized
+                description,
+                market_annualized,
+                calendar_annualized
             );
-            
+
             // The difference should be meaningful
             let difference = market_annualized - calendar_annualized;
             assert!(
                 difference > 1.0,
                 "Difference should be meaningful for {}: {:.1}%",
-                description, difference
+                description,
+                difference
             );
         }
     }
@@ -1393,15 +1422,21 @@ mod tests {
     #[test]
     fn test_edge_cases_for_annualized_calculation() {
         // Test edge cases that could cause issues
-        
+
         // Test with 1 day
         let one_day_result = ((1.0 + 1.0 / 100.0).powf(365.25 / 1.0) - 1.0) * 100.0;
-        assert!(one_day_result > 3600.0, "1% over 1 day should give very high annualized rate");
-        
+        assert!(
+            one_day_result > 3600.0,
+            "1% over 1 day should give very high annualized rate"
+        );
+
         // Test with 365 days (should be close to the original performance)
         let one_year_result = ((1.0 + 10.0 / 100.0).powf(365.25 / 365.25) - 1.0) * 100.0;
-        assert!((one_year_result - 10.0).abs() < 0.1, "10% over 365 days should be ~10% annualized");
-        
+        assert!(
+            (one_year_result - 10.0).abs() < 0.1,
+            "10% over 365 days should be ~10% annualized"
+        );
+
         // Test with zero days (should handle gracefully)
         let zero_days_result = if 0 > 0 {
             ((1.0 + 5.0 / 100.0).powf(365.25 / 0.0) - 1.0) * 100.0
@@ -1409,13 +1444,19 @@ mod tests {
             0.0
         };
         assert_eq!(zero_days_result, 0.0, "Zero days should return 0");
-        
+
         // Test with negative performance close to -100%
         let near_total_loss = ((1.0 + (-95.0) / 100.0).powf(365.25 / 30.0) - 1.0) * 100.0;
-        assert!(near_total_loss < -99.0, "-95% over 30 days should annualize to near -100%");
-        
+        assert!(
+            near_total_loss < -99.0,
+            "-95% over 30 days should annualize to near -100%"
+        );
+
         // Test very small positive performance
         let tiny_performance = ((1.0 + 0.01 / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
-        assert!(tiny_performance > 0.0 && tiny_performance < 1.0, "Tiny performance should give small positive annualized");
+        assert!(
+            tiny_performance > 0.0 && tiny_performance < 1.0,
+            "Tiny performance should give small positive annualized"
+        );
     }
 }
