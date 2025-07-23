@@ -1237,13 +1237,13 @@ mod tests {
 
         let test_cases = vec![
             // (performance_pct, days_elapsed, expected_annualized_approx)
-            (2.0, 5, 167.0),   // Early days: 2% over 5 days should annualize to ~167%
-            (4.0, 10, 172.0),  // 4% over 10 days should annualize to ~172%
-            (6.0, 30, 78.0),   // 6% over 30 days should annualize to ~78%
-            (8.0, 60, 54.0),   // 8% over 60 days should annualize to ~54%
-            (10.0, 90, 50.0),  // 10% over 90 days should annualize to ~50%
+            (2.0, 5, 324.9),   // Early days: 2% over 5 days should annualize to ~325%
+            (4.0, 10, 318.9),  // 4% over 10 days should annualize to ~319%
+            (6.0, 30, 103.3),  // 6% over 30 days should annualize to ~103%
+            (8.0, 60, 59.8),   // 8% over 60 days should annualize to ~60%
+            (10.0, 90, 47.2),  // 10% over 90 days should annualize to ~47%
             (0.0, 30, 0.0),    // Zero performance should always return 0
-            (-3.0, 15, -58.0), // Negative performance: -3% over 15 days should be ~-58%
+            (-3.0, 15, -52.4), // Negative performance: -3% over 15 days should be ~-52%
         ];
 
         for (performance, days, expected_approx) in test_cases {
@@ -1320,7 +1320,7 @@ mod tests {
 
             // Old approach: always use 90 days (what was wrong)
             let annualized_fixed_90 =
-                ((1.0 + performance / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
+                ((1.0_f64 + performance / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
 
             println!(
                 "{}% over {} days: Actual-days method: {:.1}%, Fixed-90 method: {:.1}%",
@@ -1364,7 +1364,7 @@ mod tests {
 
         use chrono::NaiveDate;
 
-        let score_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let _score_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
 
         // Simulate different scenarios
         let scenarios = vec![
@@ -1380,14 +1380,14 @@ mod tests {
         for (calendar_days, market_days, description) in scenarios {
             // Calculate what we'd get with calendar days (wrong)
             let calendar_annualized = if calendar_days > 0 {
-                ((1.0 + performance / 100.0).powf(365.25 / calendar_days as f64) - 1.0) * 100.0
+                ((1.0_f64 + performance / 100.0).powf(365.25 / calendar_days as f64) - 1.0) * 100.0
             } else {
                 0.0
             };
 
             // Calculate what we should get with market days (correct)
             let market_annualized = if market_days > 0 {
-                ((1.0 + performance / 100.0).powf(365.25 / market_days as f64) - 1.0) * 100.0
+                ((1.0_f64 + performance / 100.0).powf(365.25 / market_days as f64) - 1.0) * 100.0
             } else {
                 0.0
             };
@@ -1424,14 +1424,14 @@ mod tests {
         // Test edge cases that could cause issues
 
         // Test with 1 day
-        let one_day_result = ((1.0 + 1.0 / 100.0).powf(365.25 / 1.0) - 1.0) * 100.0;
+        let one_day_result = ((1.0_f64 + 1.0 / 100.0).powf(365.25 / 1.0) - 1.0) * 100.0;
         assert!(
             one_day_result > 3600.0,
             "1% over 1 day should give very high annualized rate"
         );
 
         // Test with 365 days (should be close to the original performance)
-        let one_year_result = ((1.0 + 10.0 / 100.0).powf(365.25 / 365.25) - 1.0) * 100.0;
+        let one_year_result = ((1.0_f64 + 10.0 / 100.0).powf(365.25 / 365.25) - 1.0) * 100.0;
         assert!(
             (one_year_result - 10.0).abs() < 0.1,
             "10% over 365 days should be ~10% annualized"
@@ -1439,21 +1439,21 @@ mod tests {
 
         // Test with zero days (should handle gracefully)
         let zero_days_result = if 0 > 0 {
-            ((1.0 + 5.0 / 100.0).powf(365.25 / 0.0) - 1.0) * 100.0
+            ((1.0_f64 + 5.0 / 100.0).powf(365.25 / 0.0) - 1.0) * 100.0
         } else {
             0.0
         };
         assert_eq!(zero_days_result, 0.0, "Zero days should return 0");
 
         // Test with negative performance close to -100%
-        let near_total_loss = ((1.0 + (-95.0) / 100.0).powf(365.25 / 30.0) - 1.0) * 100.0;
+        let near_total_loss = ((1.0_f64 + (-95.0) / 100.0).powf(365.25 / 30.0) - 1.0) * 100.0;
         assert!(
             near_total_loss < -99.0,
             "-95% over 30 days should annualize to near -100%"
         );
 
         // Test very small positive performance
-        let tiny_performance = ((1.0 + 0.01 / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
+        let tiny_performance = ((1.0_f64 + 0.01 / 100.0).powf(365.25 / 90.0) - 1.0) * 100.0;
         assert!(
             tiny_performance > 0.0 && tiny_performance < 1.0,
             "Tiny performance should give small positive annualized"
