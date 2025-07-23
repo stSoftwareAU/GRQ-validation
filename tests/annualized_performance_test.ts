@@ -605,3 +605,114 @@ Deno.test("Annualized Performance - Zero Bug Investigation", () => {
 
   console.log("✅ All zero annualized performance bug tests passed");
 });
+
+// TEST FOR AVERAGE ANNUALIZED PERFORMANCE CALCULATION
+Deno.test("Average Annualized Performance Calculation", () => {
+  // Simulate the data structure from index.json
+  const mockData = [
+    {
+      date: "2025-04-15",
+      performance_90_day: 23.77,
+      performance_annualized: 137.62,
+    },
+    {
+      date: "2025-04-22",
+      performance_90_day: 23.64,
+      performance_annualized: 136.57,
+    },
+    {
+      date: "2025-07-22",
+      performance_90_day: null, // No 90-day performance yet
+      performance_annualized: 0.0, // Hybrid projection
+    },
+    {
+      date: "2025-07-23",
+      performance_90_day: null, // No 90-day performance yet
+      performance_annualized: 0.0, // Hybrid projection
+    },
+  ];
+
+  // Simulate the fixed calculation logic
+  let total90Day = 0;
+  let totalAnnualized = 0;
+  let valid90DayCount = 0;
+  let validAnnualizedCount = 0;
+  let positiveCount = 0;
+
+  mockData.forEach((row) => {
+    const performance90Day = row.performance_90_day;
+    const performanceAnnualized = row.performance_annualized;
+
+    if (performance90Day !== null && performance90Day !== undefined) {
+      total90Day += performance90Day;
+      valid90DayCount++;
+
+      if (performance90Day > 0) {
+        positiveCount++;
+      }
+    }
+
+    if (performanceAnnualized !== null && performanceAnnualized !== undefined) {
+      totalAnnualized += performanceAnnualized;
+      validAnnualizedCount++;
+    }
+  });
+
+  const avg90Day = valid90DayCount > 0 ? total90Day / valid90DayCount : 0;
+  const avgAnnualized = validAnnualizedCount > 0
+    ? totalAnnualized / validAnnualizedCount
+    : 0;
+
+  console.log("Test Results:");
+  console.log(`Total 90-day: ${total90Day}`);
+  console.log(`Total annualized: ${totalAnnualized}`);
+  console.log(`Valid 90-day count: ${valid90DayCount}`);
+  console.log(`Valid annualized count: ${validAnnualizedCount}`);
+  console.log(`Average 90-day: ${avg90Day.toFixed(2)}%`);
+  console.log(`Average annualized: ${avgAnnualized.toFixed(2)}%`);
+  console.log(`Positive count: ${positiveCount}`);
+
+  // Verify the calculations are correct
+  const expectedAvg90Day = (23.77 + 23.64) / 2; // Only the 2 valid entries
+  const expectedAvgAnnualized = (137.62 + 136.57 + 0.0 + 0.0) / 4; // All 4 entries
+
+  console.log(`Expected avg 90-day: ${expectedAvg90Day.toFixed(2)}%`);
+  console.log(`Expected avg annualized: ${expectedAvgAnnualized.toFixed(2)}%`);
+
+  // Assertions
+  if (Math.abs(avg90Day - expectedAvg90Day) > 0.01) {
+    throw new Error(
+      `Average 90-day calculation wrong: expected ${
+        expectedAvg90Day.toFixed(2)
+      }%, got ${avg90Day.toFixed(2)}%`,
+    );
+  }
+
+  if (Math.abs(avgAnnualized - expectedAvgAnnualized) > 0.01) {
+    throw new Error(
+      `Average annualized calculation wrong: expected ${
+        expectedAvgAnnualized.toFixed(2)
+      }%, got ${avgAnnualized.toFixed(2)}%`,
+    );
+  }
+
+  if (valid90DayCount !== 2) {
+    throw new Error(
+      `Should have 2 valid 90-day entries, got ${valid90DayCount}`,
+    );
+  }
+
+  if (validAnnualizedCount !== 4) {
+    throw new Error(
+      `Should have 4 valid annualized entries, got ${validAnnualizedCount}`,
+    );
+  }
+
+  if (positiveCount !== 2) {
+    throw new Error(
+      `Should have 2 positive 90-day entries, got ${positiveCount}`,
+    );
+  }
+
+  console.log("✅ Average annualized performance calculation test passed");
+});

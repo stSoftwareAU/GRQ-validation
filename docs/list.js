@@ -262,7 +262,8 @@ class ScoreFilesList {
             let total90Day = 0;
             let totalAnnualized = 0;
             let positiveCount = 0;
-            let validCount = 0;
+            let valid90DayCount = 0;
+            let validAnnualizedCount = 0;
             
             visibleData.each((row) => {
                 const performance90Day = row.performance_90_day;
@@ -270,7 +271,7 @@ class ScoreFilesList {
                 
                 if (performance90Day !== null && performance90Day !== undefined) {
                     total90Day += performance90Day;
-                    validCount++;
+                    valid90DayCount++;
                     
                     if (performance90Day > 0) {
                         positiveCount++;
@@ -279,12 +280,15 @@ class ScoreFilesList {
                 
                 if (performanceAnnualized !== null && performanceAnnualized !== undefined) {
                     totalAnnualized += performanceAnnualized;
+                    validAnnualizedCount++;
                 }
             });
             
-            const avg90Day = validCount > 0 ? total90Day / validCount : 0;
-            const avgAnnualized = validCount > 0 ? totalAnnualized / validCount : 0;
+            const avg90Day = valid90DayCount > 0 ? total90Day / valid90DayCount : 0;
+            const avgAnnualized = validAnnualizedCount > 0 ? totalAnnualized / validAnnualizedCount : 0;
             const totalFiles = visibleData.count();
+            
+
             
             // Update display
             const avg90DayElement = document.getElementById('avg90Day');
@@ -307,7 +311,7 @@ class ScoreFilesList {
             }
             
             if (positiveCountElement) {
-                positiveCountElement.textContent = `${positiveCount} (${validCount > 0 ? (positiveCount / validCount * 100).toFixed(1) : 0}%)`;
+                positiveCountElement.textContent = `${positiveCount} (${valid90DayCount > 0 ? (positiveCount / valid90DayCount * 100).toFixed(1) : 0}%)`;
             }
         } catch (error) {
             console.error('Error updating summary stats:', error);
