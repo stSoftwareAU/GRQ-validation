@@ -19,8 +19,11 @@ if git diff --cached --name-only | grep -E "^docs/" > /dev/null; then
     # Update version in index.html (macOS/BSD sed compatible)
     sed -i '' "s/const VERSION=\"[^\"]*\"/const VERSION=\"$NEW_VERSION\"/" docs/index.html
     
-    # Add the updated file to the commit
-    git add docs/index.html
+    # Update version in list.html (macOS/BSD sed compatible)
+    sed -i '' "s/const VERSION=\"[^\"]*\"/const VERSION=\"$NEW_VERSION\"/" docs/list.html
     
-    echo "Version auto-incremented to $NEW_VERSION"
+    # Add the updated files to the commit
+    git add docs/index.html docs/list.html
+    
+    echo "Version auto-incremented to $NEW_VERSION in both index.html and list.html"
 fi 
