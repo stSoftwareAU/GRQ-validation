@@ -489,7 +489,7 @@ Deno.test("Annualized Performance - Edge Cases and Error Handling", () => {
 Deno.test("Annualized Performance - Zero Bug Investigation", () => {
   // Test the specific scenario where 90-day performance is positive but annualized is 0
   // This tests the bug where actual_days_elapsed might be 0
-  
+
   const calculateAnnualizedWithActualDays = (
     performance: number,
     actualDays: number,
@@ -500,67 +500,79 @@ Deno.test("Annualized Performance - Zero Bug Investigation", () => {
 
   // Test cases that should NOT result in zero annualized performance
   const testCases = [
-    { 
-      performance: 23.77, 
-      days: 90, 
+    {
+      performance: 23.77,
+      days: 90,
       description: "2025-04-15 scenario: 23.77% over 90 days",
-      expectedMin: 100 // Should be significantly positive
+      expectedMin: 100, // Should be significantly positive
     },
-    { 
-      performance: 17.68, 
-      days: 90, 
+    {
+      performance: 17.68,
+      days: 90,
       description: "2025-04-04 scenario: 17.68% over 90 days",
-      expectedMin: 50 // Should be significantly positive
+      expectedMin: 50, // Should be significantly positive
     },
-    { 
-      performance: 23.64, 
-      days: 90, 
+    {
+      performance: 23.64,
+      days: 90,
       description: "2025-04-22 scenario: 23.64% over 90 days",
-      expectedMin: 100 // Should be significantly positive
+      expectedMin: 100, // Should be significantly positive
     },
     // Edge cases that should be handled properly
-    { 
-      performance: 5.0, 
-      days: 1, 
+    {
+      performance: 5.0,
+      days: 1,
       description: "Very early days: 5% over 1 day",
-      expectedMin: 1000 // Should be very high
+      expectedMin: 1000, // Should be very high
     },
-    { 
-      performance: 10.0, 
-      days: 30, 
+    {
+      performance: 10.0,
+      days: 30,
       description: "Early days: 10% over 30 days",
-      expectedMin: 100 // Should be high
+      expectedMin: 100, // Should be high
     },
   ];
 
   testCases.forEach(({ performance, days, description, expectedMin }) => {
-    const actualAnnualized = calculateAnnualizedWithActualDays(performance, days);
-    
-    console.log(`${description}: ${performance}% over ${days} days → ${actualAnnualized.toFixed(2)}%`);
-    
+    const actualAnnualized = calculateAnnualizedWithActualDays(
+      performance,
+      days,
+    );
+
+    console.log(
+      `${description}: ${performance}% over ${days} days → ${
+        actualAnnualized.toFixed(2)
+      }%`,
+    );
+
     // Verify that positive performance with positive days gives positive annualized
     if (performance > 0 && days > 0) {
       if (actualAnnualized <= 0) {
         throw new Error(
-          `BUG: Positive performance ${performance}% over ${days} days should give positive annualized, got ${actualAnnualized}%`
+          `BUG: Positive performance ${performance}% over ${days} days should give positive annualized, got ${actualAnnualized}%`,
         );
       }
-      
+
       if (actualAnnualized < expectedMin) {
         throw new Error(
-          `BUG: ${description} should give at least ${expectedMin}% annualized, got ${actualAnnualized.toFixed(2)}%`
+          `BUG: ${description} should give at least ${expectedMin}% annualized, got ${
+            actualAnnualized.toFixed(2)
+          }%`,
         );
       }
     }
-    
+
     // Verify the calculation is mathematically sound
-    const expectedApprox = ((1 + performance / 100) ** (365.25 / days) - 1) * 100;
+    const expectedApprox = ((1 + performance / 100) ** (365.25 / days) - 1) *
+      100;
     const tolerance = 0.01; // Allow for floating point precision
     const difference = Math.abs(actualAnnualized - expectedApprox);
-    
+
     if (difference > tolerance) {
       throw new Error(
-        `Calculation error: Expected ~${expectedApprox.toFixed(2)}%, got ${actualAnnualized.toFixed(2)}%, difference: ${difference.toFixed(2)}%`
+        `Calculation error: Expected ~${expectedApprox.toFixed(2)}%, got ${
+          actualAnnualized.toFixed(2)
+        }%, difference: ${difference.toFixed(2)}%`,
       );
     }
   });
@@ -569,16 +581,24 @@ Deno.test("Annualized Performance - Zero Bug Investigation", () => {
   const edgeCases = [
     { performance: 0, days: 90, description: "Zero performance" },
     { performance: 10, days: 0, description: "Zero days" },
-    { performance: -5, days: 0, description: "Negative performance, zero days" },
+    {
+      performance: -5,
+      days: 0,
+      description: "Negative performance, zero days",
+    },
   ];
 
   edgeCases.forEach(({ performance, days, description }) => {
     const result = calculateAnnualizedWithActualDays(performance, days);
-    console.log(`${description}: ${performance}% over ${days} days → ${result.toFixed(2)}%`);
-    
+    console.log(
+      `${description}: ${performance}% over ${days} days → ${
+        result.toFixed(2)
+      }%`,
+    );
+
     if (result !== 0) {
       throw new Error(
-        `${description} should return 0, got ${result}%`
+        `${description} should return 0, got ${result}%`,
       );
     }
   });
