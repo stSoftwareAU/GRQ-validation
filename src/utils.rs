@@ -540,6 +540,12 @@ pub fn calculate_portfolio_performance(
         // Get the current price (90-day end date or latest available)
         let current_price = if let Some(symbol_data) = market_data_csv.get(full_ticker) {
             if let Some(end_day) = symbol_data.get(&end_date_str) {
+                // Update the latest market date when we have the exact end date
+                if let Ok(end_date_parsed) = NaiveDate::parse_from_str(&end_date_str, "%Y-%m-%d") {
+                    if end_date_parsed > latest_market_date {
+                        latest_market_date = end_date_parsed;
+                    }
+                }
                 *end_day
             } else {
                 // Find the latest available price within 90 days
@@ -601,16 +607,17 @@ pub fn calculate_portfolio_performance(
         0.0
     };
 
-    // For 90-day validation, we always use 90 days for annualization
-    // This represents the intended prediction period, not the actual days elapsed
-    let days_for_annualization = 90;
+    // Calculate actual days elapsed from score date to latest market data date (capped at 90)
+    let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
 
-    let performance_annualized = if performance_90_day != 0.0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25 / days_for_annualization as f64) - 1.0)
-            * 100.0
+    // Calculate annualized performance using actual days elapsed instead of fixed 90 days
+    let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
+        ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
     } else {
         0.0
     };
+
+
 
     Ok(PortfolioPerformance {
         score_date: score_file_date.to_string(),
