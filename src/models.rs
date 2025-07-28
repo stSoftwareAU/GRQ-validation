@@ -18,9 +18,15 @@ where
     let s: String = Deserialize::deserialize(deserializer)?;
 
     // Remove dollar sign and commas, then parse as float
+    // Handle negative values with currency formatting like "-$45,749.70"
     let cleaned = s.replace(['$', ','], "");
 
-    cleaned.parse::<f64>().map_err(serde::de::Error::custom)
+    cleaned.parse::<f64>().map_err(|e| {
+        serde::de::Error::custom(format!(
+            "Failed to parse currency value '{}' as float: {}",
+            s, e
+        ))
+    })
 }
 
 /// Custom serializer for optional currency values
@@ -47,15 +53,22 @@ where
 
     match s {
         Some(s) => {
-            if s.trim().is_empty() {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
                 Ok(None)
             } else {
                 // Remove dollar sign and commas, then parse as float
-                let cleaned = s.replace(['$', ','], "");
+                // Handle negative values with currency formatting like "-$45,749.70"
+                let cleaned = trimmed.replace(['$', ','], "");
                 cleaned
                     .parse::<f64>()
                     .map(Some)
-                    .map_err(serde::de::Error::custom)
+                    .map_err(|e| {
+                        serde::de::Error::custom(format!(
+                            "Failed to parse currency value '{}' as float: {}",
+                            trimmed, e
+                        ))
+                    })
             }
         }
         None => Ok(None),
@@ -263,6 +276,37 @@ mod tests {
         // Currency values are rounded to 2 decimal places during serialization
         assert!((deserialized.intrinsic_value_per_share_basic.unwrap() - 19.45).abs() < 0.01);
         assert!((deserialized.intrinsic_value_per_share_adjusted.unwrap() - 28.69).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_currency_deserialization_with_negative_values() {
+        // Test that negative currency values with formatting are parsed correctly
+        let test_cases = vec![
+            ("-$45,749.70", -45749.70),
+            ("-$45,568.43", -45568.43),
+            ("-$1,414.96", -1414.96),
+            ("-$7,075.94", -7075.94),
+            ("$18.42", 18.42),
+            ("$27.56", 27.56),
+            ("$3,208.46", 3208.46),
+            ("$3,427.71", 3427.71),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = deserialize_currency(&mut serde_json::Deserializer::from_str(&format!("\"{}\"", input)));
+            match result {
+                Ok(value) => {
+                    assert!(
+                        (value - expected).abs() < 0.01,
+                        "Failed to parse '{}': expected {}, got {}",
+                        input, expected, value
+                    );
+                }
+                Err(e) => {
+                    panic!("Failed to parse '{}': {}", input, e);
+                }
+            }
+        }
     }
 
     #[test]
