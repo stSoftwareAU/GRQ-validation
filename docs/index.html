@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <script>
-        const VERSION="1.0.94";
+        const VERSION="1.0.98";
         document.title=`GRQ Validation Dashboard v${VERSION}`;
     </script>
     <link rel="icon" type="image/png" href="logo.png" />
@@ -135,7 +135,7 @@
                   </div>
                   <div class="card-body">
                     <div class="row">
-                      <div class="col-md-6">
+                      <div class="col-md-4">
                         <div class="market-index-card">
                           <h6 class="text-primary mb-2">SP500 Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
@@ -144,12 +144,21 @@
                           </div>
                         </div>
                       </div>
-                      <div class="col-md-6">
+                      <div class="col-md-4">
                         <div class="market-index-card">
                           <h6 class="text-info mb-2">NASDAQ Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="nasdaqPerformance" class="h5 mb-0">-</span>
                             <small id="nasdaqDetails" class="text-muted">-</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="market-index-card">
+                          <h6 class="text-success mb-2">Russell 2000 Performance</h6>
+                          <div class="d-flex justify-content-between align-items-center">
+                            <span id="russell2000Performance" class="h5 mb-0">-</span>
+                            <small id="russell2000Details" class="text-muted">-</small>
                           </div>
                         </div>
                       </div>

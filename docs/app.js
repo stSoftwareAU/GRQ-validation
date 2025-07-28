@@ -450,6 +450,14 @@ class GRQValidator {
             const startTimestamp = Math.floor(startDate.getTime() / 1000);
             const endTimestamp = Math.floor(endDate.getTime() / 1000);
 
+            console.log('Market data date range:', {
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                startTimestamp,
+                endTimestamp,
+                dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+            });
+
             console.log('Fetching SP500 data from Yahoo Finance via CORS proxy...');
             
             // Fetch SP500 data with multiple proxy options and better error handling
@@ -530,6 +538,47 @@ class GRQValidator {
                 }
             }
 
+            // Add delay between API calls to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            console.log('Fetching Russell 2000 data from Yahoo Finance via CORS proxy...');
+            // Fetch Russell 2000 data with multiple proxy options and better error handling
+            let russell2000Data = null;
+            const russell2000Proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5ERUT?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
+                `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5ERUT?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
+                `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5ERUT?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`
+            ];
+            
+            for (let i = 0; i < russell2000Proxies.length; i++) {
+                try {
+                    console.log(`Attempting Russell 2000 fetch with proxy ${i + 1}/${russell2000Proxies.length}...`);
+                    const russell2000Response = await Promise.race([
+                        fetch(russell2000Proxies[i], { method: 'GET' }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Russell 2000 request timeout')), 5000))
+                    ]);
+                    
+                    if (!russell2000Response.ok) {
+                        throw new Error(`Russell 2000 API request failed: ${russell2000Response.status} ${russell2000Response.statusText}`);
+                    }
+                    
+                    const responseText = await russell2000Response.text();
+                    if (responseText.includes('Too Many Requests') || responseText.includes('rate limit')) {
+                        throw new Error('Yahoo Finance rate limit exceeded');
+                    }
+                    
+                    russell2000Data = JSON.parse(responseText);
+                    console.log('Russell 2000 raw data (proxy', i + 1, '):', russell2000Data);
+                    break; // Success, exit the loop
+                } catch (russell2000Error) {
+                    console.warn(`Russell 2000 fetch failed with proxy ${i + 1}:`, russell2000Error);
+                    if (i === russell2000Proxies.length - 1) {
+                        console.warn('Russell 2000 fetch failed with all proxies, continuing without Russell 2000 data');
+                        russell2000Data = null;
+                    }
+                }
+            }
+
             // Process the data - only include valid data
             this.marketIndexData = {};
             
@@ -566,11 +615,39 @@ class GRQValidator {
             } else {
                 console.warn('No NASDAQ data available');
             }
+            
+            if (russell2000Data) {
+                console.log('Processing Russell 2000 data...');
+                console.log('Russell 2000 raw data structure:', {
+                    hasChart: !!russell2000Data.chart,
+                    hasResult: !!russell2000Data.chart?.result,
+                    resultLength: russell2000Data.chart?.result?.length || 0,
+                    hasTimestamp: !!russell2000Data.chart?.result?.[0]?.timestamp,
+                    hasQuote: !!russell2000Data.chart?.result?.[0]?.indicators?.quote
+                });
+                
+                const russell2000Processed = this.processYahooFinanceData(russell2000Data, 'Russell 2000');
+                console.log('Russell 2000 processed result:', russell2000Processed);
+                
+                if (russell2000Processed && russell2000Processed.initialPrice && russell2000Processed.currentPrice) {
+                    this.marketIndexData.russell2000 = russell2000Processed;
+                    console.log('Russell 2000 data processed successfully:', {
+                        initialPrice: russell2000Processed.initialPrice,
+                        currentPrice: russell2000Processed.currentPrice,
+                        dataPoints: russell2000Processed.data.length
+                    });
+                } else {
+                    console.warn('Russell 2000 data processing failed - missing required fields');
+                    console.warn('Processed data:', russell2000Processed);
+                }
+            } else {
+                console.warn('No Russell 2000 data available');
+            }
 
             console.log('Final market index data:', this.marketIndexData);
             
             // Show user-friendly message if market data failed
-            if (!this.marketIndexData || (!this.marketIndexData.sp500 && !this.marketIndexData.nasdaq)) {
+            if (!this.marketIndexData || (!this.marketIndexData.sp500 && !this.marketIndexData.nasdaq && !this.marketIndexData.russell2000)) {
                 console.warn('Market comparison data unavailable - CORS proxies may be down');
                 // Optionally show a user notification
                 const marketComparisonDiv = document.getElementById('marketComparison');
@@ -579,12 +656,20 @@ class GRQValidator {
                         <div class="alert alert-warning">
                             <i class="fas fa-exclamation-triangle me-2"></i>
                             <strong>Market Comparison Unavailable:</strong> 
-                            SP500 and NASDAQ data cannot be loaded due to CORS restrictions. 
+                            SP500, NASDAQ, and Russell 2000 data cannot be loaded due to CORS restrictions. 
                             The chart will still display portfolio performance data.
                         </div>
                     `;
                     marketComparisonDiv.style.display = 'block';
                 }
+            } else {
+                // Show success message with available data
+                const availableIndices = [];
+                if (this.marketIndexData.sp500) availableIndices.push('SP500');
+                if (this.marketIndexData.nasdaq) availableIndices.push('NASDAQ');
+                if (this.marketIndexData.russell2000) availableIndices.push('Russell 2000');
+                
+                console.log(`Market comparison data loaded successfully: ${availableIndices.join(', ')}`);
             }
         } catch (error) {
             console.error('Error loading market index data:', error);
@@ -618,6 +703,15 @@ class GRQValidator {
         const quotes = result.indicators.quote[0];
         const closes = quotes.close;
 
+        console.log(`${indexName} data processing:`, {
+            timestampsLength: timestamps?.length || 0,
+            closesLength: closes?.length || 0,
+            firstTimestamp: timestamps?.[0] ? new Date(timestamps[0] * 1000).toISOString() : 'none',
+            lastTimestamp: timestamps?.[timestamps.length - 1] ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : 'none',
+            firstClose: closes?.[0],
+            lastClose: closes?.[closes.length - 1]
+        });
+
         const data = [];
         for (let i = 0; i < timestamps.length; i++) {
             if (closes[i] !== null && closes[i] !== undefined) {
@@ -628,6 +722,13 @@ class GRQValidator {
                 });
             }
         }
+
+        console.log(`${indexName} processed data:`, {
+            dataLength: data.length,
+            initialPrice: data.length > 0 ? data[0].close : null,
+            currentPrice: data.length > 0 ? data[data.length - 1].close : null,
+            dateRange: data.length > 0 ? `${data[0].date.toISOString()} to ${data[data.length - 1].date.toISOString()}` : 'none'
+        });
 
         return {
             name: indexName,
@@ -659,6 +760,9 @@ class GRQValidator {
             }
             if (this.marketIndexData.nasdaq) {
                 marketPerformance.nasdaq = this.calculateMarketPerformance(this.marketIndexData.nasdaq);
+            }
+            if (this.marketIndexData.russell2000) {
+                marketPerformance.russell2000 = this.calculateMarketPerformance(this.marketIndexData.russell2000);
             }
         }
 
@@ -693,6 +797,15 @@ class GRQValidator {
             nasdaqElement.className = 'h5 mb-0 text-muted';
             nasdaqDetailsElement.textContent = 'Fetching data...';
         }
+        
+        // Update Russell 2000 with loading indicator
+        const russell2000Element = document.getElementById('russell2000Performance');
+        const russell2000DetailsElement = document.getElementById('russell2000Details');
+        if (russell2000Element && russell2000DetailsElement) {
+            russell2000Element.textContent = 'Loading...';
+            russell2000Element.className = 'h5 mb-0 text-muted';
+            russell2000DetailsElement.textContent = 'Fetching data...';
+        }
     }
 
     updateMarketComparison() {
@@ -706,7 +819,7 @@ class GRQValidator {
         const marketPerformance = this.getMarketPerformanceData();
         console.log('Market performance data:', marketPerformance);
         
-        if (marketPerformance.sp500 || marketPerformance.nasdaq) {
+        if (marketPerformance.sp500 || marketPerformance.nasdaq || marketPerformance.russell2000) {
             console.log('Showing market comparison section');
             marketComparison.style.display = 'block';
             
@@ -747,15 +860,38 @@ class GRQValidator {
                     
                     nasdaqDetailsElement.textContent = 
                         `${Math.round(marketPerformance.nasdaq.initialPrice)} → ${Math.round(marketPerformance.nasdaq.currentPrice)}`;
-                } else {
-                    console.log('NASDAQ display elements not found');
-                }
+                            } else {
+                console.log('NASDAQ display elements not found');
+            }
+        }
+        
+        // Update Russell 2000
+        if (marketPerformance.russell2000) {
+            console.log('Updating Russell 2000 display:', marketPerformance.russell2000);
+            const russell2000Element = document.getElementById('russell2000Performance');
+            const russell2000DetailsElement = document.getElementById('russell2000Details');
+            
+            if (russell2000Element && russell2000DetailsElement) {
+                const performance = marketPerformance.russell2000.performance;
+                const sign = performance >= 0 ? '+' : '';
+                const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
+                
+                russell2000Element.textContent = `${sign}${performance.toFixed(2)}%`;
+                russell2000Element.className = `h5 mb-0 ${performanceClass}`;
+                
+                russell2000DetailsElement.textContent = 
+                    `${Math.round(marketPerformance.russell2000.initialPrice)} → ${Math.round(marketPerformance.russell2000.currentPrice)}`;
+            } else {
+                console.log('Russell 2000 display elements not found');
             }
         } else {
-            console.log('No market performance data available, hiding comparison section');
-            marketComparison.style.display = 'none';
+            console.log('No Russell 2000 performance data available for display');
         }
+    } else {
+        console.log('No market performance data available, hiding comparison section');
+        marketComparison.style.display = 'none';
     }
+}
 
     updateDisplay() {
         console.log('updateDisplay called');
@@ -858,7 +994,8 @@ class GRQValidator {
         if (this.marketIndexData) {
             console.log('Market index data in updateChart:', {
                 sp500: this.marketIndexData.sp500 ? 'available' : 'not available',
-                nasdaq: this.marketIndexData.nasdaq ? 'available' : 'not available'
+                nasdaq: this.marketIndexData.nasdaq ? 'available' : 'not available',
+                russell2000: this.marketIndexData.russell2000 ? 'available' : 'not available'
             });
         } else {
             console.log('No market index data available - chart will show portfolio data only');
@@ -1669,6 +1806,41 @@ class GRQValidator {
                 }
             } else {
                 console.log('No NASDAQ data available');
+            }
+
+            // Add Russell 2000 data
+            if (this.marketIndexData.russell2000 && this.marketIndexData.russell2000.data.length > 0) {
+                console.log('Russell 2000 data available:', this.marketIndexData.russell2000.data.length, 'points');
+                console.log('Russell 2000 initial price:', this.marketIndexData.russell2000.initialPrice);
+                console.log('Russell 2000 current price:', this.marketIndexData.russell2000.currentPrice);
+                
+                const russell2000Data = this.marketIndexData.russell2000.data
+                    .filter(point => point.date <= maxDate)
+                    .map(point => {
+                        const initialPrice = this.marketIndexData.russell2000.initialPrice;
+                        const performance = ((point.close - initialPrice) / initialPrice) * 100;
+                        return {
+                            x: new Date(point.date.getTime()),
+                            y: performance
+                        };
+                    });
+                
+                console.log('Russell 2000 chart data points:', russell2000Data.length);
+                if (russell2000Data.length > 0) {
+                    console.log('Adding Russell 2000 to chart datasets');
+                    datasets.push({
+                        label: "Russell 2000",
+                        data: russell2000Data,
+                        borderColor: "rgba(75, 192, 192, 0.8)",
+                        backgroundColor: "rgba(75, 192, 192, 0.1)",
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1,
+                    });
+                }
+            } else {
+                console.log('No Russell 2000 data available');
             }
         } else {
             console.log('No market index data available');
