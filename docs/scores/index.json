@@ -206,8 +206,8 @@
       "day": "27",
       "file": "2025/May/27.tsv",
       "date": "2025-05-27",
-      "performance_90_day": 1.5175135825627146,
-      "performance_annualized": 6.209628322680771,
+      "performance_90_day": 1.989628919360005,
+      "performance_annualized": 8.316822392151192,
       "total_stocks": 22
     },
     {
@@ -605,7 +605,10 @@
       "month": "July",
       "day": "29",
       "file": "2025/July/29.tsv",
-      "date": "2025-07-29"
+      "date": "2025-07-29",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
