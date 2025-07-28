@@ -23,8 +23,7 @@ where
 
     cleaned.parse::<f64>().map_err(|e| {
         serde::de::Error::custom(format!(
-            "Failed to parse currency value '{}' as float: {}",
-            s, e
+            "Failed to parse currency value '{s}' as float: {e}"
         ))
     })
 }
@@ -60,15 +59,11 @@ where
                 // Remove dollar sign and commas, then parse as float
                 // Handle negative values with currency formatting like "-$45,749.70"
                 let cleaned = trimmed.replace(['$', ','], "");
-                cleaned
-                    .parse::<f64>()
-                    .map(Some)
-                    .map_err(|e| {
-                        serde::de::Error::custom(format!(
-                            "Failed to parse currency value '{}' as float: {}",
-                            trimmed, e
-                        ))
-                    })
+                cleaned.parse::<f64>().map(Some).map_err(|e| {
+                    serde::de::Error::custom(format!(
+                        "Failed to parse currency value '{trimmed}' as float: {e}"
+                    ))
+                })
             }
         }
         None => Ok(None),
@@ -293,17 +288,18 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = deserialize_currency(&mut serde_json::Deserializer::from_str(&format!("\"{}\"", input)));
+            let result = deserialize_currency(&mut serde_json::Deserializer::from_str(&format!(
+                "\"{input}\""
+            )));
             match result {
                 Ok(value) => {
                     assert!(
                         (value - expected).abs() < 0.01,
-                        "Failed to parse '{}': expected {}, got {}",
-                        input, expected, value
+                        "Failed to parse '{input}': expected {expected}, got {value}"
                     );
                 }
                 Err(e) => {
-                    panic!("Failed to parse '{}': {}", input, e);
+                    panic!("Failed to parse '{input}': {e}");
                 }
             }
         }

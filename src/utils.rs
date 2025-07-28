@@ -962,8 +962,10 @@ mod tests {
 
         // Verify that dates are sorted chronologically
         for i in 1..index_data.scores.len() {
-            let prev_date = NaiveDate::parse_from_str(&index_data.scores[i - 1].date, "%Y-%m-%d").unwrap();
-            let curr_date = NaiveDate::parse_from_str(&index_data.scores[i].date, "%Y-%m-%d").unwrap();
+            let prev_date =
+                NaiveDate::parse_from_str(&index_data.scores[i - 1].date, "%Y-%m-%d").unwrap();
+            let curr_date =
+                NaiveDate::parse_from_str(&index_data.scores[i].date, "%Y-%m-%d").unwrap();
             assert!(
                 prev_date <= curr_date,
                 "Dates are not sorted: {} should come before {}",
