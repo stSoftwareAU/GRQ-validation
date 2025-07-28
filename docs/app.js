@@ -180,6 +180,10 @@ class GRQValidator {
         this.showLoading();
         console.log('loadScoreFile called for:', this.selectedFile);
 
+        // Clear market index data to prevent showing stale SP500/NASDAQ data
+        this.marketIndexData = null;
+        console.log('Cleared market index data to prevent stale data display');
+
         try {
             console.log('Loading score data...');
             await this.loadScoreData();
@@ -189,9 +193,12 @@ class GRQValidator {
             await this.loadMarketData();
             console.log('Market data loaded, available stocks:', this.marketData ? Object.keys(this.marketData).length : 0);
             
-            // Show the main chart immediately
+            // Show the main chart immediately (without SP500/NASDAQ)
             console.log('Calling updateDisplay...');
             this.updateDisplay();
+            
+            // Show loading state for market comparison
+            this.showMarketComparisonLoading();
             
             // Load market index data asynchronously (don't block the main display)
             this.loadMarketIndexData().then(() => {
@@ -853,6 +860,8 @@ class GRQValidator {
                 sp500: this.marketIndexData.sp500 ? 'available' : 'not available',
                 nasdaq: this.marketIndexData.nasdaq ? 'available' : 'not available'
             });
+        } else {
+            console.log('No market index data available - chart will show portfolio data only');
         }
         
         const ctx = document

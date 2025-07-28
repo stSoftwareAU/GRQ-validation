@@ -38,7 +38,21 @@ pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
 
     let index_path = Path::new(docs_path).join("scores").join("index.json");
     let content = fs::read_to_string(index_path)?;
-    let index_data: IndexData = serde_json::from_str(&content)?;
+    let mut index_data: IndexData = serde_json::from_str(&content)?;
+
+    // Sort the scores by date to ensure chronological order
+    index_data.scores.sort_by(|a, b| {
+        // Parse dates and compare them
+        if let (Ok(date_a), Ok(date_b)) = (
+            NaiveDate::parse_from_str(&a.date, "%Y-%m-%d"),
+            NaiveDate::parse_from_str(&b.date, "%Y-%m-%d"),
+        ) {
+            date_a.cmp(&date_b)
+        } else {
+            // Fallback to string comparison if date parsing fails
+            a.date.cmp(&b.date)
+        }
+    });
 
     Ok(index_data)
 }
@@ -945,6 +959,18 @@ mod tests {
         let dates: Vec<&str> = index_data.scores.iter().map(|s| s.date.as_str()).collect();
         assert!(dates.contains(&"2025-06-20"));
         assert!(dates.contains(&"2025-06-21"));
+
+        // Verify that dates are sorted chronologically
+        for i in 1..index_data.scores.len() {
+            let prev_date = NaiveDate::parse_from_str(&index_data.scores[i - 1].date, "%Y-%m-%d").unwrap();
+            let curr_date = NaiveDate::parse_from_str(&index_data.scores[i].date, "%Y-%m-%d").unwrap();
+            assert!(
+                prev_date <= curr_date,
+                "Dates are not sorted: {} should come before {}",
+                index_data.scores[i - 1].date,
+                index_data.scores[i].date
+            );
+        }
     }
 
     #[test]
