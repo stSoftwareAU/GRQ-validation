@@ -22,8 +22,25 @@ if git diff --cached --name-only | grep -E "^docs/" > /dev/null; then
     # Update version in list.html (macOS/BSD sed compatible)
     sed -i '' "s/const VERSION=\"[^\"]*\"/const VERSION=\"$NEW_VERSION\"/" docs/list.html
     
-    # Add the updated files to the commit
-    git add docs/index.html docs/list.html
+    # Update Rust version in Cargo.toml (increment patch version)
+    # Current Rust version is 0.1.0, so we'll increment to 0.1.1, 0.1.2, etc.
+    CURRENT_RUST_VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
+    echo "Current Rust version: $CURRENT_RUST_VERSION"
     
-    echo "Version auto-incremented to $NEW_VERSION in both index.html and list.html"
+    # Parse Rust version components
+    IFS='.' read -r rust_major rust_minor rust_patch <<< "$CURRENT_RUST_VERSION"
+    
+    # Increment Rust patch version
+    NEW_RUST_PATCH=$((rust_patch + 1))
+    NEW_RUST_VERSION="$rust_major.$rust_minor.$NEW_RUST_PATCH"
+    echo "New Rust version: $NEW_RUST_VERSION"
+    
+    # Update version in Cargo.toml (macOS/BSD sed compatible)
+    sed -i '' "s/^version = \"[^\"]*\"/version = \"$NEW_RUST_VERSION\"/" Cargo.toml
+    
+    # Add the updated files to the commit
+    git add docs/index.html docs/list.html Cargo.toml
+    
+    echo "Version auto-incremented to $NEW_VERSION in frontend files"
+    echo "Rust version auto-incremented to $NEW_RUST_VERSION in Cargo.toml"
 fi 
