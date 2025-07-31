@@ -1,6 +1,6 @@
 [package]
 name = "grq-validation"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
 description = "A Rust program to process daily stock scores from TSV files"
