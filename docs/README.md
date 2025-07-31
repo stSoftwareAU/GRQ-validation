@@ -74,3 +74,4 @@ python3 -m http.server 8000
 ```
 
 The application reads from the same data files that your Rust program generates, making it perfect for validating AI predictions in real-time.
+# Test comment
