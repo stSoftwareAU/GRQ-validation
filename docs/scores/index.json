@@ -679,6 +679,13 @@
       "performance_90_day": 0.0,
       "performance_annualized": 0.0,
       "total_stocks": 20
+    },
+    {
+      "year": "2025",
+      "month": "August",
+      "day": "10",
+      "file": "2025/August/10.tsv",
+      "date": "2025-08-10"
     }
   ]
 }
