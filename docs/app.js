@@ -4,6 +4,7 @@ class GRQValidator {
         this.marketData = null;
         this.dividendData = null;
         this.marketIndexData = null; // SP500 and NASDAQ data
+        this.analysisData = null; // Analysis data for star ratings
         this.selectedFile = null;
         this.filteredStocks = [];
         this.selectedStock = null; // Track selected stock for single view
@@ -193,6 +194,10 @@ class GRQValidator {
             await this.loadMarketData();
             console.log('Market data loaded, available stocks:', this.marketData ? Object.keys(this.marketData).length : 0);
             
+            console.log('Loading analysis data...');
+            await this.loadAnalysisData();
+            console.log('Analysis data loaded, available stocks:', this.analysisData ? Object.keys(this.analysisData).length : 0);
+            
             // Show the main chart immediately (without SP500/NASDAQ)
             console.log('Calling updateDisplay...');
             this.updateDisplay();
@@ -369,6 +374,245 @@ class GRQValidator {
             );
             this.marketData = null;
         }
+    }
+
+    async loadAnalysisData() {
+        // Try to find analysis file for the current score date
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        const analysisDate = this.formatDateForAnalysisFile(scoreDate);
+        
+        // Look for analysis file in the same directory as the score file
+        const scoreFilePath = this.selectedFile;
+        const scoreFileDir = scoreFilePath.substring(0, scoreFilePath.lastIndexOf('/') + 1);
+        const analysisFileName = `scores/${scoreFileDir}${analysisDate}.analysis.csv`;
+        
+        console.log('Looking for analysis file:', analysisFileName);
+        console.log('Score date:', scoreDate);
+        console.log('Analysis date:', analysisDate);
+        
+        try {
+            // Add cache-busting parameter
+            const timestamp = new Date().getTime();
+            const response = await fetch(`${analysisFileName}?t=${timestamp}`);
+            
+            if (!response.ok) {
+                console.log('Analysis file not found, skipping analysis data loading');
+                this.analysisData = {};
+                return;
+            }
+            
+            const text = await response.text();
+            const lines = text.trim().split('\n');
+            
+            if (lines.length < 2) {
+                console.log('Analysis file is empty or has no data rows');
+                this.analysisData = {};
+                return;
+            }
+            
+            // Parse CSV header
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            // Find column indices
+            const stockIndex = headers.indexOf('Stock');
+            const dateIndex = headers.indexOf('Date');
+            const msIndex = headers.indexOf('MS');
+            const tipsStarsIndex = headers.indexOf('Tips Stars');
+            
+            if (stockIndex === -1 || dateIndex === -1) {
+                console.log('Required columns not found in analysis file');
+                this.analysisData = {};
+                return;
+            }
+            
+            // Parse data rows
+            this.analysisData = {};
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                const values = this.parseCSVLine(line);
+                
+                if (values.length < Math.max(stockIndex, dateIndex) + 1) {
+                    continue; // Skip malformed rows
+                }
+                
+                                        const stock = values[stockIndex]?.trim();
+                        const dateStr = values[dateIndex]?.trim();
+                        
+                                                if (!stock || !dateStr) {
+                            continue;
+                        }
+                        
+                        // Parse the date
+                        const analysisDate = this.parseAnalysisDate(dateStr);
+                        if (!analysisDate) {
+                            continue;
+                        }
+                        
+                        // Check if analysis is within 30 days of score date
+                        const daysDiff = Math.abs((analysisDate.getTime() - scoreDate.getTime()) / (1000 * 60 * 60 * 24));
+                        
+                        if (daysDiff <= 30) {
+                            // Parse star ratings
+                            const msStars = msIndex !== -1 && values[msIndex] ? parseFloat(values[msIndex]) : null;
+                            const tipsStars = tipsStarsIndex !== -1 && values[tipsStarsIndex] ? parseFloat(values[tipsStarsIndex]) : null;
+                            
+                            // Calculate average star rating (Tips Stars divided by 2 to normalize to 1-5 scale)
+                            let avgStars = null;
+                            let validRatings = 0;
+                            let totalRating = 0;
+                            
+                            if (msStars !== null && !isNaN(msStars) && msStars >= 1 && msStars <= 5) {
+                                totalRating += msStars;
+                                validRatings++;
+                            }
+                            
+                            if (tipsStars !== null && !isNaN(tipsStars) && tipsStars >= 1 && tipsStars <= 10) {
+                                totalRating += tipsStars / 2; // Normalize to 1-5 scale
+                                validRatings++;
+                            }
+                            
+                            if (validRatings > 0) {
+                                avgStars = totalRating / validRatings;
+                            }
+                    
+                    this.analysisData[stock] = {
+                        date: analysisDate,
+                        msStars: msStars,
+                        tipsStars: tipsStars,
+                        avgStars: avgStars,
+                        daysFromScore: daysDiff
+                    };
+                }
+            }
+            
+            console.log(`Analysis data loaded for ${Object.keys(this.analysisData).length} stocks`);
+            console.log('Sample analysis data:', Object.keys(this.analysisData).slice(0, 5).map(stock => ({
+                stock,
+                ...this.analysisData[stock]
+            })));
+            console.log('All analysis stocks:', Object.keys(this.analysisData));
+            
+        } catch (error) {
+            console.log('Error loading analysis data:', error);
+            this.analysisData = {};
+        }
+    }
+
+    // Helper method to parse CSV line properly (handles quoted fields)
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        result.push(current.trim());
+        return result;
+    }
+
+    // Helper method to format date for analysis file name
+    formatDateForAnalysisFile(date) {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}`;
+    }
+
+    // Helper method to parse analysis date (format: "28 Feb 2024", "11 Jul 2025", etc.)
+    parseAnalysisDate(dateStr) {
+        try {
+            // Handle various date formats
+            const date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+                return date;
+            }
+            
+            // Try parsing specific formats
+            const months = {
+                'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+            };
+            
+            // Format: "28 Feb 2024"
+            const match = dateStr.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/);
+            if (match) {
+                const day = parseInt(match[1]);
+                const month = months[match[2]];
+                const year = parseInt(match[3]);
+                
+                if (month !== undefined) {
+                    return new Date(year, month, day);
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.log('Error parsing analysis date:', dateStr, error);
+            return null;
+        }
+    }
+
+    // Helper method to get star rating display
+    getStarRatingDisplay(stockSymbol) {
+        if (!this.analysisData || !this.analysisData[stockSymbol]) {
+            return '';
+        }
+        
+        const analysis = this.analysisData[stockSymbol];
+        if (analysis.avgStars === null) {
+            return '';
+        }
+        
+        // Use full moons for integer values, then moon phases for partial stars
+        // 3.75 stars = 🌕🌕🌕🌔 (3 full moons + 1 waxing gibbous)
+        const fullStars = Math.floor(analysis.avgStars);
+        const partialStar = analysis.avgStars % 1;
+        
+        let display = '';
+        
+        // Add full moons for integer values
+        for (let i = 0; i < fullStars; i++) {
+            display += '🌕';
+        }
+        
+        // Add partial moon for fractional part
+        if (partialStar > 0) {
+            if (partialStar <= 0.25) {
+                display += '🌑'; // new moon
+            } else if (partialStar <= 0.5) {
+                display += '🌒'; // waxing crescent
+            } else if (partialStar <= 0.75) {
+                display += '🌓'; // first quarter
+            } else {
+                display += '🌔'; // waxing gibbous
+            }
+        }
+        
+        return display;
+    }
+
+    // Debug method to show analysis data for a stock
+    debugAnalysisData(stockSymbol) {
+        if (!this.analysisData || !this.analysisData[stockSymbol]) {
+            console.log(`No analysis data for ${stockSymbol}`);
+            return;
+        }
+        
+        const analysis = this.analysisData[stockSymbol];
+        console.log(`Analysis data for ${stockSymbol}:`, analysis);
+        console.log(`Star display: ${this.getStarRatingDisplay(stockSymbol)}`);
     }
 
     async loadDividendData() {
@@ -2281,6 +2525,7 @@ class GRQValidator {
                             data-stock="${stock.stock}"
                             style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
                         >${this.formatCurrency(buyPrice)}</span>
+                        ${this.getStarRatingDisplay(stock.stock) ? ` ${this.getStarRatingDisplay(stock.stock)}` : ''}
                     </div>
                   </div>
                   <div class="row mb-2">
@@ -2426,6 +2671,7 @@ class GRQValidator {
             thead.innerHTML = `
           <th>Stock</th>
           <th>Buy Price</th>
+          <th>Stars</th>
           <th>90-Day Target</th>
           <th>Current Price</th>
           <th>Gain/Loss (%)</th>
@@ -2484,6 +2730,7 @@ class GRQValidator {
                     style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
                 >${this.formatCurrency(buyPrice)}</span>
             </td>
+            <td>${this.getStarRatingDisplay(stock.stock)}</td>
             <td>
             <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">${this.formatCurrency(target)
                 }</span></td>
@@ -2533,6 +2780,8 @@ class GRQValidator {
             totalsRow.classList.add("table-info", "fw-bold");
             totalsRow.innerHTML = `
           <td>Days Elapsed: ${actualDaysElapsed}</td>
+          <td>-</td>
+          <td>-</td>
           <td>-</td>
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
                 portfolioTarget.toFixed(1)
