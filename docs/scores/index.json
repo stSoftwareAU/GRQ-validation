@@ -693,6 +693,13 @@
       "day": "11",
       "file": "2025/August/11.tsv",
       "date": "2025-08-11"
+    },
+    {
+      "year": "2025",
+      "month": "August",
+      "day": "12",
+      "file": "2025/August/12.tsv",
+      "date": "2025-08-12"
     }
   ]
 }
