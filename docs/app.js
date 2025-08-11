@@ -575,10 +575,11 @@ class GRQValidator {
             return '';
         }
         
-        // Use full moons for integer values, then moon phases for partial stars
-        // 3.75 stars = 🌕🌕🌕🌔 (3 full moons + 1 waxing gibbous)
-        const fullStars = Math.floor(analysis.avgStars);
-        const partialStar = analysis.avgStars % 1;
+        // Round to nearest quarter using your logic
+        const hundredStars = Math.min(Math.round(analysis.avgStars * 20), 100);
+        const fullStars = Math.floor(hundredStars / 20);
+        const remainderStars = hundredStars - fullStars * 20;
+        const partialStars = Math.round(Math.min(Math.max(0, remainderStars), 20) / 5);
         
         let display = '';
         
@@ -588,19 +589,85 @@ class GRQValidator {
         }
         
         // Add partial moon for fractional part
-        if (partialStar > 0) {
-            if (partialStar <= 0.25) {
-                display += '🌑'; // new moon
-            } else if (partialStar <= 0.5) {
-                display += '🌒'; // waxing crescent
-            } else if (partialStar <= 0.75) {
-                display += '🌓'; // first quarter
-            } else {
-                display += '🌔'; // waxing gibbous
+        if (remainderStars > 0) {
+            switch (partialStars) {
+                case 0:
+                    display += '🌑'; // new moon (0-0.25)
+                    break;
+                case 1:
+                    display += '🌒'; // quarter moon (0.25-0.5)
+                    break;
+                case 2:
+                    display += '🌓'; // half moon (0.5-0.75)
+                    break;
+                case 3:
+                    display += '🌔'; // three-quarter moon (0.75-1.0)
+                    break;
+                case 4:
+                    // This should round up to next full star
+                    // Add one more full star
+                    display += '🌕';
+                    break;
             }
         }
         
         return display;
+    }
+
+    getStarRatingCalculation(stockSymbol) {
+        if (!this.analysisData || !this.analysisData[stockSymbol]) {
+            return null;
+        }
+        
+        const analysis = this.analysisData[stockSymbol];
+        if (analysis.avgStars === null) {
+            return null;
+        }
+        
+        // Get the original values
+        const msStars = analysis.msStars;
+        const tipsStars = analysis.tipsStars;
+        const avgStars = analysis.avgStars;
+        
+        // Round to nearest quarter using your logic
+        const hundredStars = Math.min(Math.round(avgStars * 20), 100);
+        const fullStars = Math.floor(hundredStars / 20);
+        const remainderStars = hundredStars - fullStars * 20;
+        const partialStars = Math.round(Math.min(Math.max(0, remainderStars), 20) / 5);
+        
+        // Determine moon phase description
+        let moonPhase = '';
+        if (remainderStars > 0) {
+            switch (partialStars) {
+                case 0:
+                    moonPhase = '🌑 (new moon)';
+                    break;
+                case 1:
+                    moonPhase = '🌒 (quarter moon)';
+                    break;
+                case 2:
+                    moonPhase = '🌓 (half moon)';
+                    break;
+                case 3:
+                    moonPhase = '🌔 (three-quarter moon)';
+                    break;
+                case 4:
+                    moonPhase = '🌕 (full moon - rounded up)';
+                    break;
+            }
+        }
+        
+        return {
+            msStars,
+            tipsStars,
+            avgStars,
+            hundredStars,
+            fullStars,
+            remainderStars,
+            partialStars,
+            moonPhase,
+            display: this.getStarRatingDisplay(stockSymbol)
+        };
     }
 
     // Debug method to show analysis data for a stock
@@ -2525,7 +2592,7 @@ class GRQValidator {
                             data-stock="${stock.stock}"
                             style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
                         >${this.formatCurrency(buyPrice)}</span>
-                        ${this.getStarRatingDisplay(stock.stock) ? ` ${this.getStarRatingDisplay(stock.stock)}` : ''}
+                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${stock.stock}" data-field="stars" data-stock="${stock.stock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
                     </div>
                   </div>
                   <div class="row mb-2">
@@ -2730,7 +2797,9 @@ class GRQValidator {
                     style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
                 >${this.formatCurrency(buyPrice)}</span>
             </td>
-            <td>${this.getStarRatingDisplay(stock.stock)}</td>
+            <td>
+                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${stock.stock}" data-field="stars" data-stock="${stock.stock}">${this.getStarRatingDisplay(stock.stock)}</span>
+            </td>
             <td>
             <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">${this.formatCurrency(target)
                 }</span></td>
@@ -3698,6 +3767,43 @@ class GRQValidator {
                     } (${divInfoDividends.length} dividend${
                         divInfoDividends.length > 1 ? "s" : ""
                     })`;
+            case "stars":
+                const starCalculation = this.getStarRatingCalculation(stockSymbol);
+                if (!starCalculation) {
+                    return header +
+                        "Stars working:\nNo analysis data available for this stock";
+                }
+                
+                const { msStars, tipsStars, avgStars, hundredStars, fullStars, remainderStars, partialStars, moonPhase, display } = starCalculation;
+                
+                // Format the MS and Tips stars for display
+                const msDisplay = msStars !== null ? `${msStars} stars` : 'null';
+                const tipsDisplay = tipsStars !== null ? `${tipsStars} stars` : 'null';
+                const tipsNormalized = tipsStars !== null ? `${(tipsStars / 2).toFixed(1)} stars` : 'null';
+                
+                let calculationSteps = `= MorningStar: ${msDisplay}\n= Tips Stars: ${tipsDisplay} (normalized to ${tipsNormalized})\n= Average: (${msDisplay} + ${tipsNormalized}) / 2 = ${avgStars.toFixed(2)} stars`;
+                
+                if (msStars === null && tipsStars === null) {
+                    calculationSteps = `= MorningStar: null\n= Tips Stars: null\n= Average: null (no valid data)`;
+                } else if (msStars === null) {
+                    calculationSteps = `= MorningStar: null\n= Tips Stars: ${tipsDisplay} (normalized to ${tipsNormalized})\n= Average: ${tipsNormalized} = ${avgStars.toFixed(2)} stars`;
+                } else if (tipsStars === null) {
+                    calculationSteps = `= MorningStar: ${msDisplay}\n= Tips Stars: null\n= Average: ${msDisplay} = ${avgStars.toFixed(2)} stars`;
+                }
+                
+                let roundingSteps = `\n\nRounding to nearest quarter:\n= ${avgStars.toFixed(2)} × 20 = ${(avgStars * 20).toFixed(1)}\n= Rounded to ${hundredStars} twentieths\n= Full stars: ${hundredStars} ÷ 20 = ${fullStars}\n= Remainder: ${hundredStars} - (${fullStars} × 20) = ${remainderStars} twentieths\n= Partial stars: ${remainderStars} ÷ 5 = ${(remainderStars / 5).toFixed(1)} → ${partialStars} quarters`;
+                
+                if (remainderStars === 0) {
+                    roundingSteps = `\n\nRounding to nearest quarter:\n= ${avgStars.toFixed(2)} × 20 = ${(avgStars * 20).toFixed(1)}\n= Rounded to ${hundredStars} twentieths\n= Full stars: ${hundredStars} ÷ 20 = ${fullStars}\n= No remainder (exact quarter)`;
+                }
+                
+                let moonPhaseStep = '';
+                if (remainderStars > 0) {
+                    moonPhaseStep = `\n= Moon phase: ${moonPhase}`;
+                }
+                
+                return header +
+                    `Stars working:\n${calculationSteps}${roundingSteps}${moonPhaseStep}\n= Display: ${display}`;
             default:
                 return "Calculation working not implemented for this field";
         }
