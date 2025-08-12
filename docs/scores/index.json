@@ -447,7 +447,7 @@
       "file": "2025/July/13.tsv",
       "date": "2025-07-13",
       "performance_90_day": 1215.0106841904712,
-      "performance_annualized": 1.2380020969637892e16,
+      "performance_annualized": 12380020969637892,
       "total_stocks": 20
     },
     {
@@ -700,6 +700,13 @@
       "day": "12",
       "file": "2025/August/12.tsv",
       "date": "2025-08-12"
+    },
+    {
+      "year": "2025",
+      "month": "August",
+      "day": "13",
+      "file": "2025/August/13.tsv",
+      "date": "2025-08-13"
     }
   ]
 }
