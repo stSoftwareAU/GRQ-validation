@@ -418,6 +418,8 @@ class GRQValidator {
             const dateIndex = headers.indexOf('Date');
             const msIndex = headers.indexOf('MS');
             const tipsStarsIndex = headers.indexOf('Tips Stars');
+            const msFairValueIndex = headers.indexOf('MS Fair Value');
+            const tipsTargetIndex = headers.indexOf('Tips Target');
             
             if (stockIndex === -1 || dateIndex === -1) {
                 console.log('Required columns not found in analysis file');
@@ -475,13 +477,21 @@ class GRQValidator {
                             if (validRatings > 0) {
                                 avgStars = totalRating / validRatings;
                             }
+                            
+                            // Parse fair value data
+                            const msFairValue = msFairValueIndex !== -1 && values[msFairValueIndex] ? 
+                                this.parseCurrencyValue(values[msFairValueIndex]) : null;
+                            const tipsTarget = tipsTargetIndex !== -1 && values[tipsTargetIndex] ? 
+                                this.parseCurrencyValue(values[tipsTargetIndex]) : null;
                     
                     this.analysisData[stock] = {
                         date: analysisDate,
                         msStars: msStars,
                         tipsStars: tipsStars,
                         avgStars: avgStars,
-                        daysFromScore: daysDiff
+                        daysFromScore: daysDiff,
+                        msFairValue: msFairValue,
+                        tipsTarget: tipsTarget
                     };
                 }
             }
@@ -528,6 +538,19 @@ class GRQValidator {
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const year = date.getFullYear();
         return `${day}`;
+    }
+
+    // Helper method to parse currency values from analysis data
+    parseCurrencyValue(valueStr) {
+        if (!valueStr || valueStr.trim() === '' || valueStr === 'Loading...') {
+            return null;
+        }
+        
+        // Remove currency symbols and commas, then parse as float
+        const cleanValue = valueStr.replace(/[$,]/g, '').trim();
+        const parsed = parseFloat(cleanValue);
+        
+        return isNaN(parsed) ? null : parsed;
     }
 
     // Helper method to parse analysis date (format: "28 Feb 2024", "11 Jul 2025", etc.)
@@ -612,6 +635,52 @@ class GRQValidator {
         }
         
         return display;
+    }
+
+    getFairValueRange(stockSymbol) {
+        const analysis = this.analysisData[stockSymbol];
+        if (!analysis) {
+            return null;
+        }
+        
+        const { msFairValue, tipsTarget } = analysis;
+        
+        // If we have both values, show range
+        if (msFairValue !== null && tipsTarget !== null) {
+            const low = Math.min(msFairValue, tipsTarget);
+            const high = Math.max(msFairValue, tipsTarget);
+            return { low, high, type: 'range' };
+        }
+        // If we have only one value, show single target
+        else if (msFairValue !== null) {
+            return { value: msFairValue, type: 'single', source: 'MS Fair Value' };
+        }
+        else if (tipsTarget !== null) {
+            return { value: tipsTarget, type: 'single', source: 'Tips Target' };
+        }
+        
+        return null;
+    }
+
+    getTargetPriceColor(targetPrice, currentPrice, buyPrice) {
+        if (targetPrice === null || currentPrice === null || buyPrice === null) {
+            return ''; // Default color
+        }
+        
+        // Red (Danger): Target price is below buy price - this is always bad
+        if (targetPrice < buyPrice) {
+            return 'color: #dc3545; font-weight: bold;'; // Red - danger
+        }
+        
+        // Green (Good): Target price is above current price AND we're in profit territory
+        if (targetPrice > currentPrice && currentPrice >= buyPrice) {
+            return 'color: #28a745; font-weight: bold;'; // Green - good
+        }
+        
+        // Gray (Neutral): Target price is above buy price but we're either:
+        // - Below current price (target achieved), or
+        // - Current price is below buy price (we're in loss territory but target is still above buy price)
+        return 'color: #6c757d; font-weight: bold;'; // Gray - neutral
     }
 
     getStarRatingCalculation(stockSymbol) {
@@ -2549,6 +2618,10 @@ class GRQValidator {
                 );
                 const currentPriceResult={rawValue:null,formattedValue:null}
                 this.getWorking("current-price",stock.stock,this.scoreData,currentPriceResult);
+                
+                // Get current price as raw number for color logic
+                const marketData = this.marketData[stock.stock];
+                const currentPriceRaw = marketData && marketData.length > 0 ? (marketData[marketData.length - 1].high + marketData[marketData.length - 1].low) / 2 : null;
 
                 // Hide the table and show card
                 const tableContainer = document.querySelector(
@@ -2603,7 +2676,7 @@ class GRQValidator {
                             data-bs-title="90-Day Target - ${stock.stock}" 
                             data-field="target" 
                             data-stock="${stock.stock}"
-                            style="${target === null ? 'color: #c00; font-weight: bold;' : ''}"
+                            style="${target === null ? 'color: #c00; font-weight: bold;' : this.getTargetPriceColor(target, currentPriceRaw, buyPrice)}"
                         >${this.formatCurrency(target)}</span>
                     </div>
                   </div>
@@ -2695,6 +2768,27 @@ class GRQValidator {
                         })`
                         : "None"
                 }</span>
+                    </div>
+                  </div>
+                  <div class="row mb-2">
+                    <div class="col-6"><strong>Fair Value Range:</strong></div>
+                    <div class="col-6">
+                      ${
+                    (() => {
+                        const fairValueRange = this.getFairValueRange(stock.stock);
+                        if (!fairValueRange) {
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${stock.stock}" data-field="fair-value-range" data-stock="${stock.stock}">N/A</span>`;
+                        }
+                        if (fairValueRange.type === 'range') {
+                            const lowColor = this.getTargetPriceColor(fairValueRange.low, currentPriceRaw, buyPrice);
+                            const highColor = this.getTargetPriceColor(fairValueRange.high, currentPriceRaw, buyPrice);
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${stock.stock}" data-field="fair-value-range" data-stock="${stock.stock}"><span style="${lowColor}">$${fairValueRange.low.toFixed(2)}</span>...<span style="${highColor}">$${fairValueRange.high.toFixed(2)}</span></span>`;
+                        } else {
+                            const valueColor = this.getTargetPriceColor(fairValueRange.value, currentPriceRaw, buyPrice);
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${stock.stock}" data-field="fair-value-range" data-stock="${stock.stock}"><span style="${valueColor}">$${fairValueRange.value.toFixed(2)}</span> (${fairValueRange.source})</span>`;
+                        }
+                    })()
+                }
                     </div>
                   </div>
                 </div>
@@ -2801,7 +2895,7 @@ class GRQValidator {
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${stock.stock}" data-field="stars" data-stock="${stock.stock}">${this.getStarRatingDisplay(stock.stock)}</span>
             </td>
             <td>
-            <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}">${this.formatCurrency(target)
+            <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${stock.stock}" data-field="target" data-stock="${stock.stock}" style="${this.getTargetPriceColor(target, currentPrice, buyPrice)}">${this.formatCurrency(target)
                 }</span></td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
@@ -3804,6 +3898,20 @@ class GRQValidator {
                 
                 return header +
                     `Stars working:\n${calculationSteps}${roundingSteps}${moonPhaseStep}\n= Display: ${display}`;
+            case "fair-value-range":
+                const fairValueRange = this.getFairValueRange(stockSymbol);
+                if (!fairValueRange) {
+                    return header +
+                        "Fair Value Range working:\nNo analysis data available for this stock";
+                }
+                
+                if (fairValueRange.type === 'range') {
+                    return header +
+                        `Fair Value Range working:\n= MS Fair Value: $${fairValueRange.low.toFixed(2)}\n= Tips Target: $${fairValueRange.high.toFixed(2)}\n= Range: $${fairValueRange.low.toFixed(2)} - $${fairValueRange.high.toFixed(2)}`;
+                } else {
+                    return header +
+                        `Fair Value Range working:\n= ${fairValueRange.source}: $${fairValueRange.value.toFixed(2)}\n= Only one value available`;
+                }
             default:
                 return "Calculation working not implemented for this field";
         }
@@ -3848,12 +3956,8 @@ class GRQValidator {
     getBuyPrice(stockSymbol, scoreDate) {
         const marketData = this.marketData[stockSymbol];
         if (!marketData) {
-            console.log(`getBuyPrice - ${stockSymbol}: No market data available`);
             return null;
         }
-
-        console.log(`getBuyPrice - ${stockSymbol}: Looking for price on or after ${scoreDate.toISOString().split('T')[0]}`);
-        console.log(`getBuyPrice - ${stockSymbol}: Available market data dates:`, marketData.map(p => p.date.toISOString().split('T')[0]).slice(0, 5), "...");
 
         // Try to get the price on the exact score date or up to 5 days forward
         for (let offset = 0; offset <= 5; offset++) {
@@ -3873,7 +3977,6 @@ class GRQValidator {
                     stockSymbol,
                     scoreDate,
                 );
-                console.log(`getBuyPrice - ${stockSymbol}: Found price on ${candidateDate.toISOString().split('T')[0]}: $${adjustedPrice.toFixed(2)}`);
                 return {
                     price: adjustedPrice,
                     dateUsed: candidateDate
@@ -3881,7 +3984,6 @@ class GRQValidator {
             }
         }
         // No price found within 5 days
-        console.log(`getBuyPrice - ${stockSymbol}: No price found within 5 days of score date`);
         return null;
     }
 
