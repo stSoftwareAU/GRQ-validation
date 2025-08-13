@@ -384,7 +384,7 @@ class GRQValidator {
         // Look for analysis file in the same directory as the score file
         const scoreFilePath = this.selectedFile;
         const scoreFileDir = scoreFilePath.substring(0, scoreFilePath.lastIndexOf('/') + 1);
-        const analysisFileName = `scores/${scoreFileDir}${analysisDate}.analysis.csv`;
+        const analysisFileName = `scores/${scoreFileDir}${analysisDate}-analysis.csv`;
         
         console.log('Looking for analysis file:', analysisFileName);
         console.log('Score date:', scoreDate);
