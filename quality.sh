@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo "🔍 Checking bash script syntax..."
+find . -name "*.sh" -type f -exec bash -n {} \;
+
 echo "🧹 Cleaning previous builds..."
 cargo clean
 

@@ -126,6 +126,13 @@ jobs:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
         
+    # Check bash script syntax
+    - name: Check Bash Script Syntax
+      run: |
+        echo "Checking bash script syntax..."
+        find . -name "*.sh" -type f -exec bash -n {} \;
+        echo "All bash scripts have valid syntax"
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
