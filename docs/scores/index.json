@@ -755,7 +755,10 @@
       "month": "August",
       "day": "20",
       "file": "2025/August/20.tsv",
-      "date": "2025-08-20"
+      "date": "2025-08-20",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
