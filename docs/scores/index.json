@@ -1095,7 +1095,10 @@
       "month": "September",
       "day": "24",
       "file": "2025/September/24.tsv",
-      "date": "2025-09-24"
+      "date": "2025-09-24",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
