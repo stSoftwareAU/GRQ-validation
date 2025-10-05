@@ -566,8 +566,8 @@
       "day": "25",
       "file": "2025/July/25.tsv",
       "date": "2025-07-25",
-      "performance_90_day": 122.69112898213824,
-      "performance_annualized": 6420.248519828518,
+      "performance_90_day": 125.0547653457746,
+      "performance_annualized": 6789.529587058127,
       "total_stocks": 20
     },
     {
@@ -576,8 +576,8 @@
       "day": "26",
       "file": "2025/July/26.tsv",
       "date": "2025-07-26",
-      "performance_90_day": 14.86599619133792,
-      "performance_annualized": 108.267886068877,
+      "performance_90_day": 17.25898798552732,
+      "performance_annualized": 132.28630069634505,
       "total_stocks": 20
     },
     {
@@ -586,8 +586,8 @@
       "day": "27",
       "file": "2025/July/27.tsv",
       "date": "2025-07-27",
-      "performance_90_day": 16.0675393203527,
-      "performance_annualized": 122.62940253615436,
+      "performance_90_day": 18.4605311145421,
+      "performance_annualized": 148.42083323388854,
       "total_stocks": 20
     },
     {
@@ -596,8 +596,8 @@
       "day": "28",
       "file": "2025/July/28.tsv",
       "date": "2025-07-28",
-      "performance_90_day": 26.923181049467036,
-      "performance_annualized": 266.81974650383825,
+      "performance_90_day": 29.31617284365643,
+      "performance_annualized": 306.13894896160616,
       "total_stocks": 20
     },
     {
@@ -606,8 +606,8 @@
       "day": "29",
       "file": "2025/July/29.tsv",
       "date": "2025-07-29",
-      "performance_90_day": 29.52362357162595,
-      "performance_annualized": 318.55207659019175,
+      "performance_90_day": 31.93587485711668,
+      "performance_annualized": 363.5528304867483,
       "total_stocks": 20
     },
     {
@@ -626,8 +626,8 @@
       "day": "31",
       "file": "2025/July/31.tsv",
       "date": "2025-07-31",
-      "performance_90_day": 62.88582278132287,
-      "performance_annualized": 1518.9168158853904,
+      "performance_90_day": 65.35436544890467,
+      "performance_annualized": 1664.0261781193085,
       "total_stocks": 20
     },
     {
