@@ -1166,8 +1166,8 @@
       "day": "06",
       "file": "2025/October/06.tsv",
       "date": "2025-10-06",
-      "performance_90_day": 0,
-      "performance_annualized": 0,
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
       "total_stocks": 20
     },
     {
@@ -1175,7 +1175,10 @@
       "month": "October",
       "day": "07",
       "file": "2025/October/07.tsv",
-      "date": "2025-10-07"
+      "date": "2025-10-07",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
