@@ -1326,8 +1326,8 @@
       "day": "22",
       "file": "2025/October/22.tsv",
       "date": "2025-10-22",
-      "performance_90_day": 0,
-      "performance_annualized": 0,
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
       "total_stocks": 20
     },
     {
@@ -1336,8 +1336,8 @@
       "day": "23",
       "file": "2025/October/23.tsv",
       "date": "2025-10-23",
-      "performance_90_day": 0,
-      "performance_annualized": 0,
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
       "total_stocks": 20
     },
     {
@@ -1346,8 +1346,8 @@
       "day": "24",
       "file": "2025/October/24.tsv",
       "date": "2025-10-24",
-      "performance_90_day": 0,
-      "performance_annualized": 0,
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
       "total_stocks": 20
     },
     {
@@ -1355,7 +1355,10 @@
       "month": "October",
       "day": "25",
       "file": "2025/October/25.tsv",
-      "date": "2025-10-25"
+      "date": "2025-10-25",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
