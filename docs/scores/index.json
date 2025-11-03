@@ -1435,7 +1435,10 @@
       "month": "November",
       "day": "03",
       "file": "2025/November/03.tsv",
-      "date": "2025-11-03"
+      "date": "2025-11-03",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
