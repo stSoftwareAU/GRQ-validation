@@ -25,4 +25,4 @@ target/
 .*
 *~
 !.gitignore
-!.github
+!.github!.gitattributes
