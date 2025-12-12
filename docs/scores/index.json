@@ -1786,6 +1786,13 @@
       "day": "11",
       "file": "2025/December/11.tsv",
       "date": "2025-12-11"
+    },
+    {
+      "year": "2025",
+      "month": "December",
+      "day": "12",
+      "file": "2025/December/12.tsv",
+      "date": "2025-12-12"
     }
   ]
 }
