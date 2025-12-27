@@ -1945,7 +1945,10 @@
       "month": "December",
       "day": "28",
       "file": "2025/December/28.tsv",
-      "date": "2025-12-28"
+      "date": "2025-12-28",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
