@@ -2015,7 +2015,10 @@
       "month": "January",
       "day": "04",
       "file": "2026/January/04.tsv",
-      "date": "2026-01-04"
+      "date": "2026-01-04",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
