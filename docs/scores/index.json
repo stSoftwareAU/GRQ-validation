@@ -2259,6 +2259,13 @@
       "performance_90_day": 0.0,
       "performance_annualized": 0.0,
       "total_stocks": 20
+    },
+    {
+      "year": "2026",
+      "month": "January",
+      "day": "30",
+      "file": "2026/January/30.tsv",
+      "date": "2026-01-30"
     }
   ]
 }
