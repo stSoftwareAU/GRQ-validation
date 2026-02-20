@@ -2465,7 +2465,10 @@
       "month": "February",
       "day": "20",
       "file": "2026/February/20.tsv",
-      "date": "2026-02-20"
+      "date": "2026-02-20",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
