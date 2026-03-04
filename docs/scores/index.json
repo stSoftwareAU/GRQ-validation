@@ -2559,6 +2559,13 @@
       "performance_90_day": 0.0,
       "performance_annualized": 0.0,
       "total_stocks": 20
+    },
+    {
+      "year": "2026",
+      "month": "March",
+      "day": "05",
+      "file": "2026/March/05.tsv",
+      "date": "2026-03-05"
     }
   ]
 }
