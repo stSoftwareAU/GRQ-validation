@@ -2965,7 +2965,10 @@
       "month": "April",
       "day": "15",
       "file": "2026/April/15.tsv",
-      "date": "2026-04-15"
+      "date": "2026-04-15",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
