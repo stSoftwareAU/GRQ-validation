@@ -3175,14 +3175,20 @@
       "month": "May",
       "day": "08",
       "file": "2026/May/08.tsv",
-      "date": "2026-05-08"
+      "date": "2026-05-08",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     },
     {
       "year": "2026",
       "month": "May",
       "day": "09",
       "file": "2026/May/09.tsv",
-      "date": "2026-05-09"
+      "date": "2026-05-09",
+      "performance_90_day": 0.0,
+      "performance_annualized": 0.0,
+      "total_stocks": 20
     }
   ]
 }
