@@ -57,6 +57,7 @@ class GRQValidator {
                 if (this.selectedFile) {
                     this.loadScoreFile();
                 }
+                this.updateShareUrl();
             });
 
         // Remove stock filter event listener - no longer needed
@@ -67,8 +68,91 @@ class GRQValidator {
             () => {
                 this.selectedStock = null;
                 this.updateDisplay();
+                this.updateShareUrl();
             },
         );
+
+        // Share-link button: copies the current shareable URL to the clipboard.
+        const shareBtn = document.getElementById("shareLinkBtn");
+        if (shareBtn) {
+            shareBtn.addEventListener("click", () => this.shareCurrentView());
+        }
+    }
+
+    // --- Share URL helpers (issue #11) ---
+    // Tested in parallel by tests/share_url_test.ts.
+    parseShareParams(search) {
+        const params = new URLSearchParams(search || window.location.search);
+        return {
+            file: params.get("file"),
+            date: params.get("date"),
+            stock: params.get("stock"),
+        };
+    }
+
+    buildShareSearch(state) {
+        const params = new URLSearchParams();
+        if (state && state.file) params.set("file", state.file);
+        if (state && state.stock) params.set("stock", state.stock);
+        const qs = params.toString();
+        return qs ? `?${qs}` : "";
+    }
+
+    resolveScoreByParams(state, scores) {
+        if (!Array.isArray(scores) || scores.length === 0) return null;
+        if (state && state.file) {
+            const match = scores.find((s) => s.file === state.file);
+            if (match) return match;
+        }
+        if (state && state.date) {
+            const match = scores.find((s) => s.date === state.date);
+            if (match) return match;
+        }
+        return null;
+    }
+
+    // Reflect the current selection in the address bar without reloading.
+    updateShareUrl() {
+        try {
+            const search = this.buildShareSearch({
+                file: this.selectedFile,
+                stock: this.selectedStock,
+            });
+            const newUrl = window.location.pathname + search +
+                window.location.hash;
+            window.history.replaceState(null, "", newUrl);
+        } catch (error) {
+            console.warn("Failed to update share URL:", error);
+        }
+    }
+
+    async shareCurrentView() {
+        this.updateShareUrl();
+        const url = window.location.href;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(url);
+                this.showShareFeedback("Link copied to clipboard");
+                return;
+            }
+        } catch (error) {
+            console.warn("Clipboard write failed, falling back to prompt:", error);
+        }
+        // Fallback for browsers without clipboard API access.
+        window.prompt("Copy this shareable link:", url);
+    }
+
+    showShareFeedback(message) {
+        const btn = document.getElementById("shareLinkBtn");
+        if (!btn) return;
+        const original = btn.textContent;
+        btn.textContent = message;
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 1500);
+    }
 
         // Global click handler to manage popover behavior
         document.addEventListener("click", (event) => {
@@ -129,22 +213,33 @@ class GRQValidator {
             });
 
             if (indexData.scores.length > 0) {
-                // Check for file parameter in URL first
-                const urlParams = new URLSearchParams(window.location.search);
-                const fileParam = urlParams.get('file');
-                
-                if (fileParam) {
-                    // Check if the file parameter matches any available score file
-                    const matchingScore = indexData.scores.find(score => score.file === fileParam);
-                    if (matchingScore) {
-                        console.log(`Auto-selecting score file from URL parameter: ${matchingScore.date} (${matchingScore.month} ${matchingScore.day})`);
-                        this.selectedFile = matchingScore.file;
-                        select.value = this.selectedFile;
-                        await this.loadScoreFile();
-                        return;
-                    } else {
-                        console.warn(`File parameter '${fileParam}' not found in available scores`);
+                // Check for share parameters (file, date, stock) in URL first.
+                const shareParams = this.parseShareParams();
+                const matchingScore = this.resolveScoreByParams(
+                    shareParams,
+                    indexData.scores,
+                );
+
+                if (matchingScore) {
+                    console.log(
+                        `Auto-selecting score file from URL parameters: ${matchingScore.date} (${matchingScore.month} ${matchingScore.day})`,
+                    );
+                    this.selectedFile = matchingScore.file;
+                    select.value = this.selectedFile;
+                    if (shareParams.stock) {
+                        this.selectedStock = shareParams.stock;
                     }
+                    await this.loadScoreFile();
+                    // Ensure the URL reflects the canonical resolved state
+                    // (so a ?date= link rewrites to include ?file=).
+                    this.updateShareUrl();
+                    return;
+                } else if (
+                    shareParams.file || shareParams.date || shareParams.stock
+                ) {
+                    console.warn(
+                        `Share parameters did not match any score: file=${shareParams.file}, date=${shareParams.date}`,
+                    );
                 }
                 
                 // Fallback: Find the score file closest to 90 days ago
@@ -3215,6 +3310,9 @@ class GRQValidator {
 
         // Show the back button
         document.getElementById("backToAggregate").style.display = "block";
+
+        // Update the share URL so the deep link reflects the selected stock.
+        this.updateShareUrl();
     }
 
     showLoading() {

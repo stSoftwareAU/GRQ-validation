@@ -45,6 +45,22 @@ python3 -m http.server 8000
 
 Visit `http://localhost:8000` to access the dashboard.
 
+#### Shareable URLs
+
+The dashboard supports deep-linking to a specific score file and (optionally)
+an individual stock via URL query parameters. Use the **🔗 Share Link** button
+to copy the current view's URL to the clipboard, or build a link by hand:
+
+| Parameter | Example                          | Meaning                                              |
+| --------- | -------------------------------- | ---------------------------------------------------- |
+| `file`    | `?file=2025/February/14.tsv`     | Score file path as listed in `scores/index.json`.    |
+| `date`    | `?date=2025-02-14`               | Score date — resolved against the index if `file` is absent. |
+| `stock`   | `?stock=SCHW`                    | Drill into a single stock's detail view.             |
+
+Parameters can be combined, e.g. `?date=2025-02-14&stock=SCHW`. When `file` is
+present it takes precedence over `date`; on load the URL is rewritten to the
+canonical `file` form so the link remains stable even if the index changes.
+
 ## CI/CD Pipeline
 
 This repository includes comprehensive GitHub Actions workflows for continuous integration and deployment.
