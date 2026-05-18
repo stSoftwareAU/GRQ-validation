@@ -28,6 +28,7 @@ target/
 !.github/
 !.github/**
 !.gitattributes
+!.markdownlint-cli2.jsonc
 
 *.json.error
 *.json.error.*

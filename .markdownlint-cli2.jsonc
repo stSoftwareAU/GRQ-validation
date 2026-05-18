@@ -1,0 +1,49 @@
+// markdownlint-cli2 configuration (Issue #23).
+//
+// Rules are tuned to flag genuinely broken markdown while accepting the
+// stylistic choices already present in this repository. Tighten as we
+// progressively clean up existing documents.
+{
+  "config": {
+    "default": true,
+    // Long lines are common in narrative documentation and tables.
+    "MD013": false,
+    // The repo's existing markdown was authored without strict blank-line
+    // discipline around headings, fences, and lists. Disable until the
+    // documentation has been swept clean.
+    "MD012": false,
+    "MD022": false,
+    "MD031": false,
+    "MD032": false,
+    // Allow code blocks without an explicit language hint.
+    "MD040": false,
+    // Allow trailing whitespace and missing final newlines in existing files.
+    "MD009": false,
+    "MD047": false,
+    // Permit bare URLs — common in troubleshooting notes.
+    "MD034": false,
+    // The first line is not always a top-level heading in sub-documents.
+    "MD041": false,
+    // Inline HTML is occasionally used (e.g. <details>, <br>).
+    "MD033": false,
+    // Duplicate headings can appear in changelog-style documents.
+    "MD024": { "siblings_only": true },
+    // Existing docs use bold-only "summary" lines as visual sub-headers.
+    "MD036": false,
+    // Existing docs use compact-style tables without surrounding spaces.
+    "MD060": false,
+    // Trailing colons in headings are common in this repo's notes.
+    "MD026": false,
+    // Multiple H1s appear in docs/README.md where review comments are quoted.
+    "MD025": false
+  },
+  "globs": [
+    "**/*.md"
+  ],
+  "ignores": [
+    "node_modules",
+    "target",
+    ".coverage",
+    "docs/pr-summary-*.md"
+  ]
+}
