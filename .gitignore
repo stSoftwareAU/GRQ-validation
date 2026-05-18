@@ -25,7 +25,8 @@ target/
 .*
 *~
 !.gitignore
-!.github!.gitattributes
+!.github/
+!.github/**
 !.gitattributes
 
 *.json.error
