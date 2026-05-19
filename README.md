@@ -70,6 +70,11 @@ This repository includes comprehensive GitHub Actions workflows for continuous i
    - Weekly dependency checks
    - Automatic PR creation for updates
 
+5. **Cargo Audit** (`cargo-audit.yml`) - Rust security advisory scan
+   - Runs `cargo audit` on every pull request
+   - Weekly scheduled run (Mondays 06:00 UTC) catches newly disclosed
+     advisories against existing dependencies
+
 ### Setup
 1. Enable GitHub Actions in your repository
 2. Configure GitHub Pages (Settings > Pages > Source: GitHub Actions)
