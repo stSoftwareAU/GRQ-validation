@@ -15,9 +15,6 @@
 # Configuration
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SCRIPT_NAME="${BASH_SOURCE[0]##*/}"
-MAX_STALE_SECONDS=14400 # Four hours
-
 # Logging function
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
