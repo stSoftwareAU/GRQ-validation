@@ -1,0 +1,32 @@
+name: Semgrep
+
+# Static analysis security testing (SAST) via Semgrep (Issue #21).
+#
+# Runs the Semgrep `p/default` ruleset on every pull request. The job
+# runs inside the official `semgrep/semgrep` container so the CLI is
+# pre-installed. SEMGREP_APP_TOKEN, when present as a repo/org secret,
+# uploads findings to Semgrep AppSec Platform; without it the scan still
+# runs locally and fails the build on findings.
+#
+# Third-party actions are pinned to 40-character commit SHAs to satisfy
+# the supply-chain rule (Issue #1756 / dep-bump guidelines).
+
+on:
+  pull_request:
+    branches: ["*"]
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      # actions/checkout@v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Run Semgrep CI
+        run: semgrep ci --config p/default
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
