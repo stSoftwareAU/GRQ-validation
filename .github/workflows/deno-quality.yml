@@ -1,0 +1,37 @@
+name: Deno Quality
+
+on:
+  pull_request:
+    branches: ["*"]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      # denoland/setup-deno@v2.0.4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+        with:
+          deno-version: v2.x
+      - name: Deno lint
+        run: deno lint
+      - name: Deno fmt check
+        run: deno fmt --check
+      - name: Deno type check
+        run: deno check tests/*.ts
+      # Run tests with coverage and upload to Codecov (Issue #1636).
+      # The codecov-action is a no-op when no test files are found.
+      - name: Run tests with coverage
+        run: deno test --allow-read --allow-env --coverage=cov_profile tests/*.ts
+      - name: Generate lcov report
+        run: deno coverage cov_profile --lcov --output=coverage.lcov
+      # codecov/codecov-action@v4
+      - uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238
+        with:
+          files: coverage.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
