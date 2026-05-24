@@ -1,7 +1,4 @@
-import {
-  assertAlmostEquals,
-  assertEquals,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertAlmostEquals, assertEquals } from "@std/assert";
 
 // Test case for portfolio target percentage and 90-day performance calculation
 

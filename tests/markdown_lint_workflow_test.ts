@@ -88,9 +88,13 @@ Deno.test("markdownlint-cli2 passes against repository markdown files", async ()
   try {
     result = await cmd.output();
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
+    // Skip when the tool is not installed or when --allow-run is not granted.
+    if (
+      err instanceof Deno.errors.NotFound ||
+      err instanceof Deno.errors.NotCapable
+    ) {
       console.warn(
-        "markdownlint-cli2 not installed locally — skipping repository lint check",
+        "markdownlint-cli2 not available (not installed or --allow-run not granted) — skipping repository lint check",
       );
       return;
     }

@@ -80,7 +80,7 @@ fn main() -> Result<()> {
             "10" => "October",
             "11" => "November",
             "12" => "December",
-            _ => return Err(anyhow!("Invalid month: {}", month)),
+            _ => return Err(anyhow!("Invalid month: {month}")),
         };
 
         let score_file_path = format!(

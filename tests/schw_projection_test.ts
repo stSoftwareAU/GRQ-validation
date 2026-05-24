@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write
 
-import { assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert } from "@std/assert";
 
 // TypeScript interfaces for type safety
 interface StockData {
@@ -58,8 +58,13 @@ class TestGRQValidator {
   selectedFile = "2025/April/15.tsv";
   costOfCapital = 0.15;
 
+  // Optional path overrides — used by fixture-based tests for determinism.
+  scorePath = "docs/scores/2025/April/15.tsv";
+  marketDataPath = "docs/scores/2025/April/15.csv";
+  dividendDataPath = "docs/scores/2025/April/15-dividends.csv";
+
   async loadScoreData() {
-    const text = await Deno.readTextFile("docs/scores/2025/April/15.tsv");
+    const text = await Deno.readTextFile(this.scorePath);
     const lines = text.trim().split("\n");
 
     this.scoreData = lines.slice(1).map((line) => {
@@ -80,7 +85,7 @@ class TestGRQValidator {
   }
 
   async loadMarketData() {
-    const text = await Deno.readTextFile("docs/scores/2025/April/15.csv");
+    const text = await Deno.readTextFile(this.marketDataPath);
     const lines = text.trim().split("\n");
 
     // Parse CSV data
@@ -114,9 +119,7 @@ class TestGRQValidator {
   }
 
   async loadDividendData() {
-    const text = await Deno.readTextFile(
-      "docs/scores/2025/April/15-dividends.csv",
-    );
+    const text = await Deno.readTextFile(this.dividendDataPath);
     const lines = text.trim().split("\n");
 
     const dividendDataByStock: Record<string, DividendDataPoint[]> = {};
@@ -598,9 +601,15 @@ class TestGRQValidator {
 }
 
 Deno.test("NYSE:SCHW Projection Test - Using Real App Functions", async (t) => {
+  // Use a fixed snapshot of market data so assertions are deterministic
+  // regardless of how many rows the live CSV accumulates over time.
+  // Snapshot covers Apr 15 – Jul 1 2025 (≈77 calendar days / 53 trading days).
   const validator = new TestGRQValidator();
+  validator.scorePath = "tests/fixtures/schw_april_2025_scores.tsv";
+  validator.marketDataPath = "tests/fixtures/schw_april_2025_snapshot.csv";
+  validator.dividendDataPath = "tests/fixtures/schw_april_2025_dividends.csv";
 
-  // Load the actual data files
+  // Load the fixture data files
   await validator.loadScoreData();
   await validator.loadMarketData();
   await validator.loadDividendData();

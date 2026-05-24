@@ -70,7 +70,7 @@ class MockGRQValidator {
     this.marketData = {
       "NASDAQ:XP": [
         {
-          date: new Date("2025-02-18"),
+          date: new Date(2025, 1, 18), // Feb 18 — local time, matches getScoreDate()
           high: 15.18,
           low: 14.72,
           open: 14.72,
@@ -78,7 +78,7 @@ class MockGRQValidator {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date("2025-02-19"),
+          date: new Date(2025, 1, 19), // Feb 19
           high: 15.25,
           low: 14.85,
           open: 15.02,
@@ -86,7 +86,7 @@ class MockGRQValidator {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date("2025-02-20"),
+          date: new Date(2025, 1, 20), // Feb 20
           high: 15.30,
           low: 14.90,
           open: 15.10,
@@ -96,7 +96,7 @@ class MockGRQValidator {
       ],
       "NYSE:AAPL": [
         {
-          date: new Date("2025-02-18"),
+          date: new Date(2025, 1, 18), // Feb 18
           high: 180.50,
           low: 179.20,
           open: 179.20,
@@ -104,7 +104,7 @@ class MockGRQValidator {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date("2025-02-19"),
+          date: new Date(2025, 1, 19), // Feb 19
           high: 181.00,
           low: 179.80,
           open: 180.00,
@@ -117,7 +117,7 @@ class MockGRQValidator {
     this.dividendData = {
       "NYSE:AAPL": [
         {
-          exDivDate: new Date("2025-03-15"),
+          exDivDate: new Date(2025, 2, 15), // Mar 15 — local time
           amount: 0.25,
         },
       ],
@@ -397,15 +397,15 @@ Deno.test("Portfolio View Consistency", async (t) => {
       const marketDataDays = validator.getDaysElapsedFromMarketData(scoreDate);
       assertEquals(
         marketDataDays,
-        3,
+        2,
         "Should return actual days from market data when less than 90",
       );
 
-      // Test with extended market data
+      // Test with extended market data (Jun 18 = 120 days from Feb 18, well beyond 90)
       validator.marketData = {
         "NASDAQ:XP": [
           {
-            date: new Date("2025-02-18"),
+            date: new Date(2025, 1, 18), // Feb 18 — local time
             high: 15.18,
             low: 14.72,
             open: 14.72,
@@ -413,7 +413,7 @@ Deno.test("Portfolio View Consistency", async (t) => {
             splitCoefficient: 1.0,
           },
           {
-            date: new Date("2025-05-18"),
+            date: new Date(2025, 5, 18), // Jun 18 — 120 days from Feb 18
             high: 16.00,
             low: 15.50,
             open: 15.50,
@@ -457,7 +457,7 @@ Deno.test("Portfolio View Consistency", async (t) => {
     validator.marketData = {
       "NASDAQ:XP": [
         {
-          date: new Date("2025-02-18"),
+          date: new Date(2025, 1, 18), // Feb 18 — local time
           high: 15.18,
           low: 14.72,
           open: 14.72,
@@ -465,7 +465,7 @@ Deno.test("Portfolio View Consistency", async (t) => {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date("2025-05-18"),
+          date: new Date(2025, 5, 18), // Jun 18 — 120 days from Feb 18
           high: 16.00,
           low: 15.50,
           open: 15.50,
