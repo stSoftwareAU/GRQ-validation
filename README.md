@@ -1,22 +1,44 @@
 # GRQ Validation
 
-A Rust-based system for validating AI predictions against 90-day targets and 10% annual cost of capital.
+A Rust-based system for validating AI predictions against 90-day targets and a
+10% annual cost of capital, paired with a static dashboard published via GitHub
+Pages.
 
 ## Features
 
-- **Performance Tracking**: Calculate 90-day and annualized performance for stock portfolios
-- **Market Data Integration**: Fetch and process historical stock data
-- **Dividend Tracking**: Calculate dividend income and total returns
-- **Web Dashboard**: Interactive charts and tables for performance analysis
-- **Automated Processing**: Batch processing of score files with inline performance calculation
+- **Performance Tracking** — calculate 90-day and annualised performance for
+  stock portfolios.
+- **Market Data Integration** — fetch and process historical stock data into
+  per-score-file CSVs.
+- **Dividend Tracking** — calculate dividend income and total returns.
+- **Web Dashboard** — interactive charts and tables for performance analysis,
+  served as a static site from `docs/`.
+- **Hybrid Projection** — for score files less than 90 days old, project
+  performance from the current actual prices.
+- **Automated Processing** — batch process score files with inline performance
+  calculation.
+
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    A[scores/*.tsv] --> B[grq-validation CLI]
+    B --> C[scores/*.csv market data]
+    B --> D[scores/index.json]
+    C --> E[Dashboard docs/index.html]
+    D --> E
+```
 
 ## Quick Start
 
 ### Prerequisites
+
 - Rust (latest stable)
+- Deno (for the dashboard and TypeScript tests)
 - Git
 
 ### Installation
+
 ```bash
 git clone <repository-url>
 cd GRQ-validation
@@ -24,90 +46,95 @@ cargo build --release
 ```
 
 ### Usage
+
 ```bash
-# Process recent score files (within 180 days)
+# Process recent score files (within 100 days)
 ./run.sh
 
-# Process all score files
+# Process all score files (including those older than 100 days)
 ./run.sh --process-all
+# (alias: ./run.sh --full-reload)
 
 # Process a specific date
 ./target/release/grq-validation --docs-path docs --date 2025-01-15
 ```
 
 ### Web Interface
+
 ```bash
-# Start the web server
+# Start a static server in the docs directory
 cd docs
 python3 -m http.server 8000
-# Or use any static file server
+# Or use any other static file server (e.g. ../helpers/server.sh)
 ```
 
 Visit `http://localhost:8000` to access the dashboard.
 
 ## CI/CD Pipeline
 
-This repository includes comprehensive GitHub Actions workflows for continuous integration and deployment.
+This repository ships a set of GitHub Actions workflows in
+`.github/workflows/` covering continuous integration, security scanning, and
+dependency hygiene.
 
 ### Workflows
 
-1. **CI** (`ci.yml`) - Main continuous integration
-   - Code formatting and linting
-   - Build and test
-   - Security audits
-   - Artifact upload
-
-2. **Rust CI** (`rust.yml`) - Extended Rust testing
-   - Multi-version testing (stable, 1.75)
-   - Additional security checks
-   - Documentation generation
-
-3. **Deploy** (`deploy.yml`) - GitHub Pages deployment
-   - Automatic deployment on main branch
-   - Data processing and web app deployment
-
-4. **Dependencies** (`dependencies.yml`) - Automated dependency updates
-   - Weekly dependency checks
-   - Automatic PR creation for updates
-
-5. **Cargo Audit** (`cargo-audit.yml`) - Rust security advisory scan
-   - Runs `cargo audit` on every pull request
-   - Weekly scheduled run (Mondays 06:00 UTC) catches newly disclosed
-     advisories against existing dependencies
+1. **CI** (`ci.yml`) — main continuous integration: build, test, formatting,
+   linting, and artifact upload.
+2. **Cargo Audit** (`cargo-audit.yml`) — runs `cargo audit` on every pull
+   request and on a weekly schedule to catch newly disclosed advisories.
+3. **Deno Outdated** (`deno-outdated.yml`) — checks for outdated JSR/npm
+   imports used by the TypeScript dashboard tests.
+4. **Deno Quality** (`deno-quality.yml`) — runs `deno fmt`, `deno lint`,
+   `deno check`, and `deno test` against `tests/`.
+5. **Dependency Review** (`dependency-review.yml`) — reviews dependency
+   changes on pull requests for known vulnerabilities and licence issues.
+6. **Gitleaks** (`gitleaks.yml`) — scans the repository for accidentally
+   committed secrets.
+7. **Markdown Lint** (`markdown-lint.yml`) — enforces the rules in
+   `.markdownlint-cli2.jsonc` against every Markdown file.
+8. **Semgrep** (`semgrep.yml`) — runs Semgrep static analysis for security
+   and correctness issues.
+9. **Shellcheck** (`shellcheck.yml`) — lints every `*.sh` script in the
+   repository.
 
 ### Setup
-1. Enable GitHub Actions in your repository
-2. Configure GitHub Pages (Settings > Pages > Source: GitHub Actions)
-3. Set up branch protection rules (recommended)
+
+1. Enable GitHub Actions in your repository.
+2. Configure GitHub Pages (Settings → Pages → Source: GitHub Actions).
+3. Set up branch protection rules (recommended).
 
 See [CI_CD_SETUP.md](CI_CD_SETUP.md) for detailed setup instructions.
 
 ## Project Structure
 
-```
+```text
 GRQ-validation/
 ├── src/                    # Rust source code
-│   ├── main.rs            # Main application entry point
-│   ├── models.rs          # Data structures
-│   ├── utils.rs           # Utility functions
-│   └── lib.rs             # Library interface
-├── docs/                   # Web application
-│   ├── index.html         # Main dashboard
-│   ├── list.html          # Score files list
-│   ├── list.css           # List page styling
-│   ├── list.js            # List page logic
-│   ├── app.js             # Main dashboard logic
-│   ├── styles.css         # Main dashboard styling
-│   └── scores/            # Score files and data
-├── tests/                  # Test files
-├── .github/workflows/      # GitHub Actions
-├── run.sh                  # Main execution script
-└── Cargo.toml             # Rust dependencies
+│   ├── main.rs             # CLI entry point
+│   ├── lib.rs              # Library interface
+│   ├── models.rs           # Data structures
+│   └── utils.rs            # Utility functions
+├── docs/                   # Static dashboard (published via GitHub Pages)
+│   ├── index.html          # Main dashboard
+│   ├── list.html           # Score files list
+│   ├── app.js              # Main dashboard logic
+│   ├── list.js             # List page logic
+│   ├── styles.css          # Main dashboard styling
+│   ├── list.css            # List page styling
+│   └── scores/             # Score files and generated market data
+├── tests/                  # Rust and Deno tests
+├── helpers/                # Local development helpers (e.g. static server)
+├── scripts/                # Git hooks and utility scripts
+├── .github/workflows/      # GitHub Actions workflows
+├── run.sh                  # Build-and-run wrapper for the CLI
+├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
+└── Cargo.toml              # Rust dependencies and crate metadata
 ```
 
 ## Development
 
 ### Local Development
+
 ```bash
 # Format code
 cargo fmt
@@ -120,52 +147,58 @@ cargo test
 
 # Build release
 cargo build --release
+
+# Run the full quality gate (mirrors CI)
+./quality.sh
 ```
 
 ### Testing
+
 ```bash
-# Run all tests
+# Run all Rust tests
 cargo test
 
-# Run specific test
+# Run a specific Rust test
 cargo test test_name
 
-# Run with verbose output
-cargo test --verbose
+# Run the Deno test suite (dashboard / workflow tests)
+deno test --allow-read tests/
 ```
 
 ## Configuration
 
 ### Environment Variables
-- `RUST_LOG`: Logging level (default: info)
-- `CARGO_TERM_COLOR`: Terminal color output
+
+- `RUST_LOG` — logging level (default: `info`).
+- `CARGO_TERM_COLOR` — terminal colour output.
 
 ### Command Line Options
-- `--docs-path`: Path to docs directory (default: docs)
-- `--process-all`: Process all files, not just recent ones
-- `--calculate-performance`: Only calculate performance metrics
-- `--date`: Process specific date (YYYY-MM-DD format)
-- `--verbose`: Enable verbose logging
+
+- `--docs-path` — path to the docs directory (default: `docs`).
+- `--process-all` — process every score file, not just recent ones.
+- `--calculate-performance` — calculate performance metrics for score files.
+- `--performance-only` — only calculate performance metrics; skip CSV
+  generation.
+- `--date` — process a specific date in `YYYY-MM-DD` format.
+- `--verbose` — enable verbose logging.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
+1. Fork the repository.
+2. Create a feature branch.
+3. Make your changes.
+4. Run `./quality.sh` and ensure it passes cleanly.
+5. Submit a pull request.
 
 ## License
 
-[Add your license information here]
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
+full text.
 
 ## Support
 
 For issues and questions:
-1. Check the [CI_CD_SETUP.md](CI_CD_SETUP.md) for workflow issues
-2. Review existing issues
-3. Create a new issue with detailed information
 
-
-
-
+1. Check [CI_CD_SETUP.md](CI_CD_SETUP.md) for workflow issues.
+2. Review existing issues.
+3. Create a new issue with detailed information.
