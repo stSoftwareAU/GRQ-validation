@@ -1,7 +1,4 @@
-import {
-  assertAlmostEquals,
-  assertEquals,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertAlmostEquals, assertEquals } from "@std/assert";
 
 // Test case for dividend calculation within 90-day period
 // Testing NYSE:WFG from 2024-11-15 score file

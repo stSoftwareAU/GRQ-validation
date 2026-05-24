@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write
 
-import { assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert } from "@std/assert";
 
 // TypeScript interfaces for type safety
 interface StockData {
