@@ -1,10 +1,12 @@
 # Test Server for GRQ Validation Dashboard
 
-This directory contains scripts to start a local test server for the GRQ Validation Dashboard.
+This directory contains scripts to start a local test server for the GRQ
+Validation Dashboard.
 
 ## Quick Start
 
 ### Option 1: Using the shell script (Recommended)
+
 ```bash
 # Start server on default port (8000)
 ./tests/start-server.sh
@@ -14,6 +16,7 @@ This directory contains scripts to start a local test server for the GRQ Validat
 ```
 
 ### Option 2: Using Deno directly
+
 ```bash
 # Start server on default port (8000)
 deno run --allow-net --allow-read tests/start-test-server.js
@@ -25,6 +28,7 @@ deno run --allow-net --allow-read tests/start-test-server.js 3000
 ## What it does
 
 The test server:
+
 - Serves static files from the `docs/` directory
 - Handles all file types (HTML, CSS, JS, JSON, CSV, TSV, images, etc.)
 - Sets appropriate MIME types for different file extensions
@@ -56,20 +60,26 @@ tests/
 ## Troubleshooting
 
 ### Port already in use
+
 If you get a port conflict error, try a different port:
+
 ```bash
 ./tests/start-server.sh 8080
 ```
 
 ### Permission denied
+
 Make sure the shell script is executable:
+
 ```bash
 chmod +x tests/start-server.sh
 ```
 
 ### Deno not found
+
 Install Deno from https://deno.land/ or use your system's package manager.
 
 ## Development
 
-The server is designed for development and testing purposes. For production deployment, consider using a more robust web server like nginx or Apache. 
+The server is designed for development and testing purposes. For production
+deployment, consider using a more robust web server like nginx or Apache.
