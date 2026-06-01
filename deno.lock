@@ -13,7 +13,7 @@
     "jsr:@std/net@~0.224.3": "0.224.5",
     "jsr:@std/path@1.0.0-rc.2": "1.0.0-rc.2",
     "jsr:@std/streams@~0.224.5": "0.224.5",
-    "jsr:@std/yaml@^1.1.0": "1.1.0"
+    "jsr:@std/yaml@^1.1.1": "1.1.1"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -65,8 +65,8 @@
     "@std/streams@0.224.5": {
       "integrity": "bcde7818dd5460d474cdbd674b15f6638b9cd73cd64e52bd852fba2bd4d8ec91"
     },
-    "@std/yaml@1.1.0": {
-      "integrity": "fc1c5c63e05c4c5eb6118355f557958035d41940d6c29d35b306ef7155d6edb0"
+    "@std/yaml@1.1.1": {
+      "integrity": "a57665ecf3d17b926380593a56625d8a10cc7281802f1e993b5ebc94a48e71f8"
     }
   },
   "remote": {
@@ -253,7 +253,7 @@
     "dependencies": [
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/jsonc@^1.0.2",
-      "jsr:@std/yaml@^1.1.0"
+      "jsr:@std/yaml@^1.1.1"
     ]
   }
 }
