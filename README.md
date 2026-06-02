@@ -85,7 +85,10 @@ dependency hygiene.
 3. **Deno Outdated** (`deno-outdated.yml`) — checks for outdated JSR/npm
    imports used by the TypeScript dashboard tests.
 4. **Deno Quality** (`deno-quality.yml`) — runs `deno fmt`, `deno lint`,
-   `deno check`, and `deno test` against `tests/`.
+   `deno check`, `deno audit`, and `deno test` against `tests/` on every
+   pull request and on a weekly schedule. `deno audit` scans the resolved
+   JSR/`@std` dependency graph for known vulnerabilities — the Deno-side
+   counterpart to `cargo audit`.
 5. **Dependency Review** (`dependency-review.yml`) — reviews dependency
    changes on pull requests for known vulnerabilities and licence issues.
 6. **Gitleaks** (`gitleaks.yml`) — scans the repository for accidentally

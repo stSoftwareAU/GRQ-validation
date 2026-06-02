@@ -86,6 +86,43 @@ Deno.test("Deno Quality workflow runs lint, fmt --check, check and test", async 
   );
 });
 
+Deno.test("Deno Quality workflow runs deno audit (SCR-VULN-SCAN, Issue #59)", async () => {
+  // The Deno/JSR dependency surface must be scanned for known
+  // vulnerabilities in CI, mirroring `cargo audit` on the Rust side.
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as { jobs: Record<string, unknown> };
+  const job = doc.jobs.quality as {
+    steps: Array<{ run?: string }>;
+  };
+  const runs = job.steps.map((s) => s.run ?? "").join("\n");
+  assert(
+    /\bdeno\s+audit\b/.test(runs),
+    "quality job must run `deno audit` to scan JSR dependencies",
+  );
+});
+
+Deno.test("Deno Quality workflow triggers on a weekly schedule (Issue #59)", async () => {
+  // The audit should also run on the existing weekly cron so a JSR
+  // compromise is caught even without an open pull request.
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const on = (doc.on ?? doc["true"] ??
+    (doc as Record<string, unknown>)[true as unknown as string]) as
+      | Record<string, unknown>
+      | undefined;
+  assert(on, "workflow must declare an 'on' trigger");
+  assert("schedule" in on, "must trigger on a schedule");
+  const schedule = on.schedule as Array<{ cron: string }>;
+  assert(
+    Array.isArray(schedule) && schedule.length > 0,
+    "schedule must list at least one cron entry",
+  );
+  assert(
+    schedule.some((s) => typeof s.cron === "string" && s.cron.length > 0),
+    "schedule entry must declare a non-empty cron expression",
+  );
+});
+
 Deno.test("Deno Quality workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a
