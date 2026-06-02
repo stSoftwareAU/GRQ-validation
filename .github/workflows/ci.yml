@@ -146,12 +146,36 @@ jobs:
           
     - name: Build release
       run: cargo build --release
-      
+
+    # SCR-SBOM (Issue #53): generate a machine-readable component inventory
+    # alongside the binary so post-disclosure incident triage can answer
+    # "did we ship crate X version Y?" in seconds.
+    - name: Generate CycloneDX SBOM
+      run: |
+        cargo install cargo-cyclonedx
+        cargo cyclonedx --format json
+        # cargo-cyclonedx names the SBOM after the package; normalise the
+        # path so the upload step always finds it.
+        if [ -f grq-validation.cdx.json ]; then
+          echo "SBOM generated: grq-validation.cdx.json"
+        else
+          sbom=$(find . -maxdepth 2 -name '*.cdx.json' ! -path './target/*' | head -n1)
+          if [ -n "$sbom" ]; then
+            cp "$sbom" grq-validation.cdx.json
+            echo "SBOM copied from $sbom to grq-validation.cdx.json"
+          else
+            echo "No CycloneDX SBOM produced" >&2
+            exit 1
+          fi
+        fi
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: grq-validation-release
-        path: target/release/grq-validation
+        path: |
+          target/release/grq-validation
+          grq-validation.cdx.json
 
   deploy-pages:
     name: Deploy to GitHub Pages

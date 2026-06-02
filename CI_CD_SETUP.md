@@ -13,7 +13,8 @@ This repository includes GitHub Actions workflows for continuous integration and
 - ✅ Builds the project in debug and release modes
 - ✅ Runs all tests
 - ✅ Checks for security vulnerabilities with `cargo audit`
-- ✅ Uploads build artifacts
+- ✅ Generates a CycloneDX SBOM (`grq-validation.cdx.json`) from the Rust lockfile
+- ✅ Uploads build artifacts (release binary + SBOM)
 
 ### 2. Rust CI (`rust.yml`)
 **Triggers:** Push to main/master/develop, Pull requests, Weekly security checks
@@ -85,7 +86,8 @@ on:
 7. Run tests
 8. Build release version
 9. Security audit
-10. Upload artifacts
+10. Generate CycloneDX SBOM (component inventory for incident triage)
+11. Upload artifacts (binary + SBOM)
 ```
 
 ### Deployment Pipeline
