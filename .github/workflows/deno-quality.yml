@@ -3,6 +3,9 @@ name: Deno Quality
 on:
   pull_request:
     branches: ["*"]
+  schedule:
+    # Weekly audit so a JSR/@std compromise is caught even with no open PR.
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -23,6 +26,10 @@ jobs:
         run: deno fmt --check
       - name: Deno type check
         run: deno check tests/*.ts
+      # Scan the resolved JSR/@std dependency graph against the advisory
+      # database — the Deno-side counterpart to `cargo audit` (Issue #59).
+      - name: Deno audit
+        run: deno audit
       # Run tests with coverage and upload to Codecov (Issue #1636).
       # The codecov-action is a no-op when no test files are found.
       - name: Run tests with coverage
