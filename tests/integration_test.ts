@@ -1,4 +1,16 @@
-import { assertAlmostEquals, assertEquals } from "@std/assert";
+import { assertEquals } from "@std/assert";
+import "../docs/projection.js";
+
+const g = globalThis as unknown as {
+  GRQProjection: {
+    calculatePerformanceReturn: (
+      buyPrice: number,
+      currentPrice: number,
+      totalDividends?: number,
+    ) => number | null;
+  };
+};
+const GRQProjection = g.GRQProjection;
 
 // Integration test for 90-day portfolio calculations
 
@@ -20,18 +32,10 @@ Deno.test("Integration Tests", async (t) => {
     );
   });
 
-  await t.step("portfolio target logic", () => {
-    // Test that portfolio target is 20% for equal-weighted portfolio
-    const individualTarget = 20.0; // Each stock target
-    const portfolioTarget = 20.0; // Equal weighting means same target
-
-    assertAlmostEquals(
-      portfolioTarget,
-      individualTarget,
-      0.1,
-      "Portfolio target should equal individual target",
-    );
-  });
+  // NOTE (issue #80): the former "portfolio target logic" step asserted
+  // `20.0 ≈ 20.0` against two locally-declared constants — a tautology that
+  // verified no production code. It has been removed in favour of the
+  // real-function "performance calculation" step below.
 
   await t.step("dividend exclusion after 90 days", () => {
     // Test that dividends after 90 days are excluded
@@ -53,16 +57,19 @@ Deno.test("Integration Tests", async (t) => {
   });
 
   await t.step("performance calculation", () => {
-    // Mock performance calculation
+    // Drive the REAL shared performance maths (issue #80) rather than
+    // recomputing the formula inline and asserting on our own arithmetic.
     const buyPrice = 100.0;
-    const priceAt90Days = 120.0; // 20% gain
-    const dividends = 2.0; // $2 in dividends
+    const priceAt90Days = 120.0; // 20% price gain
+    const dividends = 2.0; // $2 in dividends -> +2%
 
-    const priceReturn = ((priceAt90Days - buyPrice) / buyPrice) * 100;
-    const dividendReturn = (dividends / buyPrice) * 100;
-    const totalReturn = priceReturn + dividendReturn;
+    const totalReturn = GRQProjection.calculatePerformanceReturn(
+      buyPrice,
+      priceAt90Days,
+      dividends,
+    );
 
-    assertAlmostEquals(totalReturn, 22.0, 0.1, "Total return should be 22.0%");
+    assertEquals(totalReturn, 22.0, "Total return should be 22.0%");
   });
 
   await t.step("chart data limitation", () => {
