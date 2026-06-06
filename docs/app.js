@@ -3322,10 +3322,9 @@ class GRQValidator {
     }
 
     getDaysElapsed(scoreDate) {
-        const today = new Date();
-        const diffTime = Math.abs(today - scoreDate);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays;
+        // Delegate to the shared projection module (issue #80) so the browser
+        // and the Deno tests exercise identical maths.
+        return GRQProjection.getDaysElapsed(scoreDate, new Date());
     }
 
     // New method to calculate days elapsed based on actual market data availability
@@ -3381,20 +3380,20 @@ class GRQValidator {
         }
         const buyPrice = buyPriceObj.price;
 
-        // Calculate price return
-        const priceReturn = ((currentPrice - buyPrice) / buyPrice) *
-            100;
-
         // Add dividend return within 90 days
         const dividends = this.getDividendsWithin90Days(stock.stock);
         const totalDividends = dividends.reduce(
             (sum, div) => sum + div.amount,
             0,
         );
-        const dividendReturn = (totalDividends / buyPrice) * 100;
 
-        // Total return including dividends
-        return priceReturn + dividendReturn;
+        // Total return (price + dividends) via the shared projection module
+        // (issue #80) so production and tests share one implementation.
+        return GRQProjection.calculatePerformanceReturn(
+            buyPrice,
+            currentPrice,
+            totalDividends,
+        );
     }
 
     calculatePortfolioTargetPercentage() {
@@ -4418,94 +4417,21 @@ class GRQValidator {
         const projection = this.calculateHybridProjection(stock, scoreDate);
         if (!projection) return null;
 
-        const trendData = [];
-        const scoreDateTimestamp = scoreDate.getTime();
+        // The dampened-trend curve needs the regression line; the other
+        // methods derive their shape purely from the projection figures.
+        const trendLine = projection.projectionMethod === "dampened_trend"
+            ? this.calculateTrendLine(stock, scoreDate)
+            : null;
 
-        // Helper to get midnight date
-        const getDayDate = (base, day) => this.setDateToMidnight(new Date(base.getTime() + day * 24 * 60 * 60 * 1000));
+        // Delegate the weekly trend-shape generation to the shared projection
+        // module (issue #80) so production and the Deno tests share one
+        // implementation.
+        const trendData = GRQProjection.buildHybridProjectionData(
+            projection,
+            scoreDate,
+            trendLine,
+        );
 
-        if (projection.projectionMethod === "dampened_trend") {
-            const trendLine = this.calculateTrendLine(stock, scoreDate);
-            if (trendLine) {
-                const dampenFactor = projection.daysElapsed < 30 ? 0.3 : 0.5;
-                const dampenedSlope = trendLine.slope * dampenFactor;
-                // Generate weekly points up to 90 days, starting at zero
-                for (let day = 0; day <= 90; day += 7) {
-                    trendData.push({
-                        x: getDayDate(scoreDate, day),
-                        y: Math.max(dampenedSlope * day, -100)
-                    });
-                }
-                // Ensure we have exactly 90 days as the last point
-                const lastPoint = trendData[trendData.length - 1];
-                const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
-                if (lastPointDay !== 90) {
-                    trendData.push({
-                        x: getDayDate(scoreDate, 90),
-                        y: Math.max(dampenedSlope * 90, -100)
-                    });
-                }
-            }
-        } else if (projection.projectionMethod === "realistic_trajectory") {
-            // Realistic trajectory based on current performance rate
-            const current = projection.currentPerformance;
-            const daysElapsed = projection.daysElapsed;
-            const currentRate = current / daysElapsed; // % per day
-            
-            // Generate weekly points up to 90 days, starting at zero
-            for (let day = 0; day <= 90; day += 7) {
-                let predictedPerformance;
-                if (day <= daysElapsed) {
-                    // For days up to current, use linear interpolation
-                    predictedPerformance = (current / daysElapsed) * day;
-                } else {
-                    // For future days, use the projection
-                    predictedPerformance = projection.projected90DayPerformance * (day / 90);
-                }
-                
-                predictedPerformance = Math.max(Math.min(predictedPerformance, 200), -100);
-                trendData.push({
-                    x: getDayDate(scoreDate, day),
-                    y: predictedPerformance
-                });
-            }
-            
-            // Ensure we have exactly 90 days as the last point
-            const lastPoint = trendData[trendData.length - 1];
-            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
-            if (lastPointDay !== 90) {
-                trendData.push({
-                    x: getDayDate(scoreDate, 90),
-                    y: projection.projected90DayPerformance
-                });
-            }
-        } else {
-            // Target-based or mean reversion - use the projection value from calculateHybridProjection
-            const projected90DayPerformance = projection.projected90DayPerformance;
-            
-            // Generate weekly points up to 90 days, starting at zero
-            for (let day = 0; day <= 90; day += 7) {
-                // Linear interpolation from zero to the projection
-                const progress = Math.min(day / 90, 1);
-                const predictedPerformance = projected90DayPerformance * progress;
-                
-                trendData.push({
-                    x: getDayDate(scoreDate, day),
-                    y: Math.max(Math.min(predictedPerformance, 200), -100)
-                });
-            }
-            
-            // Ensure we have exactly 90 days as the last point
-            const lastPoint = trendData[trendData.length - 1];
-            const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
-            if (lastPointDay !== 90) {
-                trendData.push({
-                    x: getDayDate(scoreDate, 90),
-                    y: projected90DayPerformance
-                });
-            }
-        }
-        
         return {
             data: trendData,
             projection: projection
