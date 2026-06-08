@@ -103,7 +103,6 @@ pub struct StockRecord {
 }
 
 impl StockRecord {
-    #[allow(dead_code)]
     pub fn new(stock: String, score: f64, target: f64) -> Self {
         Self {
             stock,
