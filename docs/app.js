@@ -3117,67 +3117,18 @@ class GRQValidator {
         const daysElapsed = this.getDaysElapsed(scoreDate);
         const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
 
-        // If we haven't reached 90 days yet, use hybrid projection
-        if (daysElapsed < 90) {
-            const hybridProjection = this.calculateHybridProjection(stock, scoreDate);
-            
-            if (hybridProjection && hybridProjection.confidence > 0.2) {
-                const predicted = hybridProjection.projected90DayPerformance;
-                const target = targetPercentage || 20; // Default to 20% if no target
-                const pctOfTarget = target === 0 ? 0 : predicted / target;
-                if (predicted < 0 || pctOfTarget < 0.2) {
-                    return `Declining (${predicted.toFixed(1)}%)`;
-                } else if (pctOfTarget >= 0.95) {
-                    return `On Track (${predicted.toFixed(1)}%)`;
-                } else if (pctOfTarget >= 0.2) {
-                    return `Below Target (${predicted.toFixed(1)}%)`;
-                } else {
-                    return `Declining (${predicted.toFixed(1)}%)`;
-                }
-            } else {
-                // Not enough data for reliable prediction - use current performance with context
-                const target = targetPercentage || 20; // Default to 20% if no target
-                const threshold = target * 0.8; // 80% of target
-                if (daysElapsed < 30) {
-                    // First 30 days - truly early
-                    if (performance > 0) {
-                        return `Early Days (+${performance.toFixed(1)}%)`;
-                    } else {
-                        return `Early Days (${performance.toFixed(1)}%)`;
-                    }
-                } else if (daysElapsed < 60) {
-                    // 30-60 days - mid period
-                    if (performance >= threshold) {
-                        return `On Track (${performance.toFixed(1)}%)`;
-                    } else if (performance > 0) {
-                        return `Below Target (${performance.toFixed(1)}%)`;
-                    } else {
-                        return `Declining (${performance.toFixed(1)}%)`;
-                    }
-                } else {
-                    // 60+ days - late period, should have good data
-                    if (performance >= threshold) {
-                        return `On Track (${performance.toFixed(1)}%)`;
-                    } else if (performance > 0) {
-                        return `Below Target (${performance.toFixed(1)}%)`;
-                    } else {
-                        return `Declining (${performance.toFixed(1)}%)`;
-                    }
-                }
-            }
-        } else {
-            // 90 days or more elapsed - use actual performance
-            const target = targetPercentage || 20; // Default to 20% if no target
-            const threshold = target * 0.8; // 80% of target
+        // Before day 90 the judgement leans on the hybrid projection; gather it
+        // so the shared kernel (issue #100) can apply the decision thresholds.
+        const projection = daysElapsed < 90
+            ? this.calculateHybridProjection(stock, scoreDate)
+            : null;
 
-            if (performance >= threshold) {
-                return "Hit Target";
-            } else if (performance > 0) {
-                return "Partial Success";
-            } else {
-                return "Missed Target";
-            }
-        }
+        return GRQProjection.computeJudgement({
+            performance,
+            daysElapsed,
+            targetPercentage,
+            projection,
+        });
     }
 
     getPerformanceClass(performance) {

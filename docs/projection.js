@@ -382,6 +382,55 @@ function computeHybridProjection(
     return { projected90DayPerformance, projectionMethod, confidence };
 }
 
+// Map a stock's performance to a human-readable judgement string. Before day 90
+// it leans on the hybrid projection (when confident enough), otherwise on the
+// current performance against 80% of target; from day 90 it reports the realised
+// outcome. This is the pure scoring kernel the dashboard's GRQValidator gathers
+// inputs for and delegates to.
+function computeJudgement(
+    { performance, daysElapsed, targetPercentage, projection },
+) {
+    if (performance === null) return "Pending";
+
+    const target = targetPercentage || 20; // Default to 20% if no target.
+
+    if (daysElapsed < 90) {
+        if (projection && projection.confidence > 0.2) {
+            const predicted = projection.projected90DayPerformance;
+            const pctOfTarget = target === 0 ? 0 : predicted / target;
+            if (predicted < 0 || pctOfTarget < 0.2) {
+                return `Declining (${predicted.toFixed(1)}%)`;
+            } else if (pctOfTarget >= 0.95) {
+                return `On Track (${predicted.toFixed(1)}%)`;
+            } else if (pctOfTarget >= 0.2) {
+                return `Below Target (${predicted.toFixed(1)}%)`;
+            }
+            return `Declining (${predicted.toFixed(1)}%)`;
+        }
+
+        // Not enough data for a reliable projection: judge current performance.
+        const threshold = target * 0.8;
+        if (daysElapsed < 30) {
+            return performance > 0
+                ? `Early Days (+${performance.toFixed(1)}%)`
+                : `Early Days (${performance.toFixed(1)}%)`;
+        }
+        // 30-60 and 60+ days share the same thresholds.
+        if (performance >= threshold) {
+            return `On Track (${performance.toFixed(1)}%)`;
+        } else if (performance > 0) {
+            return `Below Target (${performance.toFixed(1)}%)`;
+        }
+        return `Declining (${performance.toFixed(1)}%)`;
+    }
+
+    // 90 days or more elapsed: report the realised outcome.
+    const threshold = target * 0.8;
+    if (performance >= threshold) return "Hit Target";
+    if (performance > 0) return "Partial Success";
+    return "Missed Target";
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
@@ -399,4 +448,5 @@ globalThis.GRQProjection = {
     computeTrendLine,
     daysElapsedFromMarketData,
     computeHybridProjection,
+    computeJudgement,
 };
