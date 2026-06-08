@@ -495,6 +495,22 @@ pub fn create_dividend_csv_for_score_file(
     create_dividend_csv(symbols, score_file_date, &output_path)
 }
 
+/// Annualises a period return using compound growth over the actual number of
+/// days observed.
+///
+/// Spec (`ANNUALIZED_PERFORMANCE_CALCULATION.md`):
+/// `annualised = ((1 + performance/100) ^ (365.25 / days_elapsed) - 1) * 100`.
+///
+/// Returns `0.0` when the period return is exactly zero or no days have
+/// elapsed — the dashboard treats those as a not-yet-meaningful figure.
+pub fn calculate_annualized_performance(performance_pct: f64, days_elapsed: i64) -> f64 {
+    if performance_pct != 0.0 && days_elapsed > 0 {
+        ((1.0 + performance_pct / 100.0).powf(365.25 / days_elapsed as f64) - 1.0) * 100.0
+    } else {
+        0.0
+    }
+}
+
 /// Calculates portfolio performance for a given score file
 pub fn calculate_portfolio_performance(
     score_file_path: &str,
@@ -625,11 +641,8 @@ pub fn calculate_portfolio_performance(
     let actual_days_elapsed = std::cmp::min((latest_market_date - score_date).num_days(), 90);
 
     // Calculate annualized performance using actual days elapsed instead of fixed 90 days
-    let performance_annualized = if performance_90_day != 0.0 && actual_days_elapsed > 0 {
-        ((1.0 + performance_90_day / 100.0).powf(365.25 / actual_days_elapsed as f64) - 1.0) * 100.0
-    } else {
-        0.0
-    };
+    let performance_annualized =
+        calculate_annualized_performance(performance_90_day, actual_days_elapsed);
 
     Ok(PortfolioPerformance {
         score_date: score_file_date.to_string(),
@@ -1295,38 +1308,42 @@ mod tests {
 
     #[test]
     fn test_annualized_performance_calculation_with_actual_days() {
-        // Test the annualized performance calculation formula with different days elapsed
-        // This tests the core fix for using actual days instead of fixed 90 days
-
-        let test_cases = vec![
-            // (performance_pct, days_elapsed, expected_annualized_approx)
-            (2.0, 5, 324.9),   // Early days: 2% over 5 days should annualize to ~325%
-            (4.0, 10, 318.9),  // 4% over 10 days should annualize to ~319%
-            (6.0, 30, 103.3),  // 6% over 30 days should annualize to ~103%
-            (8.0, 60, 59.8),   // 8% over 60 days should annualize to ~60%
-            (10.0, 90, 47.2),  // 10% over 90 days should annualize to ~47%
-            (0.0, 30, 0.0),    // Zero performance should always return 0
-            (-3.0, 15, -52.4), // Negative performance: -3% over 15 days should be ~-52%
+        // WHAT-test for the production annualisation helper
+        // `calculate_annualized_performance` — the exact code path
+        // `calculate_portfolio_performance` uses to fill `performance_annualized`.
+        //
+        // Each expected value is derived directly from the spec formula in
+        // ANNUALIZED_PERFORMANCE_CALCULATION.md:
+        //   annualised = ((1 + p/100) ^ (365.25 / days) - 1) * 100
+        // (e.g. 2% over 5 days: (1.02 ^ (365.25/5) - 1) * 100 = (1.02 ^ 73.05 - 1) * 100 ≈ 324.9),
+        // rounded to one decimal place — not numbers copied from a one-off run.
+        let test_cases: Vec<(f64, i64, f64)> = vec![
+            // (performance_pct, days_elapsed, expected_annualized)
+            (2.0, 5, 324.9),   // (1.02 ^ 73.050 - 1) * 100
+            (4.0, 10, 318.9),  // (1.04 ^ 36.525 - 1) * 100
+            (6.0, 30, 103.3),  // (1.06 ^ 12.175 - 1) * 100
+            (8.0, 60, 59.8),   // (1.08 ^ 6.0875 - 1) * 100
+            (10.0, 90, 47.2),  // (1.10 ^ 4.0583 - 1) * 100
+            (0.0, 30, 0.0),    // zero return → zero annualised (guard branch)
+            (-3.0, 15, -52.4), // (0.97 ^ 24.350 - 1) * 100
         ];
 
-        for (performance, days, expected_approx) in test_cases {
-            let actual_annualized = if performance != 0.0 && days > 0 {
-                ((1.0_f64 + performance / 100.0).powf(365.25 / days as f64) - 1.0) * 100.0
-            } else {
-                0.0
-            };
+        for (performance, days, expected) in test_cases {
+            // Call the real production helper rather than recomputing the formula.
+            let actual_annualized = calculate_annualized_performance(performance, days);
 
             println!(
-                "Performance: {performance}% over {days} days → Annualized: {actual_annualized:.1}% (expected ~{expected_approx}%)"
+                "Performance: {performance}% over {days} days → Annualized: {actual_annualized:.1}% (expected {expected}%)"
             );
 
-            // Allow reasonable tolerance for approximation
-            let tolerance = 10.0; // 10% tolerance since these are approximations
-            let difference = (actual_annualized - expected_approx).abs();
+            // Tight tolerance: the expected values are the spec formula rounded to
+            // one decimal place, so production must land within that rounding.
+            let tolerance = 0.1;
+            let difference = (actual_annualized - expected).abs();
 
             assert!(
                 difference < tolerance,
-                "Performance {performance}% over {days} days: Expected ~{expected_approx}%, got {actual_annualized:.1}%, difference: {difference:.1}%"
+                "Performance {performance}% over {days} days: Expected {expected}%, got {actual_annualized:.4}%, difference: {difference:.4}%"
             );
 
             // Verify edge case behaviors
