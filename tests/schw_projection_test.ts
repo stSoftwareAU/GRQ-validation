@@ -77,7 +77,11 @@ const g = globalThis as unknown as {
       currentPerformance: number;
       targetPercentage: number | null;
       trendLine: { slope: number; rSquared: number } | null;
-    }) => { projected90DayPerformance: number; projectionMethod: string; confidence: number };
+    }) => {
+      projected90DayPerformance: number;
+      projectionMethod: string;
+      confidence: number;
+    };
   };
 };
 const GRQProjection = g.GRQProjection;
@@ -107,7 +111,9 @@ class TestGRQValidator {
         dividendPerShare: values[4] ? parseFloat(values[4]) : 0,
         notes: values[5] || "",
         intrinsicValuePerShareBasic: values[6] ? parseFloat(values[6]) : null,
-        intrinsicValuePerShareAdjusted: values[7] ? parseFloat(values[7]) : null,
+        intrinsicValuePerShareAdjusted: values[7]
+          ? parseFloat(values[7])
+          : null,
       };
     });
   }
@@ -207,7 +213,8 @@ class TestGRQValidator {
     const dataPoints: { x: number; y: number }[] = [];
     marketData.forEach((point) => {
       if (point.date >= scoreDate && point.date <= trendEndDate) {
-        const daysSinceScore = (point.date.getTime() - scoreDate.getTime()) / DAY;
+        const daysSinceScore = (point.date.getTime() - scoreDate.getTime()) /
+          DAY;
         const currentPrice = (point.high + point.low) / 2;
         const priceReturn =
           ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
@@ -285,7 +292,9 @@ Deno.test("NYSE:SCHW Projection Test - Using Real App Functions", async (t) => {
     assert(currentPerformance !== null, "Should have current performance");
     assert(
       currentPerformance! > 15,
-      `Current performance should be > 15%, got ${currentPerformance?.toFixed(1)}%`,
+      `Current performance should be > 15%, got ${
+        currentPerformance?.toFixed(1)
+      }%`,
     );
   });
 
@@ -294,11 +303,15 @@ Deno.test("NYSE:SCHW Projection Test - Using Real App Functions", async (t) => {
     assert(projection, "Should have projection");
     assert(
       projection!.projected90DayPerformance > 17,
-      `Projection should be > 17%, got ${projection!.projected90DayPerformance.toFixed(1)}%`,
+      `Projection should be > 17%, got ${
+        projection!.projected90DayPerformance.toFixed(1)
+      }%`,
     );
     assert(
       projection!.projected90DayPerformance > 19,
-      `Projection should be > 19%, got ${projection!.projected90DayPerformance.toFixed(1)}%`,
+      `Projection should be > 19%, got ${
+        projection!.projected90DayPerformance.toFixed(1)
+      }%`,
     );
   });
 

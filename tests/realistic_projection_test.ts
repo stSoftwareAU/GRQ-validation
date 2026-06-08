@@ -69,7 +69,11 @@ Deno.test("Realistic Projection - Behind Target Scenario", async (t) => {
         projection.projected90DayPerformance < 10.0,
         "Projection should be realistic (< 10%)",
       );
-      assertEquals(projection.confidence, 0.6, "Should have moderate confidence");
+      assertEquals(
+        projection.confidence,
+        0.6,
+        "Should have moderate confidence",
+      );
     },
   );
 

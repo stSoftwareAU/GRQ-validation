@@ -1,6 +1,15 @@
+// Portfolio-view consistency tests (issue #100).
+//
+// These used to drive a `MockGRQValidator` that copied getBuyPrice, the
+// target-percentage formula, the market-data day count, the portfolio trend-line
+// regression and R². The portfolio maths now comes from the REAL shared kernels
+// in docs/projection.js (getBuyPrice, calculatePerformanceReturn,
+// calculateTargetPercentage, daysElapsedFromMarketData, computeTrendLine). The
+// portfolio-series and chart-dataset assembly stay local glue (dashboard UI),
+// but build their figures with the kernels so they cannot drift from production.
 import { assertEquals, assertExists } from "@std/assert";
+import "../docs/projection.js";
 
-// Define proper types for the test data
 interface StockData {
   stock: string;
   score: number;
@@ -21,27 +30,38 @@ interface MarketDataPoint {
   splitCoefficient: number;
 }
 
-interface DividendData {
-  exDivDate: Date;
-  amount: number;
-}
+const DAY = 1000 * 60 * 60 * 24;
 
-interface TrendLineResult {
-  slope: number;
-  intercept: number;
-  predicted90DayPerformance: number;
-  dataPoints: Array<{ x: number; y: number }>;
-  rSquared: number;
-}
+const g = globalThis as unknown as {
+  GRQProjection: {
+    getBuyPrice: (
+      marketData: MarketDataPoint[] | undefined,
+      scoreDate: Date,
+    ) => { price: number; dateUsed: Date } | null;
+    calculatePerformanceReturn: (
+      buyPrice: number,
+      currentPrice: number,
+      totalDividends?: number,
+    ) => number | null;
+    calculateTargetPercentage: (
+      buyPrice: number | null,
+      adjustedTarget: number | null,
+    ) => number | null;
+    daysElapsedFromMarketData: (
+      scoreDate: Date,
+      latestMarketDate: Date,
+    ) => number;
+    computeTrendLine: (
+      dataPoints: { x: number; y: number }[],
+    ) => { slope: number; intercept: number; rSquared: number } | null;
+  };
+};
+const GRQProjection = g.GRQProjection;
 
-// Mock the GRQValidator class for testing
-class MockGRQValidator {
+class PortfolioValidator {
   scoreData: StockData[] = [];
   marketData: Record<string, MarketDataPoint[]> = {};
-  dividendData: Record<string, DividendData[]> = {};
-  selectedFile = "2025/February/18.tsv";
   selectedStock: string | null = null;
-  costOfCapital = 10;
 
   setupTestData(): void {
     this.scoreData = [
@@ -70,7 +90,7 @@ class MockGRQValidator {
     this.marketData = {
       "NASDAQ:XP": [
         {
-          date: new Date(2025, 1, 18), // Feb 18 — local time, matches getScoreDate()
+          date: new Date(2025, 1, 18),
           high: 15.18,
           low: 14.72,
           open: 14.72,
@@ -78,7 +98,7 @@ class MockGRQValidator {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date(2025, 1, 19), // Feb 19
+          date: new Date(2025, 1, 19),
           high: 15.25,
           low: 14.85,
           open: 15.02,
@@ -86,7 +106,7 @@ class MockGRQValidator {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date(2025, 1, 20), // Feb 20
+          date: new Date(2025, 1, 20),
           high: 15.30,
           low: 14.90,
           open: 15.10,
@@ -96,7 +116,7 @@ class MockGRQValidator {
       ],
       "NYSE:AAPL": [
         {
-          date: new Date(2025, 1, 18), // Feb 18
+          date: new Date(2025, 1, 18),
           high: 180.50,
           low: 179.20,
           open: 179.20,
@@ -104,21 +124,12 @@ class MockGRQValidator {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date(2025, 1, 19), // Feb 19
+          date: new Date(2025, 1, 19),
           high: 181.00,
           low: 179.80,
           open: 180.00,
           close: 180.50,
           splitCoefficient: 1.0,
-        },
-      ],
-    };
-
-    this.dividendData = {
-      "NYSE:AAPL": [
-        {
-          exDivDate: new Date(2025, 2, 15), // Mar 15 — local time
-          amount: 0.25,
         },
       ],
     };
@@ -135,122 +146,76 @@ class MockGRQValidator {
   }
 
   getDaysElapsed(scoreDate: Date): number {
-    const today = new Date();
-    const diffTime = Math.abs(today.getTime() - scoreDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    const diffTime = Math.abs(new Date().getTime() - scoreDate.getTime());
+    return Math.ceil(diffTime / DAY);
   }
 
   getDaysElapsedFromMarketData(scoreDate: Date): number {
     if (!this.marketData || Object.keys(this.marketData).length === 0) {
-      // Fall back to calendar days if no market data
-      return this.getDaysElapsed(scoreDate);
+      return this.getDaysElapsed(scoreDate); // Calendar fallback.
     }
-
-    // Find the latest market data date across all stocks
+    // Find the latest market-data date across the portfolio (data plumbing)...
     let latestMarketDate = scoreDate;
-
     this.scoreData.forEach((stock) => {
-      const marketData = this.marketData[stock.stock];
-      if (marketData && marketData.length > 0) {
-        const stockLatestDate = marketData[marketData.length - 1].date;
-        if (stockLatestDate > latestMarketDate) {
-          latestMarketDate = stockLatestDate;
-        }
+      const md = this.marketData[stock.stock];
+      if (md && md.length > 0) {
+        const last = md[md.length - 1].date;
+        if (last > latestMarketDate) latestMarketDate = last;
       }
     });
-
-    // Calculate days from score date to latest market data date
-    const diffTime = Math.abs(latestMarketDate.getTime() - scoreDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    // Cap at 90 days for portfolio view consistency
-    return Math.min(diffDays, 90);
-  }
-
-  getBuyPrice(
-    stockSymbol: string,
-    scoreDate: Date,
-  ): { price: number; dateUsed: Date } | null {
-    const marketData = this.marketData[stockSymbol];
-    if (!marketData) return null;
-
-    for (let offset = 0; offset <= 5; offset++) {
-      const candidateDate = new Date(scoreDate.getTime());
-      candidateDate.setDate(candidateDate.getDate() + offset);
-      const candidateData = marketData.find((point) => {
-        const pointDate = new Date(
-          point.date.getFullYear(),
-          point.date.getMonth(),
-          point.date.getDate(),
-        );
-        return pointDate.getTime() === candidateDate.getTime();
-      });
-      if (candidateData) {
-        return {
-          price: (candidateData.high + candidateData.low) / 2,
-          dateUsed: candidateDate,
-        };
-      }
-    }
-    return null;
+    // ...then delegate the capped day count to the kernel.
+    return GRQProjection.daysElapsedFromMarketData(scoreDate, latestMarketDate);
   }
 
   calculateTargetPercentage(stock: StockData, scoreDate: Date): number | null {
-    const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
-    if (buyPrice !== null) {
-      return ((stock.target - buyPrice.price) / buyPrice.price) * 100;
-    }
-    return null;
+    const buyPrice = GRQProjection.getBuyPrice(
+      this.marketData[stock.stock],
+      scoreDate,
+    );
+    return GRQProjection.calculateTargetPercentage(
+      buyPrice ? buyPrice.price : null,
+      stock.target,
+    );
   }
 
   calculatePortfolioData(): Array<{ x: Date; y: number }> {
-    const scoreDate = this.getScoreDate(this.selectedFile);
+    const scoreDate = this.getScoreDate("2025/February/18.tsv");
     const portfolioData: Array<{ x: Date; y: number }> = [];
 
     const allDates = new Set<number>();
     this.scoreData.forEach((stock) => {
-      const marketData = this.marketData[stock.stock];
-      if (marketData) {
-        marketData.forEach((point) => {
-          allDates.add(point.date.getTime());
-        });
-      }
+      this.marketData[stock.stock]?.forEach((point) =>
+        allDates.add(point.date.getTime())
+      );
     });
-
     allDates.add(scoreDate.getTime());
-    const sortedDates = Array.from(allDates).sort((a, b) => a - b);
 
-    sortedDates.forEach((timestamp) => {
-      const date = new Date(timestamp);
+    Array.from(allDates).sort((a, b) => a - b).forEach((timestamp) => {
       let totalPerformance = 0;
       let validStocks = 0;
-
       this.scoreData.forEach((stock) => {
-        const marketData = this.marketData[stock.stock];
-        if (marketData) {
-          const dataPoint = marketData.find(
-            (point) => point.date.getTime() === timestamp,
-          );
-
-          const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-          if (!buyPriceObj) return;
-
-          if (dataPoint) {
-            const currentPrice = (dataPoint.high + dataPoint.low) / 2;
-            const priceReturn =
-              ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
-            totalPerformance += priceReturn;
-            validStocks++;
-          } else if (timestamp === scoreDate.getTime()) {
-            validStocks++;
-          }
+        const md = this.marketData[stock.stock];
+        if (!md) return;
+        const buyPriceObj = GRQProjection.getBuyPrice(md, scoreDate);
+        if (!buyPriceObj) return;
+        const dataPoint = md.find((point) =>
+          point.date.getTime() === timestamp
+        );
+        if (dataPoint) {
+          const currentPrice = (dataPoint.high + dataPoint.low) / 2;
+          totalPerformance += GRQProjection.calculatePerformanceReturn(
+            buyPriceObj.price,
+            currentPrice,
+            0,
+          )!;
+          validStocks++;
+        } else if (timestamp === scoreDate.getTime()) {
+          validStocks++;
         }
       });
-
       if (validStocks > 0) {
         portfolioData.push({
-          x: new Date(date.getTime()),
+          x: new Date(timestamp),
           y: totalPerformance / validStocks,
         });
       }
@@ -259,64 +224,13 @@ class MockGRQValidator {
     return portfolioData;
   }
 
-  calculatePortfolioTrendLine(): TrendLineResult | null {
-    const scoreDate = this.getScoreDate(this.selectedFile);
-    const portfolioData = this.calculatePortfolioData();
-    const dataPoints: Array<{ x: number; y: number }> = [];
-
-    portfolioData.forEach((point) => {
-      const daysSinceScore = (point.x.getTime() - scoreDate.getTime()) /
-        (1000 * 60 * 60 * 24);
-      dataPoints.push({
-        x: daysSinceScore,
-        y: point.y,
-      });
-    });
-
-    if (dataPoints.length < 3) {
-      return null;
-    }
-
-    // Calculate linear regression
-    const n = dataPoints.length;
-    const sumX = dataPoints.reduce((sum, point) => sum + point.x, 0);
-    const sumY = dataPoints.reduce((sum, point) => sum + point.y, 0);
-    const sumXY = dataPoints.reduce((sum, point) => sum + point.x * point.y, 0);
-    const sumXX = dataPoints.reduce((sum, point) => sum + point.x * point.x, 0);
-
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = 0; // Force to start at zero
-
-    const predicted90DayPerformance = Math.max(slope * 90 + intercept, -100);
-    const rSquared = this.calculateRSquared(dataPoints, slope, intercept);
-
-    return {
-      slope,
-      intercept,
-      predicted90DayPerformance,
-      dataPoints,
-      rSquared,
-    };
-  }
-
-  calculateRSquared(
-    dataPoints: Array<{ x: number; y: number }>,
-    slope: number,
-    intercept: number,
-  ): number {
-    const n = dataPoints.length;
-    const meanY = dataPoints.reduce((sum, point) => sum + point.y, 0) / n;
-
-    let ssRes = 0; // Sum of squared residuals
-    let ssTot = 0; // Total sum of squares
-
-    dataPoints.forEach((point) => {
-      const predicted = slope * point.x + intercept;
-      ssRes += Math.pow(point.y - predicted, 2);
-      ssTot += Math.pow(point.y - meanY, 2);
-    });
-
-    return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+  calculatePortfolioTrendLine() {
+    const scoreDate = this.getScoreDate("2025/February/18.tsv");
+    const dataPoints = this.calculatePortfolioData().map((point) => ({
+      x: (point.x.getTime() - scoreDate.getTime()) / DAY,
+      y: point.y,
+    }));
+    return GRQProjection.computeTrendLine(dataPoints);
   }
 
   prepareChartData(): {
@@ -325,57 +239,35 @@ class MockGRQValidator {
     const datasets: Array<
       { label: string; data: Array<{ x: Date; y: number }> }
     > = [];
-    const scoreDate = this.getScoreDate(this.selectedFile);
+    const scoreDate = this.getScoreDate("2025/February/18.tsv");
     const marketDataDaysElapsed = this.getDaysElapsedFromMarketData(scoreDate);
 
-    if (!this.selectedStock) {
-      // Portfolio view
-      const portfolioData = this.calculatePortfolioData();
-      if (portfolioData.length > 0) {
-        datasets.push({
-          label: "Performance",
-          data: portfolioData,
-        });
-      }
+    if (this.selectedStock) return { datasets };
 
-      // Add trend line if less than 90 days
-      if (marketDataDaysElapsed < 90) {
-        const portfolioTrendLine = this.calculatePortfolioTrendLine();
-        if (portfolioTrendLine) {
-          const trendData: Array<{ x: Date; y: number }> = [];
-          for (let day = 0; day <= 90; day += 7) {
-            const predictedPerformance = Math.max(
-              portfolioTrendLine.slope * day + portfolioTrendLine.intercept,
-              -100,
-            );
-            trendData.push({
-              x: new Date(scoreDate.getTime() + (day * 24 * 60 * 60 * 1000)),
-              y: predictedPerformance,
-            });
-          }
+    const portfolioData = this.calculatePortfolioData();
+    if (portfolioData.length > 0) {
+      datasets.push({ label: "Performance", data: portfolioData });
+    }
 
-          const daysElapsed = marketDataDaysElapsed;
-          const rSquared = portfolioTrendLine.rSquared;
-
-          // Adjust confidence threshold based on days elapsed
-          let confidenceThreshold = 0.05;
-          if (daysElapsed >= 80) {
-            confidenceThreshold = 0.001; // Extremely lenient for very late-stage predictions (80+ days)
-          } else if (daysElapsed >= 60) {
-            confidenceThreshold = 0.01;
-          } else if (daysElapsed >= 30) {
-            confidenceThreshold = 0.03;
-          }
-
-          const label = rSquared >= confidenceThreshold
-            ? "Portfolio Trend Prediction"
-            : "Portfolio Trend (Low Confidence)";
-
-          datasets.push({
-            label,
-            data: trendData,
+    if (marketDataDaysElapsed < 90) {
+      const trendLine = this.calculatePortfolioTrendLine();
+      if (trendLine) {
+        const trendData: Array<{ x: Date; y: number }> = [];
+        for (let day = 0; day <= 90; day += 7) {
+          trendData.push({
+            x: new Date(scoreDate.getTime() + day * DAY),
+            y: Math.max(trendLine.slope * day + trendLine.intercept, -100),
           });
         }
+        let confidenceThreshold = 0.05;
+        if (marketDataDaysElapsed >= 80) confidenceThreshold = 0.001;
+        else if (marketDataDaysElapsed >= 60) confidenceThreshold = 0.01;
+        else if (marketDataDaysElapsed >= 30) confidenceThreshold = 0.03;
+
+        const label = trendLine.rSquared >= confidenceThreshold
+          ? "Portfolio Trend Prediction"
+          : "Portfolio Trend (Low Confidence)";
+        datasets.push({ label, data: trendData });
       }
     }
 
@@ -383,9 +275,8 @@ class MockGRQValidator {
   }
 }
 
-// Test cases
 Deno.test("Portfolio View Consistency", async (t) => {
-  const validator = new MockGRQValidator();
+  const validator = new PortfolioValidator();
   validator.setupTestData();
 
   await t.step(
@@ -393,19 +284,17 @@ Deno.test("Portfolio View Consistency", async (t) => {
     () => {
       const scoreDate = validator.getScoreDate("2025/February/18.tsv");
 
-      // Test with limited market data (test data only goes to Feb 20)
-      const marketDataDays = validator.getDaysElapsedFromMarketData(scoreDate);
       assertEquals(
-        marketDataDays,
+        validator.getDaysElapsedFromMarketData(scoreDate),
         2,
         "Should return actual days from market data when less than 90",
       );
 
-      // Test with extended market data (Jun 18 = 120 days from Feb 18, well beyond 90)
+      // Extended market data (Jun 18 = 120 days) caps at 90.
       validator.marketData = {
         "NASDAQ:XP": [
           {
-            date: new Date(2025, 1, 18), // Feb 18 — local time
+            date: new Date(2025, 1, 18),
             high: 15.18,
             low: 14.72,
             open: 14.72,
@@ -413,7 +302,7 @@ Deno.test("Portfolio View Consistency", async (t) => {
             splitCoefficient: 1.0,
           },
           {
-            date: new Date(2025, 5, 18), // Jun 18 — 120 days from Feb 18
+            date: new Date(2025, 5, 18),
             high: 16.00,
             low: 15.50,
             open: 15.50,
@@ -422,42 +311,32 @@ Deno.test("Portfolio View Consistency", async (t) => {
           },
         ],
       };
-
-      const extendedDays = validator.getDaysElapsedFromMarketData(scoreDate);
       assertEquals(
-        extendedDays,
+        validator.getDaysElapsedFromMarketData(scoreDate),
         90,
         "Should cap at 90 days when market data extends beyond 90 days",
       );
 
-      // Test with no market data (fallback to calendar days)
       validator.marketData = {};
-      const fallbackDays = validator.getDaysElapsedFromMarketData(scoreDate);
       assertExists(
-        fallbackDays,
-        "Should fallback to calendar days when no market data",
+        validator.getDaysElapsedFromMarketData(scoreDate),
+        "Should fall back to calendar days when no market data",
       );
     },
   );
 
   await t.step("should use market data days for portfolio view", () => {
-    // Reset to test data
     validator.setupTestData();
-
-    // Test portfolio view with limited market data (should show trend line)
     const chartData = validator.prepareChartData();
-
-    // Should have performance data
     const performanceDataset = chartData.datasets.find((d) =>
       d.label === "Performance"
     );
     assertExists(performanceDataset, "Should have performance dataset");
 
-    // Test with extended market data (should not show trend line)
     validator.marketData = {
       "NASDAQ:XP": [
         {
-          date: new Date(2025, 1, 18), // Feb 18 — local time
+          date: new Date(2025, 1, 18),
           high: 15.18,
           low: 14.72,
           open: 14.72,
@@ -465,7 +344,7 @@ Deno.test("Portfolio View Consistency", async (t) => {
           splitCoefficient: 1.0,
         },
         {
-          date: new Date(2025, 5, 18), // Jun 18 — 120 days from Feb 18
+          date: new Date(2025, 5, 18),
           high: 16.00,
           low: 15.50,
           open: 15.50,
@@ -474,15 +353,10 @@ Deno.test("Portfolio View Consistency", async (t) => {
         },
       ],
     };
-
     const extendedChartData = validator.prepareChartData();
-
-    // Note: trend line generation depends on R-squared threshold, so we just check the logic
-    console.log(
-      "Extended market data chart datasets:",
-      extendedChartData.datasets.map((d) => d.label),
+    assertExists(
+      extendedChartData.datasets,
+      "Extended chart data should exist",
     );
   });
 });
-
-console.log("All portfolio view consistency tests passed! 🎉");

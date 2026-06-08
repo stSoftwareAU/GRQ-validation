@@ -66,9 +66,19 @@ function updateBasicStockTable(scoreData: ScoreData[]): string {
       <td>${stock.score.toFixed(3)}</td>
       <td>${formatCurrency(stock.target)}</td>
       <td>${stock.exDividendDate || "N/A"}</td>
-      <td>${stock.dividendPerShare ? formatCurrency(stock.dividendPerShare) : "N/A"}</td>
-      <td>${stock.intrinsicValuePerShareBasic ? formatCurrency(stock.intrinsicValuePerShareBasic) : "N/A"}</td>
-      <td>${stock.intrinsicValuePerShareAdjusted ? formatCurrency(stock.intrinsicValuePerShareAdjusted) : "N/A"}</td>
+      <td>${
+      stock.dividendPerShare ? formatCurrency(stock.dividendPerShare) : "N/A"
+    }</td>
+      <td>${
+      stock.intrinsicValuePerShareBasic
+        ? formatCurrency(stock.intrinsicValuePerShareBasic)
+        : "N/A"
+    }</td>
+      <td>${
+      stock.intrinsicValuePerShareAdjusted
+        ? formatCurrency(stock.intrinsicValuePerShareAdjusted)
+        : "N/A"
+    }</td>
       <td>${stock.notes || ""}</td>
     `;
   });
@@ -76,7 +86,9 @@ function updateBasicStockTable(scoreData: ScoreData[]): string {
   const scoreDate = new Date("2025-02-14");
   const daysElapsed = 5;
   tableHTML += `
-    <td>Score Date: ${scoreDate.toISOString().split("T")[0]} (${daysElapsed} days ago)</td>
+    <td>Score Date: ${
+    scoreDate.toISOString().split("T")[0]
+  } (${daysElapsed} days ago)</td>
     <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
   `;
 
@@ -91,15 +103,27 @@ Deno.test("Basic Score Table - No Market Data", async (t) => {
 
     assertEquals(tableHTML.includes("TEST1"), true, "Should include TEST1");
     assertEquals(tableHTML.includes("TEST2"), true, "Should include TEST2");
-    assertEquals(tableHTML.includes("0.850"), true, "Should include TEST1 score");
-    assertEquals(tableHTML.includes("0.720"), true, "Should include TEST2 score");
+    assertEquals(
+      tableHTML.includes("0.850"),
+      true,
+      "Should include TEST1 score",
+    );
+    assertEquals(
+      tableHTML.includes("0.720"),
+      true,
+      "Should include TEST2 score",
+    );
     assertEquals(tableHTML.includes("$18.50"), true, "Format TEST1 target");
     assertEquals(tableHTML.includes("$15.00"), true, "Format TEST2 target");
     assertEquals(tableHTML.includes("2025-03-15"), true, "Ex-dividend date");
     assertEquals(tableHTML.includes("$0.25"), true, "Format dividend");
     assertEquals(tableHTML.includes("N/A"), true, "N/A for missing dividend");
     assertEquals(tableHTML.includes("$20.00"), true, "Format basic intrinsic");
-    assertEquals(tableHTML.includes("$19.50"), true, "Format adjusted intrinsic");
+    assertEquals(
+      tableHTML.includes("$19.50"),
+      true,
+      "Format adjusted intrinsic",
+    );
     assertEquals(tableHTML.includes("Strong fundamentals"), true, "Notes");
     assertEquals(
       tableHTML.includes("Score Date: 2025-02-14 (5 days ago)"),

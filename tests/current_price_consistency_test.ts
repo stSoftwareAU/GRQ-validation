@@ -135,8 +135,13 @@ Deno.test("Current Price Consistency Tests", async (t) => {
   await t.step("calculates correct current price from latest data", () => {
     const marketData = MARKET["NYSE:SCHW"];
     const latestData = marketData[marketData.length - 1];
-    const expectedPrice = "$" + ((latestData.high + latestData.low) / 2).toFixed(2);
-    assertEquals(getCurrentPrice("NYSE:SCHW"), expectedPrice, "From latest data");
+    const expectedPrice = "$" +
+      ((latestData.high + latestData.low) / 2).toFixed(2);
+    assertEquals(
+      getCurrentPrice("NYSE:SCHW"),
+      expectedPrice,
+      "From latest data",
+    );
   });
 
   await t.step("working logic shows correct calculation steps", () => {

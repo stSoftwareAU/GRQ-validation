@@ -71,8 +71,12 @@ function performanceWithDilution(
   scoreDate: Date,
 ): number | null {
   if (!marketData || marketData.length === 0) return null;
-  const ninetyDayDate = new Date(scoreDate.getTime() + 90 * 24 * 60 * 60 * 1000);
-  const within90Days = marketData.filter((point) => point.date <= ninetyDayDate);
+  const ninetyDayDate = new Date(
+    scoreDate.getTime() + 90 * 24 * 60 * 60 * 1000,
+  );
+  const within90Days = marketData.filter((point) =>
+    point.date <= ninetyDayDate
+  );
   if (within90Days.length === 0) return null;
   const lastData = within90Days[within90Days.length - 1];
   const currentPrice = (lastData.high + lastData.low) / 2;
@@ -148,12 +152,18 @@ Deno.test("Buy Price Logic - February 15, 2025 Case", async (t) => {
 
 Deno.test("Buy Price Logic - Edge Cases", async (t) => {
   await t.step("should return null for non-existent stock", () => {
-    const buyPrice = GRQProjection.getBuyPrice(undefined, new Date(2025, 1, 14));
+    const buyPrice = GRQProjection.getBuyPrice(
+      undefined,
+      new Date(2025, 1, 14),
+    );
     assertEquals(buyPrice, null, "Should return null for non-existent stock");
   });
 
   await t.step("should return null when no market data", () => {
-    const buyPrice = GRQProjection.getBuyPrice(undefined, new Date(2025, 1, 14));
+    const buyPrice = GRQProjection.getBuyPrice(
+      undefined,
+      new Date(2025, 1, 14),
+    );
     assertEquals(buyPrice, null, "Should return null when no market data");
   });
 
@@ -188,7 +198,10 @@ Deno.test("Buy Price Logic - Split Adjustments", async (t) => {
   ];
 
   await t.step("should adjust buy price for splits", () => {
-    const buyPrice = GRQProjection.getBuyPrice(marketData, new Date(2025, 1, 18));
+    const buyPrice = GRQProjection.getBuyPrice(
+      marketData,
+      new Date(2025, 1, 18),
+    );
     assertExists(buyPrice, "Buy price should not be null");
     // (30.36 + 29.44) / 2 = 29.90, divided by the 2:1 split = 14.95.
     assertEquals(buyPrice!.price, 14.95, "Buy price should be split-adjusted");
@@ -215,7 +228,10 @@ Deno.test("Buy Price Logic - 5 Day Forward Search", async (t) => {
         splitCoefficient: 1.0,
       },
     ];
-    const buyPrice = GRQProjection.getBuyPrice(marketData, new Date(2025, 1, 14));
+    const buyPrice = GRQProjection.getBuyPrice(
+      marketData,
+      new Date(2025, 1, 14),
+    );
     assertExists(buyPrice, "Buy price should not be null");
     assertEquals(buyPrice!.dateUsed.getDate(), 14, "Should find exact date");
   });
@@ -231,7 +247,10 @@ Deno.test("Buy Price Logic - 5 Day Forward Search", async (t) => {
         splitCoefficient: 1.0,
       },
     ];
-    const buyPrice = GRQProjection.getBuyPrice(marketData, new Date(2025, 1, 14));
+    const buyPrice = GRQProjection.getBuyPrice(
+      marketData,
+      new Date(2025, 1, 14),
+    );
     assertEquals(buyPrice, null, "Should return null beyond the 5-day window");
   });
 });
@@ -245,8 +264,18 @@ Deno.test("Buy Price Logic - Null Safety", async (t) => {
     },
   );
 
-  await t.step("should handle null buy price in performance calculation", () => {
-    const performance = performanceWithDilution(undefined, new Date(2025, 1, 14));
-    assertEquals(performance, null, "Should return null when buy price is null");
-  });
+  await t.step(
+    "should handle null buy price in performance calculation",
+    () => {
+      const performance = performanceWithDilution(
+        undefined,
+        new Date(2025, 1, 14),
+      );
+      assertEquals(
+        performance,
+        null,
+        "Should return null when buy price is null",
+      );
+    },
+  );
 });
