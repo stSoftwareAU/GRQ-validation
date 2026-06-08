@@ -120,6 +120,268 @@ function buildHybridProjectionData(projection, scoreDate, trendLine) {
     return trendData;
 }
 
+// Format a numeric value as a USD currency string, mirroring the dashboard's
+// table rendering. Returns "N/A" for null/undefined/NaN so callers never show a
+// broken figure. Pure: no DOM or class state.
+function formatCurrency(value) {
+    if (value === null || value === undefined || isNaN(value)) {
+        return "N/A";
+    }
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value);
+}
+
+// Cumulative split adjustment from a historical date to "now". Walks the stock's
+// market data and multiplies every split (splitCoefficient > 1.0) recorded after
+// `historicalDate`. A missing series means no known splits, so the factor is 1.0.
+function getSplitAdjustment(marketData, historicalDate) {
+    if (!marketData) return 1.0;
+    let cumulativeSplit = 1.0;
+    for (const point of marketData) {
+        if (point.date > historicalDate && point.splitCoefficient > 1.0) {
+            cumulativeSplit *= point.splitCoefficient;
+        }
+    }
+    return cumulativeSplit;
+}
+
+// Restate a historical price in current (post-split) terms by dividing out the
+// cumulative split adjustment.
+function adjustHistoricalPriceToCurrent(price, marketData, historicalDate) {
+    return price / getSplitAdjustment(marketData, historicalDate);
+}
+
+// Resolve the buy price for a stock: the split-adjusted midpoint of the first
+// trading day on or within five days after the score date. Returns
+// `{ price, dateUsed }`, or null when no market data falls in that window.
+function getBuyPrice(marketData, scoreDate) {
+    if (!marketData) return null;
+
+    for (let offset = 0; offset <= 5; offset++) {
+        const candidateDate = new Date(scoreDate.getTime());
+        candidateDate.setDate(candidateDate.getDate() + offset);
+        const candidateData = marketData.find((point) => {
+            const pointDate = new Date(
+                point.date.getFullYear(),
+                point.date.getMonth(),
+                point.date.getDate(),
+            );
+            return pointDate.getTime() === candidateDate.getTime();
+        });
+        if (candidateData) {
+            const adjustedPrice = adjustHistoricalPriceToCurrent(
+                (candidateData.high + candidateData.low) / 2,
+                marketData,
+                scoreDate,
+            );
+            return { price: adjustedPrice, dateUsed: candidateDate };
+        }
+    }
+    return null;
+}
+
+// Latest observed price = midpoint of the most recent market-data point (already
+// post-split). Returns null when there is no data.
+function currentPriceFromLatest(marketData) {
+    if (!marketData || marketData.length === 0) return null;
+    const lastData = marketData[marketData.length - 1];
+    return (lastData.high + lastData.low) / 2;
+}
+
+// Target return as a percentage of the buy price. Returns null when either input
+// is missing, matching the dashboard's guard before reporting a target figure.
+function calculateTargetPercentage(buyPrice, adjustedTarget) {
+    if (buyPrice !== null && adjustedTarget !== null) {
+        return ((adjustedTarget - buyPrice) / buyPrice) * 100;
+    }
+    return null;
+}
+
+// Coefficient of determination (R²) for a linear fit y = slope·x + intercept over
+// the data points. Returns 0 when the data has no variance.
+function calculateRSquared(dataPoints, slope, intercept) {
+    const n = dataPoints.length;
+    const meanY = dataPoints.reduce((sum, point) => sum + point.y, 0) / n;
+
+    let ssRes = 0; // Sum of squared residuals.
+    let ssTot = 0; // Total sum of squares.
+    dataPoints.forEach((point) => {
+        const predicted = slope * point.x + intercept;
+        ssRes += Math.pow(point.y - predicted, 2);
+        ssTot += Math.pow(point.y - meanY, 2);
+    });
+
+    return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+}
+
+// Linear-regression trend line over `{ x: daysSinceScore, y: totalReturn }`
+// points. The line is forced through the origin (intercept 0) so day 0 reads 0%,
+// the 90-day prediction is floored at -100%, and R² measures the fit. Returns
+// null when fewer than three points are available (too few for a meaningful fit).
+function computeTrendLine(dataPoints) {
+    if (!dataPoints || dataPoints.length < 3) {
+        return null;
+    }
+
+    const n = dataPoints.length;
+    const sumX = dataPoints.reduce((sum, point) => sum + point.x, 0);
+    const sumY = dataPoints.reduce((sum, point) => sum + point.y, 0);
+    const sumXY = dataPoints.reduce((sum, point) => sum + point.x * point.y, 0);
+    const sumXX = dataPoints.reduce((sum, point) => sum + point.x * point.x, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+
+    // Force the line through zero on the score date (x = 0 -> y = 0).
+    const adjustedIntercept = 0;
+    const adjustedSlope = slope;
+
+    const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
+    // Cannot lose more than 100% of the investment.
+    const cappedPredicted90DayPerformance = Math.max(
+        predicted90DayPerformance,
+        -100,
+    );
+    const rSquared = calculateRSquared(
+        dataPoints,
+        adjustedSlope,
+        adjustedIntercept,
+    );
+
+    return {
+        slope: adjustedSlope,
+        intercept: adjustedIntercept,
+        predicted90DayPerformance: cappedPredicted90DayPerformance,
+        dataPoints,
+        rSquared,
+    };
+}
+
+// Days elapsed from the score date to the latest market-data date, capped at 90
+// (the validation window). Pure given the two dates.
+function daysElapsedFromMarketData(scoreDate, latestMarketDate) {
+    const diffTime = Math.abs(latestMarketDate - scoreDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.min(diffDays, 90);
+}
+
+// The hybrid 90-day projection decision tree. Given the gathered inputs
+// (days elapsed, current performance, target percentage, and — for the short and
+// medium horizons — the regression trend line), it selects a projection method
+// and figure plus a confidence. This is the pure scoring kernel; the dashboard's
+// GRQValidator gathers the inputs (market data, buy price, dividends) and
+// delegates the maths here so production and tests share one implementation.
+function computeHybridProjection(
+    { daysElapsed, currentPerformance, targetPercentage, trendLine },
+) {
+    let projected90DayPerformance;
+    let projectionMethod;
+    let confidence;
+
+    if (daysElapsed < 30) {
+        // Short-term: dampened trend to temper early volatility.
+        projectionMethod = "dampened_trend";
+        if (trendLine && trendLine.rSquared > 0.1) {
+            const dampenedSlope = trendLine.slope * 0.3; // Dampen by 70%.
+            projected90DayPerformance = Math.max(dampenedSlope * 90, -100);
+            confidence = Math.min(trendLine.rSquared * 0.7, 0.8);
+        } else {
+            // Fall back to a target-anchored projection.
+            projectionMethod = "target_based";
+            if (targetPercentage !== null) {
+                if (currentPerformance > 0) {
+                    const gap = targetPercentage - currentPerformance;
+                    projected90DayPerformance = currentPerformance + gap * 0.1;
+                } else {
+                    projected90DayPerformance = currentPerformance * 0.5;
+                }
+                projected90DayPerformance = Math.max(
+                    Math.min(projected90DayPerformance, targetPercentage),
+                    -100,
+                );
+            } else {
+                projected90DayPerformance = -5;
+            }
+            confidence = 0.3;
+        }
+    } else if (daysElapsed < 60) {
+        // Medium-term: dampened trend with higher confidence.
+        projectionMethod = "dampened_trend";
+        if (trendLine && trendLine.rSquared > 0.05) {
+            const dampenedSlope = trendLine.slope * 0.5; // Dampen by 50%.
+            projected90DayPerformance = Math.max(dampenedSlope * 90, -100);
+            confidence = Math.min(trendLine.rSquared * 0.8, 0.9);
+        } else {
+            projectionMethod = "target_based";
+            if (targetPercentage !== null) {
+                if (currentPerformance > 0) {
+                    const gap = targetPercentage - currentPerformance;
+                    projected90DayPerformance = currentPerformance + gap * 0.15;
+                } else {
+                    projected90DayPerformance = currentPerformance * 0.6;
+                }
+                projected90DayPerformance = Math.max(
+                    Math.min(projected90DayPerformance, targetPercentage),
+                    -100,
+                );
+            } else {
+                projected90DayPerformance = -5;
+            }
+            confidence = 0.5;
+        }
+    } else {
+        // Long-term: extrapolate the current trajectory toward the target.
+        projectionMethod = "realistic_trajectory";
+        if (targetPercentage !== null) {
+            const currentRate = currentPerformance / daysElapsed; // % per day.
+            const trajectoryProjection = currentRate * 90;
+            const remainingDays = 90 - daysElapsed;
+            const remainingGap = targetPercentage - currentPerformance;
+            const requiredDailyRate = remainingGap / remainingDays;
+
+            if (requiredDailyRate > 2.0) {
+                // Catch-up rate is unrealistic: project a miss.
+                const realisticProjection = Math.min(
+                    trajectoryProjection,
+                    targetPercentage * 0.6,
+                );
+                projected90DayPerformance = Math.max(
+                    realisticProjection,
+                    currentPerformance * 1.2,
+                );
+                confidence = 0.7;
+            } else if (currentPerformance > targetPercentage) {
+                // Already above target: trust the trajectory.
+                projected90DayPerformance = trajectoryProjection;
+                confidence = 0.7;
+            } else {
+                // Target still reachable, but stay conservative.
+                projected90DayPerformance = Math.min(
+                    trajectoryProjection,
+                    targetPercentage * 0.8,
+                );
+                confidence = 0.6;
+            }
+        } else {
+            // No target: mean-revert toward 0% performance.
+            const reversionRate = 0.4;
+            projected90DayPerformance = currentPerformance * (1 - reversionRate);
+            confidence = 0.3;
+        }
+    }
+
+    // Keep the figure within realistic bounds.
+    projected90DayPerformance = Math.max(
+        Math.min(projected90DayPerformance, 200),
+        -100,
+    );
+
+    return { projected90DayPerformance, projectionMethod, confidence };
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
@@ -127,4 +389,14 @@ globalThis.GRQProjection = {
     getDaysElapsed,
     calculatePerformanceReturn,
     buildHybridProjectionData,
+    formatCurrency,
+    getSplitAdjustment,
+    adjustHistoricalPriceToCurrent,
+    getBuyPrice,
+    currentPriceFromLatest,
+    calculateTargetPercentage,
+    calculateRSquared,
+    computeTrendLine,
+    daysElapsedFromMarketData,
+    computeHybridProjection,
 };
