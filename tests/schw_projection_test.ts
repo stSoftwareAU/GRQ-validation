@@ -1,8 +1,19 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write
 
+// NYSE:SCHW fixture-based projection test (issue #100).
+//
+// This is the most integration-like test: it loads a frozen snapshot of SCHW
+// score/market/dividend fixtures and checks current performance, the 90-day
+// hybrid projection and the trend-line fit. It used to reimplement getBuyPrice,
+// performance, the regression and the whole projection tree inside a
+// `TestGRQValidator`. It now loads the same fixtures but delegates every piece
+// of maths to the REAL shared kernels in docs/projection.js (getBuyPrice,
+// currentPriceFromLatest, calculatePerformanceReturn, computeTrendLine,
+// calculateTargetPercentage, computeHybridProjection) — the same code the
+// dashboard's GRQValidator uses.
 import { assert } from "@std/assert";
+import "../docs/projection.js";
 
-// TypeScript interfaces for type safety
 interface StockData {
   stock: string;
   score: number;
@@ -20,7 +31,7 @@ interface MarketDataPoint {
   low: number;
   open: number;
   close: number;
-  split_coefficient: number;
+  splitCoefficient: number;
 }
 
 interface DividendDataPoint {
@@ -28,20 +39,7 @@ interface DividendDataPoint {
   amount: number;
 }
 
-interface DataPoint {
-  x: number;
-  y: number;
-}
-
-interface TrendLineResult {
-  slope: number;
-  intercept: number;
-  predicted90DayPerformance: number;
-  dataPoints: DataPoint[];
-  rSquared: number;
-}
-
-interface HybridProjectionResult {
+interface Projection {
   projected90DayPerformance: number;
   projectionMethod: string;
   confidence: number;
@@ -50,15 +48,48 @@ interface HybridProjectionResult {
   targetPercentage: number | null;
 }
 
-// Import the actual app.js functions by creating a minimal version for testing
+const g = globalThis as unknown as {
+  GRQProjection: {
+    getBuyPrice: (
+      marketData: MarketDataPoint[] | undefined,
+      scoreDate: Date,
+    ) => { price: number; dateUsed: Date } | null;
+    currentPriceFromLatest: (marketData: MarketDataPoint[]) => number | null;
+    calculatePerformanceReturn: (
+      buyPrice: number,
+      currentPrice: number,
+      totalDividends?: number,
+    ) => number | null;
+    calculateTargetPercentage: (
+      buyPrice: number | null,
+      adjustedTarget: number | null,
+    ) => number | null;
+    computeTrendLine: (
+      dataPoints: { x: number; y: number }[],
+    ) => {
+      slope: number;
+      intercept: number;
+      predicted90DayPerformance: number;
+      rSquared: number;
+    } | null;
+    computeHybridProjection: (inputs: {
+      daysElapsed: number;
+      currentPerformance: number;
+      targetPercentage: number | null;
+      trendLine: { slope: number; rSquared: number } | null;
+    }) => { projected90DayPerformance: number; projectionMethod: string; confidence: number };
+  };
+};
+const GRQProjection = g.GRQProjection;
+
+const DAY = 1000 * 60 * 60 * 24;
+
 class TestGRQValidator {
   scoreData: StockData[] = [];
   marketData: Record<string, MarketDataPoint[]> = {};
   dividendData: Record<string, DividendDataPoint[]> = {};
   selectedFile = "2025/April/15.tsv";
-  costOfCapital = 0.15;
 
-  // Optional path overrides — used by fixture-based tests for determinism.
   scorePath = "docs/scores/2025/April/15.tsv";
   marketDataPath = "docs/scores/2025/April/15.csv";
   dividendDataPath = "docs/scores/2025/April/15-dividends.csv";
@@ -66,7 +97,6 @@ class TestGRQValidator {
   async loadScoreData() {
     const text = await Deno.readTextFile(this.scorePath);
     const lines = text.trim().split("\n");
-
     this.scoreData = lines.slice(1).map((line) => {
       const values = line.split("\t");
       return {
@@ -77,9 +107,7 @@ class TestGRQValidator {
         dividendPerShare: values[4] ? parseFloat(values[4]) : 0,
         notes: values[5] || "",
         intrinsicValuePerShareBasic: values[6] ? parseFloat(values[6]) : null,
-        intrinsicValuePerShareAdjusted: values[7]
-          ? parseFloat(values[7])
-          : null,
+        intrinsicValuePerShareAdjusted: values[7] ? parseFloat(values[7]) : null,
       };
     });
   }
@@ -87,609 +115,203 @@ class TestGRQValidator {
   async loadMarketData() {
     const text = await Deno.readTextFile(this.marketDataPath);
     const lines = text.trim().split("\n");
-
-    // Parse CSV data
-    const marketDataByStock: Record<string, MarketDataPoint[]> = {};
-
+    const byStock: Record<string, MarketDataPoint[]> = {};
     lines.slice(1).forEach((line) => {
       const values = line.split(",");
       const ticker = values[1];
-      const date = new Date(values[0]);
-      const high = parseFloat(values[2]);
-      const low = parseFloat(values[3]);
-      const open = parseFloat(values[4]);
-      const close = parseFloat(values[5]);
-      const split_coefficient = parseFloat(values[6]);
-
-      if (!marketDataByStock[ticker]) {
-        marketDataByStock[ticker] = [];
-      }
-
-      marketDataByStock[ticker].push({
-        date,
-        high,
-        low,
-        open,
-        close,
-        split_coefficient,
+      (byStock[ticker] ||= []).push({
+        date: new Date(values[0]),
+        high: parseFloat(values[2]),
+        low: parseFloat(values[3]),
+        open: parseFloat(values[4]),
+        close: parseFloat(values[5]),
+        splitCoefficient: parseFloat(values[6]),
       });
     });
-
-    this.marketData = marketDataByStock;
+    this.marketData = byStock;
   }
 
   async loadDividendData() {
     const text = await Deno.readTextFile(this.dividendDataPath);
     const lines = text.trim().split("\n");
-
-    const dividendDataByStock: Record<string, DividendDataPoint[]> = {};
-
+    const byStock: Record<string, DividendDataPoint[]> = {};
     lines.slice(1).forEach((line) => {
-      if (line.trim()) {
-        const values = line.split(",");
-        const date = new Date(values[0]);
-        const symbol = values[1];
-        const amount = parseFloat(values[2]);
-
-        if (!dividendDataByStock[symbol]) {
-          dividendDataByStock[symbol] = [];
-        }
-
-        dividendDataByStock[symbol].push({
-          exDivDate: date,
-          amount,
-        });
-      }
+      if (!line.trim()) return;
+      const values = line.split(",");
+      (byStock[values[1]] ||= []).push({
+        exDivDate: new Date(values[0]),
+        amount: parseFloat(values[2]),
+      });
     });
-
-    this.dividendData = dividendDataByStock;
+    this.dividendData = byStock;
   }
 
   getScoreDate(scoreFile: string): Date {
     const match = scoreFile.match(/(\d{4})\/(\w+)\/(\d+)\.tsv/);
     if (!match) return new Date();
-
     const [, year, month, day] = match;
     const monthMap: Record<string, number> = {
-      "January": 0,
-      "February": 1,
-      "March": 2,
-      "April": 3,
-      "May": 4,
-      "June": 5,
-      "July": 6,
-      "August": 7,
-      "September": 8,
-      "October": 9,
-      "November": 10,
-      "December": 11,
+      January: 0,
+      February: 1,
+      March: 2,
+      April: 3,
+      May: 4,
+      June: 5,
+      July: 6,
+      August: 7,
+      September: 8,
+      October: 9,
+      November: 10,
+      December: 11,
     };
-
     return new Date(parseInt(year), monthMap[month], parseInt(day));
-  }
-
-  getBuyPrice(
-    stockSymbol: string,
-    scoreDate: Date,
-  ): { price: number; dateUsed: Date } | null {
-    const marketData = this.marketData[stockSymbol];
-    if (!marketData) return null;
-
-    // Find the price on the score date or next available day
-    for (let i = 0; i <= 5; i++) {
-      const targetDate = new Date(
-        scoreDate.getTime() + i * 24 * 60 * 60 * 1000,
-      );
-      const scoreData = marketData.find((point: MarketDataPoint) => {
-        const pointDate = new Date(
-          point.date.getFullYear(),
-          point.date.getMonth(),
-          point.date.getDate(),
-        );
-        const targetDateOnly = new Date(
-          targetDate.getFullYear(),
-          targetDate.getMonth(),
-          targetDate.getDate(),
-        );
-        return pointDate.getTime() === targetDateOnly.getTime();
-      });
-
-      if (scoreData) {
-        const price = (scoreData.high + scoreData.low) / 2;
-        return { price, dateUsed: scoreData.date };
-      }
-    }
-
-    return null;
-  }
-
-  getCurrentPrice(stockSymbol: string): string {
-    const marketData = this.marketData[stockSymbol];
-    if (!marketData || marketData.length === 0) return "N/A";
-
-    const lastData = marketData[marketData.length - 1];
-    const currentPrice = (lastData.high + lastData.low) / 2;
-    return "$" + currentPrice.toFixed(2);
   }
 
   getDividendsWithin90Days(stockSymbol: string): DividendDataPoint[] {
     const dividends = this.dividendData[stockSymbol] || [];
     const scoreDate = this.getScoreDate(this.selectedFile);
-    const ninetyDayDate = new Date(
-      scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-    );
-
-    return dividends.filter((div: DividendDataPoint) =>
-      div.exDivDate <= ninetyDayDate
-    );
+    const ninetyDayDate = new Date(scoreDate.getTime() + 90 * DAY);
+    return dividends.filter((div) => div.exDivDate <= ninetyDayDate);
   }
 
+  // Current performance via the real performance-return kernel.
   calculateStockPerformance(stock: StockData): number | null {
     const scoreDate = this.getScoreDate(this.selectedFile);
-    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-    if (!buyPriceObj) return null;
-
-    const buyPrice = buyPriceObj.price;
-    const currentPriceStr = this.getCurrentPrice(stock.stock);
-    if (currentPriceStr === "N/A") return null;
-
-    const currentPrice = parseFloat(currentPriceStr.slice(1));
-    const dividends = this.getDividendsWithin90Days(stock.stock);
-    const totalDividends = dividends.reduce(
-      (sum: number, div: DividendDataPoint) => sum + div.amount,
-      0,
+    const buyPriceObj = GRQProjection.getBuyPrice(
+      this.marketData[stock.stock],
+      scoreDate,
     );
-
-    const totalReturn = (currentPrice - buyPrice + totalDividends) / buyPrice;
-    return totalReturn * 100;
+    if (!buyPriceObj) return null;
+    const currentPrice = GRQProjection.currentPriceFromLatest(
+      this.marketData[stock.stock],
+    );
+    if (currentPrice === null) return null;
+    const totalDividends = this.getDividendsWithin90Days(stock.stock)
+      .reduce((sum, div) => sum + div.amount, 0);
+    return GRQProjection.calculatePerformanceReturn(
+      buyPriceObj.price,
+      currentPrice,
+      totalDividends,
+    );
   }
 
-  calculateTrendLine(
-    stock: StockData,
-    scoreDate: Date,
-    endDate?: Date,
-  ): TrendLineResult | null {
+  // Collect regression points (data plumbing) then delegate to the kernel.
+  calculateTrendLine(stock: StockData, scoreDate: Date) {
     const marketData = this.marketData[stock.stock];
     if (!marketData || marketData.length === 0) return null;
-
-    const scoreDateTimestamp = scoreDate.getTime();
-    const trendEndDate = endDate ||
-      (marketData && marketData.length > 0
-        ? marketData[marketData.length - 1].date
-        : new Date());
-
-    const dataPoints: DataPoint[] = [];
-    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-
+    const buyPriceObj = GRQProjection.getBuyPrice(marketData, scoreDate);
     if (!buyPriceObj || buyPriceObj.price <= 0) return null;
+    const trendEndDate = marketData[marketData.length - 1].date;
+    const dividends = this.getDividendsWithin90Days(stock.stock);
 
-    marketData.forEach((point: MarketDataPoint) => {
+    const dataPoints: { x: number; y: number }[] = [];
+    marketData.forEach((point) => {
       if (point.date >= scoreDate && point.date <= trendEndDate) {
-        const daysSinceScore = (point.date.getTime() - scoreDateTimestamp) /
-          (1000 * 60 * 60 * 24);
+        const daysSinceScore = (point.date.getTime() - scoreDate.getTime()) / DAY;
         const currentPrice = (point.high + point.low) / 2;
-
         const priceReturn =
           ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
-        const dividends = this.getDividendsWithin90Days(stock.stock);
-        const dividendsUpToDate = dividends.filter((d: DividendDataPoint) =>
-          d.exDivDate <= point.date
-        );
-        const totalDividends = dividendsUpToDate.reduce(
-          (sum: number, div: DividendDataPoint) => sum + div.amount,
-          0,
-        );
+        const totalDividends = dividends
+          .filter((d) => d.exDivDate <= point.date)
+          .reduce((sum, div) => sum + div.amount, 0);
         const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
-        const totalReturn = priceReturn + dividendReturn;
-
-        dataPoints.push({
-          x: daysSinceScore,
-          y: totalReturn,
-        });
+        dataPoints.push({ x: daysSinceScore, y: priceReturn + dividendReturn });
       }
     });
 
-    if (dataPoints.length < 3) return null;
-
-    const n = dataPoints.length;
-    const sumX = dataPoints.reduce(
-      (sum: number, point: DataPoint) => sum + point.x,
-      0,
-    );
-    const sumY = dataPoints.reduce(
-      (sum: number, point: DataPoint) => sum + point.y,
-      0,
-    );
-    const sumXY = dataPoints.reduce(
-      (sum: number, point: DataPoint) => sum + point.x * point.y,
-      0,
-    );
-    const sumXX = dataPoints.reduce(
-      (sum: number, point: DataPoint) => sum + point.x * point.x,
-      0,
-    );
-
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const _intercept = (sumY - slope * sumX) / n;
-
-    const adjustedIntercept = 0;
-    const adjustedSlope = slope;
-
-    const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
-    const cappedPredicted90DayPerformance = Math.max(
-      predicted90DayPerformance,
-      -100,
-    );
-
-    const rSquared = this.calculateRSquared(
-      dataPoints,
-      adjustedSlope,
-      adjustedIntercept,
-    );
-
-    return {
-      slope: adjustedSlope,
-      intercept: adjustedIntercept,
-      predicted90DayPerformance: cappedPredicted90DayPerformance,
-      dataPoints,
-      rSquared: rSquared,
-    };
-  }
-
-  calculateRSquared(
-    dataPoints: DataPoint[],
-    slope: number,
-    intercept: number,
-  ): number {
-    const n = dataPoints.length;
-    const meanY =
-      dataPoints.reduce((sum: number, point: DataPoint) => sum + point.y, 0) /
-      n;
-
-    let ssRes = 0;
-    let ssTot = 0;
-
-    dataPoints.forEach((point: DataPoint) => {
-      const predicted = slope * point.x + intercept;
-      ssRes += Math.pow(point.y - predicted, 2);
-      ssTot += Math.pow(point.y - meanY, 2);
-    });
-
-    return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+    return GRQProjection.computeTrendLine(dataPoints);
   }
 
   calculateTargetPercentage(stock: StockData, scoreDate: Date): number | null {
-    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-    if (!buyPriceObj || buyPriceObj.price <= 0) return null;
-
-    const targetPrice = stock.target;
-    const targetReturn =
-      ((targetPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
-    return targetReturn;
+    const buyPriceObj = GRQProjection.getBuyPrice(
+      this.marketData[stock.stock],
+      scoreDate,
+    );
+    return GRQProjection.calculateTargetPercentage(
+      buyPriceObj ? buyPriceObj.price : null,
+      stock.target,
+    );
   }
 
-  // This is the actual function from app.js that we want to test
+  // Gather inputs the way GRQValidator does, then delegate the decision tree.
   calculateHybridProjection(
     stock: StockData,
     scoreDate: Date,
-  ): HybridProjectionResult | null {
+  ): Projection | null {
     const marketData = this.marketData[stock.stock];
-    if (!marketData || marketData.length === 0) {
-      console.log(
-        `calculateHybridProjection - ${stock.stock}: No market data available`,
-      );
-      return null;
-    }
-
-    const scoreDateTimestamp = scoreDate.getTime();
-    // Use the latest market data date instead of today's date
-    const latestMarketDate = marketData && marketData.length > 0
-      ? marketData[marketData.length - 1].date
-      : new Date();
+    if (!marketData || marketData.length === 0) return null;
+    const latestMarketDate = marketData[marketData.length - 1].date;
     const daysElapsed = Math.floor(
-      (latestMarketDate.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24),
+      (latestMarketDate.getTime() - scoreDate.getTime()) / DAY,
     );
 
-    console.log(
-      `calculateHybridProjection - ${stock.stock}: Days elapsed: ${daysElapsed} (using latest market data date: ${
-        latestMarketDate.toISOString().split("T")[0]
-      })`,
-    );
-
-    // Get buy price
-    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-    if (!buyPriceObj || buyPriceObj.price <= 0) {
-      console.log(
-        `calculateHybridProjection - ${stock.stock}: No valid buy price`,
-      );
-      return null;
-    }
-
-    // Calculate current performance
+    const buyPriceObj = GRQProjection.getBuyPrice(marketData, scoreDate);
+    if (!buyPriceObj || buyPriceObj.price <= 0) return null;
     const currentPerformance = this.calculateStockPerformance(stock);
-    if (currentPerformance === null) {
-      console.log(
-        `calculateHybridProjection - ${stock.stock}: Cannot calculate current performance`,
-      );
-      return null;
-    }
-
-    // Get target percentage
+    if (currentPerformance === null) return null;
     const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+    const trendLine = daysElapsed < 60
+      ? this.calculateTrendLine(stock, scoreDate)
+      : null;
 
-    console.log(
-      `calculateHybridProjection - ${stock.stock}: Current performance: ${
-        currentPerformance.toFixed(1)
-      }%, Target: ${targetPercentage ? targetPercentage.toFixed(1) : "N/A"}%`,
-    );
-
-    // Hybrid approach based on days elapsed
-    let projected90DayPerformance;
-    let projectionMethod;
-    let confidence;
-
-    if (daysElapsed < 30) {
-      // Short-term: Use dampened trend (reduce early volatility)
-      projectionMethod = "dampened_trend";
-      const trendLine = this.calculateTrendLine(stock, scoreDate);
-
-      if (trendLine && trendLine.rSquared > 0.1) {
-        // Dampen the trend by 70% to account for mean reversion
-        const dampenedSlope = trendLine.slope * 0.3;
-        projected90DayPerformance = Math.max(dampenedSlope * 90, -100);
-        confidence = Math.min(trendLine.rSquared * 0.7, 0.8); // Reduce confidence for early projections
-        console.log(
-          `calculateHybridProjection - ${stock.stock}: Using dampened trend (slope: ${
-            trendLine.slope.toFixed(4)
-          } → ${dampenedSlope.toFixed(4)})`,
-        );
-      } else {
-        // Fall back to realistic projection based on current performance
-        projectionMethod = "target_based";
-        if (targetPercentage !== null) {
-          // Use current performance as base, project modest improvement if positive
-          if (currentPerformance > 0) {
-            // If currently positive, project slight improvement (10% of remaining gap)
-            const gap = targetPercentage - currentPerformance;
-            projected90DayPerformance = currentPerformance + (gap * 0.1);
-          } else {
-            // If currently negative, project slight recovery toward zero
-            projected90DayPerformance = currentPerformance * 0.5; // Move halfway toward zero
-          }
-          // Cap at reasonable bounds
-          projected90DayPerformance = Math.max(
-            Math.min(projected90DayPerformance, targetPercentage),
-            -100,
-          );
-        } else {
-          projected90DayPerformance = -5; // Default to -5% if no target
-        }
-        confidence = 0.3; // Low confidence for early projections
-        console.log(
-          `calculateHybridProjection - ${stock.stock}: Using realistic projection (insufficient trend data)`,
-        );
-      }
-    } else if (daysElapsed < 60) {
-      // Medium-term: Use dampened trend with higher confidence
-      projectionMethod = "dampened_trend";
-      const trendLine = this.calculateTrendLine(stock, scoreDate);
-
-      if (trendLine && trendLine.rSquared > 0.05) {
-        // Dampen the trend by 50% for medium-term
-        const dampenedSlope = trendLine.slope * 0.5;
-        projected90DayPerformance = Math.max(dampenedSlope * 90, -100);
-        confidence = Math.min(trendLine.rSquared * 0.8, 0.9);
-        console.log(
-          `calculateHybridProjection - ${stock.stock}: Using dampened trend (slope: ${
-            trendLine.slope.toFixed(4)
-          } → ${dampenedSlope.toFixed(4)})`,
-        );
-      } else {
-        // Fall back to realistic projection based on current performance
-        projectionMethod = "target_based";
-        if (targetPercentage !== null) {
-          // Use current performance as base, project modest improvement if positive
-          if (currentPerformance > 0) {
-            // If currently positive, project slight improvement (15% of remaining gap)
-            const gap = targetPercentage - currentPerformance;
-            projected90DayPerformance = currentPerformance + (gap * 0.15);
-          } else {
-            // If currently negative, project slight recovery toward zero
-            projected90DayPerformance = currentPerformance * 0.6; // Move 60% toward zero
-          }
-          // Cap at reasonable bounds
-          projected90DayPerformance = Math.max(
-            Math.min(projected90DayPerformance, targetPercentage),
-            -100,
-          );
-        } else {
-          projected90DayPerformance = -5; // Default to -5% if no target
-        }
-        confidence = 0.5;
-        console.log(
-          `calculateHybridProjection - ${stock.stock}: Using realistic projection (insufficient trend data)`,
-        );
-      }
-    } else {
-      // Long-term: Use realistic projection based on current trajectory
-      projectionMethod = "realistic_trajectory";
-
-      if (targetPercentage !== null) {
-        // Calculate what the current trajectory suggests for 90 days
-        const currentRate = currentPerformance / daysElapsed; // % per day
-        const trajectoryProjection = currentRate * 90;
-
-        // If we're significantly behind target, be realistic about missing it
-        const _targetThreshold = targetPercentage * 0.8; // 80% of target
-        const remainingDays = 90 - daysElapsed;
-        const remainingGap = targetPercentage - currentPerformance;
-        const requiredDailyRate = remainingGap / remainingDays;
-
-        // If required rate is unrealistic (>2% per day), project missing target
-        if (requiredDailyRate > 2.0) {
-          // Project based on current trajectory, but cap at a realistic maximum
-          const realisticProjection = Math.min(
-            trajectoryProjection,
-            targetPercentage * 0.6,
-          );
-          projected90DayPerformance = Math.max(
-            realisticProjection,
-            currentPerformance * 1.2,
-          ); // At least some improvement
-          confidence = 0.7; // High confidence we're missing target
-          console.log(
-            `calculateHybridProjection - ${stock.stock}: Projecting to miss target (required daily rate: ${
-              requiredDailyRate.toFixed(2)
-            }% is unrealistic)`,
-          );
-        } else {
-          // If current performance is already above target, use trajectory projection
-          if (currentPerformance > targetPercentage) {
-            projected90DayPerformance = trajectoryProjection;
-            confidence = 0.7;
-            console.log(
-              `calculateHybridProjection - ${stock.stock}: Current performance (${
-                currentPerformance.toFixed(1)
-              }%) already above target (${
-                targetPercentage.toFixed(1)
-              }%), using trajectory projection`,
-            );
-          } else {
-            // Still possible to hit target, but be conservative
-            projected90DayPerformance = Math.min(
-              trajectoryProjection,
-              targetPercentage * 0.8,
-            );
-            confidence = 0.6;
-            console.log(
-              `calculateHybridProjection - ${stock.stock}: Projecting conservative improvement toward target`,
-            );
-          }
-        }
-      } else {
-        // Use mean reversion (move toward 0% performance)
-        const reversionRate = 0.4; // 40% reversion toward mean
-        projected90DayPerformance = currentPerformance * (1 - reversionRate);
-        confidence = 0.3;
-        console.log(
-          `calculateHybridProjection - ${stock.stock}: Using mean reversion projection`,
-        );
-      }
-    }
-
-    // Ensure projection is within realistic bounds
-    projected90DayPerformance = Math.max(
-      Math.min(projected90DayPerformance, 200),
-      -100,
-    );
-
-    console.log(
-      `calculateHybridProjection - ${stock.stock}: Final projection: ${
-        projected90DayPerformance.toFixed(1)
-      }% (method: ${projectionMethod}, confidence: ${confidence.toFixed(2)})`,
-    );
-
-    return {
-      projected90DayPerformance,
-      projectionMethod,
-      confidence,
+    const projection = GRQProjection.computeHybridProjection({
       daysElapsed,
       currentPerformance,
       targetPercentage,
-    };
+      trendLine,
+    });
+    return { ...projection, daysElapsed, currentPerformance, targetPercentage };
   }
 }
 
 Deno.test("NYSE:SCHW Projection Test - Using Real App Functions", async (t) => {
-  // Use a fixed snapshot of market data so assertions are deterministic
-  // regardless of how many rows the live CSV accumulates over time.
-  // Snapshot covers Apr 15 – Jul 1 2025 (≈77 calendar days / 53 trading days).
+  // Frozen snapshot covering Apr 15 – Jul 1 2025 (~77 calendar days) so the
+  // assertions stay deterministic as the live CSV grows.
   const validator = new TestGRQValidator();
   validator.scorePath = "tests/fixtures/schw_april_2025_scores.tsv";
   validator.marketDataPath = "tests/fixtures/schw_april_2025_snapshot.csv";
   validator.dividendDataPath = "tests/fixtures/schw_april_2025_dividends.csv";
 
-  // Load the fixture data files
   await validator.loadScoreData();
   await validator.loadMarketData();
   await validator.loadDividendData();
 
   const scoreDate = validator.getScoreDate("2025/April/15.tsv");
-  const stock = validator.scoreData.find((s: StockData) =>
-    s.stock === "NYSE:SCHW"
-  );
-
+  const stock = validator.scoreData.find((s) => s.stock === "NYSE:SCHW");
   assert(stock, "NYSE:SCHW should be found in score data");
 
-  await t.step(
-    "should calculate correct current performance using app functions",
-    () => {
-      const currentPerformance = validator.calculateStockPerformance(stock);
-      assert(currentPerformance !== null, "Should have current performance");
+  await t.step("should calculate correct current performance", () => {
+    const currentPerformance = validator.calculateStockPerformance(stock!);
+    assert(currentPerformance !== null, "Should have current performance");
+    assert(
+      currentPerformance! > 15,
+      `Current performance should be > 15%, got ${currentPerformance?.toFixed(1)}%`,
+    );
+  });
 
-      console.log(`Current performance: ${currentPerformance?.toFixed(1)}%`);
+  await t.step("should calculate correct 90-day projection", () => {
+    const projection = validator.calculateHybridProjection(stock!, scoreDate);
+    assert(projection, "Should have projection");
+    assert(
+      projection!.projected90DayPerformance > 17,
+      `Projection should be > 17%, got ${projection!.projected90DayPerformance.toFixed(1)}%`,
+    );
+    assert(
+      projection!.projected90DayPerformance > 19,
+      `Projection should be > 19%, got ${projection!.projected90DayPerformance.toFixed(1)}%`,
+    );
+  });
 
-      // Current performance should be around 17-20% based on the data
-      assert(
-        currentPerformance! > 15,
-        `Current performance should be > 15%, got ${
-          currentPerformance?.toFixed(1)
-        }%`,
-      );
-    },
-  );
-
-  await t.step(
-    "should calculate correct 90-day projection using app functions",
-    () => {
-      const projection = validator.calculateHybridProjection(stock, scoreDate);
-      assert(projection, "Should have projection");
-
-      console.log(
-        `Projected 90-day performance: ${
-          projection.projected90DayPerformance.toFixed(1)
-        }%`,
-      );
-      console.log(`Confidence: ${projection.confidence.toFixed(3)}`);
-      console.log(`Method: ${projection.projectionMethod}`);
-
-      // The projection should be well over 17% based on the strong upward trend
-      assert(
-        projection.projected90DayPerformance > 17,
-        `Projection should be > 17%, got ${
-          projection.projected90DayPerformance.toFixed(1)
-        }%`,
-      );
-
-      // Should be closer to 20% or higher given the strong performance
-      assert(
-        projection.projected90DayPerformance > 19,
-        `Projection should be > 19%, got ${
-          projection.projected90DayPerformance.toFixed(1)
-        }%`,
-      );
-    },
-  );
-
-  await t.step("should have strong trend line fit using app functions", () => {
-    const trendLine = validator.calculateTrendLine(stock, scoreDate);
-
+  await t.step("should have strong trend line fit", () => {
+    const trendLine = validator.calculateTrendLine(stock!, scoreDate);
     assert(trendLine, "Should have trend line");
-    console.log(`Trend line R-squared: ${trendLine.rSquared.toFixed(3)}`);
-    console.log(
-      `Trend line slope: ${trendLine.slope.toFixed(4)} (price change per day)`,
-    );
-
-    // Should have good fit given the consistent upward trend
     assert(
-      trendLine.rSquared > 0.3,
-      `R-squared should be > 0.3, got ${trendLine.rSquared.toFixed(3)}`,
+      trendLine!.rSquared > 0.3,
+      `R-squared should be > 0.3, got ${trendLine!.rSquared.toFixed(3)}`,
     );
-
-    // Slope should be positive (upward trend)
     assert(
-      trendLine.slope > 0,
-      `Slope should be positive, got ${trendLine.slope.toFixed(4)}`,
+      trendLine!.slope > 0,
+      `Slope should be positive, got ${trendLine!.slope.toFixed(4)}`,
     );
   });
 });
