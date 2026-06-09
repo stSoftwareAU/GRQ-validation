@@ -10,7 +10,6 @@ use std::path::Path;
 pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2025Q1";
 pub const DIVIDEND_DATA_BASE_PATH: &str = "../GRQ-dividends";
 
-#[allow(dead_code)]
 pub fn validate_stock_symbol(symbol: &str) -> bool {
     // Basic validation for stock symbols
     if symbol.is_empty() || symbol.len() > 30 {
@@ -22,7 +21,6 @@ pub fn validate_stock_symbol(symbol: &str) -> bool {
         .all(|c| c.is_alphanumeric() || c == '.' || c == ':')
 }
 
-#[allow(dead_code)]
 pub fn calculate_average_score(scores: &[f64]) -> f64 {
     if scores.is_empty() {
         return 0.0;
@@ -31,7 +29,6 @@ pub fn calculate_average_score(scores: &[f64]) -> f64 {
     scores.iter().sum::<f64>() / scores.len() as f64
 }
 
-#[allow(dead_code)]
 pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
     use std::fs;
     use std::path::Path;
@@ -57,7 +54,6 @@ pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
     Ok(index_data)
 }
 
-#[allow(dead_code)]
 pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
     // Extract ticker from "NYSE:SEM" -> "SEM"
     symbol
@@ -65,13 +61,11 @@ pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
         .map(|colon_pos| symbol[colon_pos + 1..].to_string())
 }
 
-#[allow(dead_code)]
 pub fn get_market_data_path(ticker: &str) -> String {
     let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
     format!("{MARKET_DATA_BASE_PATH}/data/{first_letter}/{ticker}.json")
 }
 
-#[allow(dead_code)]
 pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
     use csv::ReaderBuilder;
     use std::fs::File;
@@ -92,7 +86,6 @@ pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
     Ok(stock_records)
 }
 
-#[allow(dead_code)]
 pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<String>> {
     let stock_records = read_tsv_score_file(file_path)?;
     let ticker_codes: Vec<String> = stock_records
@@ -103,7 +96,6 @@ pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<Strin
     Ok(ticker_codes)
 }
 
-#[allow(dead_code)]
 pub fn extract_symbol_from_ticker(ticker: &str) -> String {
     let symbol = match ticker.rsplit_once(':') {
         Some((_, symbol)) => symbol.to_string(),
@@ -157,7 +149,6 @@ pub fn read_market_data_from_csv(
     Ok(market_data)
 }
 
-#[allow(dead_code)]
 pub fn filter_market_data_by_date_range(
     market_data: &MarketData,
     start_date: &str,

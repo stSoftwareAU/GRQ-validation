@@ -1,15 +1,12 @@
 use anyhow::{anyhow, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
-use log::info;
-use std::path::Path;
-use utils::{
+use grq_validation::utils::{
     create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
     extract_ticker_codes_from_score_file, read_index_json,
 };
-
-pub mod models;
-pub mod utils;
+use log::info;
+use std::path::Path;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -96,7 +93,10 @@ fn main() -> Result<()> {
 
         if days_since_score >= 90 {
             // Use regular performance calculation
-            match utils::calculate_portfolio_performance(&score_file_path, score_file_date) {
+            match grq_validation::utils::calculate_portfolio_performance(
+                &score_file_path,
+                score_file_date,
+            ) {
                 Ok(performance) => {
                     println!("\n=== {date} Performance Results ===");
                     println!("Score Date: {}", performance.score_date);
@@ -121,7 +121,7 @@ fn main() -> Result<()> {
                     }
 
                     // Update the index.json with this performance data
-                    let mut index_data = utils::read_index_json(&args.docs_path)?;
+                    let mut index_data = grq_validation::utils::read_index_json(&args.docs_path)?;
                     for score_entry in &mut index_data.scores {
                         if score_entry.date == date {
                             score_entry.performance_90_day = Some(performance.performance_90_day);
@@ -145,13 +145,13 @@ fn main() -> Result<()> {
             }
         } else {
             // Use hybrid projection for dates less than 90 days old
-            match utils::read_tsv_score_file(&score_file_path) {
+            match grq_validation::utils::read_tsv_score_file(&score_file_path) {
                 Ok(stock_records) => {
-                    match utils::read_market_data_from_csv(&utils::derive_csv_output_path(
-                        &score_file_path,
-                    )) {
+                    match grq_validation::utils::read_market_data_from_csv(
+                        &grq_validation::utils::derive_csv_output_path(&score_file_path),
+                    ) {
                         Ok(market_data_csv) => {
-                            match utils::calculate_hybrid_projection(
+                            match grq_validation::utils::calculate_hybrid_projection(
                                 &stock_records,
                                 score_file_date,
                                 &market_data_csv,
@@ -183,7 +183,8 @@ fn main() -> Result<()> {
                                     }
 
                                     // Update the index.json with this projection data
-                                    let mut index_data = utils::read_index_json(&args.docs_path)?;
+                                    let mut index_data =
+                                        grq_validation::utils::read_index_json(&args.docs_path)?;
                                     for score_entry in &mut index_data.scores {
                                         if score_entry.date == date {
                                             score_entry.performance_90_day =
@@ -232,7 +233,7 @@ fn main() -> Result<()> {
     // Calculate performance for all score files that are at least 90 days old
     if args.calculate_performance {
         info!("Calculating performance metrics for all score files...");
-        match utils::update_index_with_performance(&args.docs_path) {
+        match grq_validation::utils::update_index_with_performance(&args.docs_path) {
             Ok(_) => {
                 info!("Successfully updated index.json with performance metrics");
             }
@@ -323,7 +324,10 @@ fn main() -> Result<()> {
 
                 // Calculate performance for this score file immediately after creating CSVs
                 info!("Calculating performance for {}", score_entry.date);
-                match utils::calculate_portfolio_performance(&score_file_path, &score_entry.date) {
+                match grq_validation::utils::calculate_portfolio_performance(
+                    &score_file_path,
+                    &score_entry.date,
+                ) {
                     Ok(performance) => {
                         info!(
                             "Performance for {}: {:.2}% (90-day), {:.2}% (annualized)",
@@ -333,7 +337,8 @@ fn main() -> Result<()> {
                         );
 
                         // Update the index.json with this performance data
-                        let mut index_data = utils::read_index_json(&args.docs_path)?;
+                        let mut index_data =
+                            grq_validation::utils::read_index_json(&args.docs_path)?;
                         for score_entry_update in &mut index_data.scores {
                             if score_entry_update.date == score_entry.date {
                                 score_entry_update.performance_90_day =
