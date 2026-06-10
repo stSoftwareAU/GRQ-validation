@@ -118,6 +118,22 @@ pub fn read_market_data(symbol: &str) -> Result<MarketData> {
     Ok(market_data)
 }
 
+/// Parses a financial value (a price or dividend amount) from its raw string.
+///
+/// Returns `Some(value)` on success. On failure the offending value is logged
+/// to stderr as a `Warning:` line and `None` is returned, so malformed upstream
+/// data is visible to the operator rather than being silently coerced to a
+/// sentinel (e.g. `0.0`) or dropped without trace. See issue #110.
+fn parse_financial_value(field: &str, context: &str, raw: &str) -> Option<f64> {
+    match raw.parse::<f64>() {
+        Ok(value) => Some(value),
+        Err(error) => {
+            eprintln!("Warning: skipping unparseable {field} '{raw}' ({context}): {error}");
+            None
+        }
+    }
+}
+
 pub fn read_market_data_from_csv(
     csv_file_path: &str,
 ) -> Result<HashMap<String, HashMap<String, f64>>> {
@@ -134,7 +150,15 @@ pub fn read_market_data_from_csv(
         if record.len() >= 6 {
             let date = record[0].to_string();
             let full_ticker = record[1].to_string();
-            let close_price = record[5].parse::<f64>().unwrap_or(0.0); // Use close price (column 5)
+            // Use close price (column 5); skip and warn if it is non-numeric.
+            let close_price = match parse_financial_value(
+                "close price",
+                &format!("{full_ticker} on {date}"),
+                &record[5],
+            ) {
+                Some(price) => price,
+                None => continue,
+            };
 
             if close_price > 0.0 {
                 // Store data using the full ticker (e.g., "NYSE:MBC")
@@ -162,7 +186,9 @@ pub fn filter_market_data_by_date_range(
     for (date_str, daily_data) in &market_data.time_series_daily {
         if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
             if date >= start && date <= end {
-                if let Ok(close_price) = daily_data.close.parse::<f64>() {
+                if let Some(close_price) =
+                    parse_financial_value("close price", date_str, &daily_data.close)
+                {
                     filtered_data.push((date_str.clone(), close_price));
                 }
             }
@@ -394,7 +420,11 @@ pub fn filter_dividend_data_by_date_range(
             NaiveDate::parse_from_str(&dividend_record.ex_dividend_date, "%Y-%m-%d")
         {
             if ex_div_date >= start && ex_div_date <= end {
-                if let Ok(amount) = dividend_record.amount.parse::<f64>() {
+                if let Some(amount) = parse_financial_value(
+                    "dividend amount",
+                    &dividend_record.ex_dividend_date,
+                    &dividend_record.amount,
+                ) {
                     filtered_data.push((dividend_record.ex_dividend_date.clone(), amount));
                 }
             }
@@ -1601,5 +1631,132 @@ mod tests {
         );
 
         println!("✅ Zero annualized performance bug test completed");
+    }
+
+    // --- Issue #110: numeric parse failures must be skipped, not coerced ---
+
+    #[test]
+    fn test_parse_financial_value_valid() {
+        assert_eq!(
+            parse_financial_value("close price", "ctx", "12.34"),
+            Some(12.34)
+        );
+        assert_eq!(parse_financial_value("close price", "ctx", "0"), Some(0.0));
+        assert_eq!(
+            parse_financial_value("dividend amount", "ctx", "-1.5"),
+            Some(-1.5)
+        );
+    }
+
+    #[test]
+    fn test_parse_financial_value_invalid() {
+        // Non-numeric, empty, and sentinel-like strings all return None rather
+        // than being silently coerced to 0.0.
+        assert_eq!(parse_financial_value("close price", "ctx", "N/A"), None);
+        assert_eq!(parse_financial_value("close price", "ctx", ""), None);
+        assert_eq!(parse_financial_value("dividend amount", "ctx", "abc"), None);
+    }
+
+    fn make_daily_data(close: &str) -> crate::models::DailyData {
+        crate::models::DailyData {
+            open: "0".to_string(),
+            high: "0".to_string(),
+            low: "0".to_string(),
+            close: close.to_string(),
+            adjusted_close: "0".to_string(),
+            volume: "0".to_string(),
+            dividend_amount: "0".to_string(),
+            split_coefficient: "0".to_string(),
+        }
+    }
+
+    fn make_market_data(entries: &[(&str, &str)]) -> MarketData {
+        let mut time_series_daily = HashMap::new();
+        for (date, close) in entries {
+            time_series_daily.insert(date.to_string(), make_daily_data(close));
+        }
+        MarketData {
+            meta_data: crate::models::MarketDataMeta {
+                information: String::new(),
+                symbol: "TEST".to_string(),
+                last_refreshed: String::new(),
+                output_size: String::new(),
+                time_zone: String::new(),
+            },
+            time_series_daily,
+        }
+    }
+
+    #[test]
+    fn test_filter_market_data_skips_unparseable_close() {
+        let market_data = make_market_data(&[
+            ("2025-06-16", "10.00"),
+            ("2025-06-17", "not-a-number"),
+            ("2025-06-18", "12.00"),
+        ]);
+
+        let filtered =
+            filter_market_data_by_date_range(&market_data, "2025-06-15", "2025-06-20").unwrap();
+
+        // The unparseable row is dropped; the two valid rows survive.
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0], ("2025-06-16".to_string(), 10.00));
+        assert_eq!(filtered[1], ("2025-06-18".to_string(), 12.00));
+    }
+
+    fn make_dividend_record(ex_date: &str, amount: &str) -> crate::models::DividendRecord {
+        crate::models::DividendRecord {
+            ex_dividend_date: ex_date.to_string(),
+            declaration_date: None,
+            record_date: None,
+            payment_date: None,
+            amount: amount.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_filter_dividend_data_skips_unparseable_amount() {
+        let dividend_data = DividendData {
+            symbol: "TEST".to_string(),
+            data: vec![
+                make_dividend_record("2025-06-16", "0.50"),
+                make_dividend_record("2025-06-17", "bad"),
+                make_dividend_record("2025-06-18", "0.75"),
+            ],
+        };
+
+        let filtered =
+            filter_dividend_data_by_date_range(&dividend_data, "2025-06-15", "2025-06-20").unwrap();
+
+        // The unparseable dividend amount is dropped; the valid ones survive.
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0], ("2025-06-16".to_string(), 0.50));
+        assert_eq!(filtered[1], ("2025-06-18".to_string(), 0.75));
+    }
+
+    #[test]
+    fn test_read_market_data_from_csv_skips_unparseable_close() {
+        use std::io::Write;
+
+        // CSV columns: date,ticker,open,high,low,close
+        let csv = "date,ticker,open,high,low,close\n\
+                   2025-06-16,NYSE:TEST,1,1,1,10.00\n\
+                   2025-06-17,NYSE:TEST,1,1,1,not-a-number\n\
+                   2025-06-18,NYSE:TEST,1,1,1,12.00\n";
+
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(csv.as_bytes()).unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let market_data = read_market_data_from_csv(&path).unwrap();
+
+        // Previously the bad close became 0.0 and was dropped by the > 0.0
+        // guard; now it is explicitly skipped with a warning. Either way only
+        // the two valid rows are retained.
+        let ticker = market_data.get("NYSE:TEST").unwrap();
+        assert_eq!(ticker.len(), 2);
+        assert_eq!(ticker.get("2025-06-16"), Some(&10.00));
+        assert_eq!(ticker.get("2025-06-18"), Some(&12.00));
+        assert!(ticker.get("2025-06-17").is_none());
     }
 }
