@@ -87,6 +87,59 @@ Deno.test("Deno Outdated workflow runs deno outdated and creates a PR", async ()
   );
 });
 
+Deno.test("Deno Outdated workflow gates updates behind a release-age quarantine (Issue #64)", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as { jobs: Record<string, unknown> };
+  const job = doc.jobs.outdated as {
+    steps: Array<{ run?: string }>;
+  };
+  const runs = job.steps.map((s) => s.run ?? "").join("\n");
+
+  // Supply-chain quarantine: the update step must pass
+  // --minimum-dependency-age so a freshly-published (possibly hijacked)
+  // external dependency is held back rather than auto-bumped.
+  const match = runs.match(/--minimum-dependency-age[=\s]+(\S+)/);
+  assert(
+    match,
+    "deno outdated must pass --minimum-dependency-age to quarantine new releases",
+  );
+
+  // The quarantine window must be at least 24h (P1D). Accept the ISO-8601
+  // one-day duration or an explicit minutes value >= 1440.
+  const value = match![1];
+  const isOneDayOrMore = value === "P1D" ||
+    (/^\d+$/.test(value) && Number(value) >= 1440);
+  assert(
+    isOneDayOrMore,
+    `quarantine window must be at least 24h (P1D); got '${value}'`,
+  );
+});
+
+Deno.test("deno.json declares a minimumDependencyAge quarantine with internal exclusions (Issue #64)", async () => {
+  const text = await Deno.readTextFile("deno.json");
+  const { parse: parseJsonc } = await import("@std/jsonc");
+  const config = parseJsonc(text) as {
+    minimumDependencyAge?: { age?: string; exclude?: string[] };
+  };
+  const mda = config.minimumDependencyAge;
+  assert(mda, "deno.json must declare minimumDependencyAge");
+  assertEquals(mda.age, "P1D", "external quarantine floor must be 24h (P1D)");
+  assert(
+    Array.isArray(mda.exclude),
+    "minimumDependencyAge.exclude must be a list",
+  );
+  // Internal stSoftwareAU deps bypass the quarantine (0h) so they update
+  // immediately, per the dependency-bump policy.
+  assert(
+    mda.exclude!.includes("jsr:@stsoftware/*"),
+    "internal jsr:@stsoftware/* deps must be excluded from the quarantine",
+  );
+  assert(
+    mda.exclude!.includes("npm:@stsoftware/*"),
+    "internal npm:@stsoftware/* deps must be excluded from the quarantine",
+  );
+});
+
 Deno.test("Deno Outdated workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a

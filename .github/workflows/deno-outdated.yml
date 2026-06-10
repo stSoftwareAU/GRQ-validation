@@ -20,7 +20,13 @@ jobs:
         with:
           deno-version: v2.x
       - name: Run deno outdated --update --latest
-        run: deno outdated --update --latest
+        # Supply-chain quarantine (Issue #64): --minimum-dependency-age=P1D
+        # holds back any external dependency published less than 24h ago, so
+        # a freshly-hijacked release cannot land in the auto-opened PR within
+        # the same weekly window. Internal jsr:@stsoftware/* and
+        # npm:@stsoftware/* deps are excluded (0h) via deno.json so they still
+        # update immediately. The flag honours deno.json's minimumDependencyAge.
+        run: deno outdated --update --latest --minimum-dependency-age=P1D
       # peter-evans/create-pull-request@v7.0.11
       - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676
         with:
