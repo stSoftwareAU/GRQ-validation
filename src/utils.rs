@@ -568,10 +568,7 @@ pub fn calculate_portfolio_performance(
 
                 for (date_str, price) in first_day_data {
                     if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-                        if date >= score_date
-                            && (next_trading_day_date.is_none()
-                                || date < next_trading_day_date.unwrap())
-                        {
+                        if date >= score_date && next_trading_day_date.is_none_or(|d| date < d) {
                             next_trading_day_date = Some(date);
                             next_trading_day_price = *price;
                         }
@@ -731,8 +728,7 @@ pub fn calculate_hybrid_projection(
                         for (date_str, price) in first_day_data {
                             if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
                                 if date >= score_date
-                                    && (next_trading_day_date.is_none()
-                                        || date < next_trading_day_date.unwrap())
+                                    && next_trading_day_date.is_none_or(|d| date < d)
                                 {
                                     next_trading_day_date = Some(date);
                                     next_trading_day_price = *price;
