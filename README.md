@@ -100,6 +100,17 @@ dependency hygiene.
 9. **Shellcheck** (`shellcheck.yml`) — lints every `*.sh` script in the
    repository.
 
+### Automated dependency updates
+
+[`.github/dependabot.yml`](.github/dependabot.yml) configures Dependabot to open
+reviewable update PRs for the **Cargo** crate ecosystem (`Cargo.toml` /
+`Cargo.lock`) and the **GitHub Actions** ecosystem on a weekly schedule. Each
+ecosystem applies a 24-hour `cooldown` (release-age quarantine) so a
+freshly-published — possibly hijacked — crate or action is held back rather than
+auto-bumped within the same window. Internal `stSoftwareAU/*` dependencies are
+excluded from the cooldown so they update immediately, mirroring the
+`minimumDependencyAge` policy that `deno.json` applies to the Deno ecosystem.
+
 ### Setup
 
 1. Enable GitHub Actions in your repository.
