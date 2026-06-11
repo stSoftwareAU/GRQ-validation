@@ -33,6 +33,7 @@ jobs:
     - name: Check for changes
       id: filter
       run: |
+        set -euo pipefail
         # Get list of changed files
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           # For PRs, compare with base branch using GitHub's merge-base
@@ -169,6 +170,7 @@ jobs:
     # "did we ship crate X version Y?" in seconds.
     - name: Generate CycloneDX SBOM
       run: |
+        set -euo pipefail
         cargo install cargo-cyclonedx
         cargo cyclonedx --format json
         # cargo-cyclonedx names the SBOM after the package; normalise the
