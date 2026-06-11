@@ -97,7 +97,7 @@ Deno.test("Annualized Performance Calculation - Compound Interest", () => {
 //
 // The tests retained below cover distinct concerns: the compound-vs-simple
 // guard above is cross-checked against the documented real-data table in
-// ANNUALIZED_PERFORMANCE_CALCULATION.md; the two tests that follow cover
+// docs/fixes/ANNUALIZED_PERFORMANCE_CALCULATION.md; the two tests that follow cover
 // index.json averaging (mirrors docs/list.js) and the hybrid-projection
 // dampening algorithm respectively.
 

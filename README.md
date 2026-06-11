@@ -117,7 +117,7 @@ excluded from the cooldown so they update immediately, mirroring the
 2. Configure GitHub Pages (Settings → Pages → Source: GitHub Actions).
 3. Set up branch protection rules (recommended).
 
-See [CI_CD_SETUP.md](CI_CD_SETUP.md) for detailed setup instructions.
+See [CI_CD_SETUP.md](docs/fixes/CI_CD_SETUP.md) for detailed setup instructions.
 
 ## Project Structure
 
@@ -213,6 +213,6 @@ full text.
 
 For issues and questions:
 
-1. Check [CI_CD_SETUP.md](CI_CD_SETUP.md) for workflow issues.
+1. Check [CI_CD_SETUP.md](docs/fixes/CI_CD_SETUP.md) for workflow issues.
 2. Review existing issues.
 3. Create a new issue with detailed information.

@@ -54,7 +54,7 @@ merging. Land the fix straight to the default branch as an out-of-band update.
 2. Refresh the cache and lockfile:
 
    ```bash
-   deno cache --reload check_syntax.ts
+   deno cache --reload scripts/debug/check_syntax.ts
    deno outdated            # confirm the pinned version is in effect
    ```
 

@@ -519,7 +519,7 @@ pub fn create_dividend_csv_for_score_file(
 /// Annualises a period return using compound growth over the actual number of
 /// days observed.
 ///
-/// Spec (`ANNUALIZED_PERFORMANCE_CALCULATION.md`):
+/// Spec (`docs/fixes/ANNUALIZED_PERFORMANCE_CALCULATION.md`):
 /// `annualised = ((1 + performance/100) ^ (365.25 / days_elapsed) - 1) * 100`.
 ///
 /// Returns `0.0` when the period return is exactly zero or no days have
@@ -1330,7 +1330,7 @@ mod tests {
         // `calculate_portfolio_performance` uses to fill `performance_annualized`.
         //
         // Each expected value is derived directly from the spec formula in
-        // ANNUALIZED_PERFORMANCE_CALCULATION.md:
+        // docs/fixes/ANNUALIZED_PERFORMANCE_CALCULATION.md:
         //   annualised = ((1 + p/100) ^ (365.25 / days) - 1) * 100
         // (e.g. 2% over 5 days: (1.02 ^ (365.25/5) - 1) * 100 = (1.02 ^ 73.05 - 1) * 100 ≈ 324.9),
         // rounded to one decimal place — not numbers copied from a one-off run.

@@ -7,7 +7,7 @@ echo "=========================================="
 echo ""
 echo "1. Running Formula Verification Script..."
 echo "----------------------------------------"
-node test_formula_verification.js
+node scripts/debug/test_formula_verification.js
 
 echo ""
 echo "2. Rust Tests Available (requires cargo):"
