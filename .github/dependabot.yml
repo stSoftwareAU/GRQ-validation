@@ -1,0 +1,52 @@
+# Dependabot configuration (Issue #75).
+#
+# Adds automated, reviewable dependency-update PRs for the Cargo crate
+# ecosystem — previously the only unmanaged ecosystem in the tree — plus
+# the GitHub Actions ecosystem. The Deno ecosystem is handled separately
+# by .github/workflows/deno-outdated.yml.
+#
+# Supply-chain quarantine: `cooldown.default-days: 1` holds back any
+# external release published less than 24h ago, so a freshly-hijacked
+# crate or action cannot land in an auto-opened PR within the same window.
+# Internal stSoftwareAU/* dependencies are excluded from the cooldown so
+# they update immediately, mirroring the deno.json minimumDependencyAge
+# policy used for the Deno ecosystem.
+version: 2
+updates:
+  # Rust crate dependencies (Cargo.toml / Cargo.lock).
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    cooldown:
+      # 24h release-age quarantine for external crates.
+      default-days: 1
+      # Internal stSoftwareAU crates bypass the quarantine (update now).
+      exclude:
+        - "stsoftware*"
+    groups:
+      cargo-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(cargo)"
+
+  # GitHub Actions used by the workflows (kept pinned to fresh SHAs).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    cooldown:
+      # 24h release-age quarantine for external actions.
+      default-days: 1
+      # Internal stSoftwareAU actions bypass the quarantine (update now).
+      exclude:
+        - "stSoftwareAU/*"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(actions)"
