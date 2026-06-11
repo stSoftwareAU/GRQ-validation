@@ -431,6 +431,41 @@ function computeJudgement(
     return "Missed Target";
 }
 
+// Build a benchmark index series from a same-origin {date: close} price map
+// (issue #93). The dashboard reads first-party benchmark data published under
+// docs/ instead of routing Yahoo Finance requests through untrusted public CORS
+// proxies, so this kernel does the slicing and shaping the proxy path used to.
+//
+// `priceMap` is a plain object of "YYYY-MM-DD" -> closing price. The series is
+// filtered to [startDate, endDate] (inclusive, at local midnight) and sorted
+// ascending by date, returning the same shape the chart consumes:
+// { name, data: [{ date, close }], initialPrice, currentPrice }. Pure and
+// deterministic so the Deno tests exercise the exact browser code.
+function buildIndexSeriesFromMap(priceMap, indexName, startDate, endDate) {
+    if (!priceMap || typeof priceMap !== "object") return null;
+
+    const start = setDateToMidnight(new Date(startDate)).getTime();
+    const end = setDateToMidnight(new Date(endDate)).getTime();
+
+    const data = [];
+    for (const [dateStr, close] of Object.entries(priceMap)) {
+        if (typeof close !== "number" || !Number.isFinite(close)) continue;
+        const date = setDateToMidnight(new Date(dateStr));
+        const time = date.getTime();
+        if (Number.isNaN(time) || time < start || time > end) continue;
+        data.push({ date, close });
+    }
+
+    data.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    return {
+        name: indexName,
+        data,
+        initialPrice: data.length > 0 ? data[0].close : null,
+        currentPrice: data.length > 0 ? data[data.length - 1].close : null,
+    };
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
@@ -449,4 +484,5 @@ globalThis.GRQProjection = {
     daysElapsedFromMarketData,
     computeHybridProjection,
     computeJudgement,
+    buildIndexSeriesFromMap,
 };
