@@ -1,0 +1,41 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- `CONTRIBUTING.md` documenting the build, test, lint, and pull-request
+  workflow.
+- `CHANGELOG.md` (this file) tracking notable changes between releases.
+
+## [0.1.10] - 2026-06-11
+
+### Added
+
+- Hybrid projection for score files less than 90 days old, projecting
+  performance from current actual prices.
+- A shared projection module so the TypeScript tests exercise production
+  projection logic.
+- Static dashboard (published via GitHub Pages from `docs/`) with interactive
+  charts and tables for performance analysis.
+- Dividend tracking and total-return calculation.
+- CI/CD workflows for continuous integration, `cargo audit`, `deno audit`,
+  Dependency Review, Gitleaks, Markdown Lint, Semgrep, and Shellcheck.
+- Dependabot configuration for the Cargo and GitHub Actions ecosystems with a
+  release-age cooldown.
+- `SECURITY.md` supply-chain runbook with a disclosure contact and emergency
+  dependency-bump procedures for both the Rust and Deno sides.
+
+### Changed
+
+- The binary now consumes the `grq_validation` library crate rather than
+  duplicating logic.
+- Untrusted TSV fields are escaped to prevent stored/DOM XSS in the dashboard.
+
+[Unreleased]: https://github.com/stSoftwareAU/GRQ-validation/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/stSoftwareAU/GRQ-validation/releases/tag/v0.1.10
