@@ -54,6 +54,47 @@ pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
     Ok(index_data)
 }
 
+/// Builds the on-disk path for a score file, guarding against path traversal.
+///
+/// The `file` field originates from `docs/scores/index.json`, which can be
+/// influenced by contributors or upstream tooling. To stop a crafted entry
+/// such as `"../../../tmp/evil"` escaping the intended `docs/scores/`
+/// directory, this rejects any `file` value that is absolute or that contains
+/// a parent-directory (`..`) segment before joining. With neither present, the
+/// joined path is lexically guaranteed to stay within `<docs_path>/scores`.
+/// Mirrors the containment guard in `helpers/server.ts::getFilePath`.
+pub fn build_score_file_path(docs_path: &str, file: &str) -> Result<String> {
+    use std::path::Component;
+
+    if file.trim().is_empty() {
+        return Err(anyhow!("Refusing empty score file path"));
+    }
+
+    let candidate = Path::new(file);
+
+    // Build within the scores root via join rather than string concatenation,
+    // keeping only normal segments. Any `..`, root, or prefix component is a
+    // traversal attempt and is rejected.
+    let mut full_path = Path::new(docs_path).join("scores");
+    for component in candidate.components() {
+        match component {
+            Component::ParentDir => {
+                return Err(anyhow!(
+                    "Refusing score file path with parent-directory segment: {file:?}"
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(anyhow!("Refusing absolute score file path: {file:?}"));
+            }
+            // `.` adds nothing; normal segments extend the path.
+            Component::CurDir => {}
+            Component::Normal(segment) => full_path.push(segment),
+        }
+    }
+
+    Ok(full_path.to_string_lossy().into_owned())
+}
+
 pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
     // Extract ticker from "NYSE:SEM" -> "SEM"
     symbol
@@ -871,7 +912,16 @@ pub fn update_index_with_performance(docs_path: &str) -> Result<()> {
     let mut index_data = read_index_json(docs_path)?;
 
     for score_entry in &mut index_data.scores {
-        let score_file_path = format!("{}/scores/{}", docs_path, score_entry.file);
+        let score_file_path = match build_score_file_path(docs_path, &score_entry.file) {
+            Ok(path) => path,
+            Err(e) => {
+                println!(
+                    "Warning: Skipping unsafe score file path {}: {}",
+                    score_entry.file, e
+                );
+                continue;
+            }
+        };
 
         // Only calculate performance for files that are at least 90 days old
         let score_date = NaiveDate::parse_from_str(&score_entry.date, "%Y-%m-%d")?;
@@ -957,6 +1007,38 @@ mod tests {
         assert!(!validate_stock_symbol(
             "THISISAREALLYLONGSTOCKSYMBOLTHATEXCEEDSTHELIMIT"
         ));
+    }
+
+    #[test]
+    fn test_build_score_file_path_valid() {
+        // A normal nested score file resolves within docs/scores.
+        let path = build_score_file_path("docs", "2025/June/20.tsv").unwrap();
+        assert_eq!(path, "docs/scores/2025/June/20.tsv");
+
+        // A leading "./" is harmless and stays contained.
+        let path = build_score_file_path("docs", "./2025/June/20.tsv").unwrap();
+        assert_eq!(path, "docs/scores/2025/June/20.tsv");
+    }
+
+    #[test]
+    fn test_build_score_file_path_rejects_parent_traversal() {
+        let err = build_score_file_path("docs", "../../../../tmp/evil.csv").unwrap_err();
+        assert!(err.to_string().contains("parent-directory"));
+
+        // Traversal hidden mid-path is also rejected.
+        assert!(build_score_file_path("docs", "2025/../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn test_build_score_file_path_rejects_absolute() {
+        let err = build_score_file_path("docs", "/etc/passwd").unwrap_err();
+        assert!(err.to_string().contains("absolute"));
+    }
+
+    #[test]
+    fn test_build_score_file_path_rejects_empty() {
+        assert!(build_score_file_path("docs", "").is_err());
+        assert!(build_score_file_path("docs", "   ").is_err());
     }
 
     #[test]
