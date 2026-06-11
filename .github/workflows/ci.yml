@@ -9,6 +9,15 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Cancel superseded runs (Issue #69). Force-pushes and rapid commits to the
+# same ref otherwise queue redundant full runs (test, release build, SBOM,
+# Pages deploy) that each hold a runner and can race on shared resources such
+# as the Pages deployment. Keying on workflow + ref with cancel-in-progress
+# leaves only the latest run for a given ref alive.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Least-privilege default GITHUB_TOKEN scope (Issue #70). check-changes, test,
 # and build only ever read repository contents, so they inherit this. The
 # deploy-pages job overrides it below where elevation is genuinely needed.
