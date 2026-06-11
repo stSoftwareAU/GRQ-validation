@@ -1,0 +1,25 @@
+# CODEOWNERS — required reviewers for the GRQ-validation repository (Issue #74).
+#
+# GitHub uses this file to request reviews automatically and, once the default
+# branch enables "Require review from Code Owners" branch protection, to enforce
+# that a named owner approves changes to the matched paths.
+#
+# Owners MUST have write access to this repository, otherwise GitHub silently
+# ignores the rule. The org has no `maintainers` team with access here, so the
+# trusted human administrators are listed directly. Update this list if the set
+# of trusted maintainers changes (e.g. once a dedicated team is granted access).
+
+# Default owners for everything in the repository.
+*                       @nleck @Green-Beret @stservice
+
+# Privileged CI/CD surface. These workflows run with id-token: write and consume
+# non-GITHUB_TOKEN secrets (SEMGREP_APP_TOKEN, CODECOV_TOKEN, GITLEAKS_LICENSE,
+# ACTIONS_PUSH), so every change here needs a trusted reviewer's approval to
+# guard against the tj-actions / OIDC-theft supply-chain attack shape.
+/.github/workflows/     @nleck @Green-Beret @stservice
+
+# Composite/local actions invoked by the workflows above.
+/.github/actions/       @nleck @Green-Beret @stservice
+
+# CODEOWNERS governs its own reviewers — changing trusted owners needs approval.
+/.github/CODEOWNERS      @nleck @Green-Beret @stservice
