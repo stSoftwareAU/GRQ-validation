@@ -858,7 +858,7 @@ class GRQValidator {
                 const processed = GRQProjection.buildIndexSeriesFromMap(priceMap, name, startDate, endDate);
                 if (processed && processed.initialPrice && processed.currentPrice) {
                     this.marketIndexData[key] = processed;
-                    console.log(`${name} data processed successfully:`, {
+                    console.log('%s data processed successfully:', name, {
                         initialPrice: processed.initialPrice,
                         currentPrice: processed.currentPrice,
                         dataPoints: processed.data.length
