@@ -1,0 +1,50 @@
+name: Accessibility
+
+# Automated accessibility (a11y) gate for the docs/ dashboard UI (Issue #92).
+#
+# The repo ships an interactive "GRQ Validation Dashboard" from docs/
+# (index.html, list.html, app.js, list.js) and publishes it to GitHub Pages.
+# This workflow runs pa11y-ci against the rendered dashboard pages on every
+# pull request that touches docs/, failing the build on WCAG 2.1 AA violations
+# so accessibility regressions (missing form labels, insufficient colour
+# contrast, missing alt text, non-keyboard-navigable controls) are caught on
+# the pull request that introduces them — the same gate the existing
+# semgrep/gitleaks checks apply.
+#
+# Third-party actions are pinned to 40-character commit SHAs to satisfy the
+# supply-chain rule, consistent with the other workflows in this repo.
+
+on:
+  pull_request:
+    paths: ["docs/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  pa11y:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions/checkout@v4.2.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      # actions/setup-node@v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "20"
+      - name: Serve docs/ dashboard and wait for it to come up
+        run: |
+          npx --yes http-server docs -p 8080 --silent &
+          for i in $(seq 1 30); do
+            if curl -sSf http://localhost:8080/index.html >/dev/null 2>&1; then
+              echo "Static server is up"
+              break
+            fi
+            sleep 1
+          done
+      - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
+        run: >
+          npx --yes pa11y-ci
+          --standard WCAG2AA
+          http://localhost:8080/index.html
+          http://localhost:8080/list.html
