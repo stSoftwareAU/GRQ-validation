@@ -10,6 +10,10 @@ Pages.
   stock portfolios.
 - **Market Data Integration** — fetch and process historical stock data into
   per-score-file CSVs.
+- **Benchmark Comparison** — S&P 500, NASDAQ and Russell 2000 index data is
+  fetched first-party (server-side, directly from Yahoo Finance — no public CORS
+  proxy) by `scripts/fetch_market_indices.ts` and published as the same-origin
+  static file `docs/market-indices.json`, which the dashboard reads directly.
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`.
@@ -27,7 +31,14 @@ flowchart LR
     B --> D[scores/index.json]
     C --> E[Dashboard docs/index.html]
     D --> E
+    F[fetch_market_indices.ts] --> G[docs/market-indices.json benchmark data]
+    G --> E
 ```
+
+The dashboard reads every input from its own origin: per-score market CSVs, the
+score index, and the benchmark-index file. Benchmark data is fetched
+server-side and committed, so a visitor's browser never calls an untrusted
+third-party relay (issue #93).
 
 ## Quick Start
 
@@ -139,10 +150,12 @@ GRQ-validation/
 │   ├── list.js             # List page logic
 │   ├── styles.css          # Main dashboard styling
 │   ├── list.css            # List page styling
+│   ├── market-indices.json # First-party benchmark index data (same-origin)
 │   └── scores/             # Score files and generated market data
 ├── tests/                  # Rust and Deno tests
 ├── helpers/                # Local development helpers (e.g. static server)
 ├── scripts/                # Git hooks and utility scripts
+│   └── fetch_market_indices.ts  # Server-side benchmark-index fetcher
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)

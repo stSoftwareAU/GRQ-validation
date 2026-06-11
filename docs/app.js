@@ -814,221 +814,73 @@ class GRQValidator {
 
             console.log('Score date for market data:', scoreDate.toISOString().split('T')[0]);
 
-            // Calculate date range (from score date to now)
+            // Calculate date range (from score date to now). Benchmark series
+            // are sliced to this window from the first-party data file.
             const endDate = new Date();
             const startDate = new Date(scoreDate);
-            
-            // Format dates for Yahoo Finance API
-            const startTimestamp = Math.floor(startDate.getTime() / 1000);
-            const endTimestamp = Math.floor(endDate.getTime() / 1000);
 
             console.log('Market data date range:', {
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),
-                startTimestamp,
-                endTimestamp,
                 dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
             });
 
-            console.log('Fetching SP500 data from Yahoo Finance via CORS proxy...');
-            
-            // Fetch SP500 data with multiple proxy options and better error handling
-            let sp500Data = null;
-            const sp500Proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
-                `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
-                `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`
-            ];
-            
-            for (let i = 0; i < sp500Proxies.length; i++) {
-                try {
-                    console.log(`Attempting SP500 fetch with proxy ${i + 1}/${sp500Proxies.length}...`);
-                    const sp500Response = await Promise.race([
-                        fetch(sp500Proxies[i], { method: 'GET' }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('SP500 request timeout')), 8000))
-                    ]);
-                    
-                    if (!sp500Response.ok) {
-                        throw new Error(`SP500 API request failed: ${sp500Response.status} ${sp500Response.statusText}`);
-                    }
-                    
-                    const responseText = await sp500Response.text();
-                    if (responseText.includes('Too Many Requests') || responseText.includes('rate limit')) {
-                        throw new Error('Yahoo Finance rate limit exceeded');
-                    }
-                    
-                    sp500Data = JSON.parse(responseText);
-                    console.log('SP500 raw data (proxy', i + 1, '):', sp500Data);
-                    break; // Success, exit the loop
-                } catch (sp500Error) {
-                    console.warn(`SP500 fetch failed with proxy ${i + 1}:`, sp500Error);
-                    if (i === sp500Proxies.length - 1) {
-                        console.warn('SP500 fetch failed with all proxies, continuing without market data');
-                        sp500Data = null;
-                    }
+            // Read benchmark indices from a same-origin static file published
+            // under docs/ (issue #93). Previously the dashboard fetched Yahoo
+            // Finance through arbitrary public CORS proxies, trusting uncontrolled
+            // third-party relays for the data it charts; it now reads first-party
+            // data only — no runtime cross-origin call, no untrusted intermediary.
+            let indexMaps = null;
+            try {
+                const timestamp = new Date().getTime();
+                const response = await fetch(`market-indices.json?t=${timestamp}`);
+                if (!response.ok) {
+                    throw new Error(`market-indices.json request failed: ${response.status} ${response.statusText}`);
                 }
+                indexMaps = await response.json();
+            } catch (fetchError) {
+                console.warn('Benchmark index data unavailable:', fetchError.message);
+                indexMaps = null;
             }
 
-            // Add delay between API calls to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            console.log('Fetching NASDAQ data from Yahoo Finance via CORS proxy...');
-            // Fetch NASDAQ data with multiple proxy options and better error handling
-            let nasdaqData = null;
-            const nasdaqProxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
-                `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
-                `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`
-            ];
-            
-            for (let i = 0; i < nasdaqProxies.length; i++) {
-                try {
-                    console.log(`Attempting NASDAQ fetch with proxy ${i + 1}/${nasdaqProxies.length}...`);
-                    const nasdaqResponse = await Promise.race([
-                        fetch(nasdaqProxies[i], { method: 'GET' }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('NASDAQ request timeout')), 8000))
-                    ]);
-                    
-                    if (!nasdaqResponse.ok) {
-                        throw new Error(`NASDAQ API request failed: ${nasdaqResponse.status} ${nasdaqResponse.statusText}`);
-                    }
-                    
-                    const responseText = await nasdaqResponse.text();
-                    if (responseText.includes('Too Many Requests') || responseText.includes('rate limit')) {
-                        throw new Error('Yahoo Finance rate limit exceeded');
-                    }
-                    
-                    nasdaqData = JSON.parse(responseText);
-                    console.log('NASDAQ raw data (proxy', i + 1, '):', nasdaqData);
-                    break; // Success, exit the loop
-                } catch (nasdaqError) {
-                    console.warn(`NASDAQ fetch failed with proxy ${i + 1}:`, nasdaqError);
-                    if (i === nasdaqProxies.length - 1) {
-                        console.warn('NASDAQ fetch failed with all proxies, continuing without market data');
-                        nasdaqData = null;
-                    }
-                }
-            }
-
-            // Add delay between API calls to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            console.log('Fetching Russell 2000 data from Yahoo Finance via CORS proxy...');
-            // Fetch Russell 2000 data with multiple proxy options and better error handling
-            let russell2000Data = null;
-            const russell2000Proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5ERUT?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
-                `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5ERUT?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`,
-                `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/%5ERUT?period1=${startTimestamp}&period2=${endTimestamp}&interval=1d`)}`
-            ];
-            
-            for (let i = 0; i < russell2000Proxies.length; i++) {
-                try {
-                    console.log(`Attempting Russell 2000 fetch with proxy ${i + 1}/${russell2000Proxies.length}...`);
-                    const russell2000Response = await Promise.race([
-                        fetch(russell2000Proxies[i], { method: 'GET' }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('Russell 2000 request timeout')), 5000))
-                    ]);
-                    
-                    if (!russell2000Response.ok) {
-                        throw new Error(`Russell 2000 API request failed: ${russell2000Response.status} ${russell2000Response.statusText}`);
-                    }
-                    
-                    const responseText = await russell2000Response.text();
-                    if (responseText.includes('Too Many Requests') || responseText.includes('rate limit')) {
-                        throw new Error('Yahoo Finance rate limit exceeded');
-                    }
-                    
-                    russell2000Data = JSON.parse(responseText);
-                    console.log('Russell 2000 raw data (proxy', i + 1, '):', russell2000Data);
-                    break; // Success, exit the loop
-                } catch (russell2000Error) {
-                    console.warn(`Russell 2000 fetch failed with proxy ${i + 1}:`, russell2000Error);
-                    if (i === russell2000Proxies.length - 1) {
-                        console.warn('Russell 2000 fetch failed with all proxies, continuing without Russell 2000 data');
-                        russell2000Data = null;
-                    }
-                }
-            }
-
-            // Process the data - only include valid data
+            // Build each index series from its {date: close} map, shaped the same
+            // way the chart consumes it via the shared projection kernel.
             this.marketIndexData = {};
-            
-            if (sp500Data) {
-                console.log('Processing SP500 data...');
-                const sp500Processed = this.processYahooFinanceData(sp500Data, 'SP500');
-                if (sp500Processed && sp500Processed.initialPrice && sp500Processed.currentPrice) {
-                    this.marketIndexData.sp500 = sp500Processed;
-                    console.log('SP500 data processed successfully:', {
-                        initialPrice: sp500Processed.initialPrice,
-                        currentPrice: sp500Processed.currentPrice,
-                        dataPoints: sp500Processed.data.length
+
+            const indexConfig = [
+                { key: 'sp500', mapKey: 'sp500', name: 'SP500' },
+                { key: 'nasdaq', mapKey: 'nasdaq', name: 'NASDAQ' },
+                { key: 'russell2000', mapKey: 'russell2000', name: 'Russell 2000' }
+            ];
+
+            for (const { key, mapKey, name } of indexConfig) {
+                const priceMap = indexMaps ? indexMaps[mapKey] : null;
+                const processed = GRQProjection.buildIndexSeriesFromMap(priceMap, name, startDate, endDate);
+                if (processed && processed.initialPrice && processed.currentPrice) {
+                    this.marketIndexData[key] = processed;
+                    console.log(`${name} data processed successfully:`, {
+                        initialPrice: processed.initialPrice,
+                        currentPrice: processed.currentPrice,
+                        dataPoints: processed.data.length
                     });
                 } else {
-                    console.warn('SP500 data processing failed - missing required fields');
+                    console.warn(`No ${name} data available`);
                 }
-            } else {
-                console.warn('No SP500 data available');
-            }
-            
-            if (nasdaqData) {
-                console.log('Processing NASDAQ data...');
-                const nasdaqProcessed = this.processYahooFinanceData(nasdaqData, 'NASDAQ');
-                if (nasdaqProcessed && nasdaqProcessed.initialPrice && nasdaqProcessed.currentPrice) {
-                    this.marketIndexData.nasdaq = nasdaqProcessed;
-                    console.log('NASDAQ data processed successfully:', {
-                        initialPrice: nasdaqProcessed.initialPrice,
-                        currentPrice: nasdaqProcessed.currentPrice,
-                        dataPoints: nasdaqProcessed.data.length
-                    });
-                } else {
-                    console.warn('NASDAQ data processing failed - missing required fields');
-                }
-            } else {
-                console.warn('No NASDAQ data available');
-            }
-            
-            if (russell2000Data) {
-                console.log('Processing Russell 2000 data...');
-                console.log('Russell 2000 raw data structure:', {
-                    hasChart: !!russell2000Data.chart,
-                    hasResult: !!russell2000Data.chart?.result,
-                    resultLength: russell2000Data.chart?.result?.length || 0,
-                    hasTimestamp: !!russell2000Data.chart?.result?.[0]?.timestamp,
-                    hasQuote: !!russell2000Data.chart?.result?.[0]?.indicators?.quote
-                });
-                
-                const russell2000Processed = this.processYahooFinanceData(russell2000Data, 'Russell 2000');
-                console.log('Russell 2000 processed result:', russell2000Processed);
-                
-                if (russell2000Processed && russell2000Processed.initialPrice && russell2000Processed.currentPrice) {
-                    this.marketIndexData.russell2000 = russell2000Processed;
-                    console.log('Russell 2000 data processed successfully:', {
-                        initialPrice: russell2000Processed.initialPrice,
-                        currentPrice: russell2000Processed.currentPrice,
-                        dataPoints: russell2000Processed.data.length
-                    });
-                } else {
-                    console.warn('Russell 2000 data processing failed - missing required fields');
-                    console.warn('Processed data:', russell2000Processed);
-                }
-            } else {
-                console.warn('No Russell 2000 data available');
             }
 
             console.log('Final market index data:', this.marketIndexData);
             
             // Show user-friendly message if market data failed
             if (!this.marketIndexData || (!this.marketIndexData.sp500 && !this.marketIndexData.nasdaq && !this.marketIndexData.russell2000)) {
-                console.warn('Market comparison data unavailable - CORS proxies may be down');
+                console.warn('Market comparison data unavailable - benchmark data file missing or empty');
                 // Optionally show a user notification
                 const marketComparisonDiv = document.getElementById('marketComparison');
                 if (marketComparisonDiv) {
                     marketComparisonDiv.innerHTML = `
                         <div class="alert alert-warning">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Market Comparison Unavailable:</strong> 
-                            SP500, NASDAQ, and Russell 2000 data cannot be loaded due to CORS restrictions. 
+                            <strong>Market Comparison Unavailable:</strong>
+                            SP500, NASDAQ, and Russell 2000 benchmark data could not be loaded.
                             The chart will still display portfolio performance data.
                         </div>
                     `;
@@ -1063,52 +915,6 @@ class GRQValidator {
     }
 
 
-
-    processYahooFinanceData(yahooData, indexName) {
-        if (!yahooData.chart || !yahooData.chart.result || !yahooData.chart.result[0]) {
-            console.warn(`No data available for ${indexName}`);
-            return null;
-        }
-
-        const result = yahooData.chart.result[0];
-        const timestamps = result.timestamp;
-        const quotes = result.indicators.quote[0];
-        const closes = quotes.close;
-
-        console.log(`${indexName} data processing:`, {
-            timestampsLength: timestamps?.length || 0,
-            closesLength: closes?.length || 0,
-            firstTimestamp: timestamps?.[0] ? new Date(timestamps[0] * 1000).toISOString() : 'none',
-            lastTimestamp: timestamps?.[timestamps.length - 1] ? new Date(timestamps[timestamps.length - 1] * 1000).toISOString() : 'none',
-            firstClose: closes?.[0],
-            lastClose: closes?.[closes.length - 1]
-        });
-
-        const data = [];
-        for (let i = 0; i < timestamps.length; i++) {
-            if (closes[i] !== null && closes[i] !== undefined) {
-                const date = this.setDateToMidnight(new Date(timestamps[i] * 1000));
-                data.push({
-                    date: date,
-                    close: closes[i]
-                });
-            }
-        }
-
-        console.log(`${indexName} processed data:`, {
-            dataLength: data.length,
-            initialPrice: data.length > 0 ? data[0].close : null,
-            currentPrice: data.length > 0 ? data[data.length - 1].close : null,
-            dateRange: data.length > 0 ? `${data[0].date.toISOString()} to ${data[data.length - 1].date.toISOString()}` : 'none'
-        });
-
-        return {
-            name: indexName,
-            data: data,
-            initialPrice: data.length > 0 ? data[0].close : null,
-            currentPrice: data.length > 0 ? data[data.length - 1].close : null
-        };
-    }
 
     calculateMarketPerformance(indexData) {
         if (!indexData || !indexData.initialPrice || !indexData.currentPrice) {
