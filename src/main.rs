@@ -2,8 +2,9 @@ use anyhow::{anyhow, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use grq_validation::utils::{
-    create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
-    extract_ticker_codes_from_score_file, read_index_json,
+    build_score_file_path, create_dividend_csv_for_score_file,
+    create_market_data_long_csv_for_score_file, extract_ticker_codes_from_score_file,
+    read_index_json,
 };
 use log::info;
 use std::path::Path;
@@ -278,7 +279,13 @@ fn main() -> Result<()> {
 
     // Process each score file
     for (i, score_entry) in scores_to_process.iter().enumerate() {
-        let score_file_path = format!("{}/scores/{}", args.docs_path, score_entry.file);
+        let score_file_path = match build_score_file_path(&args.docs_path, &score_entry.file) {
+            Ok(path) => path,
+            Err(e) => {
+                log::error!("Skipping unsafe score file path {}: {e}", score_entry.file);
+                continue;
+            }
+        };
 
         info!(
             "Processing score file {}/{}: {}",
