@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 10
     steps:
       # actions/checkout@v4.2.2
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           fetch-depth: 0
       # Fetch the PR base branch so gitleaks-action's computed commit
@@ -33,7 +33,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin "${{ github.base_ref }}:${{ github.base_ref }}" || true
       # gitleaks/gitleaks-action@v2.3.9
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Org-level Gitleaks Pro licence (Issue #1636). Required for
