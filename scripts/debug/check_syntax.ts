@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read
 
 // Simple syntax checker for JavaScript files
-async function checkSyntax() {
+export async function checkSyntax() {
     try {
         console.log('🔍 Checking JavaScript syntax...');
         
@@ -101,5 +101,12 @@ async function checkSyntax() {
     }
 }
 
-// Run the check
-checkSyntax(); 
+// Run the check only when executed directly, never on import. Await via a
+// `.catch` so a rejection surfaces as a non-zero exit instead of a silent
+// floating promise (issue #89).
+if (import.meta.main) {
+    checkSyntax().catch((error: unknown) => {
+        console.error(error);
+        Deno.exit(1);
+    });
+} 

@@ -1,9 +1,10 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use grq_validation::utils::{
-    create_dividend_csv_for_score_file, create_market_data_long_csv_for_score_file,
-    extract_ticker_codes_from_score_file, read_index_json,
+    build_score_file_path, create_dividend_csv_for_score_file,
+    create_market_data_long_csv_for_score_file, extract_ticker_codes_from_score_file,
+    read_index_json,
 };
 use log::info;
 use std::path::Path;
@@ -92,138 +93,109 @@ fn main() -> Result<()> {
         let days_since_score = (current_date - score_date).num_days();
 
         if days_since_score >= 90 {
-            // Use regular performance calculation
-            match grq_validation::utils::calculate_portfolio_performance(
+            // Use regular performance calculation. `?` propagates the error to
+            // `main`, which prints the full context chain on exit.
+            let performance = grq_validation::utils::calculate_portfolio_performance(
                 &score_file_path,
                 score_file_date,
-            ) {
-                Ok(performance) => {
-                    println!("\n=== {date} Performance Results ===");
-                    println!("Score Date: {}", performance.score_date);
-                    println!("Total Stocks: {}", performance.total_stocks);
-                    println!("90-Day Performance: {:.2}%", performance.performance_90_day);
-                    println!(
-                        "Annualized Performance: {:.2}%",
-                        performance.performance_annualized
-                    );
-                    println!();
+            )
+            .with_context(|| format!("calculating performance for {date}"))?;
 
-                    println!("Individual Stock Performances:");
-                    for stock_perf in &performance.individual_performances {
-                        println!("  {}: Buy=${:.2}, Current=${:.2}, Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
-                        stock_perf.ticker,
-                        stock_perf.buy_price,
-                        stock_perf.current_price,
-                        stock_perf.gain_loss_percent,
-                        stock_perf.dividends_total,
-                        stock_perf.total_return_percent
-                    );
-                    }
+            println!("\n=== {date} Performance Results ===");
+            println!("Score Date: {}", performance.score_date);
+            println!("Total Stocks: {}", performance.total_stocks);
+            println!("90-Day Performance: {:.2}%", performance.performance_90_day);
+            println!(
+                "Annualized Performance: {:.2}%",
+                performance.performance_annualized
+            );
+            println!();
 
-                    // Update the index.json with this performance data
-                    let mut index_data = grq_validation::utils::read_index_json(&args.docs_path)?;
-                    for score_entry in &mut index_data.scores {
-                        if score_entry.date == date {
-                            score_entry.performance_90_day = Some(performance.performance_90_day);
-                            score_entry.performance_annualized =
-                                Some(performance.performance_annualized);
-                            score_entry.total_stocks = Some(performance.total_stocks);
-                            break;
-                        }
-                    }
+            println!("Individual Stock Performances:");
+            for stock_perf in &performance.individual_performances {
+                println!("  {}: Buy=${:.2}, Current=${:.2}, Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
+                    stock_perf.ticker,
+                    stock_perf.buy_price,
+                    stock_perf.current_price,
+                    stock_perf.gain_loss_percent,
+                    stock_perf.dividends_total,
+                    stock_perf.total_return_percent
+                );
+            }
 
-                    // Write updated index back to file
-                    let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
-                    let json_content = serde_json::to_string_pretty(&index_data)?;
-                    std::fs::write(index_path, json_content)?;
-                    println!("\nUpdated index.json with performance data for {date}");
-                }
-                Err(e) => {
-                    log::error!("Failed to calculate performance: {e}");
-                    return Err(e);
+            // Update the index.json with this performance data
+            let mut index_data = grq_validation::utils::read_index_json(&args.docs_path)?;
+            for score_entry in &mut index_data.scores {
+                if score_entry.date == date {
+                    score_entry.performance_90_day = Some(performance.performance_90_day);
+                    score_entry.performance_annualized = Some(performance.performance_annualized);
+                    score_entry.total_stocks = Some(performance.total_stocks);
+                    break;
                 }
             }
+
+            // Write updated index back to file
+            let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+            let json_content = serde_json::to_string_pretty(&index_data)?;
+            std::fs::write(index_path, json_content)?;
+            println!("\nUpdated index.json with performance data for {date}");
         } else {
-            // Use hybrid projection for dates less than 90 days old
-            match grq_validation::utils::read_tsv_score_file(&score_file_path) {
-                Ok(stock_records) => {
-                    match grq_validation::utils::read_market_data_from_csv(
-                        &grq_validation::utils::derive_csv_output_path(&score_file_path),
-                    ) {
-                        Ok(market_data_csv) => {
-                            match grq_validation::utils::calculate_hybrid_projection(
-                                &stock_records,
-                                score_file_date,
-                                &market_data_csv,
-                            ) {
-                                Ok(performance) => {
-                                    println!("\n=== {date} Projection Results ===");
-                                    println!("Score Date: {}", performance.score_date);
-                                    println!("Total Stocks: {}", performance.total_stocks);
-                                    println!(
-                                        "Projected 90-Day Performance: {:.2}%",
-                                        performance.performance_90_day
-                                    );
-                                    println!(
-                                        "Projected Annualized Performance: {:.2}%",
-                                        performance.performance_annualized
-                                    );
-                                    println!();
+            // Use hybrid projection for dates less than 90 days old. Each step
+            // propagates with `?` plus context instead of a nested match ladder.
+            let stock_records = grq_validation::utils::read_tsv_score_file(&score_file_path)
+                .with_context(|| format!("reading TSV file {score_file_path}"))?;
+            let market_data_csv = grq_validation::utils::read_market_data_from_csv(
+                &grq_validation::utils::derive_csv_output_path(&score_file_path),
+            )
+            .context("reading market data CSV")?;
+            let performance = grq_validation::utils::calculate_hybrid_projection(
+                &stock_records,
+                score_file_date,
+                &market_data_csv,
+            )
+            .with_context(|| format!("calculating projection for {date}"))?;
 
-                                    println!("Individual Stock Projections:");
-                                    for stock_perf in &performance.individual_performances {
-                                        println!("  {}: Buy=${:.2}, Current=${:.2}, Projected Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
-                                            stock_perf.ticker,
-                                            stock_perf.buy_price,
-                                            stock_perf.current_price,
-                                            stock_perf.gain_loss_percent,
-                                            stock_perf.dividends_total,
-                                            stock_perf.total_return_percent
-                                        );
-                                    }
+            println!("\n=== {date} Projection Results ===");
+            println!("Score Date: {}", performance.score_date);
+            println!("Total Stocks: {}", performance.total_stocks);
+            println!(
+                "Projected 90-Day Performance: {:.2}%",
+                performance.performance_90_day
+            );
+            println!(
+                "Projected Annualized Performance: {:.2}%",
+                performance.performance_annualized
+            );
+            println!();
 
-                                    // Update the index.json with this projection data
-                                    let mut index_data =
-                                        grq_validation::utils::read_index_json(&args.docs_path)?;
-                                    for score_entry in &mut index_data.scores {
-                                        if score_entry.date == date {
-                                            score_entry.performance_90_day =
-                                                Some(performance.performance_90_day);
-                                            score_entry.performance_annualized =
-                                                Some(performance.performance_annualized);
-                                            score_entry.total_stocks =
-                                                Some(performance.total_stocks);
-                                            break;
-                                        }
-                                    }
+            println!("Individual Stock Projections:");
+            for stock_perf in &performance.individual_performances {
+                println!("  {}: Buy=${:.2}, Current=${:.2}, Projected Gain/Loss={:.2}%, Dividends=${:.2}, Total Return={:.2}%",
+                    stock_perf.ticker,
+                    stock_perf.buy_price,
+                    stock_perf.current_price,
+                    stock_perf.gain_loss_percent,
+                    stock_perf.dividends_total,
+                    stock_perf.total_return_percent
+                );
+            }
 
-                                    // Write updated index back to file
-                                    let index_path = Path::new(&args.docs_path)
-                                        .join("scores")
-                                        .join("index.json");
-                                    let json_content = serde_json::to_string_pretty(&index_data)?;
-                                    std::fs::write(index_path, json_content)?;
-                                    println!(
-                                        "\nUpdated index.json with projection data for {date}"
-                                    );
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to calculate projection: {e}");
-                                    return Err(e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to read market data CSV: {e}");
-                            return Err(e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::error!("Failed to read TSV file: {e}");
-                    return Err(e);
+            // Update the index.json with this projection data
+            let mut index_data = grq_validation::utils::read_index_json(&args.docs_path)?;
+            for score_entry in &mut index_data.scores {
+                if score_entry.date == date {
+                    score_entry.performance_90_day = Some(performance.performance_90_day);
+                    score_entry.performance_annualized = Some(performance.performance_annualized);
+                    score_entry.total_stocks = Some(performance.total_stocks);
+                    break;
                 }
             }
+
+            // Write updated index back to file
+            let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
+            let json_content = serde_json::to_string_pretty(&index_data)?;
+            std::fs::write(index_path, json_content)?;
+            println!("\nUpdated index.json with projection data for {date}");
         }
 
         info!("Single date processing completed");
@@ -278,7 +250,13 @@ fn main() -> Result<()> {
 
     // Process each score file
     for (i, score_entry) in scores_to_process.iter().enumerate() {
-        let score_file_path = format!("{}/scores/{}", args.docs_path, score_entry.file);
+        let score_file_path = match build_score_file_path(&args.docs_path, &score_entry.file) {
+            Ok(path) => path,
+            Err(e) => {
+                log::error!("Skipping unsafe score file path {}: {e}", score_entry.file);
+                continue;
+            }
+        };
 
         info!(
             "Processing score file {}/{}: {}",

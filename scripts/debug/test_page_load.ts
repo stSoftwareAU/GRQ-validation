@@ -7,7 +7,7 @@ import { checkJsSyntax } from "../../helpers/js_syntax.ts";
 // valid JavaScript. It no longer greps the served source for substrings or
 // brittle regexes (issue #82): those asserted that strings appeared in source,
 // not anything a user can observe, and broke on any rename or reformat.
-async function testPageLoad() {
+export async function testPageLoad() {
     let serverProcess: Deno.ChildProcess | null = null;
     
     try {
@@ -90,5 +90,12 @@ async function testPageLoad() {
     }
 }
 
-// Run the test
-testPageLoad(); 
+// Run the test only when executed directly, never on import. Await via a
+// `.catch` so a rejection surfaces as a non-zero exit instead of a silent
+// floating promise (issue #89).
+if (import.meta.main) {
+    testPageLoad().catch((error: unknown) => {
+        console.error(error);
+        Deno.exit(1);
+    });
+} 
