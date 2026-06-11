@@ -17,14 +17,16 @@
     "node_modules/**/*"
   ],
   "include": [
-    "tests/**/*"
+    "tests/**/*",
+    "helpers/**/*.ts",
+    "*.ts"
   ],
   "lint": {
-    "include": ["tests/**/*"],
+    "include": ["tests/**/*", "helpers/**/*.ts", "*.ts"],
     "exclude": ["docs/**/*", "src/**/*"]
   },
   "fmt": {
-    "include": ["tests/**/*"],
+    "include": ["tests/**/*", "helpers/**/*.ts", "*.ts"],
     "exclude": ["docs/**/*", "src/**/*"]
   },
   "test": {

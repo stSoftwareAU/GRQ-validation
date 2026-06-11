@@ -1,5 +1,12 @@
 #!/usr/bin/env -S deno run --allow-read --allow-net
 
+// A single daily market-data observation as stored in docs/USDAUD.json.
+interface PricePoint {
+    date: string;
+    high: number;
+    low: number;
+}
+
 // Debug script to check NYSE:SCHW current price issue
 async function debugSCHWCurrentPrice() {
     try {
@@ -23,7 +30,7 @@ async function debugSCHWCurrentPrice() {
         // Show the latest data points
         const latestData = schwData.slice(-5);
         console.log('\n📊 Latest 5 data points:');
-        latestData.forEach((point: any, index: number) => {
+        latestData.forEach((point: PricePoint, index: number) => {
             const date = new Date(point.date);
             const high = point.high;
             const low = point.low;
@@ -81,7 +88,7 @@ async function debugSCHWCurrentPrice() {
         
         // Check if there might be a data loading issue
         console.log('\n📅 Checking data dates:');
-        const recentDates = schwData.slice(-10).map((point: any) => new Date(point.date).toISOString().split('T')[0]);
+        const recentDates = schwData.slice(-10).map((point: PricePoint) => new Date(point.date).toISOString().split('T')[0]);
         console.log('Recent dates:', recentDates);
         
         // Check if the data is recent enough

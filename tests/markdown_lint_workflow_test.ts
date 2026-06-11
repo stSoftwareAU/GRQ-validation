@@ -11,6 +11,8 @@ import { parse as parseJsonc } from "@std/jsonc";
 const WORKFLOW_PATH = ".github/workflows/markdown-lint.yml";
 const CONFIG_PATH = ".markdownlint-cli2.jsonc";
 
+type Step = { name?: string; run?: string };
+
 Deno.test("Markdown Lint workflow file exists", async () => {
   const stat = await Deno.stat(WORKFLOW_PATH);
   assert(stat.isFile, `${WORKFLOW_PATH} should be a file`);
@@ -48,10 +50,23 @@ Deno.test("Markdown Lint workflow defines markdownlint job", async () => {
   );
 });
 
-Deno.test("Markdown Lint workflow installs markdownlint-cli2 and runs it", async () => {
+Deno.test("Markdown Lint workflow runs markdownlint-cli2 in its job", async () => {
+  // WHAT check (Issue #86): parse the YAML and confirm the markdownlint job
+  // actually invokes markdownlint-cli2 in one of its `run` steps, rather than
+  // grepping the raw file for one exact install incantation. This keeps the
+  // real invariant (the lint job runs the linter) while tolerating a
+  // behaviour-preserving change to how the tool is installed (e.g. pinning a
+  // version, `npm i -g`, or a setup action).
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  assertStringIncludes(text, "npm install -g markdownlint-cli2");
-  assertStringIncludes(text, "markdownlint-cli2");
+  const doc = parseYaml(text) as { jobs: Record<string, { steps?: Step[] }> };
+  const steps = doc.jobs?.markdownlint?.steps ?? [];
+  assert(steps.length > 0, "markdownlint job must declare steps");
+  const runText = steps.map((s) => s.run ?? "").join("\n");
+  assertStringIncludes(
+    runText,
+    "markdownlint-cli2",
+    "markdownlint job must invoke markdownlint-cli2 in a run step",
+  );
 });
 
 Deno.test("Markdown Lint workflow pins actions to commit SHAs", async () => {

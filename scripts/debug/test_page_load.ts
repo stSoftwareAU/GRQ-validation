@@ -1,8 +1,14 @@
 #!/usr/bin/env -S deno run --allow-net --allow-run --allow-read
 
-// Test the page load by making HTTP requests
+import { checkJsSyntax } from "../../helpers/js_syntax.ts";
+
+// Manual smoke check: boot the server and confirm observable behaviour —
+// the page and app.js are served (HTTP 200) and app.js actually parses as
+// valid JavaScript. It no longer greps the served source for substrings or
+// brittle regexes (issue #82): those asserted that strings appeared in source,
+// not anything a user can observe, and broke on any rename or reformat.
 async function testPageLoad() {
-    let serverProcess: any = null;
+    let serverProcess: Deno.ChildProcess | null = null;
     
     try {
         console.log('🚀 Starting server...');
@@ -27,43 +33,28 @@ async function testPageLoad() {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const html = await response.text();
-        
-        // Check for basic page structure
-        if (!html.includes('<title>')) {
-            throw new Error('Page missing title tag');
-        }
-        
-        if (!html.includes('app.js')) {
-            throw new Error('Page missing app.js reference');
-        }
-        
-        console.log('✅ Main page loads successfully');
-        
-        // Test if app.js loads without syntax errors
+        // HTTP 200 is the observable signal that the page renders — we no
+        // longer grep the body for `<title>`/`app.js` substrings.
+        console.log('✅ Main page loads successfully (HTTP 200)');
+
+        // app.js must be served...
         const appJsResponse = await fetch('http://localhost:8000/app.js');
-        
+
         if (!appJsResponse.ok) {
             throw new Error(`app.js not found: HTTP ${appJsResponse.status}`);
         }
-        
+
         const appJs = await appJsResponse.text();
-        
-        // Basic syntax check - look for common issues
-        const syntaxChecks = [
-            { pattern: /const\s+(\w+)\s*=\s*[^;]+;\s*const\s+\1/, name: 'Duplicate const declaration' },
-            { pattern: /let\s+(\w+)\s*=\s*[^;]+;\s*let\s+\1/, name: 'Duplicate let declaration' },
-            { pattern: /var\s+(\w+)\s*=\s*[^;]+;\s*var\s+\1/, name: 'Duplicate var declaration' },
-            { pattern: /function\s+(\w+)\s*\([^)]*\)\s*{[^}]*function\s+\1/, name: 'Duplicate function declaration' },
-        ];
-        
-        for (const check of syntaxChecks) {
-            if (check.pattern.test(appJs)) {
-                throw new Error(`Potential syntax issue: ${check.name}`);
-            }
+
+        // ...and parse as valid JavaScript. Compiling the source catches real
+        // syntax errors (including non-adjacent duplicate declarations) that the
+        // old adjacency regexes missed, without depending on its formatting.
+        const syntax = checkJsSyntax(appJs);
+        if (!syntax.valid) {
+            throw new Error(`app.js has a syntax error: ${syntax.error}`);
         }
-        
-        console.log('✅ app.js loads without obvious syntax errors');
+
+        console.log('✅ app.js is served and parses as valid JavaScript');
         
         // Test data files
         const dataFiles = [

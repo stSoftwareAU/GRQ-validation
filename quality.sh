@@ -47,13 +47,13 @@ echo "🔍 Running DenoJS tests..."
 deno test --allow-read tests/*.ts
 
 echo "📝 Formatting JS, HTML, and CSS files with deno fmt..."
-deno fmt docs/*.js docs/*.html docs/*.css tests/*.ts
+deno fmt docs/*.js docs/*.html docs/*.css helpers/*.ts tests/*.ts
 
 echo "🔍 Running Deno lint..."
-deno lint tests/*.ts
+deno lint helpers/*.ts tests/*.ts
 
 echo "✅ Running Deno check..."
-deno check tests/*.ts
+deno check helpers/*.ts tests/*.ts
 
 echo "✅ Quality checks completed successfully!"
 if [ -d ".coverage" ]; then

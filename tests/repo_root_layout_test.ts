@@ -33,12 +33,29 @@ const FIX_NOTES = [
 ];
 
 // Stray test/debug scripts that must move into scripts/debug/.
+//
+// Note (Issue #83): test_formula_verification.js used to live here, but it was
+// an assertion-free demo that re-implemented the annualised formula and always
+// printed success. It has been deleted — the formula's production home is the
+// Rust calculate_annualized_performance (WHAT-tested in src/utils.rs), so the
+// demo verified nothing while duplicating the formula. See the deletion
+// regression test below.
+//
+// Note (Issue #85): test_feb15.rs was the Rust twin of the above — a scratch
+// fn main() that called calculate_portfolio_performance, printed the result and
+// asserted nothing (the Err arm still returned Ok). It has been deleted too;
+// calculate_portfolio_performance is WHAT-tested under tests/, so the demo
+// verified nothing while keeping a second untested invocation path.
 const DEBUG_SCRIPTS = [
-  "test_feb15.rs",
-  "test_formula_verification.js",
   "test_page_load.ts",
   "debug_schw_current_price.ts",
   "check_syntax.ts",
+];
+
+// Deleted demo scripts that must not reappear at the root or under scripts/debug/.
+const DELETED_DEBUG_SCRIPTS = [
+  "test_formula_verification.js",
+  "test_feb15.rs",
 ];
 
 Deno.test("fix-note docs are removed from the repository root", async () => {
@@ -73,6 +90,19 @@ Deno.test("stray test/debug scripts live under scripts/debug/", async () => {
     assert(
       await exists(`scripts/debug/${name}`),
       `scripts/debug/${name} must exist`,
+    );
+  }
+});
+
+Deno.test("assertion-free demo scripts are deleted (issues #83, #85)", async () => {
+  for (const name of DELETED_DEBUG_SCRIPTS) {
+    assert(
+      !(await exists(name)),
+      `${name} must not exist at the repository root`,
+    );
+    assert(
+      !(await exists(`scripts/debug/${name}`)),
+      `scripts/debug/${name} must be deleted, not retained as a false-green test`,
     );
   }
 });
