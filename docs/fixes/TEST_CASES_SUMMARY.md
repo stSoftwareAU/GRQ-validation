@@ -21,7 +21,7 @@ New Tests:
 5. Annualized Performance - Market Data Days vs Calendar Days
 6. Annualized Performance - Early Stage Scenarios
 7. Annualized Performance - Edge Cases and Error Handling
-8. Formula Verification Script (test_formula_verification.js)
+8. Formula Verification Script (scripts/debug/test_formula_verification.js)
 
 ## Key Test Results
 
@@ -45,7 +45,7 @@ deno test annualized_performance_test.ts --allow-read
 
 ### Running Verification Script
 ```bash
-node test_formula_verification.js
+node scripts/debug/test_formula_verification.js
 ```
 
 ## Coverage Summary
