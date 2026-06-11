@@ -26,7 +26,7 @@ jobs:
       - name: Deno fmt check
         run: deno fmt --check
       - name: Deno type check
-        run: deno check tests/*.ts
+        run: deno check helpers/*.ts tests/*.ts
       # Scan the resolved JSR/@std dependency graph against the advisory
       # database — the Deno-side counterpart to `cargo audit` (Issue #59).
       - name: Deno audit
