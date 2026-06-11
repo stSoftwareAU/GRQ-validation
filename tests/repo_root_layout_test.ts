@@ -40,16 +40,22 @@ const FIX_NOTES = [
 // Rust calculate_annualized_performance (WHAT-tested in src/utils.rs), so the
 // demo verified nothing while duplicating the formula. See the deletion
 // regression test below.
+//
+// Note (Issue #85): test_feb15.rs was the Rust twin of the above — a scratch
+// fn main() that called calculate_portfolio_performance, printed the result and
+// asserted nothing (the Err arm still returned Ok). It has been deleted too;
+// calculate_portfolio_performance is WHAT-tested under tests/, so the demo
+// verified nothing while keeping a second untested invocation path.
 const DEBUG_SCRIPTS = [
-  "test_feb15.rs",
   "test_page_load.ts",
   "debug_schw_current_price.ts",
   "check_syntax.ts",
 ];
 
-// The deleted demo script must not reappear at the root or under scripts/debug/.
+// Deleted demo scripts that must not reappear at the root or under scripts/debug/.
 const DELETED_DEBUG_SCRIPTS = [
   "test_formula_verification.js",
+  "test_feb15.rs",
 ];
 
 Deno.test("fix-note docs are removed from the repository root", async () => {
@@ -88,7 +94,7 @@ Deno.test("stray test/debug scripts live under scripts/debug/", async () => {
   }
 });
 
-Deno.test("assertion-free formula-verification demo is deleted (issue #83)", async () => {
+Deno.test("assertion-free demo scripts are deleted (issues #83, #85)", async () => {
   for (const name of DELETED_DEBUG_SCRIPTS) {
     assert(
       !(await exists(name)),
