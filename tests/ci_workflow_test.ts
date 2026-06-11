@@ -46,18 +46,15 @@ Deno.test("CI workflow no longer references the mutable rust-toolchain stable br
   );
 });
 
-Deno.test("CI workflow carries a version comment above each pinned action", async () => {
-  const text = await Deno.readTextFile(WORKFLOW_PATH);
-  const lines = text.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    if (!/^\s*-?\s*uses:/.test(lines[i])) continue;
-    const prev = (lines[i - 1] ?? "").trim();
-    assert(
-      /^#\s*\S+\/\S+@\S+/.test(prev),
-      `missing version comment above: ${lines[i].trim()}`,
-    );
-  }
-});
+// Note: the "readable version comment above each pinned action" convention is
+// deliberately NOT asserted here (Issue #86). It was a raw source-text /
+// string-adjacency check on the YAML layout, not behaviour: moving the
+// annotation inline (`uses: x@sha # x@tag`), reformatting, or blank-lining
+// between the comment and `uses:` would break the test while CI behaves
+// identically. The genuine supply-chain guard — SHA pinning — is enforced by
+// the parsed "pins every action to a 40-char commit SHA" test above. The
+// annotation convention, if wanted, belongs in a dedicated lint/actionlint
+// rule rather than a unit assertion.
 
 // Least-privilege GITHUB_TOKEN scoping (Issue #70). The workflow must declare
 // an explicit restrictive top-level `permissions:` default so build/test jobs
