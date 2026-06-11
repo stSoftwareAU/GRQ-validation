@@ -9,6 +9,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Least-privilege default GITHUB_TOKEN scope (Issue #70). check-changes, test,
+# and build only ever read repository contents, so they inherit this. The
+# deploy-pages job overrides it below where elevation is genuinely needed.
+permissions:
+  contents: read
+
 jobs:
   check-changes:
     name: Check for Changes
@@ -193,7 +199,10 @@ jobs:
     if: |
       github.ref == 'refs/heads/main' && 
       needs.check-changes.outputs.docs-changed == 'true'
+    # A per-job block fully overrides the top-level default, so contents: read
+    # is restated here for the checkout step alongside the Pages elevation.
     permissions:
+      contents: read
       pages: write
       id-token: write
     steps:

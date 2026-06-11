@@ -58,3 +58,68 @@ Deno.test("CI workflow carries a version comment above each pinned action", asyn
     );
   }
 });
+
+// Least-privilege GITHUB_TOKEN scoping (Issue #70). The workflow must declare
+// an explicit restrictive top-level `permissions:` default so build/test jobs
+// only ever read repository contents, rather than inheriting the broad
+// repository-default token scope.
+Deno.test("CI workflow declares a restrictive top-level permissions default", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const permissions = doc.permissions as Record<string, string> | undefined;
+  assert(permissions, "workflow must declare a top-level permissions block");
+  assertEquals(
+    permissions.contents,
+    "read",
+    "top-level permissions must grant contents: read",
+  );
+});
+
+Deno.test("CI workflow grants no write scopes at the top level", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const permissions = (doc.permissions ?? {}) as Record<string, string>;
+  for (const [scope, value] of Object.entries(permissions)) {
+    assert(
+      value !== "write",
+      `top-level permissions must be least-privilege; ${scope}: write is too broad`,
+    );
+  }
+});
+
+Deno.test("deploy-pages keeps its elevated per-job permissions", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<string, Record<string, unknown>>;
+  const deploy = jobs["deploy-pages"];
+  assert(deploy, "deploy-pages job must exist");
+  const perms = deploy.permissions as Record<string, string> | undefined;
+  assert(perms, "deploy-pages must declare its own permissions block");
+  assertEquals(perms.pages, "write", "deploy-pages needs pages: write");
+  assertEquals(
+    perms["id-token"],
+    "write",
+    "deploy-pages needs id-token: write",
+  );
+  // A per-job block fully overrides the top-level default, so deploy-pages
+  // must restate contents: read for its checkout step.
+  assertEquals(
+    perms.contents,
+    "read",
+    "deploy-pages must restate contents: read for checkout",
+  );
+});
+
+Deno.test("build/test jobs do not declare their own permissions (inherit top-level)", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<string, Record<string, unknown>>;
+  for (const name of ["check-changes", "test", "build"]) {
+    assert(jobs[name], `${name} job must exist`);
+    assertEquals(
+      jobs[name].permissions,
+      undefined,
+      `${name} should inherit the top-level contents: read default`,
+    );
+  }
+});
