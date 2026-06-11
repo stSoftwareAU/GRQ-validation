@@ -8,7 +8,7 @@ interface PricePoint {
 }
 
 // Debug script to check NYSE:SCHW current price issue
-async function debugSCHWCurrentPrice() {
+export async function debugSCHWCurrentPrice() {
     try {
         console.log('🔍 Debugging NYSE:SCHW current price issue...');
         
@@ -126,5 +126,12 @@ async function debugSCHWCurrentPrice() {
     }
 }
 
-// Run the debug
-debugSCHWCurrentPrice(); 
+// Run the debug only when executed directly, never on import. Await via a
+// `.catch` so a rejection surfaces as a non-zero exit instead of a silent
+// floating promise (issue #89).
+if (import.meta.main) {
+    debugSCHWCurrentPrice().catch((error: unknown) => {
+        console.error(error);
+        Deno.exit(1);
+    });
+} 
