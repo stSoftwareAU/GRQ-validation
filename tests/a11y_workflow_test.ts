@@ -41,6 +41,18 @@ async function loadWorkflow(): Promise<Workflow> {
   return parseYaml(text) as Workflow;
 }
 
+const PA11Y_CONFIG_PATH = "pa11yci.json";
+
+interface Pa11yConfig {
+  defaults?: { standard?: string };
+  urls?: string[];
+}
+
+async function loadPa11yConfig(): Promise<Pa11yConfig> {
+  const text = await Deno.readTextFile(PA11Y_CONFIG_PATH);
+  return JSON.parse(text) as Pa11yConfig;
+}
+
 // YAML 1.1 parses a bare `on:` key as the boolean true; accept either form.
 function getOn(doc: Workflow): Record<string, unknown> {
   const raw = doc as Record<string, unknown>;
@@ -100,16 +112,21 @@ Deno.test("a11y workflow runs pa11y-ci against the dashboard pages", async () =>
   const doc = await loadWorkflow();
   const runs = allSteps(doc).map((s) => s.run ?? "").join("\n");
   assert(/pa11y-ci/.test(runs), "a job must run pa11y-ci");
-  // Both published dashboard pages must be exercised.
-  assert(/index\.html/.test(runs), "pa11y-ci must check index.html");
-  assert(/list\.html/.test(runs), "pa11y-ci must check list.html");
+  // The target URLs live in pa11yci.json (passed via --config), not in the
+  // workflow run command. Both published dashboard pages must be exercised.
+  const config = await loadPa11yConfig();
+  const urls = (config.urls ?? []).join("\n");
+  assert(/index\.html/.test(urls), "pa11y-ci must check index.html");
+  assert(/list\.html/.test(urls), "pa11y-ci must check list.html");
 });
 
 Deno.test("a11y workflow enforces the WCAG2AA standard", async () => {
-  const doc = await loadWorkflow();
-  const runs = allSteps(doc).map((s) => s.run ?? "").join("\n");
-  assert(
-    /WCAG2AA/.test(runs),
+  // The standard is configured in pa11yci.json (defaults.standard), not on the
+  // pa11y-ci CLI, so the build fails on WCAG 2.1 AA violations.
+  const config = await loadPa11yConfig();
+  assertEquals(
+    config.defaults?.standard,
+    "WCAG2AA",
     "pa11y-ci must run with the WCAG2AA standard so the build fails on WCAG 2.1 AA violations",
   );
 });
