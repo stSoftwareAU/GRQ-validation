@@ -21,7 +21,6 @@ New Tests:
 5. Annualized Performance - Market Data Days vs Calendar Days
 6. Annualized Performance - Early Stage Scenarios
 7. Annualized Performance - Edge Cases and Error Handling
-8. Formula Verification Script (scripts/debug/test_formula_verification.js)
 
 ## Key Test Results
 
@@ -43,10 +42,11 @@ cargo test test_annualized_performance_calculation_with_actual_days -- --nocaptu
 deno test annualized_performance_test.ts --allow-read
 ```
 
-### Running Verification Script
-```bash
-node scripts/debug/test_formula_verification.js
-```
+> Note (issue #83): the standalone `test_formula_verification.js` demo script was
+> deleted. It contained no assertions and always printed success while
+> duplicating the annualised formula. The production formula lives in the Rust
+> `calculate_annualized_performance` and is WHAT-tested by the Rust and Deno
+> suites listed above.
 
 ## Coverage Summary
 ✅ Complete test coverage for core formula, edge cases, and integration
