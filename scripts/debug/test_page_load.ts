@@ -8,7 +8,7 @@ import { checkJsSyntax } from "../../helpers/js_syntax.ts";
 // brittle regexes (issue #82): those asserted that strings appeared in source,
 // not anything a user can observe, and broke on any rename or reformat.
 async function testPageLoad() {
-    let serverProcess: any = null;
+    let serverProcess: Deno.ChildProcess | null = null;
     
     try {
         console.log('🚀 Starting server...');
