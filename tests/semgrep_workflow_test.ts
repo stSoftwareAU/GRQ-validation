@@ -65,6 +65,27 @@ Deno.test("Semgrep workflow defines semgrep job that runs `semgrep ci`", async (
   assert(/semgrep\s+ci/.test(runs), "semgrep job must run `semgrep ci`");
 });
 
+Deno.test("Semgrep workflow pins the container image to a sha256 digest", async () => {
+  // Supply-chain rule (Issue #72): the third-party semgrep/semgrep container
+  // must be pinned to an immutable @sha256: digest, not a mutable tag.
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as { jobs: Record<string, unknown> };
+  const job = doc.jobs.semgrep as {
+    container?: { image?: string } | string;
+  };
+  const containerImage = typeof job.container === "string"
+    ? job.container
+    : job.container?.image;
+  assert(
+    typeof containerImage === "string",
+    "semgrep job must declare a container image",
+  );
+  assert(
+    /@sha256:[0-9a-f]{64}$/.test(containerImage),
+    `container image must be pinned to a sha256 digest: ${containerImage}`,
+  );
+});
+
 Deno.test("Semgrep workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a
