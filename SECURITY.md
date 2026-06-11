@@ -20,6 +20,28 @@ You may also use GitHub's
 [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
 to open a private advisory on this repository.
 
+## Code ownership and branch protection
+
+The repository ships a [`CODEOWNERS`](.github/CODEOWNERS) file that puts a
+trusted reviewer on its privileged surface. The CI/CD workflows run with
+`id-token: write` and consume non-`GITHUB_TOKEN` secrets (`SEMGREP_APP_TOKEN`,
+`CODECOV_TOKEN`, `GITLEAKS_LICENSE`, `ACTIONS_PUSH`), so `CODEOWNERS` requires a
+named owner to approve any change under `/.github/workflows/` and
+`/.github/actions/` — raising the bar against the tj-actions / OIDC-theft
+supply-chain attack shape.
+
+`CODEOWNERS` only requests reviews on its own; enforcement comes from
+branch-protection settings, which a repository administrator must enable on the
+default branch (they are not stored in the tree). The recommended settings are:
+
+- Require at least one approving pull-request review.
+- **Require review from Code Owners.**
+- Block direct pushes and force-pushes to the default branch.
+- Require linear history (to suit the rebase/squash workflow).
+
+Note: commit-signature verification is a separate, optional control and is not
+asserted here.
+
 ## Emergency dependency-bump procedure
 
 When a malicious or vulnerable version of a dependency is disclosed, pin the
