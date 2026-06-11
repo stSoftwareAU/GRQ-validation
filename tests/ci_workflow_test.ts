@@ -123,3 +123,46 @@ Deno.test("build/test jobs do not declare their own permissions (inherit top-lev
     );
   }
 });
+
+// Multi-line bash run: blocks must fail fast (Issue #73). Without
+// `set -euo pipefail` an intermediate command that fails (or an unset
+// variable) is masked by the success of the final command, so the step
+// reports success even when an earlier stage broke.
+type Step = { name?: string; run?: string };
+
+function findRun(
+  doc: Record<string, unknown>,
+  jobName: string,
+  stepName: string,
+): string | undefined {
+  const jobs = doc.jobs as Record<string, { steps?: Step[] }>;
+  const step = jobs[jobName]?.steps?.find((s) => s.name === stepName);
+  return step?.run;
+}
+
+function firstScriptLine(run: string): string {
+  return run.split("\n").map((l) => l.trim()).filter((l) => l.length > 0)[0] ??
+    "";
+}
+
+Deno.test("multi-line bash run blocks begin with set -euo pipefail", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const targets: Array<[string, string]> = [
+    ["check-changes", "Check for changes"],
+    ["build", "Generate CycloneDX SBOM"],
+  ];
+  for (const [job, step] of targets) {
+    const run = findRun(doc, job, step);
+    assert(run, `step "${step}" in job "${job}" must exist with a run block`);
+    assert(
+      run.includes("\n"),
+      `step "${step}" should be a multi-line run block`,
+    );
+    assertEquals(
+      firstScriptLine(run),
+      "set -euo pipefail",
+      `step "${step}" must start its bash block with set -euo pipefail`,
+    );
+  }
+});
