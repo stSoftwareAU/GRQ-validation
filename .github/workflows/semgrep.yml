@@ -8,8 +8,9 @@ name: Semgrep
 # uploads findings to Semgrep AppSec Platform; without it the scan still
 # runs locally and fails the build on findings.
 #
-# Third-party actions are pinned to 40-character commit SHAs to satisfy
-# the supply-chain rule (Issue #1756 / dep-bump guidelines).
+# Third-party actions are pinned to 40-character commit SHAs and the
+# third-party container image is pinned to an immutable sha256 digest to
+# satisfy the supply-chain rule (Issue #1756 / #72 / dep-bump guidelines).
 
 on:
   pull_request:
@@ -23,7 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: semgrep/semgrep
+      # semgrep/semgrep:latest — third-party image pinned to an immutable
+      # digest (Issue #72). Refresh deliberately when bumping the scanner;
+      # resolve with `docker buildx imagetools inspect semgrep/semgrep:latest`.
+      image: semgrep/semgrep@sha256:f4791a54c891eabe1188248135574e6e03dfc31dfd3f3b747c7bec7079bfed1b
     steps:
       # actions/checkout@v4.2.2
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
