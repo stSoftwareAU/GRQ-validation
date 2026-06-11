@@ -3,15 +3,21 @@
 }
 
 .performance-positive {
-    color: #10b981 !important;
+    color: #047857 !important;
 }
 
 .performance-negative {
-    color: #ef4444 !important;
+    color: #c81e1e !important;
 }
 
 .performance-neutral {
     color: #6b7280 !important;
+}
+
+/* Darken Bootstrap's grey outline-secondary text to meet WCAG 2.1 AA
+   contrast (4.5:1) against the light page background. */
+.btn-outline-secondary {
+    color: #565e64;
 }
 
 .date-filter-container {

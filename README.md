@@ -99,6 +99,10 @@ dependency hygiene.
    and correctness issues.
 9. **Shellcheck** (`shellcheck.yml`) — lints every `*.sh` script in the
    repository.
+10. **Accessibility** (`a11y.yml`) — runs `pa11y-ci` against the rendered
+    `docs/` dashboard on every pull request that touches `docs/`, failing the
+    build on WCAG 2.1 AA violations so accessibility regressions are caught on
+    the PR that introduces them.
 
 ### Automated dependency updates
 
