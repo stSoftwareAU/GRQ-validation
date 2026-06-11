@@ -10,12 +10,7 @@
  * Default port is 8000 if not specified.
  */
 
-import {
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from "https://deno.land/std@0.208.0/path/mod.ts";
+import { isAbsolute, join, relative, resolve } from "@std/path";
 
 const DEFAULT_PORT = 8000;
 const DOCS_DIR = "docs";
