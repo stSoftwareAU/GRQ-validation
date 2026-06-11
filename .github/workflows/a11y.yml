@@ -42,9 +42,7 @@ jobs:
             fi
             sleep 1
           done
+      # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
+      # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
-        run: >
-          npx --yes pa11y-ci
-          --standard WCAG2AA
-          http://localhost:8080/index.html
-          http://localhost:8080/list.html
+        run: npx --yes pa11y-ci --config pa11yci.json
