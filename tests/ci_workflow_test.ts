@@ -124,6 +124,29 @@ Deno.test("build/test jobs do not declare their own permissions (inherit top-lev
   }
 });
 
+// Concurrency control (Issue #69). The pipeline triggers on push to main and
+// pull_request to main but, without a concurrency group, successive pushes or
+// rapid PR updates start a fresh full run (test, release build, SBOM, Pages
+// deploy) without cancelling the superseded run. A top-level concurrency block
+// keyed on the workflow and ref, with cancel-in-progress, ensures only the
+// latest run for a given ref survives.
+Deno.test("CI workflow declares a top-level concurrency group", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const concurrency = doc.concurrency as Record<string, unknown> | undefined;
+  assert(concurrency, "workflow must declare a top-level concurrency block");
+  assertEquals(
+    concurrency.group,
+    "${{ github.workflow }}-${{ github.ref }}",
+    "concurrency group must be keyed on workflow and ref",
+  );
+  assertEquals(
+    concurrency["cancel-in-progress"],
+    true,
+    "concurrency must cancel superseded in-progress runs",
+  );
+});
+
 // Multi-line bash run: blocks must fail fast (Issue #73). Without
 // `set -euo pipefail` an intermediate command that fails (or an unset
 // variable) is masked by the success of the final command, so the step
