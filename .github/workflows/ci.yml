@@ -13,6 +13,7 @@ jobs:
   check-changes:
     name: Check for Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       rust-changed: ${{ steps.filter.outputs.rust }}
       docs-changed: ${{ steps.filter.outputs.docs }}
@@ -61,6 +62,7 @@ jobs:
   test:
     name: Test and Quality Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: check-changes
     if: needs.check-changes.outputs.rust-changed == 'true'
     
@@ -121,6 +123,7 @@ jobs:
   build:
     name: Build Release
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [check-changes, test]
     if: needs.check-changes.outputs.rust-changed == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped')
     
@@ -189,6 +192,7 @@ jobs:
   deploy-pages:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: check-changes
     if: |
       github.ref == 'refs/heads/main' && 
