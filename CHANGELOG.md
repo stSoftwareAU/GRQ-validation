@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflow.
 - `CHANGELOG.md` (this file) tracking notable changes between releases.
 
+### Removed
+
+- Dead `[dependencies]` `walkdir` and `thiserror`, which were declared but
+  never referenced in `src/` or `tests/`. Removing them trims build time, the
+  lockfile, and the supply-chain surface.
+
 ## [0.1.10] - 2026-06-11
 
 ### Added
