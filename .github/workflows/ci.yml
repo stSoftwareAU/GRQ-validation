@@ -105,24 +105,31 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
           
-    - name: Update dependencies
-      run: cargo update
-      
+    # Supply-chain quarantine (Issue #124): CI builds the committed, reviewed
+    # Cargo.lock rather than running `cargo update` to float every crate to the
+    # newest in-range version on each run. `--locked` makes the build fail if
+    # Cargo.lock is stale instead of silently resolving (and executing the
+    # build.rs / proc-macros of) a freshly-published, unquarantined crate.
+    # Dependency bumps land through the quarantined Dependabot PRs instead
+    # (.github/dependabot.yml), mirroring the Deno minimumDependencyAge policy.
     - name: Check formatting
       run: cargo fmt --all -- --check
-      
+
     - name: Run linter
-      run: cargo clippy --all-targets --all-features -- -D warnings
-      
+      run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
     - name: Check types
-      run: cargo check --all-targets --all-features
-      
+      run: cargo check --locked --all-targets --all-features
+
     - name: Run tests
-      run: cargo test --all-targets --all-features --verbose
-      
+      run: cargo test --locked --all-targets --all-features --verbose
+
     - name: Generate test coverage
+      # Pin the tool to an explicit version with --locked so CI does not
+      # compile and run an arbitrary newest cargo-tarpaulin dependency tree
+      # on each run (Issue #124).
       run: |
-        cargo install cargo-tarpaulin
+        cargo install cargo-tarpaulin --locked --version 0.35.4
         cargo tarpaulin --out Xml --output-dir coverage
       continue-on-error: true
       
@@ -172,7 +179,8 @@ jobs:
           ${{ runner.os }}-cargo-
           
     - name: Build release
-      run: cargo build --release
+      # --locked: build the committed Cargo.lock, never float deps (Issue #124).
+      run: cargo build --locked --release
 
     # SCR-SBOM (Issue #53): generate a machine-readable component inventory
     # alongside the binary so post-disclosure incident triage can answer
@@ -180,7 +188,9 @@ jobs:
     - name: Generate CycloneDX SBOM
       run: |
         set -euo pipefail
-        cargo install cargo-cyclonedx
+        # Pin the tool to an explicit version with --locked so CI does not
+        # compile an arbitrary newest cargo-cyclonedx tree on each run (#124).
+        cargo install cargo-cyclonedx --locked --version 0.5.9
         cargo cyclonedx --format json
         # cargo-cyclonedx names the SBOM after the package; normalise the
         # path so the upload step always finds it.
