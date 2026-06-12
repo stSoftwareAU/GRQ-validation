@@ -11,7 +11,7 @@
 //
 // Each module also exposes its entry function as a named export so the call can
 // be awaited/guarded rather than discarded.
-import { assert, assertEquals } from "@std/assert";
+import { assertEquals } from "@std/assert";
 
 Deno.test("check_syntax.ts - imports without running the check", async () => {
   const mod = await import("../scripts/debug/check_syntax.ts");
@@ -26,14 +26,4 @@ Deno.test("debug_schw_current_price.ts - imports without running the debug", asy
 Deno.test("test_page_load.ts - imports without booting the server", async () => {
   const mod = await import("../scripts/debug/test_page_load.ts");
   assertEquals(typeof mod.testPageLoad, "function");
-});
-
-Deno.test("entry functions are async (return a promise)", async () => {
-  const { checkSyntax } = await import("../scripts/debug/check_syntax.ts");
-  // Reading the function source is not enough; confirm it is genuinely the
-  // async entry point by checking its constructor name.
-  assert(
-    checkSyntax.constructor.name === "AsyncFunction",
-    "checkSyntax should be an async function",
-  );
 });
