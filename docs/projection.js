@@ -40,6 +40,25 @@ function calculatePerformanceReturn(buyPrice, currentPrice, totalDividends) {
     return priceReturn + dividendReturn;
 }
 
+// Dividends whose ex-dividend date falls on or before the 90-day validation
+// window measured from the score date. Pure given the dividend list and score
+// date; the dashboard's GRQValidator looks the list up per stock and delegates
+// here so production and tests share one window filter (issue #145).
+function filterDividendsWithin90Days(dividends, scoreDate) {
+    const ninetyDayDate = new Date(
+        scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+    );
+    return (dividends || []).filter((dividend) =>
+        dividend.exDivDate <= ninetyDayDate
+    );
+}
+
+// Sum the cash amount of a dividend list. Returns 0 for an empty or missing
+// list, mirroring the dashboard's per-stock dividend-return summation.
+function sumDividends(dividends) {
+    return (dividends || []).reduce((sum, div) => sum + div.amount, 0);
+}
+
 // Build the weekly trend-data series for a hybrid projection chart.
 //
 // `projection` is the result of GRQValidator.calculateHybridProjection (its
@@ -472,6 +491,8 @@ globalThis.GRQProjection = {
     setDateToMidnight,
     getDaysElapsed,
     calculatePerformanceReturn,
+    filterDividendsWithin90Days,
+    sumDividends,
     buildHybridProjectionData,
     formatCurrency,
     getSplitAdjustment,
