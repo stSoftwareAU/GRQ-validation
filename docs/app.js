@@ -3768,17 +3768,8 @@ class GRQValidator {
             return null;
         }
 
-        const scoreDateTimestamp = scoreDate.getTime();
-        // Use the latest market data date if no endDate is provided, not today's date
-        const trendEndDate = endDate || (marketData && marketData.length > 0 ? marketData[marketData.length - 1].date : new Date());
-        
-        console.log(`calculateTrendLine - ${stock.stock}: Score date: ${scoreDate.toISOString().split('T')[0]}, Today: ${trendEndDate.toISOString().split('T')[0]}`);
-        console.log(`calculateTrendLine - ${stock.stock}: Total market data points: ${marketData.length}`);
-        
-        // Get data points from score date to today (but only if we have at least 3 data points)
-        const dataPoints = [];
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-        
+
         if (!buyPriceObj || buyPriceObj.price <= 0) {
             console.log(`calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
             return null;
@@ -3786,29 +3777,16 @@ class GRQValidator {
 
         console.log(`calculateTrendLine - ${stock.stock}: Buy price: $${buyPriceObj.price.toFixed(2)}`);
 
-        marketData.forEach((point) => {
-            if (point.date >= scoreDate && point.date <= trendEndDate) {
-                const daysSinceScore = (point.date.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24);
-                const currentPrice = this.adjustHistoricalPriceToCurrent(
-                    (point.high + point.low) / 2,
-                    stock.stock,
-                    point.date
-                );
-                
-                // Calculate performance including dividends up to this point
-                const priceReturn = ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
-                const dividends = this.getDividendsWithin90Days(stock.stock);
-                const dividendsUpToDate = dividends.filter((d) => d.exDivDate <= point.date);
-                const totalDividends = GRQProjection.sumDividends(dividendsUpToDate);
-                const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
-                const totalReturn = priceReturn + dividendReturn;
-                
-                dataPoints.push({
-                    x: daysSinceScore,
-                    y: totalReturn
-                });
-            }
-        });
+        // Data-window / end-date selection lives in the shared projection module
+        // (issue #144) so production and the Deno tests exercise the same window:
+        // score date to the latest market-data date (not today) unless endDate set.
+        const dataPoints = GRQProjection.buildTrendLineDataPoints(
+            marketData,
+            scoreDate,
+            buyPriceObj.price,
+            this.getDividendsWithin90Days(stock.stock),
+            endDate,
+        );
 
         console.log(`calculateTrendLine - ${stock.stock}: Data points collected: ${dataPoints.length}`);
         if (dataPoints.length > 0) {

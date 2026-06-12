@@ -279,6 +279,56 @@ function computeTrendLine(dataPoints) {
     };
 }
 
+// Build the regression input for a stock's trend line: one
+// `{ x: daysSinceScore, y: totalReturn }` per market-data point inside the
+// window from the score date to `endDate`. When `endDate` is omitted the window
+// runs to the LATEST market-data date (not today's date), so the trend reflects
+// observed data only. Each y combines the split-adjusted price move against the
+// buy price with dividends paid up to that point. Pure given its inputs; the
+// dashboard's GRQValidator gathers the inputs and delegates here (issue #144).
+function buildTrendLineDataPoints(
+    marketData,
+    scoreDate,
+    buyPrice,
+    dividends,
+    endDate,
+) {
+    if (!marketData || marketData.length === 0) return [];
+
+    const scoreDateTimestamp = scoreDate.getTime();
+    // Default to the latest market-data date, never today's date.
+    const trendEndDate = endDate || marketData[marketData.length - 1].date;
+    const dividendList = dividends || [];
+
+    const dataPoints = [];
+    marketData.forEach((point) => {
+        if (point.date >= scoreDate && point.date <= trendEndDate) {
+            const daysSinceScore = (point.date.getTime() - scoreDateTimestamp) /
+                (1000 * 60 * 60 * 24);
+            const currentPrice = adjustHistoricalPriceToCurrent(
+                (point.high + point.low) / 2,
+                marketData,
+                point.date,
+            );
+
+            // Performance including dividends paid up to this point.
+            const priceReturn =
+                ((currentPrice - buyPrice) / buyPrice) * 100;
+            const dividendsUpToDate = dividendList.filter(
+                (d) => d.exDivDate <= point.date,
+            );
+            const totalDividends = sumDividends(dividendsUpToDate);
+            const dividendReturn = (totalDividends / buyPrice) * 100;
+
+            dataPoints.push({
+                x: daysSinceScore,
+                y: priceReturn + dividendReturn,
+            });
+        }
+    });
+    return dataPoints;
+}
+
 // Days elapsed from the score date to the latest market-data date, capped at 90
 // (the validation window). Pure given the two dates.
 function daysElapsedFromMarketData(scoreDate, latestMarketDate) {
@@ -502,6 +552,7 @@ globalThis.GRQProjection = {
     calculateTargetPercentage,
     calculateRSquared,
     computeTrendLine,
+    buildTrendLineDataPoints,
     daysElapsedFromMarketData,
     computeHybridProjection,
     computeJudgement,
