@@ -7,6 +7,13 @@ on:
     # Weekly audit so a JSR/@std compromise is caught even with no open PR.
     - cron: "0 6 * * 1"
 
+# Cancel superseded runs (Issue #139): rapid pushes to the same ref otherwise
+# queue redundant scans that each hold a runner. Keying on workflow + ref with
+# cancel-in-progress leaves only the latest run for a given ref alive.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
