@@ -1,11 +1,20 @@
-// Tests for the contributor-facing docs floor (Issue #77).
+// Tests for the contributor-facing docs floor (Issue #77, refined in
+// Issue #149).
 //
 // The repo already publishes README.md, LICENSE, and SECURITY.md but was
 // missing CONTRIBUTING.md and CHANGELOG.md. These tests assert that both
-// files now exist at the repository root and carry the substance contributors
-// and consumers expect: build/test/lint commands and the PR workflow for
-// CONTRIBUTING.md, and a Keep a Changelog structure seeded with the current
-// Cargo.toml version for CHANGELOG.md.
+// files exist at the repository root and that the changelog is seeded with a
+// section for the current Cargo.toml version — a *derivable relationship*
+// rather than a hand-copied phrase.
+//
+// The earlier substring greps (cargo test/fmt/clippy/build, deno test,
+// quality.sh, "pull request", "Keep a Changelog", "Semantic Versioning") were
+// removed in Issue #149: they asserted on documentation prose rather than
+// behaviour, broke on harmless rewording that preserved meaning, and
+// duplicated implementation detail. This is the same anti-pattern removed from
+// security_md_test.ts and documentation_accuracy_test.ts under Issue #81.
+// Documentation prose is policed by the Markdown linter and human review, not
+// by string asserts in the unit-test runner.
 
 import { assert } from "@std/assert";
 
@@ -21,50 +30,9 @@ Deno.test("CONTRIBUTING.md exists at the repository root", async () => {
   assert(stat.isFile, `${CONTRIBUTING_PATH} should be a file`);
 });
 
-Deno.test("CONTRIBUTING.md documents the Rust build/test/lint commands", async () => {
-  const text = await read(CONTRIBUTING_PATH);
-  assert(/cargo test/.test(text), "must reference cargo test");
-  assert(/cargo fmt/.test(text), "must reference cargo fmt");
-  assert(/cargo clippy/.test(text), "must reference cargo clippy");
-  assert(/cargo build/.test(text), "must reference cargo build");
-});
-
-Deno.test("CONTRIBUTING.md documents the Deno test suite", async () => {
-  const text = await read(CONTRIBUTING_PATH);
-  assert(/deno test/.test(text), "must reference the Deno test suite");
-});
-
-Deno.test("CONTRIBUTING.md anchors on the existing quality gate", async () => {
-  const text = await read(CONTRIBUTING_PATH);
-  assert(
-    text.includes("quality.sh"),
-    "must reference the quality.sh local gate",
-  );
-});
-
-Deno.test("CONTRIBUTING.md describes the pull-request workflow", async () => {
-  const text = await read(CONTRIBUTING_PATH);
-  assert(
-    /pull request/i.test(text),
-    "must describe the pull-request submission workflow",
-  );
-});
-
 Deno.test("CHANGELOG.md exists at the repository root", async () => {
   const stat = await Deno.stat(CHANGELOG_PATH);
   assert(stat.isFile, `${CHANGELOG_PATH} should be a file`);
-});
-
-Deno.test("CHANGELOG.md follows the Keep a Changelog format", async () => {
-  const text = await read(CHANGELOG_PATH);
-  assert(
-    text.includes("Keep a Changelog"),
-    "must reference the Keep a Changelog format",
-  );
-  assert(
-    text.includes("Semantic Versioning"),
-    "must reference Semantic Versioning",
-  );
 });
 
 Deno.test("CHANGELOG.md is seeded with the current Cargo.toml version", async () => {
