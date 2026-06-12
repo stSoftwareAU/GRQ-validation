@@ -78,7 +78,9 @@ class ScoreFilesList {
                         data: 'file',
                         render: function(data, type, row) {
                             if (type === 'display') {
-                                return data.replace('.tsv', '');
+                                // Escape the untrusted filename before it is
+                                // inserted as cell HTML (issue #103).
+                                return renderScoreFileName(data);
                             }
                             return data;
                         }

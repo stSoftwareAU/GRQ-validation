@@ -231,6 +231,12 @@
       crossorigin="anonymous"
     >
     
+    <!-- Shared HTML/JS escaping helpers (issue #63) — must load before list.js -->
+    <script src="escape.js"></script>
+
+    <!-- Score-file name render helper (issue #103) — must load before list.js -->
+    <script src="list_render.js"></script>
+
     <!-- Load our main script -->
     <script src="list.js"></script>
   </body>
