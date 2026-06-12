@@ -6,10 +6,24 @@ use chrono::{Duration, NaiveDate};
 use std::collections::HashMap;
 use std::path::Path;
 
-// Constants for external data paths
+/// Base path of the external share-price data repository.
 pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2025Q1";
+/// Base path of the external dividend data repository.
 pub const DIVIDEND_DATA_BASE_PATH: &str = "../GRQ-dividends";
 
+/// Returns `true` if `symbol` is a plausible stock symbol.
+///
+/// A symbol is valid when it is non-empty, at most 30 characters, and composed
+/// solely of alphanumerics, `.` or `:`.
+///
+/// # Examples
+///
+/// ```
+/// use grq_validation::utils::validate_stock_symbol;
+///
+/// assert!(validate_stock_symbol("NYSE:SEM"));
+/// assert!(!validate_stock_symbol(""));
+/// ```
 pub fn validate_stock_symbol(symbol: &str) -> bool {
     // Basic validation for stock symbols
     if symbol.is_empty() || symbol.len() > 30 {
@@ -21,6 +35,16 @@ pub fn validate_stock_symbol(symbol: &str) -> bool {
         .all(|c| c.is_alphanumeric() || c == '.' || c == ':')
 }
 
+/// Returns the arithmetic mean of `scores`, or `0.0` for an empty slice.
+///
+/// # Examples
+///
+/// ```
+/// use grq_validation::utils::calculate_average_score;
+///
+/// assert_eq!(calculate_average_score(&[1.0, 2.0, 3.0]), 2.0);
+/// assert_eq!(calculate_average_score(&[]), 0.0);
+/// ```
 pub fn calculate_average_score(scores: &[f64]) -> f64 {
     if scores.is_empty() {
         return 0.0;
@@ -29,6 +53,7 @@ pub fn calculate_average_score(scores: &[f64]) -> f64 {
     scores.iter().sum::<f64>() / scores.len() as f64
 }
 
+/// Reads `<docs_path>/scores/index.json` and returns its entries sorted by date.
 pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
     use std::fs;
     use std::path::Path;
@@ -95,6 +120,8 @@ pub fn build_score_file_path(docs_path: &str, file: &str) -> Result<String> {
     Ok(full_path.to_string_lossy().into_owned())
 }
 
+/// Extracts the ticker following the first `:` (e.g. `"NYSE:SEM"` → `"SEM"`),
+/// returning `None` when no `:` is present.
 pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
     // Extract ticker from "NYSE:SEM" -> "SEM"
     symbol
@@ -102,11 +129,14 @@ pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
         .map(|colon_pos| symbol[colon_pos + 1..].to_string())
 }
 
+/// Builds the market-data JSON path for `ticker` under [`MARKET_DATA_BASE_PATH`],
+/// bucketed by uppercased first letter (e.g. `"SEM"` → `.../data/S/SEM.json`).
 pub fn get_market_data_path(ticker: &str) -> String {
     let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
     format!("{MARKET_DATA_BASE_PATH}/data/{first_letter}/{ticker}.json")
 }
 
+/// Reads a tab-separated score file into a vector of [`StockRecord`]s.
 pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
     use csv::ReaderBuilder;
     use std::fs::File;
@@ -127,6 +157,7 @@ pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
     Ok(stock_records)
 }
 
+/// Reads a score file and returns just the `Stock` ticker codes, in file order.
 pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<String>> {
     let stock_records = read_tsv_score_file(file_path)?;
     let ticker_codes: Vec<String> = stock_records
@@ -137,6 +168,8 @@ pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<Strin
     Ok(ticker_codes)
 }
 
+/// Returns the file-system-safe symbol for `ticker`: the part after the last
+/// `:`, with `.` replaced by `-` (e.g. `"NYSE:HEI.A"` → `"HEI-A"`).
 pub fn extract_symbol_from_ticker(ticker: &str) -> String {
     let symbol = match ticker.rsplit_once(':') {
         Some((_, symbol)) => symbol.to_string(),
@@ -147,6 +180,7 @@ pub fn extract_symbol_from_ticker(ticker: &str) -> String {
     symbol.replace('.', "-")
 }
 
+/// Reads and deserialises the [`MarketData`] JSON file for `symbol`.
 pub fn read_market_data(symbol: &str) -> Result<MarketData> {
     use std::fs::File;
 
@@ -175,6 +209,10 @@ fn parse_financial_value(field: &str, context: &str, raw: &str) -> Option<f64> {
     }
 }
 
+/// Reads a derived market-data CSV into a map of `ticker → (date → close)`.
+///
+/// Rows with a non-numeric or non-positive close price are skipped (and a
+/// warning is written to stderr).
 pub fn read_market_data_from_csv(
     csv_file_path: &str,
 ) -> Result<HashMap<String, HashMap<String, f64>>> {
@@ -214,6 +252,8 @@ pub fn read_market_data_from_csv(
     Ok(market_data)
 }
 
+/// Returns `(date, close)` pairs from `market_data` whose date falls within the
+/// inclusive `start_date`..=`end_date` range, sorted oldest first.
 pub fn filter_market_data_by_date_range(
     market_data: &MarketData,
     start_date: &str,
@@ -573,7 +613,22 @@ pub fn calculate_annualized_performance(performance_pct: f64, days_elapsed: i64)
     }
 }
 
-/// Calculates portfolio performance for a given score file
+/// Calculates 90-day and annualised portfolio performance for a score file.
+///
+/// Reads the score TSV at `score_file_path` and the derived market-data CSV
+/// alongside it, then computes per-stock and portfolio-wide returns for the
+/// 90-day window starting at `score_file_date` (`YYYY-MM-DD`).
+///
+/// # Examples
+///
+/// ```no_run
+/// use grq_validation::utils::calculate_portfolio_performance;
+///
+/// let performance =
+///     calculate_portfolio_performance("docs/scores/2024/November/15.tsv", "2024-11-15")?;
+/// println!("90-day return: {:.2}%", performance.performance_90_day);
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn calculate_portfolio_performance(
     score_file_path: &str,
     score_file_date: &str,
