@@ -2878,15 +2878,11 @@ class GRQValidator {
     }
 
     getDividendsWithin90Days(stockSymbol) {
+        // Window filtering lives in the shared projection module (issue #145)
+        // so production and the Deno tests exercise the same kernel.
         const dividends = this.dividendData?.[stockSymbol] || [];
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
-
-        return dividends.filter((dividend) =>
-            dividend.exDivDate <= ninetyDayDate
-        );
+        return GRQProjection.filterDividendsWithin90Days(dividends, scoreDate);
     }
 
     getCurrentPrice(stockSymbol) {
@@ -3401,7 +3397,7 @@ class GRQValidator {
                 }
                 
                 const gainLossDividends = this.getDividendsWithin90Days(stockSymbol);
-                const gainLossTotalDividends = gainLossDividends.reduce((sum, div) => sum + div.amount, 0);
+                const gainLossTotalDividends = GRQProjection.sumDividends(gainLossDividends);
                 
                 // Get current price for display
                 const gainLossMarketData = this.marketData[stockSymbol];
@@ -3758,7 +3754,7 @@ class GRQValidator {
 
         // Add dividend return within 90 days
         const dividends = this.getDividendsWithin90Days(stock.stock);
-        const totalDividends = dividends.reduce((sum, div) => sum + div.amount, 0);
+        const totalDividends = GRQProjection.sumDividends(dividends);
         const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
 
         return priceReturn + dividendReturn;
@@ -3803,7 +3799,7 @@ class GRQValidator {
                 const priceReturn = ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
                 const dividends = this.getDividendsWithin90Days(stock.stock);
                 const dividendsUpToDate = dividends.filter((d) => d.exDivDate <= point.date);
-                const totalDividends = dividendsUpToDate.reduce((sum, div) => sum + div.amount, 0);
+                const totalDividends = GRQProjection.sumDividends(dividendsUpToDate);
                 const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
                 const totalReturn = priceReturn + dividendReturn;
                 
