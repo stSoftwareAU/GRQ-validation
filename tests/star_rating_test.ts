@@ -344,7 +344,12 @@ Deno.test("Star Rating Calculation Details", () => {
     },
   };
 
-  // Mock the getStarRatingCalculation method
+  // Mock the getStarRatingCalculation method.
+  // Returns only the observable contract: the upstream inputs and the
+  // rendered moon-string. Internal decomposition state (hundredStars,
+  // fullStars, remainderStars, partialStars, moonPhase) is deliberately
+  // not exposed — those are HOW-details of the rounding maths and a
+  // behaviour-preserving refactor should not break this test (issue #98).
   function getStarRatingCalculation(stockSymbol: string) {
     if (!(stockSymbol in mockAnalysisData)) {
       return null;
@@ -356,78 +361,26 @@ Deno.test("Star Rating Calculation Details", () => {
       return null;
     }
 
-    // Get the original values
-    const msStars = analysis.msStars;
-    const tipsStars = analysis.tipsStars;
-    const avgStars = analysis.avgStars;
-
-    // Round to nearest quarter using your logic
-    const hundredStars = Math.min(Math.round(avgStars * 20), 100);
-    const fullStars = Math.floor(hundredStars / 20);
-    const remainderStars = hundredStars - fullStars * 20;
-    const partialStars = Math.round(
-      Math.min(Math.max(0, remainderStars), 20) / 5,
-    );
-
-    // Determine moon phase description
-    let moonPhase = "";
-    if (remainderStars > 0) {
-      switch (partialStars) {
-        case 0:
-          moonPhase = "🌑 (new moon)";
-          break;
-        case 1:
-          moonPhase = "🌒 (quarter moon)";
-          break;
-        case 2:
-          moonPhase = "🌓 (half moon)";
-          break;
-        case 3:
-          moonPhase = "🌔 (three-quarter moon)";
-          break;
-        case 4:
-          moonPhase = "🌕 (full moon - rounded up)";
-          break;
-      }
-    }
-
     return {
-      msStars,
-      tipsStars,
-      avgStars,
-      hundredStars,
-      fullStars,
-      remainderStars,
-      partialStars,
-      moonPhase,
-      display: getStarRatingDisplay(avgStars),
+      msStars: analysis.msStars,
+      tipsStars: analysis.tipsStars,
+      avgStars: analysis.avgStars,
+      display: getStarRatingDisplay(analysis.avgStars),
     };
   }
 
-  // Test BAC: 3 MS + 7 Tips = 3.1 average
+  // Test BAC: 3 MS + 7 Tips = 3.1 average → three full moons + new-moon partial
   const bacCalculation = getStarRatingCalculation("NYSE:BAC");
   assertEquals(bacCalculation?.msStars, 3, "BAC MS stars should be 3");
   assertEquals(bacCalculation?.tipsStars, 7, "BAC Tips stars should be 7");
   assertEquals(bacCalculation?.avgStars, 3.1, "BAC average should be 3.1");
-  assertEquals(bacCalculation?.hundredStars, 62, "BAC should be 62 twentieths");
-  assertEquals(bacCalculation?.fullStars, 3, "BAC should have 3 full stars");
   assertEquals(
-    bacCalculation?.remainderStars,
-    2,
-    "BAC should have 2 remainder",
-  );
-  assertEquals(
-    bacCalculation?.partialStars,
-    0,
-    "BAC should have 0 partial stars",
-  );
-  assertEquals(
-    bacCalculation?.moonPhase,
-    "🌑 (new moon)",
-    "BAC should show new moon",
+    bacCalculation?.display,
+    "🌕🌕🌕🌑",
+    "BAC should render three full moons and a new moon",
   );
 
-  // Test JPM: 4 MS + null Tips = 4.0 average
+  // Test JPM: 4 MS + null Tips = 4.0 average → four full moons
   const jpmCalculation = getStarRatingCalculation("NYSE:JPM");
   assertEquals(jpmCalculation?.msStars, 4, "JPM MS stars should be 4");
   assertEquals(
@@ -436,45 +389,21 @@ Deno.test("Star Rating Calculation Details", () => {
     "JPM Tips stars should be null",
   );
   assertEquals(jpmCalculation?.avgStars, 4.0, "JPM average should be 4.0");
-  assertEquals(jpmCalculation?.hundredStars, 80, "JPM should be 80 twentieths");
-  assertEquals(jpmCalculation?.fullStars, 4, "JPM should have 4 full stars");
   assertEquals(
-    jpmCalculation?.remainderStars,
-    0,
-    "JPM should have 0 remainder",
+    jpmCalculation?.display,
+    "🌕🌕🌕🌕",
+    "JPM should render four full moons",
   );
-  assertEquals(
-    jpmCalculation?.partialStars,
-    0,
-    "JPM should have 0 partial stars",
-  );
-  assertEquals(jpmCalculation?.moonPhase, "", "JPM should have no moon phase");
 
-  // Test AAPL: null MS + 8 Tips = 4.0 average
+  // Test AAPL: null MS + 8 Tips = 4.0 average → four full moons
   const aaplCalculation = getStarRatingCalculation("NYSE:AAPL");
   assertEquals(aaplCalculation?.msStars, null, "AAPL MS stars should be null");
   assertEquals(aaplCalculation?.tipsStars, 8, "AAPL Tips stars should be 8");
   assertEquals(aaplCalculation?.avgStars, 4.0, "AAPL average should be 4.0");
   assertEquals(
-    aaplCalculation?.hundredStars,
-    80,
-    "AAPL should be 80 twentieths",
-  );
-  assertEquals(aaplCalculation?.fullStars, 4, "AAPL should have 4 full stars");
-  assertEquals(
-    aaplCalculation?.remainderStars,
-    0,
-    "AAPL should have 0 remainder",
-  );
-  assertEquals(
-    aaplCalculation?.partialStars,
-    0,
-    "AAPL should have 0 partial stars",
-  );
-  assertEquals(
-    aaplCalculation?.moonPhase,
-    "",
-    "AAPL should have no moon phase",
+    aaplCalculation?.display,
+    "🌕🌕🌕🌕",
+    "AAPL should render four full moons",
   );
 
   // Test non-existent stock
