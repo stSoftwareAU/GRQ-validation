@@ -208,8 +208,6 @@ deno test --allow-read tests/
 - `--docs-path` — path to the docs directory (default: `docs`).
 - `--process-all` — process every score file, not just recent ones.
 - `--calculate-performance` — calculate performance metrics for score files.
-- `--performance-only` — only calculate performance metrics; skip CSV
-  generation.
 - `--date` — process a specific date in `YYYY-MM-DD` format.
 - `--verbose` — enable verbose logging.
 

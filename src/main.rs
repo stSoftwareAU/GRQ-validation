@@ -28,10 +28,6 @@ struct Args {
     #[arg(long)]
     calculate_performance: bool,
 
-    /// Only calculate performance metrics (skip CSV generation)
-    #[arg(long)]
-    performance_only: bool,
-
     /// Process a specific date (format: YYYY-MM-DD)
     #[arg(long)]
     date: Option<String>,
@@ -351,13 +347,6 @@ fn main() -> Result<()> {
                 log::error!("Failed to read ticker codes from {score_file_path}: {e}");
             }
         }
-    }
-
-    // Note: Performance is now calculated inline for each score file
-    // The --calculate-performance flag is kept for backward compatibility
-    if args.calculate_performance {
-        info!("Performance calculation is now done inline for each score file");
-        info!("The --calculate-performance flag is no longer needed for normal operation");
     }
 
     info!("GRQ Validation processor completed successfully");
