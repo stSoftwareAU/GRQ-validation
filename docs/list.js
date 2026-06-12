@@ -265,33 +265,12 @@ class ScoreFilesList {
             }
             
             const visibleData = this.dataTable.rows({ search: 'applied' }).data();
-            let total90Day = 0;
-            let totalAnnualized = 0;
-            let positiveCount = 0;
-            let valid90DayCount = 0;
-            let validAnnualizedCount = 0;
-            
-            visibleData.each((row) => {
-                const performance90Day = row.performance_90_day;
-                const performanceAnnualized = row.performance_annualized;
-                
-                if (performance90Day !== null && performance90Day !== undefined) {
-                    total90Day += performance90Day;
-                    valid90DayCount++;
-                    
-                    if (performance90Day > 0) {
-                        positiveCount++;
-                    }
-                }
-                
-                if (performanceAnnualized !== null && performanceAnnualized !== undefined) {
-                    totalAnnualized += performanceAnnualized;
-                    validAnnualizedCount++;
-                }
-            });
-            
-            const avg90Day = valid90DayCount > 0 ? total90Day / valid90DayCount : 0;
-            const avgAnnualized = validAnnualizedCount > 0 ? totalAnnualized / validAnnualizedCount : 0;
+
+            // Delegate the averaging to the shared kernel (issue #121) so the
+            // browser and the Deno tests exercise the exact same maths.
+            const rows = visibleData.toArray();
+            const { avg90Day, avgAnnualized, valid90DayCount, positiveCount } =
+                globalThis.GRQListStats.computeListAverages(rows);
             const totalFiles = visibleData.count();
             
 

@@ -1,4 +1,7 @@
 #![warn(missing_docs)]
+#![warn(clippy::missing_errors_doc)]
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 //! Processes daily stock-score TSV files and computes portfolio performance.
 //!
 //! The crate exposes two modules:

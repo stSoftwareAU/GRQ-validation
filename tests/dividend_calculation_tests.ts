@@ -1,80 +1,123 @@
+// Behavioural (WHAT) tests for the dividend-window kernels (issue #145).
+//
+// These import the REAL shipped helpers from docs/projection.js — the same
+// code the dashboard's GRQValidator delegates to via
+// `getDividendsWithin90Days` and the performance/return path — and assert on
+// their observable output. They replace the previous tautological tests that
+// reimplemented the filter / 90-day sum / `<=` comparison inline and asserted
+// the copy against itself, exercising zero shipped code.
 import { assertAlmostEquals, assertEquals } from "@std/assert";
+import "../docs/projection.js";
 
-// Test case for dividend calculation within 90-day period
-// Testing NYSE:WFG from 2024-11-15 score file
+interface Dividend {
+  exDivDate: Date;
+  amount: number;
+}
 
-Deno.test("Dividend Calculation Tests", async (t) => {
-  const scoreDate = new Date(2024, 10, 15); // November 15, 2024
-  const ninetyDayDate = new Date(
-    scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+const g = globalThis as unknown as {
+  GRQProjection: {
+    filterDividendsWithin90Days: (
+      dividends: Dividend[] | undefined,
+      scoreDate: Date,
+    ) => Dividend[];
+    sumDividends: (dividends: Dividend[] | undefined) => number;
+    calculatePerformanceReturn: (
+      buyPrice: number | null,
+      currentPrice: number,
+      totalDividends: number,
+    ) => number | null;
+  };
+};
+const GRQProjection = g.GRQProjection;
+
+// Fixture: NYSE:WFG from the 2024-11-15 score file. The 90-day window from the
+// score date ends 2025-02-13, so the first two ex-dividend dates fall inside
+// the window and the March payment falls outside it.
+const SCORE_DATE = new Date(2024, 10, 15); // 15 November 2024.
+const WFG_DIVIDENDS: Dividend[] = [
+  { exDivDate: new Date("2024-12-19"), amount: 0.135 },
+  { exDivDate: new Date("2024-12-27"), amount: 0.32 },
+  { exDivDate: new Date("2025-03-14"), amount: 0.32 },
+];
+
+Deno.test("filterDividendsWithin90Days keeps only in-window payments", () => {
+  const within = GRQProjection.filterDividendsWithin90Days(
+    WFG_DIVIDENDS,
+    SCORE_DATE,
   );
-  const testDividends = [
-    { exDivDate: new Date("2024-12-19"), amount: 0.135 },
-    { exDivDate: new Date("2024-12-27"), amount: 0.32 },
-    { exDivDate: new Date("2025-03-14"), amount: 0.32 },
-  ];
+  assertEquals(within.length, 2, "Two WFG dividends fall within 90 days");
+  assertEquals(
+    within.map((d) => d.amount),
+    [0.135, 0.32],
+    "The kept payments are the December ex-dividend dates",
+  );
+});
 
-  await t.step("dividend filtering within 90 days", () => {
-    // Test the filtering logic
-    const dividendsWithin90Days = testDividends.filter((dividend) =>
-      dividend.exDivDate <= ninetyDayDate
-    );
+Deno.test("filterDividendsWithin90Days includes a payment on the boundary day", () => {
+  // The window edge is score date + 90 days; an ex-div date exactly on the
+  // edge is inclusive (<=).
+  const boundary = new Date(SCORE_DATE.getTime() + 90 * 24 * 60 * 60 * 1000);
+  const within = GRQProjection.filterDividendsWithin90Days(
+    [{ exDivDate: boundary, amount: 0.5 }],
+    SCORE_DATE,
+  );
+  assertEquals(within.length, 1, "Boundary-day dividend is inside the window");
+});
 
-    assertEquals(
-      dividendsWithin90Days.length,
-      2,
-      "Should have 2 dividends within 90 days",
-    );
+Deno.test("filterDividendsWithin90Days returns empty for missing or empty input", () => {
+  assertEquals(GRQProjection.filterDividendsWithin90Days([], SCORE_DATE), []);
+  assertEquals(
+    GRQProjection.filterDividendsWithin90Days(undefined, SCORE_DATE),
+    [],
+  );
+});
 
-    // Calculate total dividends within 90 days
-    const totalDividends = dividendsWithin90Days.reduce(
-      (sum, div) => sum + div.amount,
-      0,
-    );
+Deno.test("sumDividends totals the in-window WFG payments", () => {
+  const within = GRQProjection.filterDividendsWithin90Days(
+    WFG_DIVIDENDS,
+    SCORE_DATE,
+  );
+  assertAlmostEquals(
+    GRQProjection.sumDividends(within),
+    0.455,
+    0.001,
+    "0.135 + 0.32 = $0.455 within 90 days",
+  );
+});
 
-    assertAlmostEquals(
-      totalDividends,
-      0.455,
-      0.001,
-      "Total dividends should be $0.455",
-    );
-  });
+Deno.test("sumDividends returns 0 for missing or empty input", () => {
+  assertEquals(GRQProjection.sumDividends([]), 0);
+  assertEquals(GRQProjection.sumDividends(undefined), 0);
+});
 
-  await t.step("date calculations", () => {
-    // Verify 90-day calculation
-    const expected90DayDate = new Date(2025, 1, 13); // February 13, 2025
-    const daysDiff = Math.round(
-      (ninetyDayDate.getTime() - scoreDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
+Deno.test("dividend total flows into the shipped performance return", () => {
+  // Drive the real return kernel the dashboard uses: the in-window dividend
+  // total contributes a price-relative dividend return on top of the price
+  // return, proving the filtered/summed dividends reach production output.
+  const within = GRQProjection.filterDividendsWithin90Days(
+    WFG_DIVIDENDS,
+    SCORE_DATE,
+  );
+  const totalDividends = GRQProjection.sumDividends(within);
+  const buyPrice = 91;
+  const currentPrice = 100;
 
-    assertEquals(daysDiff, 90, "Should be exactly 90 days");
-    assertEquals(
-      ninetyDayDate.getTime(),
-      expected90DayDate.getTime(),
-      "90-day date should match expected",
-    );
-  });
+  const withDividends = GRQProjection.calculatePerformanceReturn(
+    buyPrice,
+    currentPrice,
+    totalDividends,
+  )!;
+  const withoutDividends = GRQProjection.calculatePerformanceReturn(
+    buyPrice,
+    currentPrice,
+    0,
+  )!;
 
-  await t.step("dividend date validation", () => {
-    // Test that specific dividends are correctly identified
-    const dividend1 = testDividends[0]; // 2024-12-19
-    const dividend2 = testDividends[1]; // 2024-12-27
-    const dividend3 = testDividends[2]; // 2025-03-14
-
-    assertEquals(
-      dividend1.exDivDate <= ninetyDayDate,
-      true,
-      "First dividend should be within 90 days",
-    );
-    assertEquals(
-      dividend2.exDivDate <= ninetyDayDate,
-      true,
-      "Second dividend should be within 90 days",
-    );
-    assertEquals(
-      dividend3.exDivDate <= ninetyDayDate,
-      false,
-      "Third dividend should be after 90 days",
-    );
-  });
+  // The dividend return component is (0.455 / 91) * 100 ≈ 0.5%.
+  assertAlmostEquals(
+    withDividends - withoutDividends,
+    (0.455 / buyPrice) * 100,
+    0.001,
+    "Dividend total adds a price-relative dividend return",
+  );
 });
