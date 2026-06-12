@@ -54,6 +54,11 @@ pub fn calculate_average_score(scores: &[f64]) -> f64 {
 }
 
 /// Reads `<docs_path>/scores/index.json` and returns its entries sorted by date.
+///
+/// # Errors
+///
+/// Returns an error if the index file cannot be read or does not contain valid
+/// JSON matching [`IndexData`].
 pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
     use std::fs;
     use std::path::Path;
@@ -88,6 +93,11 @@ pub fn read_index_json(docs_path: &str) -> Result<IndexData> {
 /// a parent-directory (`..`) segment before joining. With neither present, the
 /// joined path is lexically guaranteed to stay within `<docs_path>/scores`.
 /// Mirrors the containment guard in `helpers/server.ts::getFilePath`.
+///
+/// # Errors
+///
+/// Returns an error if `file` is empty, absolute, or contains a
+/// parent-directory (`..`) segment.
 pub fn build_score_file_path(docs_path: &str, file: &str) -> Result<String> {
     use std::path::Component;
 
@@ -137,6 +147,11 @@ pub fn get_market_data_path(ticker: &str) -> String {
 }
 
 /// Reads a tab-separated score file into a vector of [`StockRecord`]s.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened or a row cannot be
+/// deserialised into a [`StockRecord`].
 pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
     use csv::ReaderBuilder;
     use std::fs::File;
@@ -158,6 +173,11 @@ pub fn read_tsv_score_file(file_path: &str) -> Result<Vec<StockRecord>> {
 }
 
 /// Reads a score file and returns just the `Stock` ticker codes, in file order.
+///
+/// # Errors
+///
+/// Returns an error if the underlying score file cannot be read or parsed (see
+/// [`read_tsv_score_file`]).
 pub fn extract_ticker_codes_from_score_file(file_path: &str) -> Result<Vec<String>> {
     let stock_records = read_tsv_score_file(file_path)?;
     let ticker_codes: Vec<String> = stock_records
@@ -181,6 +201,11 @@ pub fn extract_symbol_from_ticker(ticker: &str) -> String {
 }
 
 /// Reads and deserialises the [`MarketData`] JSON file for `symbol`.
+///
+/// # Errors
+///
+/// Returns an error if the market-data file cannot be opened or does not
+/// contain valid JSON matching [`MarketData`].
 pub fn read_market_data(symbol: &str) -> Result<MarketData> {
     use std::fs::File;
 
@@ -213,6 +238,11 @@ fn parse_financial_value(field: &str, context: &str, raw: &str) -> Option<f64> {
 ///
 /// Rows with a non-numeric or non-positive close price are skipped (and a
 /// warning is written to stderr).
+///
+/// # Errors
+///
+/// Returns an error if the CSV file cannot be opened or a record cannot be
+/// read.
 pub fn read_market_data_from_csv(
     csv_file_path: &str,
 ) -> Result<HashMap<String, HashMap<String, f64>>> {
@@ -254,6 +284,11 @@ pub fn read_market_data_from_csv(
 
 /// Returns `(date, close)` pairs from `market_data` whose date falls within the
 /// inclusive `start_date`..=`end_date` range, sorted oldest first.
+///
+/// # Errors
+///
+/// Returns an error if `start_date` or `end_date` is not a valid `%Y-%m-%d`
+/// date.
 pub fn filter_market_data_by_date_range(
     market_data: &MarketData,
     start_date: &str,
@@ -300,6 +335,11 @@ pub fn derive_csv_output_path(score_file_path: &str) -> String {
 
 /// Creates a CSV file with market data for the given symbols and date range
 /// The CSV file will be created in the same directory as the score file with the same base name
+///
+/// # Errors
+///
+/// Returns an error if the market data cannot be read or the CSV file cannot be
+/// written (see [`create_market_data_csv`]).
 pub fn create_market_data_csv_for_score_file(
     score_file_path: &str,
     symbols: &[String],
@@ -310,6 +350,11 @@ pub fn create_market_data_csv_for_score_file(
 }
 
 /// Creates a CSV file with market data for the given symbols and date range
+///
+/// # Errors
+///
+/// Returns an error if `score_file_date` is not a valid date, a symbol's
+/// market data cannot be read, or the output CSV cannot be written.
 pub fn create_market_data_csv(
     symbols: &[String],
     score_file_date: &str,
@@ -394,6 +439,12 @@ pub fn create_market_data_csv(
 /// Creates a CSV file with market data for the given tickers and date range, in long format.
 /// Each row: date, ticker, high, low, open, close
 /// The ticker is the full code from the scores file (e.g., NYSE:SEM)
+///
+/// # Errors
+///
+/// Returns an error if `score_file_date` is not a valid date or the output CSV
+/// cannot be created or written. Tickers with missing market data are skipped
+/// rather than failing.
 pub fn create_market_data_long_csv(
     tickers: &[String],
     score_file_date: &str,
@@ -449,6 +500,11 @@ pub fn create_market_data_long_csv(
 }
 
 /// Like create_market_data_csv_for_score_file, but outputs long format and allows custom output dir (for tests)
+///
+/// # Errors
+///
+/// Returns an error if the long-format CSV cannot be created or written (see
+/// [`create_market_data_long_csv`]).
 pub fn create_market_data_long_csv_for_score_file(
     score_file_path: &str,
     tickers: &[String],
@@ -475,6 +531,11 @@ pub fn get_dividend_data_path(ticker: &str) -> String {
 }
 
 /// Reads dividend data for a given ticker
+///
+/// # Errors
+///
+/// Returns an error if the dividend file cannot be opened or does not contain
+/// valid JSON matching [`DividendData`].
 pub fn read_dividend_data(ticker: &str) -> Result<DividendData> {
     use std::fs::File;
 
@@ -486,6 +547,11 @@ pub fn read_dividend_data(ticker: &str) -> Result<DividendData> {
 }
 
 /// Filters dividend data by date range
+///
+/// # Errors
+///
+/// Returns an error if `start_date` or `end_date` is not a valid `%Y-%m-%d`
+/// date.
 pub fn filter_dividend_data_by_date_range(
     dividend_data: &DividendData,
     start_date: &str,
@@ -535,6 +601,12 @@ pub fn derive_dividend_csv_output_path(score_file_path: &str) -> String {
 }
 
 /// Creates a dividend CSV file for the given symbols and date range
+///
+/// # Errors
+///
+/// Returns an error if `score_file_date` is not a valid date or the output CSV
+/// cannot be created or written. Symbols with missing dividend data are skipped
+/// with a warning rather than failing.
 pub fn create_dividend_csv(
     symbols: &[String],
     score_file_date: &str,
@@ -588,6 +660,11 @@ pub fn create_dividend_csv(
 }
 
 /// Creates a dividend CSV file for a score file
+///
+/// # Errors
+///
+/// Returns an error if the dividend CSV cannot be created or written (see
+/// [`create_dividend_csv`]).
 pub fn create_dividend_csv_for_score_file(
     score_file_path: &str,
     symbols: &[String],
@@ -629,6 +706,11 @@ pub fn calculate_annualized_performance(performance_pct: f64, days_elapsed: i64)
 /// println!("90-day return: {:.2}%", performance.performance_90_day);
 /// # Ok::<(), anyhow::Error>(())
 /// ```
+///
+/// # Errors
+///
+/// Returns an error if the score file or the derived market-data CSV cannot be
+/// read, or if `score_file_date` is not a valid `%Y-%m-%d` date.
 pub fn calculate_portfolio_performance(
     score_file_path: &str,
     score_file_date: &str,
@@ -768,6 +850,12 @@ pub fn calculate_portfolio_performance(
 }
 
 /// Calculates hybrid projection for scores less than 90 days old
+///
+/// # Errors
+///
+/// Returns an error if `score_file_date` is not a valid `%Y-%m-%d` date, or if
+/// the score is already 90 days or more old (use
+/// [`calculate_portfolio_performance`] instead).
 pub fn calculate_hybrid_projection(
     stock_records: &[StockRecord],
     score_file_date: &str,
@@ -963,6 +1051,11 @@ fn calculate_dividends_for_period(symbol: &str, start_date: &str, end_date: &str
 }
 
 /// Updates the index.json file with performance metrics
+///
+/// # Errors
+///
+/// Returns an error if the index file cannot be read, or if the updated index
+/// cannot be serialised or written back to disk.
 pub fn update_index_with_performance(docs_path: &str) -> Result<()> {
     let mut index_data = read_index_json(docs_path)?;
 
