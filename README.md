@@ -126,6 +126,16 @@ auto-bumped within the same window. Internal `stSoftwareAU/*` dependencies are
 excluded from the cooldown so they update immediately, mirroring the
 `minimumDependencyAge` policy that `deno.json` applies to the Deno ecosystem.
 
+The CI pipeline (`ci.yml`) complements this by building the **committed,
+reviewed `Cargo.lock`** rather than floating dependencies: every `cargo`
+build/test/check step runs with `--locked`, so a stale lockfile fails the
+build instead of silently resolving (and executing the `build.rs` /
+proc-macros of) a freshly-published, unquarantined crate. CI tool installs
+(`cargo-tarpaulin`, `cargo-cyclonedx`, `cargo-audit`) are pinned to explicit
+versions with `--locked` so they do not compile an arbitrary newest
+tool-dependency tree on each run. Crate bumps therefore arrive only through
+the quarantined Dependabot PRs above, never inline on a PR build.
+
 ### Setup
 
 1. Enable GitHub Actions in your repository.
