@@ -1,98 +1,102 @@
-import { assertEquals } from "@std/assert";
+// Behavioural tests for the dashboard's judgement kernel.
+//
+// History (issue #121): this file used to define local `calculateJudgement`
+// (returning "EXCEEDED"/"MET"/"BELOW") and `calculateProgressVsCostOfCapital`
+// (returning "ABOVE"/"AT"/"BELOW") functions and assert on those copies. No
+// such string mapping exists in the shipped code — the production
+// `GRQValidator.calculateJudgement` (docs/app.js) delegates to
+// `GRQProjection.computeJudgement` (docs/projection.js), which reports outcomes
+// such as "Hit Target", "Partial Success", "Missed Target" and "Early Days".
+// The old cases were therefore tautologies asserting on a fictional mapping;
+// the cost-of-capital "ABOVE/AT/BELOW" cases and the local Date-arithmetic
+// "boundary" steps likewise never touched shipped code.
+//
+// Per issue #121 (option a) the tests below drive the REAL exported
+// `GRQProjection.computeJudgement` and assert on the shipped judgement strings,
+// so a regression in the production string mapping (docs/projection.js:385)
+// actually fails. The fictional cost-of-capital mapping was deleted (option b):
+// the real cost-of-capital figure is the excess-return value computed by
+// `GRQValidator.calculateProgressVsCostOfCapitalValue`, not a string bucket.
+import { assert, assertEquals } from "@std/assert";
+import "../docs/projection.js";
 
-// Test case for judgement calculations and logic
+interface Projection {
+  projected90DayPerformance: number;
+  projectionMethod: string;
+  confidence: number;
+}
 
-Deno.test("Judgement Tests", async (t) => {
-  const scoreDate = new Date(2024, 10, 15); // November 15, 2024
-  const ninetyDayDate = new Date(
-    scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+const g = globalThis as unknown as {
+  GRQProjection: {
+    computeJudgement: (inputs: {
+      performance: number | null;
+      daysElapsed: number;
+      targetPercentage: number | null;
+      projection: Projection | null;
+    }) => string;
+  };
+};
+const GRQProjection = g.GRQProjection;
+
+Deno.test("computeJudgement - realised outcome from day 90", async (t) => {
+  // At/after the 90-day boundary the kernel reports the realised outcome
+  // against 80% of target. Target 20% -> threshold 16%.
+  const realised = (performance: number) =>
+    GRQProjection.computeJudgement({
+      performance,
+      daysElapsed: 90,
+      targetPercentage: 20,
+      projection: null,
+    });
+
+  await t.step("at or above 80% of target hits the target", () => {
+    assertEquals(realised(25.0), "Hit Target"); // above target
+    assertEquals(realised(16.0), "Hit Target"); // exactly the 80% threshold
+  });
+
+  await t.step("positive but below threshold is a partial success", () => {
+    assertEquals(realised(10.0), "Partial Success");
+  });
+
+  await t.step("zero or negative misses the target", () => {
+    assertEquals(realised(0.0), "Missed Target");
+    assertEquals(realised(-5.0), "Missed Target");
+  });
+});
+
+Deno.test("computeJudgement - pending and early-stage reporting", async (t) => {
+  await t.step("null performance is pending", () => {
+    assertEquals(
+      GRQProjection.computeJudgement({
+        performance: null,
+        daysElapsed: 5,
+        targetPercentage: 20,
+        projection: null,
+      }),
+      "Pending",
+    );
+  });
+
+  await t.step(
+    "before day 30 without a confident projection is early days",
+    () => {
+      const up = GRQProjection.computeJudgement({
+        performance: 3.2,
+        daysElapsed: 10,
+        targetPercentage: 20,
+        projection: null,
+      });
+      assert(up.startsWith("Early Days"));
+      assert(up.includes("+3.2%"));
+
+      const down = GRQProjection.computeJudgement({
+        performance: -2.5,
+        daysElapsed: 10,
+        targetPercentage: 20,
+        projection: null,
+      });
+      assert(down.startsWith("Early Days"));
+      assert(down.includes("-2.5%"));
+    },
   );
-
-  function calculateJudgement(performance: number, target: number): string {
-    if (performance >= target) {
-      return performance > target ? "EXCEEDED" : "MET";
-    } else {
-      return "BELOW";
-    }
-  }
-
-  function calculateProgressVsCostOfCapital(
-    performance: number,
-    costOfCapital: number,
-  ): string {
-    if (performance > costOfCapital) {
-      return "ABOVE";
-    } else if (performance === costOfCapital) {
-      return "AT";
-    } else {
-      return "BELOW";
-    }
-  }
-
-  await t.step("judgement calculation", () => {
-    // Test judgement calculation based on performance vs target
-    const testCases = [
-      { performance: 25.0, target: 20.0, expected: "EXCEEDED" },
-      { performance: 20.0, target: 20.0, expected: "MET" },
-      { performance: 15.0, target: 20.0, expected: "BELOW" },
-      { performance: 10.0, target: 20.0, expected: "BELOW" },
-      { performance: -5.0, target: 20.0, expected: "BELOW" },
-    ];
-
-    testCases.forEach((testCase, index) => {
-      const judgement = calculateJudgement(
-        testCase.performance,
-        testCase.target,
-      );
-      assertEquals(
-        judgement,
-        testCase.expected,
-        `Test ${index + 1}: Judgement should be ${testCase.expected}`,
-      );
-    });
-  });
-
-  await t.step("cost of capital comparison", () => {
-    // Test progress vs cost of capital calculation
-    const costOfCapital = 10.0; // 10% cost of capital
-    const testCases = [
-      { performance: 15.0, expected: "ABOVE" },
-      { performance: 10.0, expected: "AT" },
-      { performance: 5.0, expected: "BELOW" },
-      { performance: -5.0, expected: "BELOW" },
-    ];
-
-    testCases.forEach((testCase, index) => {
-      const progress = calculateProgressVsCostOfCapital(
-        testCase.performance,
-        costOfCapital,
-      );
-      assertEquals(
-        progress,
-        testCase.expected,
-        `Test ${index + 1}: Progress should be ${testCase.expected}`,
-      );
-    });
-  });
-
-  await t.step("date boundary logic", () => {
-    // Test that judgements are calculated within the 90-day boundary
-    const testDate = new Date("2025-02-12"); // One day before 90-day boundary
-    const isWithin90Days = testDate <= ninetyDayDate;
-
-    assertEquals(isWithin90Days, true, "Test date should be within 90 days");
-  });
-
-  await t.step("boundary date inclusion", () => {
-    // Test that the boundary date itself is included
-    const boundaryDate = new Date("2025-02-13"); // Exactly 90 days
-    // Compare only the date parts (year, month, day)
-    const isSameDay =
-      boundaryDate.getFullYear() === ninetyDayDate.getFullYear() &&
-      boundaryDate.getMonth() === ninetyDayDate.getMonth() &&
-      boundaryDate.getDate() === ninetyDayDate.getDate();
-    const isWithin90Days = isSameDay || boundaryDate < ninetyDayDate;
-
-    assertEquals(isWithin90Days, true, "Boundary date should be included");
-  });
 });
