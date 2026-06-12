@@ -37,7 +37,7 @@ helpers used in the tests):
 | --- | --- |
 | `helpers/*.ts tests/*.ts` | ✅ true |
 | `helpers/**/*.ts tests/*.ts` (glob change) | ✅ true |
-| `deno check \`<newline>` helpers/*.ts …` (line split) | ✅ true |
+| `deno check \ helpers/*.ts …` (backslash line continuation) | ✅ true |
 | `tests/*.ts` only (coverage dropped) | ❌ false — test fails |
 
 ```mermaid
