@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dead `[dependencies]` `walkdir` and `thiserror`, which were declared but
   never referenced in `src/` or `tests/`. Removing them trims build time, the
   lockfile, and the supply-chain surface.
+- Dead CLI code in `src/main.rs`: the `--performance-only` flag (parsed but
+  never read, so it silently did nothing) and the unreachable second
+  `--calculate-performance` block (dominated by an earlier early-return).
 
 ## [0.1.10] - 2026-06-11
 
