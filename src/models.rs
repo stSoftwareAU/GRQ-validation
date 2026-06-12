@@ -70,30 +70,39 @@ where
     }
 }
 
+/// A single row from a daily score TSV file describing one stock.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StockRecord {
+    /// Full ticker symbol, e.g. `"NYSE:SEM"`.
     #[serde(rename = "Stock")]
     pub stock: String,
+    /// Analyst score for the stock.
     #[serde(rename = "Score")]
     pub score: f64,
+    /// Target price (parsed from currency-formatted text such as `"$22.63"`).
     #[serde(
         rename = "Target",
         serialize_with = "serialize_currency",
         deserialize_with = "deserialize_currency"
     )]
     pub target: f64,
+    /// Ex-dividend date, when supplied by the source file.
     #[serde(rename = "ExDividendDate")]
     pub ex_dividend_date: Option<String>,
+    /// Dividend paid per share, when supplied.
     #[serde(rename = "DividendPerShare")]
     pub dividend_per_share: Option<f64>,
+    /// Free-text notes from the source file.
     #[serde(rename = "Notes")]
     pub notes: Option<String>,
+    /// Basic intrinsic value per share (parsed from currency text).
     #[serde(
         rename = "intrinsicValuePerShareBasic",
         serialize_with = "serialize_optional_currency",
         deserialize_with = "deserialize_optional_currency"
     )]
     pub intrinsic_value_per_share_basic: Option<f64>,
+    /// Adjusted intrinsic value per share (parsed from currency text).
     #[serde(
         rename = "intrinsicValuePerShareAdjusted",
         serialize_with = "serialize_optional_currency",
@@ -103,6 +112,8 @@ pub struct StockRecord {
 }
 
 impl StockRecord {
+    /// Creates a `StockRecord` with the given `stock`, `score` and `target`,
+    /// leaving the optional fields unset.
     pub fn new(stock: String, score: f64, target: f64) -> Self {
         Self {
             stock,
@@ -117,113 +128,166 @@ impl StockRecord {
     }
 }
 
+/// Metadata block of an Alpha Vantage daily time-series JSON file.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MarketDataMeta {
+    /// Human-readable description of the series.
     #[serde(rename = "1. Information")]
     pub information: String,
+    /// Ticker symbol the series belongs to.
     #[serde(rename = "2. Symbol")]
     pub symbol: String,
+    /// Timestamp of the most recent refresh.
     #[serde(rename = "3. Last Refreshed")]
     pub last_refreshed: String,
+    /// Output size (e.g. `"Compact"` or `"Full size"`).
     #[serde(rename = "4. Output Size")]
     pub output_size: String,
+    /// Time zone the timestamps are expressed in.
     #[serde(rename = "5. Time Zone")]
     pub time_zone: String,
 }
 
+/// One day's adjusted OHLCV figures from a market-data time series.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DailyData {
+    /// Opening price.
     #[serde(rename = "1. open")]
     pub open: String,
+    /// Highest traded price.
     #[serde(rename = "2. high")]
     pub high: String,
+    /// Lowest traded price.
     #[serde(rename = "3. low")]
     pub low: String,
+    /// Closing price.
     #[serde(rename = "4. close")]
     pub close: String,
+    /// Split/dividend-adjusted closing price.
     #[serde(rename = "5. adjusted close")]
     pub adjusted_close: String,
+    /// Traded volume.
     #[serde(rename = "6. volume")]
     pub volume: String,
+    /// Dividend amount paid on this date.
     #[serde(rename = "7. dividend amount")]
     pub dividend_amount: String,
+    /// Split coefficient applied on this date.
     #[serde(rename = "8. split coefficient")]
     pub split_coefficient: String,
 }
 
+/// A full market-data file: metadata plus the daily time series keyed by date.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MarketData {
+    /// Series metadata.
     #[serde(rename = "Meta Data")]
     pub meta_data: MarketDataMeta,
+    /// Daily figures keyed by `YYYY-MM-DD` date string.
     #[serde(rename = "Time Series (Daily)")]
     pub time_series_daily: std::collections::HashMap<String, DailyData>,
 }
 
+/// Top-level structure of `docs/scores/index.json`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IndexData {
+    /// All known score entries, one per daily score file.
     pub scores: Vec<ScoreEntry>,
 }
 
+/// A single entry in the scores index, describing one daily score file and its
+/// computed performance.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScoreEntry {
+    /// Year component of the score date.
     #[serde(rename = "year")]
     pub year: String,
+    /// Month component (full name, e.g. `"June"`).
     #[serde(rename = "month")]
     pub month: String,
+    /// Day-of-month component.
     #[serde(rename = "day")]
     pub day: String,
+    /// Relative path to the score file under `docs/scores/`.
     #[serde(rename = "file")]
     pub file: String,
+    /// Score date in `YYYY-MM-DD` form.
     #[serde(rename = "date")]
     pub date: String,
+    /// 90-day portfolio performance, once calculated.
     #[serde(rename = "performance_90_day", skip_serializing_if = "Option::is_none")]
     pub performance_90_day: Option<f64>,
+    /// Annualised portfolio performance, once calculated.
     #[serde(
         rename = "performance_annualized",
         skip_serializing_if = "Option::is_none"
     )]
     pub performance_annualized: Option<f64>,
+    /// Number of stocks contributing to the performance figures.
     #[serde(rename = "total_stocks", skip_serializing_if = "Option::is_none")]
     pub total_stocks: Option<i32>,
 }
 
+/// A single dividend event for a stock.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DividendRecord {
+    /// Ex-dividend date in `YYYY-MM-DD` form.
     #[serde(rename = "ex_dividend_date")]
     pub ex_dividend_date: String,
+    /// Declaration date, when known.
     #[serde(rename = "declaration_date")]
     pub declaration_date: Option<String>,
+    /// Record date, when known.
     #[serde(rename = "record_date")]
     pub record_date: Option<String>,
+    /// Payment date, when known.
     #[serde(rename = "payment_date")]
     pub payment_date: Option<String>,
+    /// Dividend amount per share, as raw text.
     #[serde(rename = "amount")]
     pub amount: String,
 }
 
+/// All dividend events for a single stock.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DividendData {
+    /// Ticker symbol the dividends belong to.
     pub symbol: String,
+    /// The dividend events, in source order.
     pub data: Vec<DividendRecord>,
 }
 
+/// Computed 90-day performance for a single stock within a portfolio.
 #[derive(Debug, Clone)]
 pub struct StockPerformance {
+    /// Full ticker symbol.
     pub ticker: String,
+    /// Buy price (close on, or just after, the score date).
     pub buy_price: f64,
+    /// Analyst target price from the score file.
     pub target_price: f64,
+    /// Latest price within the 90-day window.
     pub current_price: f64,
+    /// Price gain/loss over the period, as a percentage.
     pub gain_loss_percent: f64,
+    /// Total dividends received over the period.
     pub dividends_total: f64,
+    /// Total return (price plus dividends), as a percentage.
     pub total_return_percent: f64,
 }
 
+/// Aggregated performance of a whole portfolio for one score date.
 #[derive(Debug)]
 pub struct PortfolioPerformance {
+    /// Score date the figures relate to (`YYYY-MM-DD`).
     pub score_date: String,
+    /// Number of stocks in the portfolio.
     pub total_stocks: i32,
+    /// Average 90-day total return across the portfolio, as a percentage.
     pub performance_90_day: f64,
+    /// Annualised equivalent of the 90-day return, as a percentage.
     pub performance_annualized: f64,
+    /// Per-stock performance breakdown.
     pub individual_performances: Vec<StockPerformance>,
 }
 
