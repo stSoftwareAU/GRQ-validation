@@ -1,4 +1,6 @@
 #![warn(missing_docs)]
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 //! Processes daily stock-score TSV files and computes portfolio performance.
 //!
 //! The crate exposes two modules:
