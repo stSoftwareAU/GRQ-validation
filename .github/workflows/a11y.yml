@@ -66,7 +66,16 @@ jobs:
       - name: Install pa11y-ci
         run: npm install --no-save pa11y-ci
       - name: Install the Chrome build Puppeteer expects
-        run: npx puppeteer browsers install chrome
+        run: |
+          set -euo pipefail
+          # Puppeteer refuses to repair a half-populated cache entry: if the
+          # version folder exists but the chrome binary is missing, the install
+          # aborts with "All providers failed ... executable is missing" rather
+          # than re-downloading. The pa11y-ci install above can leave the cache
+          # in exactly that partial state, so clear it first to guarantee a
+          # clean download every run.
+          rm -rf "${HOME}/.cache/puppeteer/chrome"
+          npx puppeteer browsers install chrome
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
       # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
