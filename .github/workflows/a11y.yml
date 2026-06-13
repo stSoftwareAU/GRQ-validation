@@ -56,7 +56,18 @@ jobs:
             fi
             sleep 1
           done
+      # pa11y-ci pulls in Puppeteer, but Puppeteer v22+ no longer downloads
+      # Chrome during install — the browser must be fetched explicitly, or the
+      # run dies with "Could not find Chrome (ver. ...)". Install pa11y-ci
+      # locally first so its own Puppeteer drives the download; that pins the
+      # Chrome build to the exact version Puppeteer resolves at launch (a bare
+      # `npx puppeteer ...` could resolve a different Puppeteer, and so a
+      # mismatched Chrome build).
+      - name: Install pa11y-ci
+        run: npm install --no-save pa11y-ci
+      - name: Install the Chrome build Puppeteer expects
+        run: npx puppeteer browsers install chrome
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
       # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
-        run: npx --yes pa11y-ci --config pa11yci.json
+        run: npx pa11y-ci --config pa11yci.json
