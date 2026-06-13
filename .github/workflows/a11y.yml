@@ -18,6 +18,14 @@ on:
   pull_request:
     paths: ["docs/**"]
 
+# Cancel superseded runs (Issue #172): rapid pushes to the same ref otherwise
+# queue redundant accessibility scans that each hold a runner. Keying on
+# workflow + ref with cancel-in-progress leaves only the latest run for a
+# given ref alive, matching every other PR-triggered workflow in this repo.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
