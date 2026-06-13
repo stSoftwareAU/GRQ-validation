@@ -39,7 +39,12 @@ jobs:
       # actions/setup-node@v4
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
-          node-version: "20"
+          # Track the current LTS rather than a pinned major: Node 20 reaches
+          # end-of-life on GitHub-hosted runners (2026-09-16), so pinning it
+          # runs the toolchain (http-server, pa11y-ci) on an unsupported
+          # interpreter. lts/* keeps the gate on a maintained runtime, matching
+          # markdown-lint.yml (Issue #171).
+          node-version: "lts/*"
       - name: Serve docs/ dashboard and wait for it to come up
         run: |
           set -euo pipefail
@@ -51,7 +56,18 @@ jobs:
             fi
             sleep 1
           done
+      # pa11y-ci pulls in Puppeteer, but Puppeteer v22+ no longer downloads
+      # Chrome during install — the browser must be fetched explicitly, or the
+      # run dies with "Could not find Chrome (ver. ...)". Install pa11y-ci
+      # locally first so its own Puppeteer drives the download; that pins the
+      # Chrome build to the exact version Puppeteer resolves at launch (a bare
+      # `npx puppeteer ...` could resolve a different Puppeteer, and so a
+      # mismatched Chrome build).
+      - name: Install pa11y-ci
+        run: npm install --no-save pa11y-ci
+      - name: Install the Chrome build Puppeteer expects
+        run: npx puppeteer browsers install chrome
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
       # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
-        run: npx --yes pa11y-ci --config pa11yci.json
+        run: npx pa11y-ci --config pa11yci.json
