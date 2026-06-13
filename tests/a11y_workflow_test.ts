@@ -142,6 +142,30 @@ Deno.test("a11y workflow serves the docs/ directory before checking", async () =
   );
 });
 
+// Multi-line bash run: blocks must fail fast (Issue #173). Without
+// `set -euo pipefail` an intermediate command that fails (e.g. npx failing to
+// install http-server) is masked by the success of a later command, so the
+// step reports success even when an earlier stage broke.
+Deno.test("a11y multi-line bash run blocks begin with set -euo pipefail", async () => {
+  const doc = await loadWorkflow();
+  const multiLineRuns = allSteps(doc)
+    .map((s) => s.run ?? "")
+    .filter((run) => run.includes("\n"));
+  assert(
+    multiLineRuns.length > 0,
+    "workflow must contain at least one multi-line run block",
+  );
+  for (const run of multiLineRuns) {
+    const firstLine = run.split("\n").map((l) => l.trim())
+      .filter((l) => l.length > 0)[0] ?? "";
+    assertEquals(
+      firstLine,
+      "set -euo pipefail",
+      "every multi-line bash run block must start with set -euo pipefail",
+    );
+  }
+});
+
 Deno.test("a11y workflow pins actions to 40-character commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));

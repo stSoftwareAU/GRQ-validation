@@ -171,6 +171,7 @@ Deno.test("multi-line bash run blocks begin with set -euo pipefail", async () =>
   const targets: Array<[string, string]> = [
     ["check-changes", "Check for changes"],
     ["build", "Generate CycloneDX SBOM"],
+    ["build", "Check Bash Script Syntax"],
   ];
   for (const [job, step] of targets) {
     const run = findRun(doc, job, step);
