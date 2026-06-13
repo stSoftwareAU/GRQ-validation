@@ -39,7 +39,12 @@ jobs:
       # actions/setup-node@v4
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
-          node-version: "20"
+          # Track the current LTS rather than a pinned major: Node 20 reaches
+          # end-of-life on GitHub-hosted runners (2026-09-16), so pinning it
+          # runs the toolchain (http-server, pa11y-ci) on an unsupported
+          # interpreter. lts/* keeps the gate on a maintained runtime, matching
+          # markdown-lint.yml (Issue #171).
+          node-version: "lts/*"
       - name: Serve docs/ dashboard and wait for it to come up
         run: |
           set -euo pipefail
