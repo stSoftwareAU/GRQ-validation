@@ -23,18 +23,14 @@ echo "================================"
 
 # Build the project first
 echo "Building project..."
-cargo build --release
-
-if [ $? -ne 0 ]; then
+if ! cargo build --release; then
     echo "Error: Build failed"
     exit 1
 fi
 
 # Process the specific date
 echo "Running processor for $DATE..."
-./target/release/grq-validation --docs-path docs --date $DATE
-
-if [ $? -eq 0 ]; then
+if ./target/release/grq-validation --docs-path docs --date "$DATE"; then
     echo "================================"
     echo "Successfully processed $DATE"
     echo "Check the list view to see the results: http://localhost:8000/list.html"
