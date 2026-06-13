@@ -34,6 +34,7 @@ jobs:
           node-version: "20"
       - name: Serve docs/ dashboard and wait for it to come up
         run: |
+          set -euo pipefail
           npx --yes http-server docs -p 8080 --silent &
           for i in $(seq 1 30); do
             if curl -sSf http://localhost:8080/index.html >/dev/null 2>&1; then
