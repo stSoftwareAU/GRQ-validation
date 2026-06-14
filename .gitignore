@@ -3,6 +3,10 @@
 debug/
 target/
 
+# npm dependencies installed locally / in CI (pa11y-ci toolchain) — never
+# committed. Accidentally committing node_modules bloated PR #187.
+node_modules/
+
 # CycloneDX SBOM generated during CI (Issue #53) — produced at build time,
 # not committed.
 *.cdx.json
