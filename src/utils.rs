@@ -523,11 +523,59 @@ pub fn create_market_data_long_csv_for_score_file(
     Ok(output_path)
 }
 
-/// Gets the dividend data path for a given ticker
-/// For example: "SEM" -> "../GRQ-dividends/data/S/SEM.json"
-pub fn get_dividend_data_path(ticker: &str) -> String {
-    let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
-    format!("{DIVIDEND_DATA_BASE_PATH}/data/{first_letter}/{ticker}.json")
+/// Gets the dividend data path for a given ticker.
+///
+/// For example: `"SEM"` -> `"../GRQ-dividends/data/S/SEM.json"`.
+///
+/// The `ticker` field of a score TSV is attacker-influenceable (a contributor,
+/// a compromised upstream data step, or a malicious pull request against the
+/// data set), exactly like the `file` field guarded by [`build_score_file_path`].
+/// To stop a crafted ticker such as `"X/../../../../../../etc/some"` escaping
+/// the intended `../GRQ-dividends/data/` tree, the path is built with
+/// `Path::join` over validated components rather than plain string
+/// interpolation: any parent-directory (`..`), root, or prefix component is a
+/// traversal attempt and is rejected. This mirrors the defence-in-depth posture
+/// of the market-data path (`extract_symbol_from_ticker`) and `build_score_file_path`
+/// (issue #182).
+///
+/// # Errors
+///
+/// Returns an error if `ticker` is absolute or contains a parent-directory
+/// (`..`) segment.
+pub fn get_dividend_data_path(ticker: &str) -> Result<String> {
+    use std::path::Component;
+
+    let first_letter = ticker
+        .chars()
+        .next()
+        .unwrap_or('X')
+        .to_uppercase()
+        .to_string();
+
+    // Build within the dividend-data root via join rather than string
+    // concatenation, keeping only normal segments.
+    let mut full_path = Path::new(DIVIDEND_DATA_BASE_PATH)
+        .join("data")
+        .join(&first_letter);
+
+    let file_name = format!("{ticker}.json");
+    for component in Path::new(&file_name).components() {
+        match component {
+            Component::ParentDir => {
+                return Err(anyhow!(
+                    "Refusing dividend ticker with parent-directory segment: {ticker:?}"
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(anyhow!("Refusing absolute dividend ticker: {ticker:?}"));
+            }
+            // `.` adds nothing; normal segments extend the path.
+            Component::CurDir => {}
+            Component::Normal(segment) => full_path.push(segment),
+        }
+    }
+
+    Ok(full_path.to_string_lossy().into_owned())
 }
 
 /// Reads dividend data for a given ticker
@@ -539,7 +587,7 @@ pub fn get_dividend_data_path(ticker: &str) -> String {
 pub fn read_dividend_data(ticker: &str) -> Result<DividendData> {
     use std::fs::File;
 
-    let dividend_data_path = get_dividend_data_path(ticker);
+    let dividend_data_path = get_dividend_data_path(ticker)?;
     let file = File::open(&dividend_data_path)?;
     let dividend_data: DividendData = serde_json::from_reader(file)?;
 
@@ -1476,17 +1524,81 @@ mod tests {
     #[test]
     fn test_get_dividend_data_path() {
         assert_eq!(
-            get_dividend_data_path("SEM"),
-            format!("{DIVIDEND_DATA_BASE_PATH}/data/S/SEM.json")
+            get_dividend_data_path("SEM").unwrap(),
+            Path::new(DIVIDEND_DATA_BASE_PATH)
+                .join("data/S/SEM.json")
+                .to_string_lossy()
         );
         assert_eq!(
-            get_dividend_data_path("AAPL"),
-            format!("{DIVIDEND_DATA_BASE_PATH}/data/A/AAPL.json")
+            get_dividend_data_path("AAPL").unwrap(),
+            Path::new(DIVIDEND_DATA_BASE_PATH)
+                .join("data/A/AAPL.json")
+                .to_string_lossy()
         );
         assert_eq!(
-            get_dividend_data_path(""),
-            format!("{DIVIDEND_DATA_BASE_PATH}/data/X/.json")
+            get_dividend_data_path("").unwrap(),
+            Path::new(DIVIDEND_DATA_BASE_PATH)
+                .join("data/X/.json")
+                .to_string_lossy()
         );
+    }
+
+    // Regression tests for issue #182: a `..` or absolute segment in an
+    // attacker-influenceable ticker must not escape the dividend data root.
+    #[test]
+    fn test_get_dividend_data_path_rejects_parent_dir_traversal() {
+        let result = get_dividend_data_path("X/../../../../../../etc/some");
+        assert!(
+            result.is_err(),
+            "expected a ticker containing `..` to be rejected, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_get_dividend_data_path_rejects_absolute_ticker() {
+        let result = get_dividend_data_path("/etc/passwd");
+        assert!(
+            result.is_err(),
+            "expected an absolute ticker to be rejected, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_get_dividend_data_path_allows_plain_ticker_with_exchange_prefix() {
+        // A legitimate ticker with an exchange prefix contains no path
+        // separators or traversal segments and must still resolve.
+        let path = get_dividend_data_path("NYSE:SEM").unwrap();
+        assert_eq!(
+            path,
+            Path::new(DIVIDEND_DATA_BASE_PATH)
+                .join("data/N/NYSE:SEM.json")
+                .to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn test_read_dividend_data_rejects_traversal_ticker() {
+        // The read must fail at the path-validation stage rather than opening an
+        // out-of-tree file. We assert it errors for a traversal ticker.
+        let result = read_dividend_data("X/../../../../../../etc/some");
+        assert!(
+            result.is_err(),
+            "expected read_dividend_data to reject a traversal ticker, got ok"
+        );
+    }
+
+    #[test]
+    fn test_calculate_dividends_for_period_safe_on_traversal_ticker() {
+        // The vulnerable call site (calculate_portfolio_performance ->
+        // calculate_dividends_for_period) must not read out-of-tree files for a
+        // crafted ticker; it returns 0.0 dividends instead.
+        let total = calculate_dividends_for_period(
+            "X/../../../../../../etc/some",
+            "2025-01-01",
+            "2025-04-01",
+        )
+        .unwrap();
+        assert_eq!(total, 0.0);
     }
 
     #[test]
