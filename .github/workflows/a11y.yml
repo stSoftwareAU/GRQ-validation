@@ -85,7 +85,22 @@ jobs:
           # launcher always agree on the version.
           CHROME_VERSION="$(node -e "console.log(require('puppeteer-core/lib/cjs/puppeteer/revisions.js').PUPPETEER_REVISIONS.chrome)")"
           echo "Installing Chrome ${CHROME_VERSION} to match pa11y-ci's puppeteer-core"
-          npx --yes @puppeteer/browsers install "chrome@${CHROME_VERSION}"
+          # The standalone @puppeteer/browsers CLI defaults --path to the CURRENT
+          # WORKING DIRECTORY (it would write to "${PWD}/chrome/..."), but
+          # puppeteer-core's launcher only looks in "${HOME}/.cache/puppeteer".
+          # Without an explicit --path the download lands in the wrong place and
+          # the launcher dies with "Could not find Chrome (ver. ...)" even though
+          # the install "succeeded" (PR #185). Pin --path to the launcher's cache
+          # dir so installer and launcher agree on the location as well as the
+          # version.
+          CACHE_DIR="${HOME}/.cache/puppeteer"
+          npx --yes @puppeteer/browsers install "chrome@${CHROME_VERSION}" --path "${CACHE_DIR}"
+          # Fail loudly if the binary is not where the launcher will look, rather
+          # than deferring to a confusing "Could not find Chrome" at scan time.
+          if ! find "${CACHE_DIR}/chrome" -name chrome -type f | grep -q .; then
+            echo "Chrome ${CHROME_VERSION} was not installed under ${CACHE_DIR}" >&2
+            exit 1
+          fi
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
       # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
