@@ -3,16 +3,27 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--
+      Content-Security-Policy as defence-in-depth against DOM XSS from
+      untrusted, TSV-derived score data rendered into innerHTML (issue #189).
+      escapeHtml/escapeJsString remain the primary control; this policy is the
+      second layer. Delivered via meta because GitHub Pages cannot set headers.
+      script-src omits 'unsafe-inline' deliberately — all scripts are external.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    >
     <meta
       http-equiv="Cache-Control"
       content="no-cache, no-store, must-revalidate"
     >
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script>
-        const VERSION="1.0.186";
-        document.title=`GRQ Validation Dashboard v${VERSION}`;
-    </script>
+    <meta name="app-version" content="1.0.186">
+    <meta name="app-title" content="GRQ Validation Dashboard">
+    <!-- Version/title bootstrap (CSP-safe, issue #189) -->
+    <script src="version.js"></script>
     <link rel="icon" type="image/png" href="logo.png" />
 
     <!-- Bootstrap 5 CSS -->
@@ -254,45 +265,7 @@
     <!-- Shared projection/scoring maths (issue #80) — must load before app.js -->
     <script src="projection.js"></script>
 
-    <script>
-        // Dynamically load app.js with version parameter
-        const script = document.createElement('script');
-        script.src = `app.js?v=${VERSION}`;
-        document.head.appendChild(script);
-        
-        // Set version display
-        document.getElementById('version').textContent = VERSION;
-        
-        // Add debug info using Bootstrap's responsive utilities
-        function updateDebugInfo() {
-            const width = window.innerWidth;
-            let breakpoint;
-            if (width >= 1400) breakpoint = 'xxl';
-            else if (width >= 1200) breakpoint = 'xl';
-            else if (width >= 992) breakpoint = 'lg';
-            else if (width >= 768) breakpoint = 'md';
-            else if (width >= 576) breakpoint = 'sm';
-            else breakpoint = 'xs';
-            
-            const isMobile = breakpoint === 'xs' || breakpoint === 'sm';
-            
-            const debugInfo = document.getElementById('debug-info');
-            if (debugInfo) {
-                debugInfo.textContent = `Bootstrap: ${breakpoint} | Mobile: ${isMobile} | Width: ${window.innerWidth}px | UA: ${navigator.userAgent.substring(0, 60)}...`;
-                console.log('Debug info updated:', debugInfo.textContent);
-            } else {
-                console.error('Debug info element not found!');
-            }
-        }
-        
-        // Update debug info immediately
-        updateDebugInfo();
-        
-        // Also update on window load to ensure it's populated
-        window.addEventListener('load', updateDebugInfo);
-        
-        // Update on resize
-        window.addEventListener('resize', updateDebugInfo);
-    </script>
+    <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
+    <script src="dashboard_boot.js"></script>
   </body>
 </html>
