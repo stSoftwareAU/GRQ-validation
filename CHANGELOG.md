@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CONTRIBUTING.md` documenting the build, test, lint, and pull-request
   workflow.
 - `CHANGELOG.md` (this file) tracking notable changes between releases.
+- `.github/branch-protection.json`: a machine-readable record of the intended
+  branch-protection and commit-signing controls for `main`, and the controls
+  deliberately relaxed for the autonomous committers, so static scans treat the
+  posture as documented rather than a gap (Issue #180). Documented in
+  `CONTRIBUTING.md` and `SECURITY.md`.
 
 ### Removed
 

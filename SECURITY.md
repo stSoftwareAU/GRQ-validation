@@ -32,15 +32,26 @@ supply-chain attack shape.
 
 `CODEOWNERS` only requests reviews on its own; enforcement comes from
 branch-protection settings, which a repository administrator must enable on the
-default branch (they are not stored in the tree). The recommended settings are:
+default branch (they are not stored in the tree). The intended controls — and
+the controls deliberately relaxed for the autonomous committers — are recorded
+as machine-readable static evidence in
+[`.github/branch-protection.json`](.github/branch-protection.json) and described
+for contributors in [CONTRIBUTING.md](CONTRIBUTING.md). The intended settings
+are:
 
 - Require at least one approving pull-request review.
 - **Require review from Code Owners.**
 - Block direct pushes and force-pushes to the default branch.
 - Require linear history (to suit the rebase/squash workflow).
+- **Require signed commits**, so `git log --show-signature` reports a good
+  signature on `main` and GitHub shows a **Verified** badge.
 
-Note: commit-signature verification is a separate, optional control and is not
-asserted here.
+Two controls are deliberately relaxed for automation and recorded as such: the
+`scorer 3` identity pushes daily data-only commits under `docs/` directly to
+`main`, and the automated committers (`scorer 3`, `Vibe Coder`, `service @ ST`)
+currently commit unsigned because per-identity signing keys are not yet
+provisioned. Both are accepted, documented postures tracked as future work — see
+`.github/branch-protection.json` for the per-control rationale.
 
 ## Emergency dependency-bump procedure
 
