@@ -65,7 +65,7 @@ jobs:
       # mismatched Chrome build).
       - name: Install pa11y-ci
         run: npm install --no-save pa11y-ci
-      - name: Install the Chrome build Puppeteer expects
+      - name: Install the Chrome build pa11y-ci's Puppeteer expects
         run: |
           set -euo pipefail
           # Puppeteer refuses to repair a half-populated cache entry: if the
@@ -75,7 +75,17 @@ jobs:
           # in exactly that partial state, so clear it first to guarantee a
           # clean download every run.
           rm -rf "${HOME}/.cache/puppeteer/chrome"
-          npx puppeteer browsers install chrome
+          # A bare `npx puppeteer browsers install chrome` resolves the LATEST
+          # puppeteer release, which pins a different Chrome build than the
+          # puppeteer-core bundled inside pa11y-ci. The launcher then dies with
+          # "Could not find Chrome (ver. ...)" because the installed browser
+          # never matches the one it looks for (PR #184). Read the exact Chrome
+          # revision from pa11y-ci's own puppeteer-core and install precisely
+          # that build via its bundled @puppeteer/browsers, so installer and
+          # launcher always agree on the version.
+          CHROME_VERSION="$(node -e "console.log(require('puppeteer-core/lib/cjs/puppeteer/revisions.js').PUPPETEER_REVISIONS.chrome)")"
+          echo "Installing Chrome ${CHROME_VERSION} to match pa11y-ci's puppeteer-core"
+          npx --yes @puppeteer/browsers install "chrome@${CHROME_VERSION}"
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
       # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
