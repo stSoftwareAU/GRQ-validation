@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Base path of the external share-price data repository.
-pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2025Q1";
+pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2026Q2";
 /// Base path of the external dividend data repository.
 pub const DIVIDEND_DATA_BASE_PATH: &str = "../GRQ-dividends";
 
@@ -1247,6 +1247,12 @@ mod tests {
         );
         assert_eq!(extract_ticker_from_symbol("SEM"), None);
         assert_eq!(extract_ticker_from_symbol(""), None);
+    }
+
+    #[test]
+    fn test_market_data_base_path_points_to_current_quarter() {
+        // Pins the configured share-price repository (issue #183).
+        assert_eq!(MARKET_DATA_BASE_PATH, "../GRQ-shareprices2026Q2");
     }
 
     #[test]
