@@ -88,6 +88,45 @@ redirect stdin to avoid hangs: `./quality.sh < /dev/null`.
 6. **Open a pull request** with a clear description of what changed and why,
    referencing any related issue.
 
+## Branch protection, review, and commit signing
+
+The repository's governance posture for the default branch (`main`) is recorded
+as machine-readable static evidence in
+[`.github/branch-protection.json`](.github/branch-protection.json), so security
+scans can confirm the intended controls — and the deliberately relaxed ones —
+rather than treating them as an undocumented gap. GitHub does **not** apply that
+file automatically; a repository administrator enforces the controls via
+Settings → Branches or a repository ruleset. The intended controls are:
+
+- **Require a pull request before merging** with at least one approving review.
+- **Require review from Code Owners** so the committed
+  [`.github/CODEOWNERS`](.github/CODEOWNERS) rules are enforced rather than
+  advisory.
+- **Block force-pushes and deletions** on `main`.
+- **Require linear history** (the rebase/squash workflow above).
+- **Require signed commits.**
+
+### Controls intentionally relaxed for automation
+
+Two controls are deliberately relaxed for the autonomous committer identities,
+and this is a recorded operational choice — not an oversight:
+
+- **Direct pushes for daily data.** The automated `scorer 3` identity pushes
+  daily score files and auto-committed models under `docs/` straight to `main`.
+  These commits touch generated data only — never source, workflows, or actions
+  (which CODEOWNERS guards) — and a human-reviewed pull request per day is
+  operationally infeasible. A ruleset bypass actor scoped to this identity is
+  the recommended way to encode the exception.
+- **Unsigned automation commits.** Per-identity GPG/SSH signing keys for the
+  automated committers (`scorer 3`, `Vibe Coder`, `service @ ST`) are not yet
+  provisioned, so commits from these identities are currently unsigned. This is
+  an accepted, documented posture and tracked as future work; once keys are
+  issued and `commit.gpgsign` is configured per identity, `main` will show the
+  **Verified** badge.
+
+See [SECURITY.md](SECURITY.md) for the rationale linking these controls to the
+supply-chain attack shape they defend against.
+
 ## Conventions
 
 - **Australian English** — use Australian spelling in code, comments, and

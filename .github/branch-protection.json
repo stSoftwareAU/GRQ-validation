@@ -1,0 +1,31 @@
+{
+  "comment": "Declared branch-protection and commit-signing policy for the default branch (Issue #180). This is the static, machine-readable record of the governance decisions described in CONTRIBUTING.md and SECURITY.md. GitHub does NOT apply this file automatically: a repository administrator enforces the intended controls via Settings -> Branches or a repository ruleset. The file exists so static scans can confirm the intended controls AND the deliberately relaxed ones, rather than treating the posture as an undocumented gap (finding BP-c6a4162e1eed).",
+  "default_branch": "main",
+  "intended_controls": {
+    "require_pull_request": true,
+    "require_code_owner_reviews": true,
+    "block_force_pushes": true,
+    "block_deletions": true,
+    "require_linear_history": true,
+    "require_signed_commits": true
+  },
+  "required_approving_review_count": 1,
+  "enforcement": "Requires a repository administrator to enable on `main` via Settings -> Branches or a repository ruleset; the controls are not applied automatically from this file. The committed `.github/CODEOWNERS` rules become enforced (not merely advisory) once 'Require review from Code Owners' is turned on.",
+  "accepted_relaxations": [
+    {
+      "control": "require_pull_request",
+      "identities": ["scorer 3 <scorer-3@lecklogic.com>"],
+      "scope": "Generated data only: daily score files and auto-committed models under docs/. Never source, workflows, or actions, which CODEOWNERS guards.",
+      "reason": "The autonomous scorer identity pushes daily score data straight to `main`. Requiring a human-reviewed pull request for each day's generated data is operationally infeasible, so direct pushes by this identity for data-only commits are a deliberate, documented choice. A ruleset bypass actor scoped to this identity is the recommended way to encode the exception."
+    },
+    {
+      "control": "require_signed_commits",
+      "identities": [
+        "scorer 3 <scorer-3@lecklogic.com>",
+        "Vibe Coder <nigel+VibeCoder@stsoftware.com.au>",
+        "service @ ST <service@stsoftware.com.au>"
+      ],
+      "reason": "Per-identity GPG/SSH signing keys for the automated committers are not yet provisioned, so `git log --show-signature` does not yet report 'Good signature' on `main`. Until keys are issued and `commit.gpgsign` is configured for each agent identity, unsigned commits from these automation identities are an accepted, documented posture rather than an undetected gap. Tracked as future work."
+    }
+  ]
+}
