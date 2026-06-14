@@ -56,51 +56,37 @@ jobs:
             fi
             sleep 1
           done
-      # pa11y-ci pulls in Puppeteer, but Puppeteer v22+ no longer downloads
-      # Chrome during install — the browser must be fetched explicitly, or the
-      # run dies with "Could not find Chrome (ver. ...)". Install pa11y-ci
-      # locally first so its own Puppeteer drives the download; that pins the
-      # Chrome build to the exact version Puppeteer resolves at launch (a bare
-      # `npx puppeteer ...` could resolve a different Puppeteer, and so a
-      # mismatched Chrome build).
-      - name: Install pa11y-ci
-        run: npm install --no-save pa11y-ci
-      - name: Install the Chrome build pa11y-ci's Puppeteer expects
+      # Drive pa11y with the runner's PRE-INSTALLED Google Chrome instead of
+      # downloading a matching Chrome-for-Testing build. pa11y depends on the
+      # full `puppeteer` package, which honours PUPPETEER_EXECUTABLE_PATH and
+      # launches whatever browser it points at — so the launcher and the binary
+      # can no longer disagree on version or cache location. This replaces the
+      # hand-rolled `@puppeteer/browsers install` dance that broke repeatedly in
+      # CI (PRs #184, #185, and PR #187): every download either landed in the
+      # wrong path or no-opped while returning success, leaving the launcher
+      # with "Could not find Chrome". GitHub-hosted ubuntu-latest runners ship
+      # Google Chrome stable, so no download is needed at all.
+      - name: Point Puppeteer at the runner's pre-installed Chrome
         run: |
           set -euo pipefail
-          # Puppeteer refuses to repair a half-populated cache entry: if the
-          # version folder exists but the chrome binary is missing, the install
-          # aborts with "All providers failed ... executable is missing" rather
-          # than re-downloading. The pa11y-ci install above can leave the cache
-          # in exactly that partial state, so clear it first to guarantee a
-          # clean download every run.
-          rm -rf "${HOME}/.cache/puppeteer/chrome"
-          # A bare `npx puppeteer browsers install chrome` resolves the LATEST
-          # puppeteer release, which pins a different Chrome build than the
-          # puppeteer-core bundled inside pa11y-ci. The launcher then dies with
-          # "Could not find Chrome (ver. ...)" because the installed browser
-          # never matches the one it looks for (PR #184). Read the exact Chrome
-          # revision from pa11y-ci's own puppeteer-core and install precisely
-          # that build via its bundled @puppeteer/browsers, so installer and
-          # launcher always agree on the version.
-          CHROME_VERSION="$(node -e "console.log(require('puppeteer-core/lib/cjs/puppeteer/revisions.js').PUPPETEER_REVISIONS.chrome)")"
-          echo "Installing Chrome ${CHROME_VERSION} to match pa11y-ci's puppeteer-core"
-          # The standalone @puppeteer/browsers CLI defaults --path to the CURRENT
-          # WORKING DIRECTORY (it would write to "${PWD}/chrome/..."), but
-          # puppeteer-core's launcher only looks in "${HOME}/.cache/puppeteer".
-          # Without an explicit --path the download lands in the wrong place and
-          # the launcher dies with "Could not find Chrome (ver. ...)" even though
-          # the install "succeeded" (PR #185). Pin --path to the launcher's cache
-          # dir so installer and launcher agree on the location as well as the
-          # version.
-          CACHE_DIR="${HOME}/.cache/puppeteer"
-          npx --yes @puppeteer/browsers install "chrome@${CHROME_VERSION}" --path "${CACHE_DIR}"
-          # Fail loudly if the binary is not where the launcher will look, rather
-          # than deferring to a confusing "Could not find Chrome" at scan time.
-          if ! find "${CACHE_DIR}/chrome" -name chrome -type f | grep -q .; then
-            echo "Chrome ${CHROME_VERSION} was not installed under ${CACHE_DIR}" >&2
+          CHROME_BIN="$(command -v google-chrome \
+            || command -v google-chrome-stable \
+            || command -v chromium-browser \
+            || command -v chromium \
+            || true)"
+          if [ -z "${CHROME_BIN}" ]; then
+            echo "No system Chrome/Chromium found on the runner" >&2
             exit 1
           fi
+          echo "Using browser at ${CHROME_BIN}"
+          echo "PUPPETEER_EXECUTABLE_PATH=${CHROME_BIN}" >> "${GITHUB_ENV}"
+      # PUPPETEER_SKIP_DOWNLOAD stops puppeteer's install hook attempting a
+      # Chrome-for-Testing download we will not use; the scan launches the
+      # system Chrome resolved above via PUPPETEER_EXECUTABLE_PATH instead.
+      - name: Install pa11y-ci
+        run: npm install --no-save pa11y-ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
       # standard and target URLs are configured in pa11yci.json instead.
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
