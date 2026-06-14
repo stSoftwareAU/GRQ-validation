@@ -62,6 +62,20 @@ class GRQValidator {
             },
         );
 
+        // Delegated drill-down handler for the stock ticker cell (issue #189).
+        // Replaces an inline onclick so the page can enforce a strict CSP
+        // without 'unsafe-inline'. The browser HTML-decodes data-stock, so we
+        // recover the original (escaped-at-render) ticker value here.
+        const stockTableBody = document.getElementById("stockTableBody");
+        if (stockTableBody) {
+            stockTableBody.addEventListener("click", (event) => {
+                const cell = event.target.closest(".clickable-stock");
+                if (cell && cell.dataset.stock) {
+                    this.showStockDetails(cell.dataset.stock);
+                }
+            });
+        }
+
         // Global click handler to manage popover behavior
         document.addEventListener("click", (event) => {
             const popoverTrigger = event.target.closest(
@@ -2686,9 +2700,8 @@ class GRQValidator {
                 // Aggregate view
                 // Escape untrusted TSV-derived ticker before interpolation (issue #63).
                 const safeStock = escapeHtml(stock.stock);
-                const safeStockJs = escapeHtml(escapeJsString(stock.stock));
                 row.innerHTML = `
-            <td class="clickable-stock" onclick="validator.showStockDetails('${safeStockJs}')">${safeStock}</td>
+            <td class="clickable-stock" data-stock="${safeStock}">${safeStock}</td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}" 
                     data-field="buy-price" data-stock="${safeStock}" 
