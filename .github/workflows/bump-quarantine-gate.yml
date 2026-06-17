@@ -41,8 +41,14 @@ jobs:
         with:
           deno-version: v2.x
       - name: Fetch base branch
-        run: git fetch --no-tags origin "${{ github.base_ref }}"
+        # Pass github context through env to avoid shell injection (semgrep
+        # run-shell-injection); github.base_ref is attacker-influenceable.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "$BASE_REF"
       - name: Run dependency quarantine gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           deno run --allow-read --allow-run --allow-net --allow-env \
-            helpers/bump_quarantine_gate.ts "origin/${{ github.base_ref }}"
+            helpers/bump_quarantine_gate.ts "origin/$BASE_REF"
