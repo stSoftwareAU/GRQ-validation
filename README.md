@@ -114,6 +114,10 @@ dependency hygiene.
     `docs/` dashboard on every pull request that touches `docs/`, failing the
     build on WCAG 2.1 AA violations so accessibility regressions are caught on
     the PR that introduces them.
+11. **Dependency Quarantine Gate** (`bump-quarantine-gate.yml`) — deterministic
+    supply-chain backstop that, on every pull request, blocks an external
+    Cargo crate or GitHub Action bump whose upstream release is younger than
+    24 hours (see _Automated dependency updates_ below).
 
 ### Automated dependency updates
 
@@ -125,6 +129,28 @@ freshly-published — possibly hijacked — crate or action is held back rather 
 auto-bumped within the same window. Internal `stSoftwareAU/*` dependencies are
 excluded from the cooldown so they update immediately, mirroring the
 `minimumDependencyAge` policy that `deno.json` applies to the Deno ecosystem.
+
+Because Dependabot's `cooldown` keyword is an in-preview, non-native age gate,
+the **Dependency Quarantine Gate** workflow (`bump-quarantine-gate.yml`) backs
+it with a deterministic, native check (`helpers/bump_quarantine_gate.ts`). On
+every pull request the gate computes which external crates and Actions changed
+against the base branch, fetches each one's upstream publish time (crates.io
+`created_at` / the Action commit date), and **fails closed** when a bump is
+younger than `VIBE_BUMP_QUARANTINE_HOURS` (default 24h) or its age cannot be
+verified. Internal `stSoftwareAU/*` dependencies bypass the gate and update
+immediately. This mirrors the Deno ecosystem's `--minimum-dependency-age=P1D`
+gate so the Cargo and Actions ecosystems no longer rely on the `cooldown`
+keyword alone.
+
+```mermaid
+flowchart TD
+    A[Dependency-bump PR] --> B{Internal stSoftwareAU/* dep?}
+    B -- Yes --> P[Bypass: update now]
+    B -- No --> C[Fetch upstream publish time]
+    C --> D{Age &ge; 24h and verifiable?}
+    D -- Yes --> P2[Pass: clears quarantine]
+    D -- No --> F[Fail closed: block merge]
+```
 
 The CI pipeline (`ci.yml`) complements this by building the **committed,
 reviewed `Cargo.lock`** rather than floating dependencies: every `cargo`
