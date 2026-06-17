@@ -1,0 +1,54 @@
+name: Dependency Quarantine Gate
+
+# Deterministic supply-chain backstop for the Cargo and GitHub Actions
+# ecosystems (Issue #193). Dependabot's `cooldown` keyword is an in-preview,
+# non-native age gate; this job is the native, attacker-unbypassable check
+# that backs it. On every PR it computes which external crates and Actions
+# changed against the base branch, fetches each one's upstream publish time,
+# and fails closed when a bump is younger than VIBE_BUMP_QUARANTINE_HOURS
+# (default 24h) or its age cannot be verified. Internal stSoftwareAU/*
+# dependencies bypass the quarantine, mirroring the Deno minimumDependencyAge
+# policy.
+
+on:
+  pull_request:
+    branches: ["*"]
+
+# Cancel superseded runs on rapid pushes to the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quarantine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # 24h release-age quarantine for external Cargo/Action bumps.
+      VIBE_BUMP_QUARANTINE_HOURS: "24"
+      # Authenticated GitHub API lookups for Action commit dates.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # actions/checkout@v6.0.2 — full history so the base ref is resolvable.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+      # denoland/setup-deno@v2.0.4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+        with:
+          deno-version: v2.x
+      - name: Fetch base branch
+        # Pass github context through env to avoid shell injection (semgrep
+        # run-shell-injection); github.base_ref is attacker-influenceable.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "$BASE_REF"
+      - name: Run dependency quarantine gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          deno run --allow-read --allow-run --allow-net --allow-env \
+            helpers/bump_quarantine_gate.ts "origin/$BASE_REF"
