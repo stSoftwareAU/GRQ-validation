@@ -140,10 +140,57 @@ pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
 }
 
 /// Builds the market-data JSON path for `ticker` under [`MARKET_DATA_BASE_PATH`],
-/// bucketed by uppercased first letter (e.g. `"SEM"` → `.../data/S/SEM.json`).
-pub fn get_market_data_path(ticker: &str) -> String {
-    let first_letter = ticker.chars().next().unwrap_or('X').to_uppercase();
-    format!("{MARKET_DATA_BASE_PATH}/data/{first_letter}/{ticker}.json")
+/// bucketed by uppercased first letter (e.g. `"SEM"` → `.../data/S/SEM.json`),
+/// guarding against path traversal.
+///
+/// The `ticker`/`symbol` originates from the `stock` column of a daily score
+/// TSV, which is attacker-influenceable (a contributor, a compromised upstream
+/// data step, or a malicious pull request against the data set), exactly like
+/// the `file` field guarded by [`build_score_file_path`] and the ticker guarded
+/// by [`get_dividend_data_path`]. To stop a crafted symbol such as
+/// `"../../../../etc/hosts"` escaping the intended `MARKET_DATA_BASE_PATH/data/`
+/// tree, the path is built with `Path::join` over validated components rather
+/// than plain string interpolation: any parent-directory (`..`), root, or
+/// prefix component is a traversal attempt and is rejected (issue #195).
+///
+/// # Errors
+///
+/// Returns an error if `ticker` is absolute or contains a parent-directory
+/// (`..`) segment.
+pub fn get_market_data_path(ticker: &str) -> Result<String> {
+    use std::path::Component;
+
+    let first_letter = ticker
+        .chars()
+        .next()
+        .unwrap_or('X')
+        .to_uppercase()
+        .to_string();
+
+    // Build within the market-data root via join rather than string
+    // concatenation, keeping only normal segments.
+    let mut full_path = Path::new(MARKET_DATA_BASE_PATH)
+        .join("data")
+        .join(&first_letter);
+
+    let file_name = format!("{ticker}.json");
+    for component in Path::new(&file_name).components() {
+        match component {
+            Component::ParentDir => {
+                return Err(anyhow!(
+                    "Refusing market-data ticker with parent-directory segment: {ticker:?}"
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(anyhow!("Refusing absolute market-data ticker: {ticker:?}"));
+            }
+            // `.` adds nothing; normal segments extend the path.
+            Component::CurDir => {}
+            Component::Normal(segment) => full_path.push(segment),
+        }
+    }
+
+    Ok(full_path.to_string_lossy().into_owned())
 }
 
 /// Reads a tab-separated score file into a vector of [`StockRecord`]s.
@@ -209,8 +256,9 @@ pub fn extract_symbol_from_ticker(ticker: &str) -> String {
 pub fn read_market_data(symbol: &str) -> Result<MarketData> {
     use std::fs::File;
 
-    let first_letter = symbol.chars().next().unwrap_or('X').to_uppercase();
-    let market_data_path = format!("{MARKET_DATA_BASE_PATH}/data/{first_letter}/{symbol}.json");
+    // Build the path through the traversal-guarded helper so an attacker-supplied
+    // symbol such as `"../../../../etc/hosts"` cannot escape the data root (issue #195).
+    let market_data_path = get_market_data_path(symbol)?;
 
     let file = File::open(&market_data_path)?;
     let market_data: MarketData = serde_json::from_reader(file)?;
@@ -1305,17 +1353,70 @@ mod tests {
 
     #[test]
     fn test_get_market_data_path() {
+        // Signature changed to `Result<String>` in issue #195 to guard against
+        // path traversal; legitimate tickers still resolve to the same path.
         assert_eq!(
-            get_market_data_path("SEM"),
-            format!("{MARKET_DATA_BASE_PATH}/data/S/SEM.json")
+            get_market_data_path("SEM").unwrap(),
+            Path::new(MARKET_DATA_BASE_PATH)
+                .join("data/S/SEM.json")
+                .to_string_lossy()
         );
         assert_eq!(
-            get_market_data_path("AAPL"),
-            format!("{MARKET_DATA_BASE_PATH}/data/A/AAPL.json")
+            get_market_data_path("AAPL").unwrap(),
+            Path::new(MARKET_DATA_BASE_PATH)
+                .join("data/A/AAPL.json")
+                .to_string_lossy()
         );
         assert_eq!(
-            get_market_data_path("TSLA"),
-            format!("{MARKET_DATA_BASE_PATH}/data/T/TSLA.json")
+            get_market_data_path("TSLA").unwrap(),
+            Path::new(MARKET_DATA_BASE_PATH)
+                .join("data/T/TSLA.json")
+                .to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn test_get_market_data_path_allows_plain_ticker_with_exchange_prefix() {
+        // A legitimate ticker with an exchange prefix contains no path
+        // separators or traversal segments and must still resolve.
+        let path = get_market_data_path("NYSE:SEM").unwrap();
+        assert_eq!(
+            path,
+            Path::new(MARKET_DATA_BASE_PATH)
+                .join("data/N/NYSE:SEM.json")
+                .to_string_lossy()
+        );
+    }
+
+    // Regression tests for issue #195: a `..` or absolute segment in an
+    // attacker-influenceable symbol must not escape the market-data root.
+    #[test]
+    fn test_get_market_data_path_rejects_parent_dir_traversal() {
+        let result = get_market_data_path("../../../../etc/hosts");
+        assert!(
+            result.is_err(),
+            "expected a symbol containing `..` to be rejected, got {result:?}"
+        );
+        assert!(result.unwrap_err().to_string().contains("parent-directory"));
+    }
+
+    #[test]
+    fn test_get_market_data_path_rejects_absolute_symbol() {
+        let result = get_market_data_path("/etc/hosts");
+        assert!(
+            result.is_err(),
+            "expected an absolute symbol to be rejected, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_read_market_data_rejects_traversal_symbol() {
+        // The read must fail at the path-validation stage rather than opening an
+        // out-of-tree file. We assert it errors for a traversal symbol.
+        let result = read_market_data("../../../../etc/hosts");
+        assert!(
+            result.is_err(),
+            "expected read_market_data to reject a traversal symbol, got ok"
         );
     }
 
