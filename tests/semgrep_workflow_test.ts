@@ -8,6 +8,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertActionsPinnedToSha,
+  invokesTool,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/semgrep.yml";
 
@@ -61,8 +65,12 @@ Deno.test("Semgrep workflow defines semgrep job that runs `semgrep ci`", async (
     "job must run in the semgrep/semgrep container",
   );
   assert(Array.isArray(job.steps) && job.steps.length > 0, "job needs steps");
-  const runs = job.steps.map((s) => s.run ?? "").join("\n");
-  assert(/semgrep\s+ci/.test(runs), "semgrep job must run `semgrep ci`");
+  // Structured invariant (Issue #202): the job invokes `semgrep ci`, matched
+  // on tokens so the `--config p/default` flag or a reordering keeps passing.
+  assert(
+    invokesTool(job.steps, "semgrep", { subcommand: "ci" }),
+    "semgrep job must run `semgrep ci`",
+  );
 });
 
 Deno.test("Semgrep workflow pins the container image to a sha256 digest", async () => {
@@ -88,16 +96,7 @@ Deno.test("Semgrep workflow pins the container image to a sha256 digest", async 
 
 Deno.test("Semgrep workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a
-  // floating tag like @stable or @v4.
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });
 
 // Concurrency cancellation (Issue #139). Without a concurrency group, rapid

@@ -9,6 +9,11 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  invokesTool,
+  stepIndexInvoking,
+  stepIndexUsing,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 const SBOM_FILE = "grq-validation.cdx.json";
@@ -35,15 +40,23 @@ async function buildSteps(): Promise<Step[]> {
 
 Deno.test("build job generates a CycloneDX SBOM from the Rust lockfile", async () => {
   const steps = await buildSteps();
-  const runs = steps.map((s) => s.run ?? "").join("\n");
+  // Structured invariant (Issue #202): the job installs and invokes
+  // cargo-cyclonedx, matched on tokenised commands so the pinned
+  // `--version`/`--locked` flags or a split step do not break the test.
   assert(
-    /cargo\s+(install\s+cargo-cyclonedx|cyclonedx)/.test(runs),
-    "build job must install/run cargo-cyclonedx",
+    invokesTool(steps, "cargo", {
+      subcommand: "install",
+      args: ["cargo-cyclonedx"],
+    }),
+    "build job must install cargo-cyclonedx",
   );
   assert(
-    /cargo\s+cyclonedx/.test(runs),
+    invokesTool(steps, "cargo", { subcommand: "cyclonedx" }),
     "build job must invoke `cargo cyclonedx` to generate the SBOM",
   );
+  // The normalised SBOM artefact filename must appear in the step (a produced
+  // artefact name, not command syntax).
+  const runs = steps.map((s) => s.run ?? "").join("\n");
   assert(
     runs.includes(SBOM_FILE),
     `SBOM step must produce ${SBOM_FILE}`,
@@ -52,10 +65,12 @@ Deno.test("build job generates a CycloneDX SBOM from the Rust lockfile", async (
 
 Deno.test("SBOM is generated before the artefact upload", async () => {
   const steps = await buildSteps();
-  const sbomIdx = steps.findIndex((s) => /cargo\s+cyclonedx/.test(s.run ?? ""));
-  const uploadIdx = steps.findIndex((s) =>
-    typeof s.uses === "string" && s.uses.includes("actions/upload-artifact")
-  );
+  // Genuine ordering invariant asserted on parsed step indices (Issue #202),
+  // not on substring positions within a joined source blob.
+  const sbomIdx = stepIndexInvoking(steps, "cargo", {
+    subcommand: "cyclonedx",
+  });
+  const uploadIdx = stepIndexUsing(steps, "actions/upload-artifact");
   assert(sbomIdx >= 0, "an SBOM-generation step must exist");
   assert(uploadIdx >= 0, "an upload-artifact step must exist");
   assert(

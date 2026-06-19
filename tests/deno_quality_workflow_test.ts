@@ -8,6 +8,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertActionsPinnedToSha,
+  invokesTool,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/deno-quality.yml";
 
@@ -55,19 +59,25 @@ Deno.test("Deno Quality workflow runs lint, fmt --check, check and test", async 
   assertEquals(job["runs-on"], "ubuntu-latest");
   assert(Array.isArray(job.steps) && job.steps.length > 0, "job needs steps");
 
-  const runs = job.steps.map((s) => s.run ?? "").join("\n");
-  assert(/\bdeno\s+lint\b/.test(runs), "job must run `deno lint`");
+  // Structured invariant (Issue #202): the job *invokes* each deno subcommand,
+  // matched by tokenising the step commands rather than grepping their exact
+  // source text — so reordering flags or splitting a step keeps passing.
+  const steps = job.steps;
+  assert(invokesTool(steps, "deno", { subcommand: "lint" }), "must run lint");
   assert(
-    /\bdeno\s+fmt\s+--check\b/.test(runs),
+    invokesTool(steps, "deno", { subcommand: "fmt", args: ["--check"] }),
     "job must run `deno fmt --check`",
   );
-  assert(/\bdeno\s+check\b/.test(runs), "job must run `deno check`");
   assert(
-    /\bdeno\s+test\b[^\n]*--coverage/.test(runs),
+    invokesTool(steps, "deno", { subcommand: "check" }),
+    "job must run `deno check`",
+  );
+  assert(
+    invokesTool(steps, "deno", { subcommand: "test", args: ["--coverage"] }),
     "job must run `deno test` with coverage",
   );
   assert(
-    /deno\s+coverage[^\n]*--lcov/.test(runs),
+    invokesTool(steps, "deno", { subcommand: "coverage", args: ["--lcov"] }),
     "job must export lcov coverage",
   );
 
@@ -94,9 +104,8 @@ Deno.test("Deno Quality workflow runs deno audit (SCR-VULN-SCAN, Issue #59)", as
   const job = doc.jobs.quality as {
     steps: Array<{ run?: string }>;
   };
-  const runs = job.steps.map((s) => s.run ?? "").join("\n");
   assert(
-    /\bdeno\s+audit\b/.test(runs),
+    invokesTool(job.steps, "deno", { subcommand: "audit" }),
     "quality job must run `deno audit` to scan JSR dependencies",
   );
 });
@@ -125,16 +134,7 @@ Deno.test("Deno Quality workflow triggers on a weekly schedule (Issue #59)", asy
 
 Deno.test("Deno Quality workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a
-  // floating tag like @v2 or @v4.
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });
 
 // Concurrency cancellation (Issue #139). Without a concurrency group, rapid

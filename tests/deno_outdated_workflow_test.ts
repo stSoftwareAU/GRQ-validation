@@ -8,6 +8,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertActionsPinnedToSha,
+  invokesTool,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/deno-outdated.yml";
 
@@ -66,9 +70,14 @@ Deno.test("Deno Outdated workflow runs deno outdated and creates a PR", async ()
   assertEquals(job["runs-on"], "ubuntu-latest");
   assert(Array.isArray(job.steps) && job.steps.length > 0, "job needs steps");
 
-  const runs = job.steps.map((s) => s.run ?? "").join("\n");
+  // Structured invariant (Issue #202): the job runs `deno outdated` with the
+  // --update and --latest flags, matched on tokens so flag order and the
+  // appended --minimum-dependency-age do not break the test.
   assert(
-    /deno\s+outdated\s+--update\s+--latest/.test(runs),
+    invokesTool(job.steps, "deno", {
+      subcommand: "outdated",
+      args: ["--update", "--latest"],
+    }),
     "job must run `deno outdated --update --latest`",
   );
 
@@ -142,14 +151,5 @@ Deno.test("deno.json declares a minimumDependencyAge quarantine with internal ex
 
 Deno.test("Deno Outdated workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a
-  // floating tag like @v2 or @v7.
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });

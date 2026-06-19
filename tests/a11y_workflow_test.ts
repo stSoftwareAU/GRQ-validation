@@ -14,6 +14,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertActionsPinnedToSha,
+  invokesTool,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/a11y.yml";
 
@@ -110,8 +114,9 @@ Deno.test("a11y workflow defines a job with a sane timeout", async () => {
 
 Deno.test("a11y workflow runs pa11y-ci against the dashboard pages", async () => {
   const doc = await loadWorkflow();
-  const runs = allSteps(doc).map((s) => s.run ?? "").join("\n");
-  assert(/pa11y-ci/.test(runs), "a job must run pa11y-ci");
+  // Structured invariant (Issue #202): a step invokes pa11y-ci (here via npx),
+  // matched on tokens rather than grepping the run-step source text.
+  assert(invokesTool(allSteps(doc), "pa11y-ci"), "a job must run pa11y-ci");
   // The target URLs live in pa11yci.json (passed via --config), not in the
   // workflow run command. Both published dashboard pages must be exercised.
   const config = await loadPa11yConfig();
@@ -133,11 +138,11 @@ Deno.test("a11y workflow enforces the WCAG2AA standard", async () => {
 
 Deno.test("a11y workflow serves the docs/ directory before checking", async () => {
   const doc = await loadWorkflow();
-  const runs = allSteps(doc).map((s) => s.run ?? "").join("\n");
   // The dashboard is a static site; a local server must back the a11y check
-  // because pa11y loads pages over HTTP.
+  // because pa11y loads pages over HTTP. Assert the http-server tool is
+  // invoked (Issue #202) rather than grepping the run-step source text.
   assert(
-    /http-server|http:\/\/localhost/.test(runs),
+    invokesTool(allSteps(doc), "http-server"),
     "workflow must serve docs/ over a local HTTP server",
   );
 });
@@ -168,12 +173,5 @@ Deno.test("a11y multi-line bash run blocks begin with set -euo pipefail", async 
 
 Deno.test("a11y workflow pins actions to 40-character commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });
