@@ -11,7 +11,7 @@
 // currentPriceFromLatest, calculatePerformanceReturn, computeTrendLine,
 // calculateTargetPercentage, computeHybridProjection) — the same code the
 // dashboard's GRQValidator uses.
-import { assert } from "@std/assert";
+import { assert, assertAlmostEquals } from "@std/assert";
 import "../docs/projection.js";
 
 interface StockData {
@@ -301,17 +301,37 @@ Deno.test("NYSE:SCHW Projection Test - Using Real App Functions", async (t) => {
   await t.step("should calculate correct 90-day projection", () => {
     const projection = validator.calculateHybridProjection(stock!, scoreDate);
     assert(projection, "Should have projection");
+
+    // Spec-derived expectation (issue #205) — replaces two undocumented magic
+    // lower bounds (`> 17` and `> 19`) that asserted on the number the code
+    // happened to emit against this fixture.
+    //
+    // Derivation: the frozen SCHW snapshot spans ~77 days, so
+    // computeHybridProjection takes the long-term (daysElapsed >= 60)
+    // "realistic_trajectory" branch. There, with a known target and the stock
+    // already trading above that target (current ~17.2% > target ~7.8%), the
+    // kernel trusts the realised trajectory and extrapolates the current daily
+    // rate out to the full 90-day horizon:
+    //
+    //     projected = currentPerformance * 90 / daysElapsed
+    //
+    // So the expected figure is the documented formula applied to the fixture
+    // (~20.1%), not an empirical bound. If the projection maths is retuned,
+    // this assertion fails with a meaningful expected-vs-actual diff rather
+    // than a stale threshold.
     assert(
-      projection!.projected90DayPerformance > 17,
-      `Projection should be > 17%, got ${
-        projection!.projected90DayPerformance.toFixed(1)
-      }%`,
+      projection!.projectionMethod === "realistic_trajectory",
+      `Expected realistic_trajectory branch, got ${
+        projection!.projectionMethod
+      }`,
     );
-    assert(
-      projection!.projected90DayPerformance > 19,
-      `Projection should be > 19%, got ${
-        projection!.projected90DayPerformance.toFixed(1)
-      }%`,
+    const expected = (projection!.currentPerformance * 90) /
+      projection!.daysElapsed;
+    assertAlmostEquals(
+      projection!.projected90DayPerformance,
+      expected,
+      1e-9,
+      "Above-target SCHW should project its current daily rate to 90 days",
     );
   });
 
