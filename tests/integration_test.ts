@@ -1,6 +1,11 @@
 import { assertEquals } from "@std/assert";
 import "../docs/projection.js";
 
+interface Dividend {
+  exDivDate: Date;
+  amount: number;
+}
+
 const g = globalThis as unknown as {
   GRQProjection: {
     calculatePerformanceReturn: (
@@ -8,6 +13,11 @@ const g = globalThis as unknown as {
       currentPrice: number,
       totalDividends?: number,
     ) => number | null;
+    getDaysElapsed: (scoreDate: Date, today: Date) => number;
+    filterDividendsWithin90Days: (
+      dividends: Dividend[],
+      scoreDate: Date,
+    ) => Dividend[];
   };
 };
 const GRQProjection = g.GRQProjection;
@@ -21,14 +31,21 @@ Deno.test("Integration Tests", async (t) => {
   );
 
   await t.step("90-day boundary respect", () => {
-    // Test that all calculations respect the 90-day boundary
-    const testDate = new Date("2025-03-14"); // After 90 days
-    const isAfter90Days = testDate > ninetyDayDate;
+    // Drive the REAL elapsed-day maths rather than recomputing the boundary
+    // inline: a date past the window must report > 90 days, one inside it
+    // must report <= 90 (issue #201).
+    const afterWindow = new Date("2025-03-14"); // After 90 days
+    const withinWindow = new Date("2025-01-15"); // Within 90 days
 
     assertEquals(
-      isAfter90Days,
+      GRQProjection.getDaysElapsed(scoreDate, afterWindow) > 90,
       true,
-      "Test date should be after 90-day boundary",
+      "A date past the window should report more than 90 elapsed days",
+    );
+    assertEquals(
+      GRQProjection.getDaysElapsed(scoreDate, withinWindow) <= 90,
+      true,
+      "A date inside the window should report 90 or fewer elapsed days",
     );
   });
 
@@ -38,21 +55,23 @@ Deno.test("Integration Tests", async (t) => {
   // real-function "performance calculation" step below.
 
   await t.step("dividend exclusion after 90 days", () => {
-    // Test that dividends after 90 days are excluded
+    // Drive the REAL production window filter (issue #201) instead of
+    // re-implementing the predicate inline.
     const testDividends = [
       { exDivDate: new Date("2024-12-19"), amount: 0.135 }, // Within 90 days
       { exDivDate: new Date("2024-12-27"), amount: 0.32 }, // Within 90 days
       { exDivDate: new Date("2025-03-14"), amount: 0.32 }, // After 90 days
     ];
 
-    const dividendsWithin90Days = testDividends.filter((d) =>
-      d.exDivDate <= ninetyDayDate
+    const within = GRQProjection.filterDividendsWithin90Days(
+      testDividends,
+      scoreDate,
     );
 
     assertEquals(
-      dividendsWithin90Days.length,
-      2,
-      "Should have 2 dividends within 90 days",
+      within.map((d) => d.amount),
+      [0.135, 0.32],
+      "Only the two dividends inside the 90-day window should remain",
     );
   });
 
