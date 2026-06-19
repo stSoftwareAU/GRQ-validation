@@ -644,49 +644,19 @@ class GRQValidator {
     }
 
     getFairValueRange(stockSymbol) {
-        const analysis = this.analysisData[stockSymbol];
-        if (!analysis) {
-            return null;
-        }
-        
-        const { msFairValue, tipsTarget } = analysis;
-        
-        // If we have both values, show range
-        if (msFairValue !== null && tipsTarget !== null) {
-            const low = Math.min(msFairValue, tipsTarget);
-            const high = Math.max(msFairValue, tipsTarget);
-            return { low, high, type: 'range' };
-        }
-        // If we have only one value, show single target
-        else if (msFairValue !== null) {
-            return { value: msFairValue, type: 'single', source: 'MS Fair Value' };
-        }
-        else if (tipsTarget !== null) {
-            return { value: tipsTarget, type: 'single', source: 'Tips Target' };
-        }
-        
-        return null;
+        // Delegate to the shared projection module (issue #204) so the browser
+        // and the Deno tests apply identical fair-value band rules.
+        return GRQProjection.getFairValueRange(this.analysisData[stockSymbol]);
     }
 
     getTargetPriceColor(targetPrice, currentPrice, buyPrice) {
-        if (targetPrice === null || currentPrice === null || buyPrice === null) {
-            return ''; // Default color
-        }
-        
-        // Red (Danger): Target price is below buy price - this is always bad
-        if (targetPrice < buyPrice) {
-            return 'color: #dc3545; font-weight: bold;'; // Red - danger
-        }
-        
-        // Green (Good): Target price is above current price AND we're in profit territory
-        if (targetPrice > currentPrice && currentPrice >= buyPrice) {
-            return 'color: #28a745; font-weight: bold;'; // Green - good
-        }
-        
-        // Gray (Neutral): Target price is above buy price but we're either:
-        // - Below current price (target achieved), or
-        // - Current price is below buy price (we're in loss territory but target is still above buy price)
-        return 'color: #6c757d; font-weight: bold;'; // Gray - neutral
+        // Delegate to the shared projection module (issue #204) so the browser
+        // and the Deno tests apply identical target-price colour rules.
+        return GRQProjection.getTargetPriceColor(
+            targetPrice,
+            currentPrice,
+            buyPrice,
+        );
     }
 
     getStarRatingCalculation(stockSymbol) {
