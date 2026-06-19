@@ -2204,4 +2204,180 @@ mod tests {
         assert_eq!(ticker.get("2025-06-18"), Some(&12.00));
         assert!(ticker.get("2025-06-17").is_none());
     }
+
+    // --- WHAT-tests for calculate_hybrid_projection (issue #200) ---
+    //
+    // These exercise the public projection behaviour against controlled,
+    // spec-derived inputs and assert on the returned PortfolioPerformance,
+    // never on internals. Each expected value is derived by hand from the
+    // documented formula (daily_rate * 90 * dampening_factor, then clamped),
+    // not copied from current output. A deliberately fake ticker is used so
+    // no dividend file exists, keeping dividends_total at 0.0 and the total
+    // return equal to the projected 90-day figure.
+
+    /// Builds a market-data map for a single ticker from `(date, price)` points.
+    fn hybrid_market_data(
+        ticker: &str,
+        points: &[(NaiveDate, f64)],
+    ) -> HashMap<String, HashMap<String, f64>> {
+        let mut inner = HashMap::new();
+        for (date, price) in points {
+            inner.insert(date.format("%Y-%m-%d").to_string(), *price);
+        }
+        let mut outer = HashMap::new();
+        outer.insert(ticker.to_string(), inner);
+        outer
+    }
+
+    #[test]
+    fn test_calculate_hybrid_projection_dampens_moderate_trend() {
+        let ticker = "TEST:HYBRIDA";
+        let today = chrono::Utc::now().naive_utc().date();
+        // Score 41 days ago; 40 market days of price history (30..60 bucket).
+        let score_date = today - Duration::days(41);
+        let latest_date = score_date + Duration::days(40); // = today - 1
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Buy price keyed exactly on the score date: 100 -> 110 over 40 days.
+        let market = hybrid_market_data(ticker, &[(score_date, 100.0), (latest_date, 110.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 120.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        // gain = 10% over 40 market days -> daily_rate = 0.25%/day.
+        // raw = 0.25 * 90 = 22.5; dampening (30..60) = 0.5 -> 11.25; within [-40, 80].
+        let expected = 11.25;
+        assert!(
+            (result.performance_90_day - expected).abs() < 1e-6,
+            "expected projected 90-day ~{expected}, got {}",
+            result.performance_90_day
+        );
+        assert_eq!(result.total_stocks, 1);
+        assert_eq!(result.individual_performances.len(), 1);
+        assert!(
+            (result.individual_performances[0].gain_loss_percent - expected).abs() < 1e-6,
+            "per-stock projection should match portfolio figure for a single stock"
+        );
+
+        // Annualisation uses quarterly compounding: ((1 + p/100)^4 - 1) * 100.
+        // For p = 11.25 this is ~53.179%.
+        assert!(
+            (result.performance_annualized - 53.1793).abs() < 1e-2,
+            "expected annualised ~53.18%, got {}",
+            result.performance_annualized
+        );
+    }
+
+    #[test]
+    fn test_calculate_hybrid_projection_uses_next_trading_day_buy_price() {
+        let ticker = "TEST:HYBRIDB";
+        let today = chrono::Utc::now().naive_utc().date();
+        // Score 20 days ago, but no price on the score date itself: the buy
+        // price must fall back to the earliest available trading day.
+        let score_date = today - Duration::days(20);
+        let buy_date = score_date + Duration::days(2); // first available day
+        let latest_date = score_date + Duration::days(10); // 10 market days
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        let market = hybrid_market_data(ticker, &[(buy_date, 50.0), (latest_date, 55.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 60.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        // Fallback buy price = 50 (next trading day). gain = 10% over 10 market
+        // days -> daily_rate = 1.0%/day; raw = 90; dampening (7..14) = 0.2 -> 18;
+        // within [-10, 20].
+        let expected = 18.0;
+        assert!(
+            (result.performance_90_day - expected).abs() < 1e-6,
+            "expected projected 90-day ~{expected}, got {}",
+            result.performance_90_day
+        );
+        assert_eq!(result.individual_performances[0].buy_price, 50.0);
+    }
+
+    #[test]
+    fn test_calculate_hybrid_projection_clamps_to_upper_bound() {
+        let ticker = "TEST:HYBRIDC";
+        let today = chrono::Utc::now().naive_utc().date();
+        // Score 9 days ago; 8 market days (7..14 bucket -> max gain 20%).
+        let score_date = today - Duration::days(9);
+        let latest_date = score_date + Duration::days(8);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Steep doubling: 100 -> 200 over 8 days.
+        let market = hybrid_market_data(ticker, &[(score_date, 100.0), (latest_date, 200.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 250.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        // gain = 100% over 8 days -> daily_rate = 12.5; raw = 1125; dampened
+        // (0.2) = 225; clamped to the 7..14 upper bound of 20%.
+        let expected = 20.0;
+        assert!(
+            (result.performance_90_day - expected).abs() < 1e-6,
+            "steep trend should clamp to upper bound {expected}, got {}",
+            result.performance_90_day
+        );
+    }
+
+    #[test]
+    fn test_calculate_hybrid_projection_clamps_to_lower_bound() {
+        let ticker = "TEST:HYBRIDD";
+        let today = chrono::Utc::now().naive_utc().date();
+        // Score 9 days ago; 8 market days (7..14 bucket -> max loss -10%).
+        let score_date = today - Duration::days(9);
+        let latest_date = score_date + Duration::days(8);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Steep crash: 100 -> 10 over 8 days.
+        let market = hybrid_market_data(ticker, &[(score_date, 100.0), (latest_date, 10.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 90.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        // gain = -90% over 8 days -> daily_rate = -11.25; raw = -1012.5; dampened
+        // (0.2) = -202.5; clamped to the 7..14 lower bound of -10%.
+        let expected = -10.0;
+        assert!(
+            (result.performance_90_day - expected).abs() < 1e-6,
+            "steep crash should clamp to lower bound {expected}, got {}",
+            result.performance_90_day
+        );
+    }
+
+    #[test]
+    fn test_calculate_hybrid_projection_rejects_old_score() {
+        let ticker = "TEST:HYBRIDE";
+        let today = chrono::Utc::now().naive_utc().date();
+        // 100 days old: must fall back to the regular performance calculation.
+        let score_date = today - Duration::days(100);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        let market = hybrid_market_data(ticker, &[(score_date, 100.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 120.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market);
+        assert!(
+            result.is_err(),
+            "scores >= 90 days old must be rejected by the hybrid projection"
+        );
+    }
+
+    #[test]
+    fn test_calculate_hybrid_projection_no_market_data_yields_zero() {
+        let today = chrono::Utc::now().naive_utc().date();
+        let score_date = today - Duration::days(10);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // No market data for the requested ticker -> no valid projections.
+        let market: HashMap<String, HashMap<String, f64>> = HashMap::new();
+        let records = vec![StockRecord::new("TEST:HYBRIDF".to_string(), 5.0, 50.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+        assert_eq!(result.performance_90_day, 0.0);
+        assert_eq!(result.performance_annualized, 0.0);
+        assert_eq!(result.total_stocks, 1);
+        assert!(result.individual_performances.is_empty());
+    }
 }
