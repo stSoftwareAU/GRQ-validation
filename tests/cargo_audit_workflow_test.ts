@@ -7,6 +7,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertActionsPinnedToSha,
+  invokesTool,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/cargo-audit.yml";
 
@@ -61,26 +65,25 @@ Deno.test("Cargo Audit workflow defines audit job that installs and runs cargo-a
   };
   assertEquals(job["runs-on"], "ubuntu-latest");
   assert(Array.isArray(job.steps) && job.steps.length > 0, "job needs steps");
-  const runs = job.steps.map((s) => s.run ?? "").join("\n");
+  // Structured invariant (Issue #202): the job installs and runs cargo-audit,
+  // matched on tokenised commands so the pinned `--version`/`--locked` flags
+  // or a split step do not break the test.
   assert(
-    /cargo\s+install\s+cargo-audit/.test(runs),
+    invokesTool(job.steps, "cargo", {
+      subcommand: "install",
+      args: ["cargo-audit"],
+    }),
     "audit job must install cargo-audit",
   );
-  assert(/cargo\s+audit/.test(runs), "audit job must run `cargo audit`");
+  assert(
+    invokesTool(job.steps, "cargo", { subcommand: "audit" }),
+    "audit job must run `cargo audit`",
+  );
 });
 
 Deno.test("Cargo Audit workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  // Supply-chain rule: every `uses:` must reference a 40-char SHA, not a
-  // floating tag like @stable or @v4.
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });
 
 // Concurrency cancellation (Issue #139). Without a concurrency group, rapid

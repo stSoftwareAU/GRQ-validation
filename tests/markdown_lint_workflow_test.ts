@@ -7,6 +7,7 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 import { parse as parseJsonc } from "@std/jsonc";
+import { assertActionsPinnedToSha } from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/markdown-lint.yml";
 const CONFIG_PATH = ".markdownlint-cli2.jsonc";
@@ -71,16 +72,7 @@ Deno.test("Markdown Lint workflow runs markdownlint-cli2 in its job", async () =
 
 Deno.test("Markdown Lint workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  // Each `uses:` line in the workflow must reference a 40-char SHA, not a
-  // floating tag like @v4. This matches the supply-chain rule in the guide.
-  const usesLines = text.split("\n").filter((l) => /^\s*-\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });
 
 Deno.test("markdownlint-cli2 config exists and parses as JSONC", async () => {

@@ -7,8 +7,13 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertActionsPinnedToSha,
+  invokesTool,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/bump-quarantine-gate.yml";
+const GATE_SCRIPT = "helpers/bump_quarantine_gate.ts";
 
 interface Step {
   run?: string;
@@ -46,10 +51,17 @@ Deno.test("quarantine gate runs the gate script with a 24h window", async () => 
   const job = jobs.quarantine;
   assert(job, "workflow must define a quarantine job");
 
-  const runs = (job.steps ?? []).map((s) => s.run ?? "").join("\n");
+  // Derived-relationship invariant (Issue #202): the referenced gate script
+  // actually exists on disk, and the job invokes it via `deno run` — matched
+  // on tokenised commands rather than the exact run-step source text.
+  const stat = await Deno.stat(GATE_SCRIPT);
+  assert(stat.isFile, `${GATE_SCRIPT} must exist on disk`);
   assert(
-    /deno\s+run[\s\S]*helpers\/bump_quarantine_gate\.ts/.test(runs),
-    "job must invoke helpers/bump_quarantine_gate.ts",
+    invokesTool(job.steps ?? [], "deno", {
+      subcommand: "run",
+      args: [GATE_SCRIPT],
+    }),
+    "job must invoke helpers/bump_quarantine_gate.ts via deno run",
   );
 
   // The 24h window must be configured (env value or VIBE_BUMP_QUARANTINE_HOURS).
@@ -64,22 +76,18 @@ Deno.test("quarantine gate runs the gate script with a 24h window", async () => 
 Deno.test("quarantine gate grants the script the permissions it needs", async () => {
   const { doc } = await loadWorkflow();
   const jobs = doc.jobs as Record<string, { steps?: Step[] }>;
-  const runs = (jobs.quarantine.steps ?? []).map((s) => s.run ?? "").join("\n");
-  for (
-    const flag of ["--allow-read", "--allow-net", "--allow-run", "--allow-env"]
-  ) {
-    assert(runs.includes(flag), `gate run step must pass ${flag}`);
-  }
+  const steps = jobs.quarantine.steps ?? [];
+  // The gate `deno run` invocation must carry every permission the script
+  // needs. Asserting them as args on the tokenised command (Issue #202)
+  // tolerates flag reordering and `\`-continued lines.
+  const flags = ["--allow-read", "--allow-net", "--allow-run", "--allow-env"];
+  assert(
+    invokesTool(steps, "deno", { subcommand: "run", args: flags }),
+    `gate run step must pass ${flags.join(", ")}`,
+  );
 });
 
 Deno.test("quarantine gate workflow pins actions to commit SHAs", async () => {
   const { text } = await loadWorkflow();
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });

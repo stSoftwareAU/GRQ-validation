@@ -9,6 +9,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import { assertActionsPinnedToSha } from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 
@@ -25,14 +26,7 @@ Deno.test("CI workflow parses as valid YAML", async () => {
 
 Deno.test("CI workflow pins every action to a 40-char commit SHA", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  const usesLines = text.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l));
-  assert(usesLines.length > 0, "workflow must use at least one action");
-  for (const line of usesLines) {
-    assert(
-      /@[0-9a-f]{40}\s*$/.test(line.trim()),
-      `action not pinned to 40-char SHA: ${line.trim()}`,
-    );
-  }
+  assertActionsPinnedToSha(text);
 });
 
 Deno.test("CI workflow no longer references the mutable rust-toolchain stable branch", async () => {
