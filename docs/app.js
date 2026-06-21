@@ -1471,6 +1471,60 @@ class GRQValidator {
                 }
             }, 100);
         }
+
+        // Populate the mobile colour key from the live datasets (issue #244).
+        this.renderColorKey();
+    }
+
+    // Populate the mobile colour key (#chartColorKey) from the live chart
+    // datasets so it always matches what is actually drawn, in both the
+    // single-stock and aggregate views (issue #244, milestone #236).
+    //
+    // Desktop keeps the native Chart.js legend, so this is a mobile-only
+    // mirror. Each chip pairs a swatch (the dataset's own borderColor) with a
+    // label (the dataset's own label) — the live datasets are the single
+    // source of truth, with no duplicated colour/label table. Hidden and
+    // unlabelled "spacer" series are excluded by GRQColorKey.colorKeyEntries;
+    // Chart.js annotation markers and the zero baseline are annotations, not
+    // datasets, so they never appear here.
+    renderColorKey() {
+        const container = document.getElementById("chartColorKey");
+        if (!container) {
+            return;
+        }
+
+        // Always clear first so a re-render never duplicates chips.
+        container.innerHTML = "";
+
+        // Desktop uses the native legend; only mobile needs the key.
+        if (!this.isMobileDevice()) {
+            return;
+        }
+        if (!this.chart || !this.chart.data) {
+            return;
+        }
+
+        const entries = globalThis.GRQColorKey.colorKeyEntries(
+            this.chart.data.datasets,
+        );
+        for (const entry of entries) {
+            const chip = document.createElement("div");
+            chip.className = "chart-color-key-chip";
+
+            // textContent (not innerHTML) keeps untrusted labels — e.g. stock
+            // tickers — inert against DOM XSS.
+            const swatch = document.createElement("span");
+            swatch.className = "chart-color-key-swatch";
+            swatch.style.backgroundColor = entry.colour;
+
+            const label = document.createElement("span");
+            label.className = "chart-color-key-label";
+            label.textContent = entry.label;
+
+            chip.appendChild(swatch);
+            chip.appendChild(label);
+            container.appendChild(chip);
+        }
     }
 
     prepareChartData() {
