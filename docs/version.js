@@ -1,7 +1,7 @@
 // Shared page bootstrap (issue #189).
 //
 // Derives the app version and document title from <meta> tags instead of an
-// inline <script>, so docs/index.html and docs/list.html can enforce a strict
+// inline <script>, so docs/index.html can enforce a strict
 // Content-Security-Policy (no 'unsafe-inline' for scripts). Must load in the
 // <head>, before the page's other scripts, so globalThis.VERSION is set early.
 (function () {

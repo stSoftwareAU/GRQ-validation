@@ -1,7 +1,7 @@
 // Tests for the PWA <head> wiring on the published dashboard pages
 // (issue #224).
 //
-// Both docs/index.html and docs/list.html must carry the meta tags, icons,
+// docs/index.html must carry the meta tags, icons,
 // manifest link and service-worker registration that make the dashboard an
 // installable Progressive Web App, mirroring stSoftwareAU/GRQ-FX-validation.
 // These assertions guard the integration: if a future edit drops the manifest
@@ -15,7 +15,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { extractCsp, parseCsp } from "./csp_test.ts";
 
-const PAGES = ["docs/index.html", "docs/list.html"];
+const PAGES = ["docs/index.html"];
 
 /** Content of a named <meta name="..."> tag, or null if absent. */
 function metaContent(html: string, name: string): string | null {
