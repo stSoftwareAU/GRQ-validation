@@ -9,7 +9,18 @@
 
 import { assert, assertEquals } from "@std/assert";
 import "../docs/projection.js";
-import { toPriceMap, toUnixSeconds } from "../scripts/fetch_market_indices.ts";
+import {
+  checkDatasetSafety,
+  checkIndexFreshness,
+  datasetNewestDate,
+  FRESHNESS_TOLERANCE_TRADING_DAYS,
+  type IndexDataset,
+  newestDate,
+  serialiseDataset,
+  toPriceMap,
+  toUnixSeconds,
+  tradingDayGap,
+} from "../scripts/fetch_market_indices.ts";
 
 interface IndexSeries {
   name: string;
@@ -128,6 +139,97 @@ Deno.test("toPriceMap - empty/malformed payload yields an empty map", () => {
   assertEquals(toPriceMap({ chart: { result: [] } }), {});
 });
 
+// --- Safe-write / guard logic for unattended daily runs (issue #237) ---
+
+const committed: IndexDataset = {
+  sp500: {
+    "2024-01-02": 4742.83,
+    "2024-01-03": 4704.81,
+    "2024-01-04": 4688.68,
+  },
+  nasdaq: { "2024-01-02": 14765.94, "2024-01-03": 14592.21 },
+  russell2000: { "2024-01-02": 2027.07, "2024-01-03": 1989.21 },
+};
+
+Deno.test("checkDatasetSafety - no committed file accepts any fresh dataset", () => {
+  const result = checkDatasetSafety(null, { sp500: { "2024-01-02": 1 } });
+  assertEquals(result.ok, true);
+});
+
+Deno.test("checkDatasetSafety - equal dataset is safe", () => {
+  const result = checkDatasetSafety(committed, structuredClone(committed));
+  assertEquals(result.ok, true);
+});
+
+Deno.test("checkDatasetSafety - extended history (more days) is safe", () => {
+  const fresh = structuredClone(committed);
+  fresh.sp500["2024-01-05"] = 4697.24;
+  fresh.nasdaq["2024-01-04"] = 14510.30;
+  fresh.russell2000["2024-01-04"] = 1975.71;
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, true);
+});
+
+Deno.test("checkDatasetSafety - dropping an index key is refused", () => {
+  const fresh = structuredClone(committed) as Partial<IndexDataset>;
+  delete fresh.russell2000;
+  const result = checkDatasetSafety(committed, fresh as IndexDataset);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("russell2000"));
+});
+
+Deno.test("checkDatasetSafety - an emptied index is refused", () => {
+  const fresh = structuredClone(committed);
+  fresh.nasdaq = {};
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("nasdaq"));
+});
+
+Deno.test("checkDatasetSafety - truncated history is refused", () => {
+  const fresh = structuredClone(committed);
+  fresh.sp500 = { "2024-01-02": 4742.83 }; // 3 days -> 1 day
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("sp500"));
+  assert(result.reason?.includes("fewer"));
+});
+
+Deno.test("checkDatasetSafety - a regressed newest date is refused", () => {
+  // Same number of days, but the newest day moves backwards.
+  const fresh = structuredClone(committed);
+  fresh.sp500 = {
+    "2024-01-01": 4700.00,
+    "2024-01-02": 4742.83,
+    "2024-01-03": 4704.81,
+  };
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("regress"));
+});
+
+Deno.test("newestDate - returns the lexically greatest ISO date", () => {
+  assertEquals(
+    newestDate(["2024-01-03", "2024-01-10", "2024-01-02"]),
+    "2024-01-10",
+  );
+  assertEquals(newestDate([]), "");
+});
+
+Deno.test("serialiseDataset - 2-space indent with a trailing newline", () => {
+  const text = serialiseDataset({ sp500: { "2024-01-02": 4742.83 } });
+  assert(text.endsWith("\n"));
+  assertEquals(
+    text,
+    '{\n  "sp500": {\n    "2024-01-02": 4742.83\n  }\n}\n',
+  );
+});
+
+Deno.test("serialiseDataset round-trips through JSON.parse", () => {
+  const data = { sp500: { "2024-01-02": 4742.83 }, nasdaq: {} };
+  assertEquals(JSON.parse(serialiseDataset(data)), data);
+});
+
 Deno.test("docs/market-indices.json is same-origin, well-formed benchmark data", async () => {
   const text = await Deno.readTextFile("docs/market-indices.json");
   const data = JSON.parse(text) as Record<string, Record<string, number>>;
@@ -154,4 +256,94 @@ Deno.test("committed benchmark data flows through the dashboard kernel", async (
   assert(series.data.length > 0);
   assert(typeof series.initialPrice === "number");
   assert(typeof series.currentPrice === "number");
+});
+
+// --- Freshness guard: indices must not silently lag the actuals (issue #239) ---
+
+Deno.test("datasetNewestDate - newest date across every index", () => {
+  const data: IndexDataset = {
+    sp500: { "2024-01-02": 1, "2024-01-05": 2 },
+    nasdaq: { "2024-01-02": 1, "2024-01-04": 2 },
+    russell2000: { "2024-01-03": 1 },
+  };
+  assertEquals(datasetNewestDate(data), "2024-01-05");
+  assertEquals(datasetNewestDate({}), "");
+  assertEquals(datasetNewestDate({ sp500: {} }), "");
+});
+
+Deno.test("tradingDayGap - identical or backwards dates are zero", () => {
+  assertEquals(tradingDayGap("2026-06-18", "2026-06-18"), 0);
+  // Indices ahead of the actuals: no lag.
+  assertEquals(tradingDayGap("2026-06-19", "2026-06-18"), 0);
+  assertEquals(tradingDayGap("", "2026-06-18"), 0);
+});
+
+Deno.test("tradingDayGap - one trading day end-of-day lag", () => {
+  // Thursday -> Friday is a single trading day.
+  assertEquals(tradingDayGap("2026-06-18", "2026-06-19"), 1);
+});
+
+Deno.test("tradingDayGap - skips weekends", () => {
+  // Friday -> Monday is one trading day (the weekend does not count).
+  assertEquals(tradingDayGap("2026-06-19", "2026-06-22"), 1);
+  // Friday -> following Friday spans only five trading days.
+  assertEquals(tradingDayGap("2026-06-19", "2026-06-26"), 5);
+});
+
+Deno.test("checkIndexFreshness - one-day lag passes within tolerance", () => {
+  const result = checkIndexFreshness("2026-06-18", "2026-06-19");
+  assertEquals(result.ok, true);
+  assertEquals(result.gap, 1);
+  assertEquals(result.reason, undefined);
+});
+
+Deno.test("checkIndexFreshness - indices level with the actuals pass", () => {
+  const result = checkIndexFreshness("2026-06-19", "2026-06-19");
+  assertEquals(result.ok, true);
+  assertEquals(result.gap, 0);
+});
+
+Deno.test("checkIndexFreshness - a weekend gap does not false-alarm", () => {
+  // Indices to Friday, actuals to the following Monday: one trading day.
+  const result = checkIndexFreshness("2026-06-19", "2026-06-22");
+  assertEquals(result.ok, true);
+  assertEquals(result.gap, 1);
+});
+
+Deno.test("checkIndexFreshness - stale indices fail with an actionable message", () => {
+  // Indices roughly eight calendar days behind the actuals (the #234 symptom).
+  const result = checkIndexFreshness("2026-06-08", "2026-06-18");
+  assertEquals(result.ok, false);
+  assert(result.gap > FRESHNESS_TOLERANCE_TRADING_DAYS);
+  // The failure message names both dates and the gap.
+  assert(result.reason);
+  assert(result.reason.includes("2026-06-08"), "names the indices date");
+  assert(result.reason.includes("2026-06-18"), "names the actuals date");
+  assert(result.reason.includes(String(result.gap)), "names the gap");
+});
+
+Deno.test("checkIndexFreshness - tolerance boundary", () => {
+  // Exactly three trading days behind is still acceptable; four is not.
+  assertEquals(checkIndexFreshness("2026-06-15", "2026-06-18").gap, 3);
+  assertEquals(checkIndexFreshness("2026-06-15", "2026-06-18").ok, true);
+  assertEquals(checkIndexFreshness("2026-06-12", "2026-06-18").gap, 4);
+  assertEquals(checkIndexFreshness("2026-06-12", "2026-06-18").ok, false);
+});
+
+Deno.test("committed indices are fresh against the committed actuals", async () => {
+  const indices = JSON.parse(
+    await Deno.readTextFile("docs/market-indices.json"),
+  ) as IndexDataset;
+  const actuals = JSON.parse(
+    await Deno.readTextFile("docs/USDAUD.json"),
+  ) as Record<string, number>;
+
+  const indicesNewest = datasetNewestDate(indices);
+  const actualsNewest = newestDate(Object.keys(actuals));
+
+  const result = checkIndexFreshness(indicesNewest, actualsNewest);
+  assert(
+    result.ok,
+    result.reason ?? "committed benchmark indices lag the committed actuals",
+  );
 });

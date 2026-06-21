@@ -14,6 +14,12 @@ Pages.
   fetched first-party (server-side, directly from Yahoo Finance — no public CORS
   proxy) by `scripts/fetch_market_indices.ts` and published as the same-origin
   static file `docs/market-indices.json`, which the dashboard reads directly.
+  Refresh it with `deno task fetch-indices`; the write is safe for unattended
+  daily runs (fails fast on an empty response, refuses to overwrite committed
+  history with a regressed payload, and skips the write when nothing changed).
+  The external daily scorer job refreshes it in lockstep with the scores via
+  the non-blocking `deno task refresh-indices` wrapper (see _Daily benchmark
+  refresh_ below).
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`.
@@ -39,6 +45,60 @@ The dashboard reads every input from its own origin: per-score market CSVs, the
 score index, and the benchmark-index file. Benchmark data is fetched
 server-side and committed, so a visitor's browser never calls an untrusted
 third-party relay (issue #93).
+
+### Daily benchmark refresh (in lockstep with the scores)
+
+The actuals stay current because an external daily **scorer** job
+(`stSoftwareAU/GRQ`, `worker/score.sh`) checks out this repo and commits new
+`docs/scores/...` and `docs/USDAUD.json` with a message like
+`Add scores for 2026-06-20`. To stop the benchmark indices drifting behind the
+actuals (issue #238), that same job now refreshes `docs/market-indices.json`
+immediately before the daily commit, by invoking the stable wrapper entry point:
+
+```bash
+deno task refresh-indices
+# (raw form: deno run --allow-net --allow-read --allow-write \
+#   scripts/refresh_market_indices.ts)
+```
+
+The wrapper runs the first-party fetcher but **never blocks the scores/USDAUD
+commit**: a Yahoo Finance outage or partial fetch is logged and swallowed (it
+still exits 0), and the safe-write guard in `scripts/fetch_market_indices.ts`
+leaves the committed file at its last-good content rather than a stale/partial
+payload. The scorer's check-in then stages whatever changed (the scores, the
+USDAUD file, and the refreshed indices) into the **same** daily commit, so the
+indices reach the last trading day in lockstep with the actuals.
+
+```mermaid
+sequenceDiagram
+    participant Scorer as Scorer job (GRQ/worker/score.sh)
+    participant Repo as GRQ-validation checkout
+    participant Yahoo as Yahoo Finance
+    Scorer->>Repo: write docs/scores/... + docs/USDAUD.json
+    Scorer->>Repo: deno task refresh-indices
+    Repo->>Yahoo: fetch S&P 500 / NASDAQ / Russell 2000
+    alt fetch succeeds
+        Repo->>Repo: safe-write docs/market-indices.json
+    else fetch fails
+        Repo-->>Repo: log + exit 0, keep last-good file
+    end
+    Scorer->>Repo: model_checkin.sh "Add scores for YYYY-MM-DD"
+    Note over Repo: scores + USDAUD + indices in one commit
+```
+
+### Freshness guard (issue #239)
+
+Keeping the refresh job running is not enough on its own: when the indices last
+drifted (issue #234) the roughly eight-day staleness went **undetected**. A
+freshness assertion in `tests/market_indices_test.ts` now compares the newest
+date in `docs/market-indices.json` against the newest date in the actuals
+(`docs/USDAUD.json`) and fails when the indices lag by more than
+`FRESHNESS_TOLERANCE_TRADING_DAYS` (3) trading days. The gap is measured in
+trading days (weekends skipped), so the acceptable one-trading-day end-of-day
+publishing lag — and an intervening public holiday — never raises a false
+alarm. When the guard trips it names both newest dates and the gap, e.g.
+`benchmark indices are stale: newest index date 2026-06-08 lags the newest
+actuals date 2026-06-18 by 7 trading days (tolerance is 3 trading days)`.
 
 ## Quick Start
 
@@ -191,7 +251,8 @@ GRQ-validation/
 ├── tests/                  # Rust and Deno tests
 ├── helpers/                # Local development helpers (e.g. static server)
 ├── scripts/                # Git hooks and utility scripts
-│   └── fetch_market_indices.ts  # Server-side benchmark-index fetcher
+│   ├── fetch_market_indices.ts    # Server-side benchmark-index fetcher
+│   └── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
