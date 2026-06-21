@@ -77,10 +77,34 @@ function colorKeyEntries(datasets) {
     return entries;
 }
 
+// Debounce `fn` so a burst of calls collapses into a single trailing call,
+// fired `wait` ms after the LAST call in the burst. The dashboard uses this to
+// keep the mobile colour key and chart legend in sync across viewport changes
+// (window resize / orientation change) without rebuilding on every intermediate
+// resize event — crossing the mobile/desktop breakpoint should re-evaluate the
+// key just once per settle (issue #246, milestone #236).
+//
+// `this` and the most recent arguments are forwarded to `fn`. Each debounced
+// wrapper owns its own timer, so independent wrappers never interfere. Uses the
+// ambient setTimeout/clearTimeout, which exist in both the browser and Deno.
+function debounce(fn, wait) {
+    let timer = null;
+    return function (...args) {
+        if (timer !== null) {
+            clearTimeout(timer);
+        }
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, args);
+        }, wait);
+    };
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helper, mirroring docs/projection.js.
 globalThis.GRQColorKey = {
     normaliseSwatchColour,
     normaliseSwatchDash,
     colorKeyEntries,
+    debounce,
 };
