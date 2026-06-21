@@ -54,6 +54,50 @@
   text-align: center;
 }
 
+/* ---------------------------------------------------------------------------
+ * Mobile colour key (issue #243)
+ *
+ * On mobile the Chart.js legend is force-hidden (see docs/app.js), so no
+ * plotted line can be identified on a phone. This compact key sits directly
+ * below the performance chart and is populated from the live chart datasets by
+ * a later issue. Desktop keeps the native Chart.js legend, so the key is hidden
+ * here and only revealed at the Bootstrap `sm` breakpoint and narrower — the
+ * same boundary isMobileDevice() uses (window width < 768px). An empty
+ * container renders nothing visible.
+ * ------------------------------------------------------------------------- */
+.chart-color-key {
+  display: none; /* desktop: native Chart.js legend is used instead */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  margin: 0.5rem 0 0.25rem;
+  padding: 0;
+}
+
+/* Each chip pairs a colour swatch with its series label. */
+.chart-color-key-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Small SVG line drawn in the dataset's own colour and dash pattern, so the
+ * swatch reflects each line's solid/dashed/dotted stroke (issue #245). */
+.chart-color-key-swatch {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 12px;
+  overflow: visible;
+}
+
+/* Label inherits the card text colour so it stays legible in light and dark. */
+.chart-color-key-label {
+  color: inherit;
+}
+
 /* Loading and message styles */
 .loading {
   text-align: center;
@@ -204,6 +248,11 @@
   .chart-container canvas + div,
   .chartjs-legend {
     display: none !important;
+  }
+
+  /* Reveal the compact colour key in place of the hidden Chart.js legend. */
+  .chart-color-key {
+    display: flex;
   }
 }
 

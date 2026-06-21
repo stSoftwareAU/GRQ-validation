@@ -1471,6 +1471,100 @@ class GRQValidator {
                 }
             }, 100);
         }
+
+        // Populate the mobile colour key from the live datasets (issue #244).
+        this.renderColorKey();
+    }
+
+    // Populate the mobile colour key (#chartColorKey) from the live chart
+    // datasets so it always matches what is actually drawn, in both the
+    // single-stock and aggregate views (issue #244, milestone #236).
+    //
+    // Desktop keeps the native Chart.js legend, so this is a mobile-only
+    // mirror. Each chip pairs a swatch (the dataset's own borderColor) with a
+    // label (the dataset's own label) — the live datasets are the single
+    // source of truth, with no duplicated colour/label table. Hidden and
+    // unlabelled "spacer" series are excluded by GRQColorKey.colorKeyEntries;
+    // Chart.js annotation markers and the zero baseline are annotations, not
+    // datasets, so they never appear here.
+    renderColorKey() {
+        const container = document.getElementById("chartColorKey");
+        if (!container) {
+            return;
+        }
+
+        // Always clear first so a re-render never duplicates chips.
+        container.innerHTML = "";
+
+        // Desktop uses the native legend; only mobile needs the key.
+        if (!this.isMobileDevice()) {
+            return;
+        }
+        if (!this.chart || !this.chart.data) {
+            return;
+        }
+
+        const entries = globalThis.GRQColorKey.colorKeyEntries(
+            this.chart.data.datasets,
+        );
+        for (const entry of entries) {
+            const chip = document.createElement("div");
+            chip.className = "chart-color-key-chip";
+
+            // The swatch is a tiny SVG line that mirrors the dataset's own
+            // stroke — colour plus dash pattern — so same-colour series (e.g.
+            // the two greys) stay distinguishable by their dashed/dotted style
+            // (issue #245). borderDash flows straight from the live dataset, so
+            // there is no hard-coded per-series style table.
+            const swatch = this.buildColorKeySwatch(entry);
+
+            const label = document.createElement("span");
+            label.className = "chart-color-key-label";
+            label.textContent = entry.label;
+
+            chip.appendChild(swatch);
+            chip.appendChild(label);
+            container.appendChild(chip);
+        }
+    }
+
+    // Build one colour-key swatch as an inline SVG line. Drawing a line (rather
+    // than a filled block) lets the swatch reflect the dataset's stroke style:
+    // a solid line for a solid series and a dashed/dotted line when the dataset
+    // carries a `borderDash`. Both colour and dash come from the live dataset
+    // via the colour-key entry, so the swatch always matches what is drawn on
+    // the chart (issue #245).
+    buildColorKeySwatch(entry) {
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const width = 18;
+        const height = 12;
+        const midY = height / 2;
+
+        const svg = document.createElementNS(SVG_NS, "svg");
+        svg.setAttribute("class", "chart-color-key-swatch");
+        svg.setAttribute("width", String(width));
+        svg.setAttribute("height", String(height));
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("aria-hidden", "true");
+
+        const line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("x1", "1");
+        line.setAttribute("y1", String(midY));
+        line.setAttribute("x2", String(width - 1));
+        line.setAttribute("y2", String(midY));
+        line.setAttribute("stroke", entry.colour);
+        line.setAttribute("stroke-width", "2");
+
+        const dash = Array.isArray(entry.dash) ? entry.dash : [];
+        if (dash.length > 0) {
+            // Round caps render the small "[2, 2]" patterns as dots rather than
+            // tiny rectangles, matching how Chart.js draws dotted lines.
+            line.setAttribute("stroke-linecap", "round");
+            line.setAttribute("stroke-dasharray", dash.join(","));
+        }
+
+        svg.appendChild(line);
+        return svg;
     }
 
     prepareChartData() {
@@ -3988,30 +4082,48 @@ class GRQValidator {
 // Initialize the validator
 const validator = new GRQValidator();
 
-// Add window resize listener to update chart configuration
-globalThis.addEventListener("resize", () => {
-    if (validator.chart && validator.chart.options && validator.chart.options.plugins && validator.chart.options.plugins.legend) {
-        const breakpoint = validator.getBootstrapBreakpoint();
-        const isMobile = validator.isMobileDevice();
-        
-        console.log("Resize event - Bootstrap breakpoint:", breakpoint);
-        console.log("Resize event - isMobile:", isMobile);
-        console.log("Resize event - window.innerWidth:", window.innerWidth);
-        console.log("Resize event - legend display:", !isMobile);
-        
+// Re-evaluate the chart legend and the mobile colour key when the viewport
+// changes (window resize / orientation change). Crossing the isMobileDevice()
+// breakpoint flips the native Chart.js legend (the desktop identifier) and
+// shows+populates the mobile colour key, or tears it down again — so neither
+// is ever left stale (issue #246, milestone #236).
+function syncChartForViewport() {
+    const isMobile = validator.isMobileDevice();
+
+    // Keep the native legend in step with the breakpoint when a chart exists.
+    if (
+        validator.chart && validator.chart.options &&
+        validator.chart.options.plugins &&
+        validator.chart.options.plugins.legend
+    ) {
         validator.chart.options.plugins.legend.display = !isMobile;
-        
-        // Only set font size if the labels object exists
+
+        // Only set font size if the labels object exists.
         if (validator.chart.options.plugins.legend.labels) {
-            validator.chart.options.plugins.legend.labels.font = validator.chart.options.plugins.legend.labels.font || {};
+            validator.chart.options.plugins.legend.labels.font =
+                validator.chart.options.plugins.legend.labels.font || {};
             validator.chart.options.plugins.legend.labels.font.size = isMobile ? 10 : 12;
             validator.chart.options.plugins.legend.labels.boxWidth = isMobile ? 12 : 16;
             validator.chart.options.plugins.legend.labels.padding = isMobile ? 8 : 12;
         }
-        
+
         validator.chart.update();
     }
-});
+
+    // Reconcile the mobile colour key from the live datasets: populate it on
+    // mobile, clear it on desktop. renderColorKey() guards a null/unbuilt chart
+    // itself, so this is safe to call before the first chart exists (no errors).
+    validator.renderColorKey();
+}
+
+// Debounce so a burst of resize / orientation-change events does at most one
+// rebuild per settle, keeping the toggle cheap (issue #246).
+const debouncedSyncChartForViewport = globalThis.GRQColorKey.debounce(
+    syncChartForViewport,
+    150,
+);
+globalThis.addEventListener("resize", debouncedSyncChartForViewport);
+globalThis.addEventListener("orientationchange", debouncedSyncChartForViewport);
 
 // Add document click handler to close popovers when clicking outside
 document.addEventListener("click", (event) => {
