@@ -14,6 +14,9 @@ Pages.
   fetched first-party (server-side, directly from Yahoo Finance — no public CORS
   proxy) by `scripts/fetch_market_indices.ts` and published as the same-origin
   static file `docs/market-indices.json`, which the dashboard reads directly.
+  Refresh it with `deno task fetch-indices`; the write is safe for unattended
+  daily runs (fails fast on an empty response, refuses to overwrite committed
+  history with a regressed payload, and skips the write when nothing changed).
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`.
