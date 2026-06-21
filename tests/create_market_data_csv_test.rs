@@ -16,15 +16,19 @@ use grq_validation::utils::{
 };
 use std::path::{Path, PathBuf};
 
-/// A unique, clearly-synthetic symbol so the fixture can never collide with a
-/// real symbol in an existing `MARKET_DATA_BASE_PATH` data repository.
-const FIXTURE_SYMBOL: &str = "GRQVTEST265";
+/// Clearly-synthetic symbols so a fixture can never collide with a real symbol
+/// in an existing `MARKET_DATA_BASE_PATH` data repository. Each test uses a
+/// distinct symbol so the fixtures live at distinct paths and never race when
+/// the test harness runs them in parallel (one test's `Drop` must not delete a
+/// fixture another test is still reading).
+const FIXTURE_SYMBOL_DIRECT: &str = "GRQVTEST265A";
+const FIXTURE_SYMBOL_WRAPPER: &str = "GRQVTEST265B";
 
 /// Score-file date used by every test; the 180-day window therefore runs from
 /// `2025-04-15` to `2025-10-12` inclusive.
 const SCORE_DATE: &str = "2025-04-15";
 
-/// RAII guard that installs a market-data fixture for [`FIXTURE_SYMBOL`] under
+/// RAII guard that installs a market-data fixture for a given symbol under
 /// `MARKET_DATA_BASE_PATH` and removes exactly what it created on drop, so the
 /// test leaves no trace whether or not the external data repository pre-exists.
 struct MarketDataFixture {
@@ -35,12 +39,12 @@ struct MarketDataFixture {
 }
 
 impl MarketDataFixture {
-    /// Writes a fixture whose daily series contains one row inside the 180-day
-    /// window, one row before it, and one row after it, so a test can assert
-    /// both inclusion and exclusion.
-    fn install() -> Result<Self> {
+    /// Writes a fixture for `symbol` whose daily series contains one row inside
+    /// the 180-day window, one row before it, and one row after it, so a test
+    /// can assert both inclusion and exclusion.
+    fn install(symbol: &str) -> Result<Self> {
         let base = Path::new(MARKET_DATA_BASE_PATH);
-        let first_letter = FIXTURE_SYMBOL.chars().next().unwrap().to_string();
+        let first_letter = symbol.chars().next().unwrap().to_string();
         let symbol_dir = base.join("data").join(&first_letter);
 
         // Track the outermost component we create so cleanup removes no more
@@ -48,8 +52,8 @@ impl MarketDataFixture {
         let created_root = first_missing_ancestor(&symbol_dir);
         std::fs::create_dir_all(&symbol_dir)?;
 
-        let json_path = symbol_dir.join(format!("{FIXTURE_SYMBOL}.json"));
-        std::fs::write(&json_path, fixture_json())?;
+        let json_path = symbol_dir.join(format!("{symbol}.json"));
+        std::fs::write(&json_path, fixture_json(symbol))?;
 
         Ok(Self {
             json_path,
@@ -61,8 +65,22 @@ impl MarketDataFixture {
 impl Drop for MarketDataFixture {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.json_path);
+
+        // Prune the directories we created, bottom-up, removing each only when
+        // it is empty. `remove_dir` (not `remove_dir_all`) means a directory
+        // shared with a concurrently-running test's fixture is left intact
+        // until that test has cleaned up too, so cleanup never races.
         if let Some(root) = &self.created_root {
-            let _ = std::fs::remove_dir_all(root);
+            let mut dir = self.json_path.parent().map(Path::to_path_buf);
+            while let Some(current) = dir {
+                if std::fs::remove_dir(&current).is_err() {
+                    break; // non-empty (another fixture present) or already gone
+                }
+                if current == *root {
+                    break;
+                }
+                dir = current.parent().map(Path::to_path_buf);
+            }
         }
     }
 }
@@ -86,7 +104,7 @@ fn first_missing_ancestor(dir: &Path) -> Option<PathBuf> {
 
 /// Builds an Alpha Vantage-shaped market-data JSON document with three dated
 /// rows: before, inside, and after the 180-day window from [`SCORE_DATE`].
-fn fixture_json() -> String {
+fn fixture_json(symbol: &str) -> String {
     fn daily(close: &str) -> serde_json::Value {
         serde_json::json!({
             "1. open": close,
@@ -103,7 +121,7 @@ fn fixture_json() -> String {
     serde_json::json!({
         "Meta Data": {
             "1. Information": "Daily Prices (fixture)",
-            "2. Symbol": FIXTURE_SYMBOL,
+            "2. Symbol": symbol,
             "3. Last Refreshed": "2025-10-12",
             "4. Output Size": "Full size",
             "5. Time Zone": "US/Eastern",
@@ -119,13 +137,13 @@ fn fixture_json() -> String {
 
 #[test]
 fn create_market_data_csv_writes_windowed_rows() -> Result<()> {
-    let _fixture = MarketDataFixture::install()?;
+    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL_DIRECT)?;
 
     let out_dir = tempfile::tempdir()?;
     let out_path = out_dir.path().join("md.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
 
-    create_market_data_csv(&[FIXTURE_SYMBOL.to_string()], SCORE_DATE, out)?;
+    create_market_data_csv(&[FIXTURE_SYMBOL_DIRECT.to_string()], SCORE_DATE, out)?;
 
     let csv = std::fs::read_to_string(&out_path)?;
 
@@ -138,7 +156,7 @@ fn create_market_data_csv_writes_windowed_rows() -> Result<()> {
 
     // In-window row present with its close price.
     assert!(
-        csv.contains(&format!("2025-04-15,{FIXTURE_SYMBOL},100.5")),
+        csv.contains(&format!("2025-04-15,{FIXTURE_SYMBOL_DIRECT},100.5")),
         "expected the window-start row in:\n{csv}"
     );
 
@@ -157,7 +175,7 @@ fn create_market_data_csv_writes_windowed_rows() -> Result<()> {
 
 #[test]
 fn create_market_data_csv_for_score_file_writes_derived_csv() -> Result<()> {
-    let _fixture = MarketDataFixture::install()?;
+    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL_WRAPPER)?;
 
     // The wrapper derives the output path by swapping the score file's
     // extension to `.csv` in the same directory.
@@ -168,7 +186,7 @@ fn create_market_data_csv_for_score_file_writes_derived_csv() -> Result<()> {
 
     create_market_data_csv_for_score_file(
         score_file_str,
-        &[FIXTURE_SYMBOL.to_string()],
+        &[FIXTURE_SYMBOL_WRAPPER.to_string()],
         SCORE_DATE,
     )?;
 
@@ -180,7 +198,7 @@ fn create_market_data_csv_for_score_file_writes_derived_csv() -> Result<()> {
 
     let csv = std::fs::read_to_string(&derived)?;
     assert_eq!(csv.lines().next().unwrap(), "date,symbol,close");
-    assert!(csv.contains(&format!("2025-04-15,{FIXTURE_SYMBOL},100.5")));
+    assert!(csv.contains(&format!("2025-04-15,{FIXTURE_SYMBOL_WRAPPER},100.5")));
 
     Ok(())
 }
