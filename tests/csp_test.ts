@@ -15,7 +15,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-const PAGES = ["docs/index.html", "docs/list.html"];
+const PAGES = ["docs/index.html"];
 
 /** Extract the CSP string from the page's meta tag, or null if absent. */
 export function extractCsp(html: string): string | null {

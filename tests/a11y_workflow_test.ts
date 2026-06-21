@@ -1,7 +1,7 @@
 // Tests for the Accessibility (a11y) GitHub Actions workflow (Issue #92).
 //
-// The repo ships an interactive dashboard from docs/ (index.html, list.html,
-// app.js, list.js) published to GitHub Pages. This workflow gates that UI with
+// The repo ships an interactive dashboard from docs/ (index.html, app.js)
+// published to GitHub Pages. This workflow gates that UI with
 // an automated accessibility check (pa11y-ci) on every pull request touching
 // docs/, failing the build on WCAG 2.1 AA violations.
 //
@@ -142,11 +142,10 @@ Deno.test("a11y workflow runs pa11y-ci against the dashboard pages", async () =>
   // matched on tokens rather than grepping the run-step source text.
   assert(invokesTool(allSteps(doc), "pa11y-ci"), "a job must run pa11y-ci");
   // The target URLs live in pa11yci.json (passed via --config), not in the
-  // workflow run command. Both published dashboard pages must be exercised.
+  // workflow run command. The published dashboard page must be exercised.
   const config = await loadPa11yConfig();
   const urls = (config.urls ?? []).join("\n");
   assert(/index\.html/.test(urls), "pa11y-ci must check index.html");
-  assert(/list\.html/.test(urls), "pa11y-ci must check list.html");
 });
 
 Deno.test("a11y workflow enforces the WCAG2AA standard", async () => {

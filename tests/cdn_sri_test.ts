@@ -1,6 +1,6 @@
 // Tests for Subresource Integrity (SRI) on third-party CDN assets (Issue #79).
 //
-// The published dashboard (docs/index.html and docs/list.html) loads
+// The published dashboard (docs/index.html) loads
 // executable JavaScript and CSS from public CDNs. Without an
 // `integrity=` hash the browser cannot verify the bytes it executes, so
 // a compromised CDN or upstream package would run arbitrary code in
@@ -10,7 +10,7 @@
 
 import { assert } from "@std/assert";
 
-const PAGES = ["docs/index.html", "docs/list.html"];
+const PAGES = ["docs/index.html"];
 
 interface ResourceTag {
   tag: string; // full opening tag text
