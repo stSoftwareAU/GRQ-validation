@@ -6,7 +6,8 @@
 // docs/, failing the build on WCAG 2.1 AA violations.
 //
 // These tests verify the workflow file exists, parses as YAML, declares the
-// expected pull_request trigger scoped to docs/**, declares a read-only
+// expected pull_request trigger (always runs; pa11y job gated on docs/ changes),
+// declares a read-only
 // contents permission, defines a job that serves the docs and runs pa11y-ci
 // over the dashboard pages with the WCAG2AA standard, bounds the job with a
 // timeout, and pins third-party actions to 40-character commit SHAs to satisfy
@@ -30,6 +31,8 @@ interface Step {
 interface Job {
   "runs-on"?: string;
   "timeout-minutes"?: number;
+  needs?: string | string[];
+  if?: string;
   steps?: Step[];
 }
 
@@ -78,16 +81,37 @@ Deno.test("a11y workflow parses as valid YAML with expected name", async () => {
   assertEquals(doc.name, "Accessibility");
 });
 
-Deno.test("a11y workflow triggers on pull_request scoped to docs/**", async () => {
+Deno.test("a11y workflow triggers on every pull_request", async () => {
   const doc = await loadWorkflow();
   const on = getOn(doc);
   assert(on, "workflow must declare an 'on' trigger");
   assert("pull_request" in on, "must trigger on pull_request");
-  const pr = on.pull_request as { paths?: string[] };
-  assert(Array.isArray(pr.paths), "pull_request must declare a paths filter");
+});
+
+// Issue #219: the Main ruleset requires the `pa11y` status check on every PR.
+// A workflow-level paths: filter suppresses the run when docs/ is unchanged,
+// leaving the required check pending (e.g. Dependabot PR #217). Gate the scan
+// with a job-level `if` instead, matching ci.yml and gitleaks.yml.
+Deno.test("a11y pa11y job runs only when docs/ changed", async () => {
+  const doc = await loadWorkflow();
+  const job = doc.jobs?.pa11y;
+  assert(job, "workflow must declare a pa11y job");
+  const needs = job.needs;
+  const dependsOnCheckDocs = Array.isArray(needs)
+    ? needs.includes("check-docs-changes")
+    : needs === "check-docs-changes";
   assert(
-    pr.paths.some((p) => p.includes("docs/")),
-    "paths filter must scope the workflow to docs/",
+    dependsOnCheckDocs,
+    "pa11y job must depend on check-docs-changes",
+  );
+  assert(
+    typeof job.if === "string",
+    "pa11y job must declare an 'if' condition gating on docs changes",
+  );
+  const condition = job.if as string;
+  assert(
+    condition.includes("docs-changed"),
+    `pa11y job 'if' must reference the docs-changed output: ${condition}`,
   );
 });
 

@@ -4,19 +4,24 @@ name: Accessibility
 #
 # The repo ships an interactive "GRQ Validation Dashboard" from docs/
 # (index.html, list.html, app.js, list.js) and publishes it to GitHub Pages.
-# This workflow runs pa11y-ci against the rendered dashboard pages on every
-# pull request that touches docs/, failing the build on WCAG 2.1 AA violations
-# so accessibility regressions (missing form labels, insufficient colour
-# contrast, missing alt text, non-keyboard-navigable controls) are caught on
-# the pull request that introduces them — the same gate the existing
-# semgrep/gitleaks checks apply.
+# This workflow runs pa11y-ci against the rendered dashboard pages when a
+# pull request touches docs/, failing the build on WCAG 2.1 AA violations so
+# accessibility regressions (missing form labels, insufficient colour contrast,
+# missing alt text, non-keyboard-navigable controls) are caught on the pull
+# request that introduces them — the same gate the existing semgrep/gitleaks
+# checks apply.
+#
+# The workflow triggers on every pull_request (not a paths: filter on `on:`)
+# because the Main ruleset requires the `pa11y` status check on all PRs. A
+# workflow-level paths filter suppresses the run entirely when docs/ is
+# unchanged, leaving the required check pending forever (Issue #219, PR #217).
+# The scan itself is gated behind a docs-changed job output instead.
 #
 # Third-party actions are pinned to 40-character commit SHAs to satisfy the
 # supply-chain rule, consistent with the other workflows in this repo.
 
 on:
   pull_request:
-    paths: ["docs/**"]
 
 # Cancel superseded runs (Issue #172): rapid pushes to the same ref otherwise
 # queue redundant accessibility scans that each hold a runner. Keying on
@@ -30,7 +35,30 @@ permissions:
   contents: read
 
 jobs:
+  check-docs-changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs-changed: ${{ steps.filter.outputs.docs }}
+    steps:
+      # actions/checkout@v4.2.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+      - name: Check for docs/ changes
+        id: filter
+        run: |
+          set -euo pipefail
+          git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} > changed_files.txt
+          if grep -E "^(docs/)" changed_files.txt > /dev/null; then
+            echo "docs=true" >> $GITHUB_OUTPUT
+          else
+            echo "docs=false" >> $GITHUB_OUTPUT
+          fi
+
   pa11y:
+    needs: check-docs-changes
+    if: needs.check-docs-changes.outputs.docs-changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
