@@ -124,6 +124,73 @@ interface SafetyResult {
   reason?: string;
 }
 
+// The newest date across every index in a dataset (the freshest closing price
+// anywhere in the file). ISO dates sort lexically, so this is just the lexical
+// maximum over all indices' date keys. Returns "" for an empty dataset.
+function datasetNewestDate(data: IndexDataset): string {
+  let newest = "";
+  for (const series of Object.values(data)) {
+    const candidate = newestDate(Object.keys(series));
+    if (candidate > newest) newest = candidate;
+  }
+  return newest;
+}
+
+// Count the trading days (Mon–Fri) that elapse strictly after `from` up to and
+// including `to`. Weekends are skipped. Public holidays are not modelled, so
+// this slightly over-estimates true trading days — acceptable because it only
+// ever makes the freshness check more lenient, never falsely strict.
+function tradingDayGap(from: string, to: string): number {
+  if (!from || !to || to <= from) return 0;
+  const cursor = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  let gap = 0;
+  while (cursor < end) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) gap++; // 0 = Sunday, 6 = Saturday
+  }
+  return gap;
+}
+
+// Default freshness tolerance: the benchmark indices may lag the actuals by up
+// to this many trading days before the guard fails. This covers the acceptable
+// one-trading-day end-of-day publishing lag plus a margin for a public holiday,
+// while still catching the multi-day silent staleness that motivated #234/#239.
+const FRESHNESS_TOLERANCE_TRADING_DAYS = 3;
+
+interface FreshnessResult {
+  ok: boolean;
+  gap: number;
+  indicesNewest: string;
+  actualsNewest: string;
+  reason?: string;
+}
+
+// Freshness guard (#239): fail when the benchmark indices lag the actuals by
+// more than `toleranceTradingDays` trading days. Indices level with — or ahead
+// of — the actuals always pass (a non-positive gap is zero trading days).
+function checkIndexFreshness(
+  indicesNewest: string,
+  actualsNewest: string,
+  toleranceTradingDays = FRESHNESS_TOLERANCE_TRADING_DAYS,
+): FreshnessResult {
+  const gap = tradingDayGap(indicesNewest, actualsNewest);
+  const result: FreshnessResult = {
+    ok: gap <= toleranceTradingDays,
+    gap,
+    indicesNewest,
+    actualsNewest,
+  };
+  if (!result.ok) {
+    result.reason =
+      `benchmark indices are stale: newest index date ${indicesNewest} lags ` +
+      `the newest actuals date ${actualsNewest} by ${gap} trading days ` +
+      `(tolerance is ${toleranceTradingDays} trading days)`;
+  }
+  return result;
+}
+
 // Guard against overwriting good committed history with a regressed payload.
 // A fresh dataset is unsafe when, relative to the committed one, it drops an
 // index key, materially truncates an index's history, or lets an index's newest
@@ -223,10 +290,14 @@ if (import.meta.main) {
 
 export {
   checkDatasetSafety,
+  checkIndexFreshness,
+  datasetNewestDate,
+  FRESHNESS_TOLERANCE_TRADING_DAYS,
   newestDate,
   refreshMarketIndices,
   serialiseDataset,
   toPriceMap,
   toUnixSeconds,
+  tradingDayGap,
 };
-export type { IndexDataset, SafetyResult };
+export type { FreshnessResult, IndexDataset, SafetyResult };

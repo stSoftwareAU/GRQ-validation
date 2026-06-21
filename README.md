@@ -86,6 +86,20 @@ sequenceDiagram
     Note over Repo: scores + USDAUD + indices in one commit
 ```
 
+### Freshness guard (issue #239)
+
+Keeping the refresh job running is not enough on its own: when the indices last
+drifted (issue #234) the roughly eight-day staleness went **undetected**. A
+freshness assertion in `tests/market_indices_test.ts` now compares the newest
+date in `docs/market-indices.json` against the newest date in the actuals
+(`docs/USDAUD.json`) and fails when the indices lag by more than
+`FRESHNESS_TOLERANCE_TRADING_DAYS` (3) trading days. The gap is measured in
+trading days (weekends skipped), so the acceptable one-trading-day end-of-day
+publishing lag — and an intervening public holiday — never raises a false
+alarm. When the guard trips it names both newest dates and the gap, e.g.
+`benchmark indices are stale: newest index date 2026-06-08 lags the newest
+actuals date 2026-06-18 by 7 trading days (tolerance is 3 trading days)`.
+
 ## Quick Start
 
 ### Prerequisites
