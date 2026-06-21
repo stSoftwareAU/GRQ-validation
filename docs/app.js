@@ -1475,6 +1475,52 @@ class GRQValidator {
 
         // Populate the mobile colour key from the live datasets (issue #244).
         this.renderColorKey();
+
+        // Colour each market series' title to match its own chart line, from
+        // the same dataset borderColor the colour key reads (issue #278).
+        this.applyMarketTitleColours();
+    }
+
+    // Detect the active theme ("light" | "dark") the same way styles.css does:
+    // an explicit body class wins; otherwise follow the OS preference. Used to
+    // pick the AA-compliant title colour for the current background.
+    detectTheme() {
+        const body = document.body;
+        if (body && body.classList.contains("dark-mode-forced")) return "dark";
+        if (body && body.classList.contains("light-mode-forced")) return "light";
+        const prefersDark = typeof globalThis.matchMedia === "function" &&
+            globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
+        return prefersDark ? "dark" : "light";
+    }
+
+    // Paint each market index card title in its own chart line's colour, so the
+    // title/label always agrees with what is drawn (issue #278). The line colour
+    // is read from the live chart datasets — the single source of truth shared
+    // with the colour key — and adjusted to clear WCAG 2 AA contrast against the
+    // current theme's card background by GRQSeriesLabelColour. Works in both the
+    // aggregate and single-stock views; a series absent from the chart leaves
+    // its title at the default colour rather than blanking it.
+    applyMarketTitleColours() {
+        const helper = globalThis.GRQSeriesLabelColour;
+        if (!helper || !this.chart || !this.chart.data) return;
+
+        const datasets = this.chart.data.datasets;
+        const theme = this.detectTheme();
+        const titles = [
+            { id: "sp500Title", label: "SP500" },
+            { id: "nasdaqTitle", label: "NASDAQ" },
+            { id: "russell2000Title", label: "Russell 2000" },
+        ];
+
+        for (const { id, label } of titles) {
+            const element = document.getElementById(id);
+            if (!element) continue;
+            const colour = helper.seriesLabelColour(datasets, label, theme);
+            // Only recolour when the chart actually carries this series.
+            if (colour !== "") {
+                element.style.color = colour;
+            }
+        }
     }
 
     // Populate the mobile colour key (#chartColorKey) from the live chart
@@ -4084,6 +4130,26 @@ class GRQValidator {
 
 // Initialize the validator
 const validator = new GRQValidator();
+
+// Re-derive the market title colours when the theme changes so they stay
+// AA-contrast-compliant against the new background (issue #278). The chart is
+// not rebuilt on a theme switch, so without this the titles would keep the
+// other theme's colours. Handlers are attached via addEventListener (no inline
+// on* handlers, issue #268) and deferred so theme.js updates the <body> class
+// before we read it.
+function reapplyMarketTitleColours() {
+    setTimeout(() => validator.applyMarketTitleColours(), 0);
+}
+const themeToggle = document.getElementById("theme-toggle");
+if (themeToggle) {
+    themeToggle.addEventListener("click", reapplyMarketTitleColours);
+}
+if (typeof globalThis.matchMedia === "function") {
+    globalThis.matchMedia("(prefers-color-scheme: dark)").addEventListener(
+        "change",
+        reapplyMarketTitleColours,
+    );
+}
 
 // Re-evaluate the chart legend and the mobile colour key when the viewport
 // changes (window resize / orientation change). Crossing the isMobileDevice()

@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.191">
+    <meta name="app-version" content="1.0.192">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -205,7 +205,7 @@
                     <div class="row">
                       <div class="col-md-4">
                         <div class="market-index-card">
-                          <h6 class="text-primary mb-2">SP500 Performance</h6>
+                          <h6 id="sp500Title" class="mb-2">SP500 Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="sp500Performance" class="h5 mb-0">-</span>
                             <small id="sp500Details" class="text-muted">-</small>
@@ -214,7 +214,7 @@
                       </div>
                       <div class="col-md-4">
                         <div class="market-index-card">
-                          <h6 class="text-info mb-2">NASDAQ Performance</h6>
+                          <h6 id="nasdaqTitle" class="mb-2">NASDAQ Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="nasdaqPerformance" class="h5 mb-0">-</span>
                             <small id="nasdaqDetails" class="text-muted">-</small>
@@ -223,7 +223,7 @@
                       </div>
                       <div class="col-md-4">
                         <div class="market-index-card">
-                          <h6 class="text-success mb-2">Russell 2000 Performance</h6>
+                          <h6 id="russell2000Title" class="mb-2">Russell 2000 Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="russell2000Performance" class="h5 mb-0">-</span>
                             <small id="russell2000Details" class="text-muted">-</small>
@@ -311,6 +311,9 @@
     <!-- Mobile colour-key entry builder (issue #244) — must load before app.js -->
     <script src="color_key.js"></script>
 
+    <!-- Market series title↔line colour pairing (issue #278) — before app.js -->
+    <script src="series_label_colour.js"></script>
+
     <!-- Shared number-formatting helpers (issue #276) — must load before app.js -->
     <script src="format.js"></script>
 
@@ -319,6 +322,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.191"></script>
+    <script src="sw-register.js?v=1.0.192"></script>
   </body>
 </html>
