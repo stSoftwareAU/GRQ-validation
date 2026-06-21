@@ -64,25 +64,38 @@ Deno.test("ci.yml release build uses --locked (Issue #124)", async () => {
   );
 });
 
+// Find the `cargo install <tool>` line within the combined run text. Returns
+// "" when no install line is present, so callers fail with a clear message.
+function installLine(runs: string, tool: string): string {
+  const re = new RegExp(`cargo\\s+install\\s+${tool}\\b`);
+  return runs.split("\n").find((l) => re.test(l)) ?? "";
+}
+
+// Assert the observable supply-chain contract for a tool install: both flags
+// present and the version pinned. Order-independent — swapping --locked and
+// --version preserves behaviour and must keep the test green.
+function assertPinnedInstall(runs: string, tool: string, source: string): void {
+  const line = installLine(runs, tool);
+  assert(line !== "", `${source} must install ${tool}`);
+  assert(
+    /\s--locked\b/.test(line),
+    `${source}: ${tool} install must pass --locked`,
+  );
+  assert(
+    /\s--version\s+\d+\.\d+/.test(line),
+    `${source}: ${tool} install must pin --version`,
+  );
+}
+
 Deno.test("ci.yml pins cargo tool installs to explicit versions with --locked (Issue #124)", async () => {
   const runs = runText(await jobSteps(CI_PATH, "test")) + "\n" +
     runText(await jobSteps(CI_PATH, "build"));
   for (const tool of ["cargo-tarpaulin", "cargo-cyclonedx"]) {
-    const installRe = new RegExp(
-      `cargo\\s+install\\s+${tool}\\b[^\\n]*--locked[^\\n]*--version\\s+\\d+\\.\\d+`,
-    );
-    assert(
-      installRe.test(runs),
-      `ci.yml must install ${tool} with --locked and a pinned --version`,
-    );
+    assertPinnedInstall(runs, tool, "ci.yml");
   }
 });
 
 Deno.test("cargo-audit.yml pins cargo-audit install to an explicit version with --locked (Issue #124)", async () => {
   const runs = runText(await jobSteps(AUDIT_PATH, "audit"));
-  assert(
-    /cargo\s+install\s+cargo-audit\b[^\n]*--locked[^\n]*--version\s+\d+\.\d+/
-      .test(runs),
-    "cargo-audit.yml must install cargo-audit with --locked and a pinned --version",
-  );
+  assertPinnedInstall(runs, "cargo-audit", "cargo-audit.yml");
 });
