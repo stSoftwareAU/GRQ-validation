@@ -162,3 +162,100 @@
     padding-left: 15px;
     padding-right: 15px;
 } 
+/* ===========================================================================
+ * Theme selector — Auto/Light/Dark (issue #233)
+ *
+ * Mirrors the dark palette in styles.css so the list page tracks the same
+ * global theme preference (persisted in localStorage by docs/theme.js).
+ * ======================================================================== */
+
+.theme-toggle-spacer {
+  width: 38px;
+  flex: 0 0 auto;
+}
+
+#theme-toggle {
+  flex: 0 0 auto;
+  min-width: 38px;
+  line-height: 1;
+}
+
+#theme-toggle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.dark-mode-forced {
+  --grq-bg: #121417;
+  --grq-surface: #1e2228;
+  --grq-surface-alt: #262b33;
+  --grq-border: #3a414b;
+  --grq-text: #e8eaed;
+  --grq-text-muted: #b6bcc4;
+}
+
+.dark-mode-forced,
+.dark-mode-forced.bg-light {
+  background-color: var(--grq-bg) !important;
+  color: var(--grq-text);
+}
+
+.dark-mode-forced .card {
+  background-color: var(--grq-surface);
+  border-color: var(--grq-border);
+  color: var(--grq-text);
+}
+
+.dark-mode-forced .text-muted,
+.dark-mode-forced small.text-muted {
+  color: var(--grq-text-muted) !important;
+}
+
+.dark-mode-forced .form-select,
+.dark-mode-forced .form-control {
+  background-color: var(--grq-surface-alt);
+  border-color: var(--grq-border);
+  color: var(--grq-text);
+}
+
+.dark-mode-forced .table {
+  --bs-table-bg: var(--grq-surface);
+  --bs-table-color: var(--grq-text);
+  --bs-table-border-color: var(--grq-border);
+  --bs-table-striped-bg: var(--grq-surface-alt);
+  --bs-table-striped-color: var(--grq-text);
+  --bs-table-hover-bg: var(--grq-surface-alt);
+  --bs-table-hover-color: var(--grq-text);
+  color: var(--grq-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not(.light-mode-forced):not(.dark-mode-forced) {
+    --grq-bg: #121417;
+    --grq-surface: #1e2228;
+    --grq-surface-alt: #262b33;
+    --grq-border: #3a414b;
+    --grq-text: #e8eaed;
+    --grq-text-muted: #b6bcc4;
+    background-color: var(--grq-bg) !important;
+    color: var(--grq-text);
+  }
+
+  body:not(.light-mode-forced):not(.dark-mode-forced) .card {
+    background-color: var(--grq-surface);
+    border-color: var(--grq-border);
+    color: var(--grq-text);
+  }
+
+  body:not(.light-mode-forced):not(.dark-mode-forced) .text-muted,
+  body:not(.light-mode-forced):not(.dark-mode-forced) small.text-muted {
+    color: var(--grq-text-muted) !important;
+  }
+
+  body:not(.light-mode-forced):not(.dark-mode-forced) .form-select,
+  body:not(.light-mode-forced):not(.dark-mode-forced) .form-control {
+    background-color: var(--grq-surface-alt);
+    border-color: var(--grq-border);
+    color: var(--grq-text);
+  }
+}
