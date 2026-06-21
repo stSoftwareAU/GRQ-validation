@@ -188,7 +188,11 @@ async function readExistingDataset(
   }
 }
 
-async function main(): Promise<void> {
+// Fetch every index, apply the safe-write guard, and refresh the committed
+// docs/market-indices.json. Throws on any failure (an empty Yahoo response or a
+// regressed payload) and leaves the committed file untouched in that case, so a
+// graceful caller can swallow the error and keep the last-good file (#238).
+async function refreshMarketIndices(): Promise<void> {
   const fresh: IndexDataset = {};
   for (const [key, symbol] of Object.entries(INDICES)) {
     console.log(`Fetching ${symbol} (${key})...`);
@@ -214,12 +218,13 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  await main();
+  await refreshMarketIndices();
 }
 
 export {
   checkDatasetSafety,
   newestDate,
+  refreshMarketIndices,
   serialiseDataset,
   toPriceMap,
   toUnixSeconds,
