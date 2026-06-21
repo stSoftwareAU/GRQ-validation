@@ -58,3 +58,11 @@ Deno.test("checkJsSyntax - production docs/color_key.js parses cleanly", async (
   const result = checkJsSyntax(source);
   assertEquals(result.valid, true, result.error);
 });
+
+Deno.test("checkJsSyntax - production docs/format.js parses cleanly", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../docs/format.js", import.meta.url),
+  );
+  const result = checkJsSyntax(source);
+  assertEquals(result.valid, true, result.error);
+});

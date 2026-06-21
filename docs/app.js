@@ -23,6 +23,19 @@ class GRQValidator {
         return GRQProjection.formatCurrency(value);
     }
 
+    // Format a market index level with thousands separators and consistent
+    // decimals (issue #276) via the shared pure module, so the browser and the
+    // Deno tests format identically.
+    formatIndexLevel(value) {
+        return GRQFormat.formatIndexLevel(value);
+    }
+
+    // Format a percentage with an explicit sign, thousands separators and
+    // consistent decimals (issue #276) via the shared pure module.
+    formatPercent(value, decimals = 2) {
+        return GRQFormat.formatPercent(value, decimals);
+    }
+
     // Centralized method to get Bootstrap breakpoint
     getBootstrapBreakpoint() {
         const width = window.innerWidth;
@@ -984,14 +997,13 @@ class GRQValidator {
                 
                 if (sp500Element && sp500DetailsElement) {
                     const performance = marketPerformance.sp500.performance;
-                    const sign = performance >= 0 ? '+' : '';
                     const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-                    
-                    sp500Element.textContent = `${sign}${performance.toFixed(2)}%`;
+
+                    sp500Element.textContent = this.formatPercent(performance);
                     sp500Element.className = `h5 mb-0 ${performanceClass}`;
-                    
-                    sp500DetailsElement.textContent = 
-                        `${Math.round(marketPerformance.sp500.initialPrice)} → ${Math.round(marketPerformance.sp500.currentPrice)}`;
+
+                    sp500DetailsElement.textContent =
+                        `${this.formatIndexLevel(marketPerformance.sp500.initialPrice)} → ${this.formatIndexLevel(marketPerformance.sp500.currentPrice)}`;
                 } else {
                     console.log('SP500 display elements not found');
                 }
@@ -1005,14 +1017,13 @@ class GRQValidator {
                 
                 if (nasdaqElement && nasdaqDetailsElement) {
                     const performance = marketPerformance.nasdaq.performance;
-                    const sign = performance >= 0 ? '+' : '';
                     const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-                    
-                    nasdaqElement.textContent = `${sign}${performance.toFixed(2)}%`;
+
+                    nasdaqElement.textContent = this.formatPercent(performance);
                     nasdaqElement.className = `h5 mb-0 ${performanceClass}`;
-                    
-                    nasdaqDetailsElement.textContent = 
-                        `${Math.round(marketPerformance.nasdaq.initialPrice)} → ${Math.round(marketPerformance.nasdaq.currentPrice)}`;
+
+                    nasdaqDetailsElement.textContent =
+                        `${this.formatIndexLevel(marketPerformance.nasdaq.initialPrice)} → ${this.formatIndexLevel(marketPerformance.nasdaq.currentPrice)}`;
                             } else {
                 console.log('NASDAQ display elements not found');
             }
@@ -1026,14 +1037,13 @@ class GRQValidator {
             
             if (russell2000Element && russell2000DetailsElement) {
                 const performance = marketPerformance.russell2000.performance;
-                const sign = performance >= 0 ? '+' : '';
                 const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-                
-                russell2000Element.textContent = `${sign}${performance.toFixed(2)}%`;
+
+                russell2000Element.textContent = this.formatPercent(performance);
                 russell2000Element.className = `h5 mb-0 ${performanceClass}`;
-                
-                russell2000DetailsElement.textContent = 
-                    `${Math.round(marketPerformance.russell2000.initialPrice)} → ${Math.round(marketPerformance.russell2000.currentPrice)}`;
+
+                russell2000DetailsElement.textContent =
+                    `${this.formatIndexLevel(marketPerformance.russell2000.initialPrice)} → ${this.formatIndexLevel(marketPerformance.russell2000.currentPrice)}`;
             } else {
                 console.log('Russell 2000 display elements not found');
             }
@@ -2959,7 +2969,9 @@ class GRQValidator {
             this.marketData[stockSymbol],
         );
         if (currentPrice === null) return "N/A";
-        return "$" + currentPrice.toFixed(2);
+        // Route through the shared currency formatter (issue #276) so large
+        // stock prices carry thousands separators and consistent decimals.
+        return this.formatCurrency(currentPrice);
     }
 
     calculateProgressVsCostOfCapital(stock, performance) {
