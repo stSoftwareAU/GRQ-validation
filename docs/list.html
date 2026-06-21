@@ -36,10 +36,13 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.159">
+    <meta name="app-version" content="1.0.160">
     <meta name="app-title" content="GRQ Score Files List">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
+
+    <!-- Theme selector: Auto/Light/Dark toggle (issue #233) -->
+    <script src="theme.js"></script>
 
     <!-- Apple Touch Icons (issue #224) -->
     <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
@@ -71,7 +74,19 @@
         <div class="col-12">
           <div class="card shadow-sm border-0">
             <div class="card-header header-gradient text-white text-center py-4">
-              <h1 class="display-4 mb-2">GRQ Score Files List</h1>
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="theme-toggle-spacer" aria-hidden="true"></div>
+                <h1 class="display-4 mb-0">GRQ Score Files List</h1>
+                <button
+                  id="theme-toggle"
+                  type="button"
+                  class="btn btn-outline-light btn-sm theme-toggle-auto"
+                  title="Auto mode — following system (click for light mode)"
+                  aria-label="Auto mode — following system (click for light mode)"
+                >
+                  <span id="theme-toggle-icon" aria-hidden="true">🌓</span>
+                </button>
+              </div>
               <p class="lead mb-0">
                 Browse and filter score files by date and performance
               </p>
@@ -279,6 +294,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.159"></script>
+    <script src="sw-register.js?v=1.0.160"></script>
   </body>
 </html> 

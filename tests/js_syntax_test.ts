@@ -42,3 +42,11 @@ Deno.test("checkJsSyntax - production docs/app.js parses cleanly", async () => {
   const result = checkJsSyntax(source);
   assertEquals(result.valid, true, result.error);
 });
+
+Deno.test("checkJsSyntax - production docs/theme.js parses cleanly", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../docs/theme.js", import.meta.url),
+  );
+  const result = checkJsSyntax(source);
+  assertEquals(result.valid, true, result.error);
+});

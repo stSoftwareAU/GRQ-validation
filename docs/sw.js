@@ -6,7 +6,7 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.0.186";
+const APP_VERSION = "1.0.187";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
@@ -25,6 +25,7 @@ const STATIC_ASSETS = [
   "./projection.js",
   "./escape.js",
   "./version.js",
+  "./theme.js",
   "./dashboard_boot.js",
   "./list_render.js",
   "./list_stats.js",
