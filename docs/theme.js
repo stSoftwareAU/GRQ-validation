@@ -4,11 +4,11 @@
 // GRQ FX Validation dashboard. The user's choice is remembered in
 // localStorage; "auto" follows the operating system via
 // `prefers-color-scheme`. The forced modes apply `light-mode-forced` /
-// `dark-mode-forced` to <body>, which the CSS in styles.css / list.css uses to
+// `dark-mode-forced` to <body>, which the CSS in styles.css uses to
 // override the default light Bootstrap palette.
 //
 // Like docs/escape.js and docs/projection.js this file is loaded as a classic
-// <script> in docs/index.html and docs/list.html and is also imported by the
+// <script> in docs/index.html and is also imported by the
 // Deno tests. It uses no module syntax, publishes its helpers on
 // `globalThis.GRQTheme`, and guards every DOM access so it is safe to import in
 // a non-browser (test) environment.

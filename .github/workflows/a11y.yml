@@ -3,7 +3,7 @@ name: Accessibility
 # Automated accessibility (a11y) gate for the docs/ dashboard UI (Issue #92).
 #
 # The repo ships an interactive "GRQ Validation Dashboard" from docs/
-# (index.html, list.html, app.js, list.js) and publishes it to GitHub Pages.
+# (index.html, app.js) and publishes it to GitHub Pages.
 # This workflow runs pa11y-ci against the rendered dashboard pages when a
 # pull request touches docs/, failing the build on WCAG 2.1 AA violations so
 # accessibility regressions (missing form labels, insufficient colour contrast,

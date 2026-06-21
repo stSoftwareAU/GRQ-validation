@@ -1,8 +1,8 @@
 // Service worker registration for the GRQ Validation Dashboard (issue #223).
 //
 // Australian English: an external registration script (not an inline
-// <script>) so docs/index.html and docs/list.html can keep a strict
-// Content-Security-Policy with script-src 'self' and no 'unsafe-inline'.
+// <script>) so docs/index.html can keep a strict Content-Security-Policy
+// with script-src 'self' and no 'unsafe-inline'.
 // Behaviour mirrors the FX dashboard: register ./sw.js, force an update check
 // on load, poll registration.update() every 30 seconds, force a reload when a
 // new service worker activates, and handle service-worker → page messages.
@@ -18,7 +18,7 @@
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=1.0.189")
+    navigator.serviceWorker.register("./sw.js?v=1.0.190")
       .then((registration) => {
         console.log("SW registered: ", registration);
 

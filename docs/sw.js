@@ -6,36 +6,31 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.0.189";
+const APP_VERSION = "1.0.190";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
 
 // App shell — static dashboard assets precached on install. Enumerated from
-// the <head> of docs/index.html and docs/list.html so the list stays in sync;
-// bump APP_VERSION when the SRI pins below change. Entries that do not yet
-// exist (e.g. manifest.json added by a sibling sub-issue) are simply skipped
-// during precache rather than failing the whole install.
+// the <head> of docs/index.html so the list stays in sync; bump APP_VERSION
+// when the SRI pins below change. Entries that do not yet exist (e.g.
+// manifest.json added by a sibling sub-issue) are simply skipped during
+// precache rather than failing the whole install.
 const STATIC_ASSETS = [
   "./",
   "./index.html",
-  "./list.html",
   "./app.js",
-  "./list.js",
   "./projection.js",
   "./color_key.js",
   "./escape.js",
   "./version.js",
   "./theme.js",
   "./dashboard_boot.js",
-  "./list_render.js",
-  "./list_stats.js",
   "./styles.css",
-  "./list.css",
   "./manifest.json",
   "./logo.png",
   "./sw-register.js",
-  // SRI-pinned CDN assets from docs/index.html / docs/list.html (issue #79).
+  // SRI-pinned CDN assets from docs/index.html (issue #79).
   // Bump APP_VERSION whenever these pins change so the integrity hashes are
   // re-validated.
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css",
