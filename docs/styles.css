@@ -507,6 +507,16 @@
   color: #565e64;
 }
 
+/* Compact Yahoo Finance attribution footnote (issue #280). Replaces the former
+   full-width `alert alert-info` banner to reclaim vertical space, while keeping
+   the source attribution discoverable. Colour comes from the theme-aware
+   `.text-muted` rules (light: Bootstrap #6c757d ≥ 4.5:1 on the white card;
+   dark: --grq-text-muted), so contrast meets WCAG 2 AA in both themes. */
+.data-source-note {
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
 .clickable-value {
   cursor: pointer;
   color: #0067d6;
