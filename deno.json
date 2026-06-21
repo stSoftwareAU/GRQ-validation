@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "fetch-indices": "deno run --allow-net --allow-read --allow-write scripts/fetch_market_indices.ts"
+    "fetch-indices": "deno run --allow-net --allow-read --allow-write scripts/fetch_market_indices.ts",
+    "refresh-indices": "deno run --allow-net --allow-read --allow-write scripts/refresh_market_indices.ts"
   },
   "minimumDependencyAge": {
     "age": "P1D",
