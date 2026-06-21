@@ -238,6 +238,28 @@
   line-height: 1.5;
 }
 
+/* ---------------------------------------------------------------------------
+ * Section / card titles (issue #277)
+ *
+ * Titles such as "Market Performance Comparison" sit in a `.card-header` as an
+ * `h5.card-title`. They were left-aligned and wasted the container width.
+ * Centre them and let them span the full width so they read as section
+ * headings. The base rule deliberately keeps `white-space` default so narrow
+ * and mobile screens can wrap the title and stay legible; the single-line
+ * requirement is applied only at desktop widths below.
+ * ------------------------------------------------------------------------- */
+.card-header .card-title {
+  text-align: center;
+  width: 100%;
+}
+
+/* At desktop widths keep each section title on one line (no awkward wrap). */
+@media (min-width: 768px) {
+  .card-header .card-title {
+    white-space: nowrap;
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .chart-container {
