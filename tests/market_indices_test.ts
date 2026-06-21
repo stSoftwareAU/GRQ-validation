@@ -9,7 +9,14 @@
 
 import { assert, assertEquals } from "@std/assert";
 import "../docs/projection.js";
-import { toPriceMap, toUnixSeconds } from "../scripts/fetch_market_indices.ts";
+import {
+  checkDatasetSafety,
+  type IndexDataset,
+  newestDate,
+  serialiseDataset,
+  toPriceMap,
+  toUnixSeconds,
+} from "../scripts/fetch_market_indices.ts";
 
 interface IndexSeries {
   name: string;
@@ -126,6 +133,97 @@ Deno.test("toPriceMap - extracts finite closes and rounds to cents", () => {
 Deno.test("toPriceMap - empty/malformed payload yields an empty map", () => {
   assertEquals(toPriceMap({}), {});
   assertEquals(toPriceMap({ chart: { result: [] } }), {});
+});
+
+// --- Safe-write / guard logic for unattended daily runs (issue #237) ---
+
+const committed: IndexDataset = {
+  sp500: {
+    "2024-01-02": 4742.83,
+    "2024-01-03": 4704.81,
+    "2024-01-04": 4688.68,
+  },
+  nasdaq: { "2024-01-02": 14765.94, "2024-01-03": 14592.21 },
+  russell2000: { "2024-01-02": 2027.07, "2024-01-03": 1989.21 },
+};
+
+Deno.test("checkDatasetSafety - no committed file accepts any fresh dataset", () => {
+  const result = checkDatasetSafety(null, { sp500: { "2024-01-02": 1 } });
+  assertEquals(result.ok, true);
+});
+
+Deno.test("checkDatasetSafety - equal dataset is safe", () => {
+  const result = checkDatasetSafety(committed, structuredClone(committed));
+  assertEquals(result.ok, true);
+});
+
+Deno.test("checkDatasetSafety - extended history (more days) is safe", () => {
+  const fresh = structuredClone(committed);
+  fresh.sp500["2024-01-05"] = 4697.24;
+  fresh.nasdaq["2024-01-04"] = 14510.30;
+  fresh.russell2000["2024-01-04"] = 1975.71;
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, true);
+});
+
+Deno.test("checkDatasetSafety - dropping an index key is refused", () => {
+  const fresh = structuredClone(committed) as Partial<IndexDataset>;
+  delete fresh.russell2000;
+  const result = checkDatasetSafety(committed, fresh as IndexDataset);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("russell2000"));
+});
+
+Deno.test("checkDatasetSafety - an emptied index is refused", () => {
+  const fresh = structuredClone(committed);
+  fresh.nasdaq = {};
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("nasdaq"));
+});
+
+Deno.test("checkDatasetSafety - truncated history is refused", () => {
+  const fresh = structuredClone(committed);
+  fresh.sp500 = { "2024-01-02": 4742.83 }; // 3 days -> 1 day
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("sp500"));
+  assert(result.reason?.includes("fewer"));
+});
+
+Deno.test("checkDatasetSafety - a regressed newest date is refused", () => {
+  // Same number of days, but the newest day moves backwards.
+  const fresh = structuredClone(committed);
+  fresh.sp500 = {
+    "2024-01-01": 4700.00,
+    "2024-01-02": 4742.83,
+    "2024-01-03": 4704.81,
+  };
+  const result = checkDatasetSafety(committed, fresh);
+  assertEquals(result.ok, false);
+  assert(result.reason?.includes("regress"));
+});
+
+Deno.test("newestDate - returns the lexically greatest ISO date", () => {
+  assertEquals(
+    newestDate(["2024-01-03", "2024-01-10", "2024-01-02"]),
+    "2024-01-10",
+  );
+  assertEquals(newestDate([]), "");
+});
+
+Deno.test("serialiseDataset - 2-space indent with a trailing newline", () => {
+  const text = serialiseDataset({ sp500: { "2024-01-02": 4742.83 } });
+  assert(text.endsWith("\n"));
+  assertEquals(
+    text,
+    '{\n  "sp500": {\n    "2024-01-02": 4742.83\n  }\n}\n',
+  );
+});
+
+Deno.test("serialiseDataset round-trips through JSON.parse", () => {
+  const data = { sp500: { "2024-01-02": 4742.83 }, nasdaq: {} };
+  assertEquals(JSON.parse(serialiseDataset(data)), data);
 });
 
 Deno.test("docs/market-indices.json is same-origin, well-formed benchmark data", async () => {
