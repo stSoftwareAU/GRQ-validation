@@ -29,9 +29,24 @@ function normaliseSwatchColour(borderColor) {
     return "";
 }
 
+// Coerce a Chart.js `borderDash` into a clean dash pattern for the swatch.
+// Chart.js carries an array of positive pixel lengths (e.g. [8, 4] dashed,
+// [2, 2] dotted); an absent/empty array means a solid line. Returns the cleaned
+// array of finite, positive numbers, or [] for a solid stroke. Faithfully
+// mirrors what the chart draws so same-colour series stay distinguishable
+// (issue #245).
+function normaliseSwatchDash(borderDash) {
+    if (!Array.isArray(borderDash)) return [];
+    const dash = borderDash.filter(
+        (n) => typeof n === "number" && Number.isFinite(n) && n > 0,
+    );
+    return dash;
+}
+
 // Build the colour-key entries for a Chart.js dataset list. Returns one
-// `{ label, colour }` per VISIBLE, labelled data series, reading each entry's
-// own `label` and `borderColor` so there is no duplicated colour/label table.
+// `{ label, colour, dash }` per VISIBLE, labelled data series, reading each
+// entry's own `label`, `borderColor` and `borderDash` so there is no duplicated
+// colour/style table. `dash` is the cleaned `borderDash` array ([] = solid).
 //
 // Excluded so the key matches the desktop legend:
 //   - hidden series (`hidden: true`),
@@ -55,7 +70,9 @@ function colorKeyEntries(datasets) {
         const colour = normaliseSwatchColour(dataset.borderColor);
         if (colour === "") continue; // no drawable colour -> skip
 
-        entries.push({ label, colour });
+        const dash = normaliseSwatchDash(dataset.borderDash);
+
+        entries.push({ label, colour, dash });
     }
     return entries;
 }
@@ -64,5 +81,6 @@ function colorKeyEntries(datasets) {
 // test importer can both reach the helper, mirroring docs/projection.js.
 globalThis.GRQColorKey = {
     normaliseSwatchColour,
+    normaliseSwatchDash,
     colorKeyEntries,
 };
