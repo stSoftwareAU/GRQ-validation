@@ -60,3 +60,31 @@ Deno.test("Gitleaks workflow declares a concurrency group that cancels supersede
     "concurrency must cancel superseded in-progress runs",
   );
 });
+
+// Issue #219: gitleaks-action requires an org-level Gitleaks Pro licence, but
+// Dependabot-triggered runs execute against the separate Dependabot secrets
+// store and cannot read GITLEAKS_LICENSE. The action therefore exits with
+// ErrLicense and the check fails on every Dependabot PR (e.g. PR #217). A
+// dependency-bump PR introduces no secrets to scan, so the gitleaks job must
+// be skipped when the actor is Dependabot.
+Deno.test("Gitleaks job is skipped for Dependabot-authored PRs", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as {
+    jobs?: Record<string, { if?: string }>;
+  };
+  const job = doc.jobs?.gitleaks;
+  assert(job, "workflow must declare a gitleaks job");
+  assert(
+    typeof job.if === "string",
+    "gitleaks job must declare an 'if' condition guarding the Dependabot actor",
+  );
+  const condition = job.if as string;
+  assert(
+    condition.includes("dependabot[bot]"),
+    `gitleaks job 'if' must reference the dependabot[bot] actor: ${condition}`,
+  );
+  assert(
+    condition.includes("github.actor") && condition.includes("!="),
+    `gitleaks job 'if' must skip runs where github.actor is Dependabot: ${condition}`,
+  );
+});
