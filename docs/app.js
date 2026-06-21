@@ -1511,11 +1511,12 @@ class GRQValidator {
             const chip = document.createElement("div");
             chip.className = "chart-color-key-chip";
 
-            // textContent (not innerHTML) keeps untrusted labels — e.g. stock
-            // tickers — inert against DOM XSS.
-            const swatch = document.createElement("span");
-            swatch.className = "chart-color-key-swatch";
-            swatch.style.backgroundColor = entry.colour;
+            // The swatch is a tiny SVG line that mirrors the dataset's own
+            // stroke — colour plus dash pattern — so same-colour series (e.g.
+            // the two greys) stay distinguishable by their dashed/dotted style
+            // (issue #245). borderDash flows straight from the live dataset, so
+            // there is no hard-coded per-series style table.
+            const swatch = this.buildColorKeySwatch(entry);
 
             const label = document.createElement("span");
             label.className = "chart-color-key-label";
@@ -1525,6 +1526,45 @@ class GRQValidator {
             chip.appendChild(label);
             container.appendChild(chip);
         }
+    }
+
+    // Build one colour-key swatch as an inline SVG line. Drawing a line (rather
+    // than a filled block) lets the swatch reflect the dataset's stroke style:
+    // a solid line for a solid series and a dashed/dotted line when the dataset
+    // carries a `borderDash`. Both colour and dash come from the live dataset
+    // via the colour-key entry, so the swatch always matches what is drawn on
+    // the chart (issue #245).
+    buildColorKeySwatch(entry) {
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const width = 18;
+        const height = 12;
+        const midY = height / 2;
+
+        const svg = document.createElementNS(SVG_NS, "svg");
+        svg.setAttribute("class", "chart-color-key-swatch");
+        svg.setAttribute("width", String(width));
+        svg.setAttribute("height", String(height));
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("aria-hidden", "true");
+
+        const line = document.createElementNS(SVG_NS, "line");
+        line.setAttribute("x1", "1");
+        line.setAttribute("y1", String(midY));
+        line.setAttribute("x2", String(width - 1));
+        line.setAttribute("y2", String(midY));
+        line.setAttribute("stroke", entry.colour);
+        line.setAttribute("stroke-width", "2");
+
+        const dash = Array.isArray(entry.dash) ? entry.dash : [];
+        if (dash.length > 0) {
+            // Round caps render the small "[2, 2]" patterns as dots rather than
+            // tiny rectangles, matching how Chart.js draws dotted lines.
+            line.setAttribute("stroke-linecap", "round");
+            line.setAttribute("stroke-dasharray", dash.join(","));
+        }
+
+        svg.appendChild(line);
+        return svg;
     }
 
     prepareChartData() {

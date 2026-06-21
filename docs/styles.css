@@ -84,13 +84,13 @@
   white-space: nowrap;
 }
 
-/* Small colour block; a faint border keeps pale swatches visible. */
+/* Small SVG line drawn in the dataset's own colour and dash pattern, so the
+ * swatch reflects each line's solid/dashed/dotted stroke (issue #245). */
 .chart-color-key-swatch {
   flex: 0 0 auto;
-  width: 0.75rem;
-  height: 0.75rem;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 2px;
+  width: 18px;
+  height: 12px;
+  overflow: visible;
 }
 
 /* Label inherits the card text colour so it stays legible in light and dark. */
