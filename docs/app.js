@@ -905,34 +905,16 @@ class GRQValidator {
 
 
     calculateMarketPerformance(indexData) {
-        if (!indexData || !indexData.initialPrice || !indexData.currentPrice) {
-            return null;
-        }
-
-        const performance = ((indexData.currentPrice - indexData.initialPrice) / indexData.initialPrice) * 100;
-        return {
-            performance: performance,
-            initialPrice: indexData.initialPrice,
-            currentPrice: indexData.currentPrice
-        };
+        // Delegate to the shared pure module (issue #279) so the browser and the
+        // Deno tests extract the benchmark figure identically.
+        return GRQMarketIndex.indexPerformance(indexData);
     }
 
     getMarketPerformanceData() {
-        const marketPerformance = {};
-        
-        if (this.marketIndexData) {
-            if (this.marketIndexData.sp500) {
-                marketPerformance.sp500 = this.calculateMarketPerformance(this.marketIndexData.sp500);
-            }
-            if (this.marketIndexData.nasdaq) {
-                marketPerformance.nasdaq = this.calculateMarketPerformance(this.marketIndexData.nasdaq);
-            }
-            if (this.marketIndexData.russell2000) {
-                marketPerformance.russell2000 = this.calculateMarketPerformance(this.marketIndexData.russell2000);
-            }
-        }
-
-        return marketPerformance;
+        // Benchmark figures come ONLY from the already-loaded local data
+        // (this.marketIndexData, i.e. docs/market-indices.json) — no live fetch.
+        // The same extraction feeds both the aggregate and single-stock views.
+        return GRQMarketIndex.marketPerformanceData(this.marketIndexData);
     }
 
     showMarketComparisonLoading() {
@@ -982,79 +964,55 @@ class GRQValidator {
             return;
         }
 
+        // Figures come ONLY from the locally-loaded data (this.marketIndexData),
+        // so this renders identically on the aggregate and single-stock views
+        // (issue #279). No live fetch; an absent index renders blank, not an error.
         const marketPerformance = this.getMarketPerformanceData();
         console.log('Market performance data:', marketPerformance);
-        
-        if (marketPerformance.sp500 || marketPerformance.nasdaq || marketPerformance.russell2000) {
-            console.log('Showing market comparison section');
-            marketComparison.style.display = 'block';
-            
-            // Update SP500
-            if (marketPerformance.sp500) {
-                console.log('Updating SP500 display:', marketPerformance.sp500);
-                const sp500Element = document.getElementById('sp500Performance');
-                const sp500DetailsElement = document.getElementById('sp500Details');
-                
-                if (sp500Element && sp500DetailsElement) {
-                    const performance = marketPerformance.sp500.performance;
-                    const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
 
-                    sp500Element.textContent = this.formatPercent(performance);
-                    sp500Element.className = `h5 mb-0 ${performanceClass}`;
-
-                    sp500DetailsElement.textContent =
-                        `${this.formatIndexLevel(marketPerformance.sp500.initialPrice)} → ${this.formatIndexLevel(marketPerformance.sp500.currentPrice)}`;
-                } else {
-                    console.log('SP500 display elements not found');
-                }
-            }
-            
-            // Update NASDAQ
-            if (marketPerformance.nasdaq) {
-                console.log('Updating NASDAQ display:', marketPerformance.nasdaq);
-                const nasdaqElement = document.getElementById('nasdaqPerformance');
-                const nasdaqDetailsElement = document.getElementById('nasdaqDetails');
-                
-                if (nasdaqElement && nasdaqDetailsElement) {
-                    const performance = marketPerformance.nasdaq.performance;
-                    const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-
-                    nasdaqElement.textContent = this.formatPercent(performance);
-                    nasdaqElement.className = `h5 mb-0 ${performanceClass}`;
-
-                    nasdaqDetailsElement.textContent =
-                        `${this.formatIndexLevel(marketPerformance.nasdaq.initialPrice)} → ${this.formatIndexLevel(marketPerformance.nasdaq.currentPrice)}`;
-                            } else {
-                console.log('NASDAQ display elements not found');
-            }
+        const hasAnyIndex = GRQMarketIndex.BENCHMARK_INDICES.some(
+            ({ key }) => marketPerformance[key],
+        );
+        if (!hasAnyIndex) {
+            console.log('No market performance data available, hiding comparison section');
+            marketComparison.style.display = 'none';
+            return;
         }
-        
-        // Update Russell 2000
-        if (marketPerformance.russell2000) {
-            console.log('Updating Russell 2000 display:', marketPerformance.russell2000);
-            const russell2000Element = document.getElementById('russell2000Performance');
-            const russell2000DetailsElement = document.getElementById('russell2000Details');
-            
-            if (russell2000Element && russell2000DetailsElement) {
-                const performance = marketPerformance.russell2000.performance;
-                const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
 
-                russell2000Element.textContent = this.formatPercent(performance);
-                russell2000Element.className = `h5 mb-0 ${performanceClass}`;
+        marketComparison.style.display = 'block';
 
-                russell2000DetailsElement.textContent =
-                    `${this.formatIndexLevel(marketPerformance.russell2000.initialPrice)} → ${this.formatIndexLevel(marketPerformance.russell2000.currentPrice)}`;
+        // Data-driven render so each index uses the same single source of truth.
+        const cells = {
+            sp500: { value: 'sp500Performance', details: 'sp500Details' },
+            nasdaq: { value: 'nasdaqPerformance', details: 'nasdaqDetails' },
+            russell2000: { value: 'russell2000Performance', details: 'russell2000Details' },
+        };
+        for (const { key, name } of GRQMarketIndex.BENCHMARK_INDICES) {
+            const ids = cells[key];
+            const valueElement = document.getElementById(ids.value);
+            const detailsElement = document.getElementById(ids.details);
+            if (!valueElement || !detailsElement) {
+                console.log(`${name} display elements not found`);
+                continue;
+            }
+
+            const perf = marketPerformance[key];
+            if (perf) {
+                const performanceClass = perf.performance >= 0
+                    ? 'performance-positive'
+                    : 'performance-negative';
+                valueElement.textContent = this.formatPercent(perf.performance);
+                valueElement.className = `h5 mb-0 ${performanceClass}`;
+                detailsElement.textContent =
+                    `${this.formatIndexLevel(perf.initialPrice)} → ${this.formatIndexLevel(perf.currentPrice)}`;
             } else {
-                console.log('Russell 2000 display elements not found');
+                // Missing value: render blank (never a fetch, never an error).
+                valueElement.textContent = '-';
+                valueElement.className = 'h5 mb-0 text-muted';
+                detailsElement.textContent = '-';
             }
-        } else {
-            console.log('No Russell 2000 performance data available for display');
         }
-    } else {
-        console.log('No market performance data available, hiding comparison section');
-        marketComparison.style.display = 'none';
     }
-}
 
     updateDisplay() {
         console.log('updateDisplay called');
@@ -1133,9 +1091,19 @@ class GRQValidator {
 
         this.updateChart();
         this.updateStockTable();
-        
-        // Show loading state for market comparison
-        this.showMarketComparisonLoading();
+
+        // Populate the benchmark index numbers from the already-loaded local
+        // data (this.marketIndexData, i.e. docs/market-indices.json). This runs
+        // for every view — including the single-stock view, which previously
+        // never repopulated and so showed no index numbers (issue #279). On the
+        // very first render the data is still loading asynchronously, so fall
+        // back to the loading state; it is repopulated when the load resolves.
+        // Never fetch live for these figures.
+        if (this.marketIndexData) {
+            this.updateMarketComparison();
+        } else {
+            this.showMarketComparisonLoading();
+        }
 
         // Show/hide back button based on view mode
         document.getElementById("backToAggregate").style.display =
