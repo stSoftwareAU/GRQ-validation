@@ -153,25 +153,16 @@ class GRQValidator {
                     }
                 }
                 
-                // Fallback: Find the score file closest to 90 days ago
-                const targetDate = new Date();
-                targetDate.setDate(targetDate.getDate() - 90); // 90 days ago
-                
-                let closestScore = indexData.scores[0]; // Default to first score
-                let smallestDifference = Infinity;
-                
-                indexData.scores.forEach((score) => {
-                    const scoreDate = new Date(score.date);
-                    const difference = Math.abs(scoreDate.getTime() - targetDate.getTime());
-                    
-                    if (difference < smallestDifference) {
-                        smallestDifference = difference;
-                        closestScore = score;
-                    }
-                });
-                
-                console.log(`Auto-selecting score file closest to 90 days ago: ${closestScore.date} (${closestScore.month} ${closestScore.day})`);
-                
+                // Fallback: select the nearest available score date ON OR
+                // BEFORE 90 days ago (issue #275). Delegates to the shared,
+                // unit-tested helper so the browser and Deno tests agree.
+                const closestScore = GRQProjection.selectDefaultScore(
+                    indexData.scores,
+                    new Date(),
+                );
+
+                console.log(`Auto-selecting score file on or before 90 days ago: ${closestScore.date} (${closestScore.month} ${closestScore.day})`);
+
                 this.selectedFile = closestScore.file;
                 select.value = this.selectedFile;
                 await this.loadScoreFile();
