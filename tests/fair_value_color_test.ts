@@ -9,8 +9,9 @@
 // output:
 //   - Fair value: both values -> range; one value -> single (with source);
 //     neither / no analysis -> null.
-//   - Colour: any null input -> ''; target < buy -> red; target > current AND
-//     current >= buy -> green; otherwise grey.
+//   - Colour: any null input -> ''; in profit (current >= buy) the target is
+//     never red (issue #299) -> green when target > current, else grey; only
+//     when underwater (current < buy) does a target < buy go red.
 import { assertEquals } from "@std/assert";
 import "../docs/projection.js";
 
@@ -94,9 +95,19 @@ Deno.test("getTargetPriceColor - any null input returns the default colour", () 
   assertEquals(GRQProjection.getTargetPriceColor(50, 60, null), "");
 });
 
-Deno.test("getTargetPriceColor - target below buy price is red (always bad)", () => {
-  // 40 < buy 55 -> red, even though it is also below the current price.
-  assertEquals(GRQProjection.getTargetPriceColor(40, 60, 55), RED);
+Deno.test("getTargetPriceColor - target below buy is red ONLY in loss territory", () => {
+  // Issue #299: red ("danger") must signal a genuine problem, so it only fires
+  // when the position is underwater. current 50 < buy 55 AND target 40 < buy 55
+  // -> the model expects the price to stay below entry -> red.
+  assertEquals(GRQProjection.getTargetPriceColor(40, 50, 55), RED);
+});
+
+Deno.test("getTargetPriceColor - target below buy while in profit is NOT red (issue #299)", () => {
+  // Regression for #299/#274: STLD-like case. The position is in profit
+  // (current 60 >= buy 55) and shows a large green realised gain, so painting a
+  // target below buy red read as self-contradictory. With current >= buy the
+  // target is grey (already met/below entry), never red.
+  assertEquals(GRQProjection.getTargetPriceColor(40, 60, 55), GREY);
 });
 
 Deno.test("getTargetPriceColor - target above current while in profit is green", () => {

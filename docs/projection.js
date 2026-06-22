@@ -458,29 +458,37 @@ function getFairValueRange(analysis) {
 // rules (issue #204). Pure given the three prices so the dashboard and tests
 // share one cascade. Returns a CSS *class* token (not an inline colour) so the
 // colour is theme-aware via the cascade — the dark theme remaps the same class
-// to a higher-contrast colour, meeting WCAG 2 AA in both themes (issue #281):
+// to a higher-contrast colour, meeting WCAG 2 AA in both themes (issue #281).
+//
+// Red ("danger") must signal a genuine problem, never sit next to a positive
+// return (issue #299, part of #274): when the position is in profit
+// (current >= buy) the target is never red — a target below the buy price there
+// is simply already met by the market, not "bad". Red is reserved for a
+// position that is underwater with a target that stays below entry.
 //   - any input null -> '' (default colour, inherited)
-//   - target below buy price -> 'price-bad' (red, always bad)
-//   - target above current AND in profit (current >= buy) -> 'price-good' (green)
+//   - in profit (current >= buy): target above current -> 'price-good' (green),
+//     otherwise -> 'price-neutral' (grey)
+//   - underwater (current < buy) AND target below buy -> 'price-bad' (red)
 //   - otherwise -> 'price-neutral' (grey)
 function getTargetPriceColor(targetPrice, currentPrice, buyPrice) {
     if (targetPrice === null || currentPrice === null || buyPrice === null) {
         return ""; // Default colour (inherits)
     }
 
-    // Red (Danger): Target price is below buy price - this is always bad
+    // In profit (current at or above buy): the realised return is positive, so
+    // the target must never read as danger (issue #299). Green when the target
+    // still implies upside from here, grey when it is already met/below entry.
+    if (currentPrice >= buyPrice) {
+        return targetPrice > currentPrice ? "price-good" : "price-neutral";
+    }
+
+    // Underwater (current below buy): a target below the buy price means the
+    // model expects the price to stay below entry - genuinely bad -> red.
     if (targetPrice < buyPrice) {
         return "price-bad";
     }
 
-    // Green (Good): Target price is above current price AND we're in profit territory
-    if (targetPrice > currentPrice && currentPrice >= buyPrice) {
-        return "price-good";
-    }
-
-    // Grey (Neutral): Target price is above buy price but we're either:
-    // - Below current price (target achieved), or
-    // - Current price is below buy price (we're in loss territory but target is still above buy price)
+    // Underwater but the target is still above entry (recovery implied) -> grey.
     return "price-neutral";
 }
 
@@ -728,31 +736,47 @@ function computeJudgement(
     if (daysElapsed < 90) {
         if (projection && projection.confidence > 0.2) {
             const predicted = projection.projected90DayPerformance;
-            const pctOfTarget = target === 0 ? 0 : predicted / target;
-            if (predicted < 0 || pctOfTarget < 0.2) {
-                return `Declining (${predicted.toFixed(1)}%)`;
-            } else if (pctOfTarget >= 0.95) {
-                return `On Track (${predicted.toFixed(1)}%)`;
-            } else if (pctOfTarget >= 0.2) {
-                return `Below Target (${predicted.toFixed(1)}%)`;
+            // The parenthetical is the projected 90-day return: label it "proj."
+            // so it cannot be read as the realised gain (issue #298).
+            // Judge by the sign of the predicted return first: only a negative
+            // projection is "Declining". A positive projection must never read
+            // as declining (issue #297).
+            if (predicted < 0) {
+                return `Declining (proj. ${predicted.toFixed(1)}%)`;
             }
-            return `Declining (${predicted.toFixed(1)}%)`;
+            // predicted >= 0 here. Guard the ratio against a non-positive
+            // target: when the model 90-Day Target price sits below the buy
+            // price the target return % is negative, and `predicted / target`
+            // would flip a healthy positive projection's sign and mislabel it
+            // as "Declining". Fall back to the sign of the projection instead.
+            if (target <= 0) {
+                return `On Track (proj. ${predicted.toFixed(1)}%)`;
+            }
+            const pctOfTarget = predicted / target;
+            if (pctOfTarget >= 0.95) {
+                return `On Track (proj. ${predicted.toFixed(1)}%)`;
+            }
+            // A positive projection short of target is below target, not
+            // declining.
+            return `Below Target (proj. ${predicted.toFixed(1)}%)`;
         }
 
         // Not enough data for a reliable projection: judge current performance.
+        // The parenthetical is the return so far, not a projection: label it
+        // "current" so the two figures cannot be confused (issue #298).
         const threshold = target * 0.8;
         if (daysElapsed < 30) {
             return performance > 0
-                ? `Early Days (+${performance.toFixed(1)}%)`
-                : `Early Days (${performance.toFixed(1)}%)`;
+                ? `Early Days (current +${performance.toFixed(1)}%)`
+                : `Early Days (current ${performance.toFixed(1)}%)`;
         }
         // 30-60 and 60+ days share the same thresholds.
         if (performance >= threshold) {
-            return `On Track (${performance.toFixed(1)}%)`;
+            return `On Track (current ${performance.toFixed(1)}%)`;
         } else if (performance > 0) {
-            return `Below Target (${performance.toFixed(1)}%)`;
+            return `Below Target (current ${performance.toFixed(1)}%)`;
         }
-        return `Declining (${performance.toFixed(1)}%)`;
+        return `Declining (current ${performance.toFixed(1)}%)`;
     }
 
     // 90 days or more elapsed: report the realised outcome.
