@@ -5,7 +5,7 @@
 On phones the gradient header banner (`div.card-header.header-gradient … py-4`)
 consumed a large slice of the first screen before any data appeared — Bootstrap's
 `py-4` gives 1.5rem top/bottom padding, with a full-size `h1.display-4` title
-(~3.5rem) and a `p.lead` subtitle (~1.25rem).
+(~3.5rem) and a `p.lead` subtitle (~1.25rem)
 
 This change adds **mobile-only, frontend CSS** to the existing
 `@media (max-width: 768px)` block in `docs/styles.css` to de-emphasise the
