@@ -281,7 +281,7 @@ pub struct StockPerformance {
 pub struct PortfolioPerformance {
     /// Score date the figures relate to (`YYYY-MM-DD`).
     pub score_date: String,
-    /// Number of stocks in the portfolio.
+    /// Number of stocks with both usable buy and current prices (included in performance calculation).
     pub total_stocks: i32,
     /// Average 90-day total return across the portfolio, as a percentage.
     pub performance_90_day: f64,
@@ -289,6 +289,8 @@ pub struct PortfolioPerformance {
     pub performance_annualized: f64,
     /// Per-stock performance breakdown.
     pub individual_performances: Vec<StockPerformance>,
+    /// Tickers excluded because they lack a usable buy price or current price.
+    pub excluded_tickers: Vec<String>,
 }
 
 #[cfg(test)]
