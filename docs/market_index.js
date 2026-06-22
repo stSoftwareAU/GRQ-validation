@@ -106,11 +106,17 @@ function indexPerformance(indexData, endDate) {
 // index data (`this.marketIndexData`). Only indices with usable prices appear
 // in the result; missing ones are simply absent (rendered blank by the caller).
 // Accepts null/undefined and returns an empty object — never throws.
-function marketPerformanceData(marketIndexData) {
+//
+// When `endDate` is supplied the figures become window-aware (issue #367): each
+// index's end price is the last close at or before `endDate`, so the summary
+// covers the SAME per-device window the chart plots and the two can never
+// disagree in direction. An index with no usable price in the window is omitted
+// (rendered blank). Omitting `endDate` keeps the original run-to-latest result.
+function marketPerformanceData(marketIndexData, endDate) {
     const result = {};
     if (marketIndexData) {
         for (const { key } of BENCHMARK_INDICES) {
-            const perf = indexPerformance(marketIndexData[key]);
+            const perf = indexPerformance(marketIndexData[key], endDate);
             if (perf) {
                 result[key] = perf;
             }

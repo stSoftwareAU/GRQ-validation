@@ -925,7 +925,22 @@ class GRQValidator {
         // Benchmark figures come ONLY from the already-loaded local data
         // (this.marketIndexData, i.e. docs/market-indices.json) — no live fetch.
         // The same extraction feeds both the aggregate and single-stock views.
-        return GRQMarketIndex.marketPerformanceData(this.marketIndexData);
+        //
+        // The summary is constrained to the SAME per-device window the chart
+        // plots (issue #367, milestone #333): its end price is the last close at
+        // or before scoreDate + (mobile 90 / desktop 180) days — the shared
+        // single source of truth — so the figures can never disagree with the
+        // chart's last visible point in direction. deviceWindowEnd returns null
+        // for a missing/unparseable score date, in which case marketPerformance
+        // Data falls back to the full-period figure rather than erroring.
+        const windowEnd = GRQProjection.deviceWindowEnd(
+            this.getScoreDate(this.selectedFile),
+            this.isMobileDevice(),
+        );
+        return GRQMarketIndex.marketPerformanceData(
+            this.marketIndexData,
+            windowEnd,
+        );
     }
 
     showMarketComparisonLoading() {
@@ -1598,11 +1613,14 @@ class GRQValidator {
         const breakpoint = this.getBootstrapBreakpoint();
         const isMobile = this.isMobileDevice();
         
-        // On mobile, limit to 90 days for better readability
-        const maxDays = isMobile ? 90 : 180;
-        const maxDate = this.setDateToMidnight(new Date(
-            this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
-        ));
+        // Per-device visible window (mobile 90 days, desktop 180). Shared with
+        // the Market Performance summary via GRQProjection so the chart and the
+        // summary cover the identical window and cannot disagree (issue #367).
+        const maxDays = GRQProjection.deviceWindowDays(isMobile);
+        const maxDate = GRQProjection.deviceWindowEnd(
+            this.getScoreDate(this.selectedFile),
+            isMobile,
+        );
 
         // Debug logging for mobile data limitation
         if (isMobile) {
@@ -2420,9 +2438,10 @@ class GRQValidator {
     calculateCostOfCapitalData() {
         const breakpoint = this.getBootstrapBreakpoint();
         const isMobile = this.isMobileDevice();
-        
-        // On mobile, limit to 90 days for better readability
-        const maxDays = isMobile ? 90 : 180;
+
+        // Per-device visible window, shared with the chart and summary via the
+        // single source of truth (issue #367) — mobile 90 days, desktop 180.
+        const maxDays = GRQProjection.deviceWindowDays(isMobile);
         const maxDate = new Date(
             this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
         );
@@ -4184,8 +4203,26 @@ if (typeof globalThis.matchMedia === "function") {
 // breakpoint flips the native Chart.js legend (the desktop identifier) and
 // shows+populates the mobile colour key, or tears it down again — so neither
 // is ever left stale (issue #246, milestone #236).
+// Remembers the breakpoint at the previous settle so we only rebuild the chart
+// and summary when the device boundary is actually crossed (issue #367).
+let lastViewportIsMobile;
+
 function syncChartForViewport() {
     const isMobile = validator.isMobileDevice();
+
+    // Crossing the mobile/desktop boundary changes the visible window (90 vs
+    // 180 days), so re-derive BOTH the chart series and the Market Performance
+    // summary to the new window — they share one source of truth, so they stay
+    // in agreement (issue #367, milestone #333). Only act on an actual crossing
+    // to avoid rebuilding the chart on same-device resizes. The chart must exist
+    // (data loaded) before a rebuild makes sense.
+    const crossedBreakpoint = lastViewportIsMobile !== undefined &&
+        lastViewportIsMobile !== isMobile;
+    lastViewportIsMobile = isMobile;
+    if (crossedBreakpoint && validator.chart && validator.marketIndexData) {
+        validator.updateChart();
+        validator.updateMarketComparison();
+    }
 
     // Keep the native legend in step with the breakpoint when a chart exists.
     if (

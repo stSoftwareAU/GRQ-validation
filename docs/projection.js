@@ -20,6 +20,34 @@ function setDateToMidnight(date) {
     return d;
 }
 
+// Per-device chart/summary window (issue #367, milestone #333). The dashboard
+// chart truncates its visible benchmark series to a fixed window measured from
+// the score date — 90 days on mobile, 180 on desktop — so the "Market
+// Performance Comparison" summary must end on the SAME date or the two can
+// disagree in direction (chart down vs summary up). These pure helpers are the
+// single source of truth for that window, shared by prepareChartData (the
+// chart) and getMarketPerformanceData (the summary) so they cannot drift apart.
+const MOBILE_WINDOW_DAYS = 90;
+const DESKTOP_WINDOW_DAYS = 180;
+
+// Days in the visible window for the current device.
+function deviceWindowDays(isMobile) {
+    return isMobile ? MOBILE_WINDOW_DAYS : DESKTOP_WINDOW_DAYS;
+}
+
+// The window's end date: scoreDate + (mobile 90 / desktop 180) days, at local
+// midnight. Returns null when the score date is missing or unparseable so the
+// caller renders blank rather than erroring (preserves blank-on-missing).
+function deviceWindowEnd(scoreDate, isMobile) {
+    if (scoreDate === null || scoreDate === undefined) return null;
+    const start = setDateToMidnight(new Date(scoreDate));
+    if (Number.isNaN(start.getTime())) return null;
+    const days = deviceWindowDays(isMobile);
+    return setDateToMidnight(
+        new Date(start.getTime() + days * 24 * 60 * 60 * 1000),
+    );
+}
+
 // Choose the default score file for the dashboard (issue #275).
 //
 // By default we select the nearest available score date ON OR BEFORE 90 days
@@ -825,6 +853,8 @@ function buildIndexSeriesFromMap(priceMap, indexName, startDate, endDate) {
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
     setDateToMidnight,
+    deviceWindowDays,
+    deviceWindowEnd,
     selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,
