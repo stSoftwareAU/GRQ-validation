@@ -30,21 +30,25 @@ const g = globalThis as unknown as {
     isStockIncluded: (
       buyPrice: number | null | undefined,
       currentPrice: number | null | undefined,
+      splitReliable?: boolean,
     ) => boolean;
   };
 };
 const GRQProjection = g.GRQProjection;
 
 /**
- * The class list the aggregate row receives for a given (buyPrice, currentPrice)
- * pair, mirroring docs/app.js: an excluded stock (per the shared predicate)
- * gets the `excluded-stock` strikethrough class; an included one does not.
+ * The class list the aggregate row receives for a given (buyPrice, currentPrice,
+ * splitReliable) triple, mirroring docs/app.js: an excluded stock (per the
+ * shared predicate) gets the `excluded-stock` strikethrough class; an included
+ * one does not. `splitReliable` defaults to `true` so existing callers are
+ * unchanged; an explicit `false` (issue #293) strikes the row through too.
  */
 function rowClassesFor(
   buyPrice: number | null,
   currentPrice: number | null,
+  splitReliable = true,
 ): string[] {
-  return GRQProjection.isStockIncluded(buyPrice, currentPrice)
+  return GRQProjection.isStockIncluded(buyPrice, currentPrice, splitReliable)
     ? []
     : ["excluded-stock"];
 }
@@ -79,6 +83,17 @@ Deno.test("excluded row - missing current price is struck through", () => {
 Deno.test("excluded row - non-positive prices are struck through", () => {
   assertEquals(rowClassesFor(0, 12.0), ["excluded-stock"]);
   assertEquals(rowClassesFor(10.5, 0), ["excluded-stock"]);
+});
+
+Deno.test("excluded row - split-unreliable stock is struck through (issue #293)", () => {
+  // Both prices present but the split series is unreliable: the SAME predicate
+  // excludes it, so the row is struck through with no extra wiring. The CSS
+  // assertions below confirm that strikethrough is theme-safe (light + dark).
+  assertEquals(rowClassesFor(10.5, 12.0, false), ["excluded-stock"]);
+});
+
+Deno.test("excluded row - split-reliable stock is NOT struck through", () => {
+  assertEquals(rowClassesFor(10.5, 12.0, true), []);
 });
 
 // --- CSS deliverable --------------------------------------------------------
