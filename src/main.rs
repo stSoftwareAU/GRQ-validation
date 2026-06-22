@@ -99,7 +99,13 @@ fn main() -> Result<()> {
 
             println!("\n=== {date} Performance Results ===");
             println!("Score Date: {}", performance.score_date);
-            println!("Total Stocks: {}", performance.total_stocks);
+            println!("Total Stocks: {} (included)", performance.total_stocks);
+            if !performance.excluded_tickers.is_empty() {
+                println!("Excluded Stocks: {}", performance.excluded_tickers.len());
+                for ticker in &performance.excluded_tickers {
+                    println!("  - {ticker} (unpriceable)");
+                }
+            }
             println!("90-Day Performance: {:.2}%", performance.performance_90_day);
             println!(
                 "Annualized Performance: {:.2}%",
@@ -153,7 +159,13 @@ fn main() -> Result<()> {
 
             println!("\n=== {date} Projection Results ===");
             println!("Score Date: {}", performance.score_date);
-            println!("Total Stocks: {}", performance.total_stocks);
+            println!("Total Stocks: {} (included)", performance.total_stocks);
+            if !performance.excluded_tickers.is_empty() {
+                println!("Excluded Stocks: {}", performance.excluded_tickers.len());
+                for ticker in &performance.excluded_tickers {
+                    println!("  - {ticker} (unpriceable)");
+                }
+            }
             println!(
                 "Projected 90-Day Performance: {:.2}%",
                 performance.performance_90_day
@@ -304,11 +316,19 @@ fn main() -> Result<()> {
                 ) {
                     Ok(performance) => {
                         info!(
-                            "Performance for {}: {:.2}% (90-day), {:.2}% (annualized)",
+                            "Performance for {}: {:.2}% (90-day), {:.2}% (annualized), {} included stocks",
                             score_entry.date,
                             performance.performance_90_day,
-                            performance.performance_annualized
+                            performance.performance_annualized,
+                            performance.total_stocks
                         );
+                        if !performance.excluded_tickers.is_empty() {
+                            info!(
+                                "Excluded {} unpriceable stocks for {}",
+                                performance.excluded_tickers.len(),
+                                score_entry.date
+                            );
+                        }
 
                         // Update the index.json with this performance data
                         let mut index_data =

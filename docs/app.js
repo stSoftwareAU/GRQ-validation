@@ -2290,6 +2290,14 @@ class GRQValidator {
 
                     // Calculate buy price using market data on score date
                     const scoreDate = this.getScoreDate(this.selectedFile);
+                    // Exclude unpriceable stocks entirely (issue #289): a stock
+                    // with no usable buy/current price must not drag the
+                    // portfolio series (and the shared trend line) down or
+                    // inject NaN from a null buy price. The remaining included
+                    // stocks are re-weighted by averaging over validStocks.
+                    if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                        return;
+                    }
                     const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
                     const buyPrice = buyPriceObj ? buyPriceObj.price : null;
                     const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
@@ -2815,6 +2823,14 @@ class GRQValidator {
                 }">${judgement}</span></span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${safeStock}" data-field="dividend-info" data-stock="${safeStock}">${dividendInfo}</span></td>
           `;
+                // Strike out excluded stocks (issue #290): a stock dropped from
+                // every portfolio calculation (per the shared inclusion
+                // predicate) gets the `excluded-stock` class so its row renders
+                // with a theme-safe line-through, signalling it is out of all
+                // calculations.
+                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                    row.classList.add("excluded-stock");
+                }
                 // Add highlighting for selected stock in aggregate view
                 if (this.selectedStock === stock.stock) {
                     row.classList.add("table-primary");
@@ -3265,6 +3281,12 @@ class GRQValidator {
         const scoreDate = this.getScoreDate(this.selectedFile);
 
         this.scoreData.forEach((stock) => {
+            // Only included (priceable) stocks contribute to the portfolio
+            // target so the displayed allocation reflects the re-weighted
+            // remainder (issue #289).
+            if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                return;
+            }
             if (stock.target !== null && !isNaN(stock.target)) {
                 // Use centralized method to calculate target percentage
                 const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
@@ -3278,6 +3300,31 @@ class GRQValidator {
         return validStocks > 0 ? totalTarget / validStocks : 20.0;
     }
 
+    // Whether a stock counts towards portfolio aggregates (issues #289, #293):
+    // it must have BOTH a usable buy price (on the score date) AND a usable
+    // current price (latest market data), AND a reliably reconcilable split
+    // series. Delegates to the shared inclusion predicate in projection.js so
+    // the dashboard, the Rust backend and the shared helpers all agree on the
+    // ONE rule. Excluded stocks (delisted, merged for cash, renamed, or with a
+    // split series that cannot be trustworthily reconciled — the KLAC spike,
+    // issue #292) are dropped entirely, re-weighting the portfolio equally over
+    // the remaining included stocks.
+    isStockPriceable(stockSymbol, scoreDate) {
+        const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
+        const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+        // `reliable` is false when the split series cannot be reconciled; feed
+        // it into the single predicate so split-distorted stocks drop out too.
+        const splitReliable = buyPriceObj ? buyPriceObj.reliable : true;
+        const currentPrice = GRQProjection.currentPriceFromLatest(
+            this.marketData[stockSymbol],
+        );
+        return GRQProjection.isStockIncluded(
+            buyPrice,
+            currentPrice,
+            splitReliable,
+        );
+    }
+
     calculatePortfolioPerformance90Day() {
         const scoreDate = this.getScoreDate(this.selectedFile);
         const ninetyDayDate = new Date(
@@ -3288,6 +3335,12 @@ class GRQValidator {
         let validStocks = 0;
 
         this.scoreData.forEach((stock) => {
+            // Exclude unpriceable stocks from the totals row (issue #289); the
+            // remaining included stocks are re-weighted by averaging over
+            // validStocks only.
+            if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                return;
+            }
             const marketData = this.marketData[stock.stock];
             if (marketData) {
                 // Find the price at 90 days (or closest available date)
@@ -3347,6 +3400,12 @@ class GRQValidator {
             let validStocks = 0;
 
             this.scoreData.forEach((stock) => {
+                // Mirror the exclusion applied in calculatePortfolioTargetPercentage
+                // so the popover's per-stock list and count reflect only the
+                // included (priceable) stocks (issue #289).
+                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                    return;
+                }
                 if (stock.target !== null && !isNaN(stock.target)) {
                     const buyPrice = this.getBuyPrice(
                         stock.stock,

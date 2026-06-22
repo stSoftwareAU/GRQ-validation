@@ -103,6 +103,65 @@ function calculatePerformanceReturn(buyPrice, currentPrice, totalDividends) {
     return priceReturn + dividendReturn;
 }
 
+// Single source of truth for the "is this stock included?" rule (issues #288,
+// #293), mirroring the Rust backend's `is_priceable` predicate (src/utils.rs). A
+// stock counts towards portfolio performance ONLY when it has BOTH a usable buy
+// price AND a usable current price — both present and strictly greater than 0 —
+// AND its split/merge series could be reliably reconciled. If either price is
+// missing/non-positive (delisted, merged for cash, renamed) OR the split series
+// cannot be trustworthily reconciled (`splitReliable === false`, e.g. the KLAC
+// spike — issue #292), the stock is excluded entirely from all portfolio
+// calculations. The numeric guard rejects null/undefined/NaN and string inputs
+// so only real positive numbers count as usable. `splitReliable` defaults to
+// `true` and only an explicit `false` excludes, so existing callers that omit it
+// keep their behaviour; this keeps split-reliability inside the ONE predicate
+// rather than a parallel "is this stock OK?" check (DRY, per #272).
+function isStockIncluded(buyPrice, currentPrice, splitReliable = true) {
+    const usable = (price) => typeof price === "number" && price > 0;
+    return usable(buyPrice) && usable(currentPrice) && splitReliable !== false;
+}
+
+// Equal-weight portfolio performance over ONLY the included stocks (issue #288).
+// Each stock object provides `buyPrice`, `currentPrice`, optional
+// `totalDividends`, and an optional `splitReliable` flag (issue #293 — a `false`
+// value drops a split-unreliable stock here too). Excluded stocks (per
+// isStockIncluded) are dropped entirely,
+// so excluding one redistributes weight equally over the remainder — e.g. two
+// of three included stocks are weighted 1/2 each, not 1/3. Returns the mean of
+// the included total returns, or null when no stock is included (matching the
+// dashboard's guard before reporting a portfolio figure). Mirrors the backend's
+// equal-weight average of `total_return_percent` over priceable stocks.
+function calculateIncludedPortfolioPerformance(stocks) {
+    if (!Array.isArray(stocks)) {
+        return null;
+    }
+    const includedReturns = [];
+    for (const stock of stocks) {
+        const buyPrice = stock && stock.buyPrice;
+        const currentPrice = stock && stock.currentPrice;
+        // A stock flagged split-unreliable (`splitReliable === false`) drops out
+        // via the same predicate, so the remainder is re-weighted (issue #293).
+        const splitReliable = stock && stock.splitReliable;
+        if (!isStockIncluded(buyPrice, currentPrice, splitReliable)) {
+            continue;
+        }
+        const totalReturn = calculatePerformanceReturn(
+            buyPrice,
+            currentPrice,
+            stock.totalDividends,
+        );
+        if (totalReturn === null) {
+            continue;
+        }
+        includedReturns.push(totalReturn);
+    }
+    if (includedReturns.length === 0) {
+        return null;
+    }
+    const sum = includedReturns.reduce((total, value) => total + value, 0);
+    return sum / includedReturns.length;
+}
+
 // Dividends whose ex-dividend date falls on or before the 90-day validation
 // window measured from the score date. Pure given the dividend list and score
 // date; the dashboard's GRQValidator looks the list up per stock and delegates
@@ -757,6 +816,8 @@ globalThis.GRQProjection = {
     selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,
+    isStockIncluded,
+    calculateIncludedPortfolioPerformance,
     filterDividendsWithin90Days,
     sumDividends,
     buildHybridProjectionData,
