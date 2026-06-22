@@ -1012,7 +1012,8 @@ class GRQValidator {
                 const performanceClass = perf.performance >= 0
                     ? 'performance-positive'
                     : 'performance-negative';
-                valueElement.textContent = this.formatPercent(perf.performance);
+                // Percentage change to one decimal place (issue #313).
+                valueElement.textContent = this.formatPercent(perf.performance, 1);
                 valueElement.className = `h5 mb-0 ${performanceClass}`;
                 detailsElement.textContent =
                     `${this.formatIndexLevel(perf.initialPrice)} → ${this.formatIndexLevel(perf.currentPrice)}`;
