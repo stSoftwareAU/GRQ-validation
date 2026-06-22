@@ -3,7 +3,7 @@
 ## Summary
 On the scores view, stocks with clear gains showed a red **"Declining"** status
 badge: NASDAQ:STLD (realised **+33.5%**) read `Declining (45.5%)` and NYSE:GE
-(**+14.7%**) the same.
+(**+14.7%**) the same
 
 Root cause was in `computeJudgement` (`docs/projection.js`). `target` is the
 **target return %**, not a price. When a stock's model 90-Day Target *price*
