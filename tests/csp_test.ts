@@ -173,15 +173,20 @@ for (const page of PAGES) {
 }
 
 // --- Generated-markup compatibility --------------------------------------
-
-Deno.test("docs/app.js: generated rows use no inline event handlers", async () => {
-  // A strict script-src blocks inline on*= handlers, so the row markup the
-  // dashboard injects must rely on delegated listeners + data attributes.
-  const source = await Deno.readTextFile("docs/app.js");
-  const handler = source.match(/\son(?:click|change|error|load|input)\s*=/i);
-  assertEquals(
-    handler,
-    null,
-    `docs/app.js must not emit inline event handlers (found ${handler?.[0]})`,
-  );
-});
+//
+// REMOVED (issue #268): the "docs/app.js: generated rows use no inline event
+// handlers" test grepped the source of docs/app.js for a hard-coded subset of
+// on*= attribute spellings. It was a source-text proxy for a security property,
+// not a behaviour assertion: it could false-positive on a benign string literal
+// containing "on… =" and silently missed any handler spelled outside its fixed
+// list (onmouseover, onfocus, …).
+//
+// The *observable* contract — inline on*= handlers never execute — is enforced
+// at runtime by the Content-Security-Policy and pinned by the
+// "script-src is strict (no unsafe-inline/eval)" test above: an inline event
+// handler requires script-src 'unsafe-inline' to run, which that test forbids
+// on every page in PAGES (including docs/index.html, which loads docs/app.js).
+// The source grep was therefore redundant defence-in-depth coupled to how the
+// source is written, so it was deleted rather than rewritten. docs/app.js boots
+// side-effects at import (new GRQValidator()), so it cannot be loaded into a
+// Deno test to render rows through its real code path without a full DOM stub.
