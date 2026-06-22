@@ -266,31 +266,125 @@ function formatCurrency(value) {
     }).format(value);
 }
 
-// Cumulative split adjustment from a historical date to "now". Walks the stock's
-// market data and multiplies every split (splitCoefficient > 1.0) recorded after
-// `historicalDate`. A missing series means no known splits, so the factor is 1.0.
-function getSplitAdjustment(marketData, historicalDate) {
-    if (!marketData) return 1.0;
-    let cumulativeSplit = 1.0;
-    for (const point of marketData) {
-        if (point.date > historicalDate && point.splitCoefficient > 1.0) {
-            cumulativeSplit *= point.splitCoefficient;
-        }
+// Trustworthy split-adjustment thresholds (issue #292, parent #272). Agreed in
+// the #291 investigation — see docs/fixes/klac-split-distortion-investigation.md.
+const MAX_PLAUSIBLE_COEFFICIENT = 10.0; // a single split of <= 10:1 is plausible
+const DUPLICATE_WINDOW_DAYS = 5; // splits within 5 days = the same event twice
+const MAX_CUMULATIVE_FACTOR = 50.0; // cumulative factor cap over the window
+const RECONCILE_TOLERANCE = 0.15; // +/-15% price-ratio cross-check
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Compute the cumulative split adjustment from `historicalDate` to "now" AND
+// judge whether it can be trusted — the single "correct-or-flag" place (issue
+// #292). Pure: no DOM or class state. Returns `{ factor, reliable }` where:
+//   - `factor` is the de-duplicated, plausibility-checked cumulative factor
+//     (kept for diagnostics);
+//   - `reliable` is false when the series cannot be reconciled, so callers must
+//     NOT silently apply `factor` — treat an unreliable series as no split.
+// Rules: de-duplicate split events recorded within DUPLICATE_WINDOW_DAYS; flag
+// any single coefficient above MAX_PLAUSIBLE_COEFFICIENT; cap the cumulative
+// factor at MAX_CUMULATIVE_FACTOR; and cross-check each split against the
+// observed pre/post price drop (a real N:1 split divides the price ~N-fold).
+function computeSplitAdjustment(marketData, historicalDate) {
+    if (!marketData || marketData.length === 0) {
+        return { factor: 1.0, reliable: true };
     }
-    return cumulativeSplit;
+
+    // Sorted copy so "the price immediately before a split" is well-defined
+    // regardless of input order (the cumulative product is order-independent).
+    const sorted = marketData
+        .filter((p) => p && p.date instanceof Date && !isNaN(p.date.getTime()))
+        .slice()
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    let factor = 1.0;
+    let reliable = true;
+    let lastEventTime = null; // ms of the last *kept* split, for de-duplication
+
+    for (let i = 0; i < sorted.length; i++) {
+        const point = sorted[i];
+        const c = point.splitCoefficient;
+
+        // Only splits strictly after the historical date adjust the buy price.
+        if (!(point.date > historicalDate)) continue;
+
+        // Invalid / non-split coefficients mean "no adjustment" (treat as 1.0)
+        // and are not, by themselves, a reliability failure.
+        if (typeof c !== "number" || !isFinite(c) || c <= 1.0) continue;
+
+        // De-duplicate: a split within DUPLICATE_WINDOW_DAYS of the last kept
+        // one is the same corporate event recorded twice — apply it once.
+        if (
+            lastEventTime !== null &&
+            (point.date.getTime() - lastEventTime) <=
+                DUPLICATE_WINDOW_DAYS * MS_PER_DAY
+        ) {
+            continue;
+        }
+        lastEventTime = point.date.getTime();
+
+        // Implausibly large single coefficient: cannot trust unguarded.
+        if (c > MAX_PLAUSIBLE_COEFFICIENT) {
+            reliable = false;
+        }
+
+        // Price-ratio cross-check: compare the midpoint just before the split
+        // with the split point's own (post-split) midpoint. Only checkable when
+        // a prior point exists; absent one we keep the data-feed invariant.
+        const prev = sorted[i - 1];
+        if (prev) {
+            const prevMid = (prev.high + prev.low) / 2;
+            const splitMid = (point.high + point.low) / 2;
+            if (isFinite(prevMid) && isFinite(splitMid) && splitMid > 0) {
+                const observedRatio = prevMid / splitMid;
+                if (Math.abs(observedRatio / c - 1) > RECONCILE_TOLERANCE) {
+                    reliable = false;
+                }
+            }
+        }
+
+        factor *= c;
+    }
+
+    // Cumulative-factor plausibility bound: a larger factor almost certainly
+    // means duplicated or spurious coefficients.
+    if (factor > MAX_CUMULATIVE_FACTOR) {
+        reliable = false;
+    }
+
+    return { factor, reliable };
+}
+
+// Cumulative split adjustment from a historical date to "now". Delegates to the
+// validated `computeSplitAdjustment` and refuses to apply a factor it cannot
+// reconcile — an unreliable series yields 1.0 (no adjustment) rather than a
+// silently wrong, inflated factor (issue #292). A missing series means no known
+// splits, so the factor is 1.0.
+function getSplitAdjustment(marketData, historicalDate) {
+    const { factor, reliable } = computeSplitAdjustment(
+        marketData,
+        historicalDate,
+    );
+    return reliable ? factor : 1.0;
 }
 
 // Restate a historical price in current (post-split) terms by dividing out the
-// cumulative split adjustment.
+// cumulative split adjustment. Uses the reliable factor only, so an
+// unreconcilable split never over-divides the price (issue #292).
 function adjustHistoricalPriceToCurrent(price, marketData, historicalDate) {
     return price / getSplitAdjustment(marketData, historicalDate);
 }
 
 // Resolve the buy price for a stock: the split-adjusted midpoint of the first
 // trading day on or within five days after the score date. Returns
-// `{ price, dateUsed }`, or null when no market data falls in that window.
+// `{ price, dateUsed, reliable }`, or null when no market data falls in that
+// window. `reliable` mirrors `computeSplitAdjustment` so callers (and the
+// inclusion predicate, #288) can surface — rather than silently apply — a split
+// series that cannot be reconciled (issue #292).
 function getBuyPrice(marketData, scoreDate) {
     if (!marketData) return null;
+
+    const { reliable } = computeSplitAdjustment(marketData, scoreDate);
 
     for (let offset = 0; offset <= 5; offset++) {
         const candidateDate = new Date(scoreDate.getTime());
@@ -309,7 +403,7 @@ function getBuyPrice(marketData, scoreDate) {
                 marketData,
                 scoreDate,
             );
-            return { price: adjustedPrice, dateUsed: candidateDate };
+            return { price: adjustedPrice, dateUsed: candidateDate, reliable };
         }
     }
     return null;
@@ -742,6 +836,7 @@ globalThis.GRQProjection = {
     sumDividends,
     buildHybridProjectionData,
     formatCurrency,
+    computeSplitAdjustment,
     getSplitAdjustment,
     adjustHistoricalPriceToCurrent,
     getBuyPrice,

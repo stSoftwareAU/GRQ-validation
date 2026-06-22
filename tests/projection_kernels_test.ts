@@ -28,6 +28,10 @@ const g = globalThis as unknown as {
       marketData: MarketDataPoint[] | undefined,
       historicalDate: Date,
     ) => number;
+    computeSplitAdjustment: (
+      marketData: MarketDataPoint[] | undefined,
+      historicalDate: Date,
+    ) => { factor: number; reliable: boolean };
     adjustHistoricalPriceToCurrent: (
       price: number,
       marketData: MarketDataPoint[] | undefined,
@@ -36,7 +40,7 @@ const g = globalThis as unknown as {
     getBuyPrice: (
       marketData: MarketDataPoint[] | undefined,
       scoreDate: Date,
-    ) => { price: number; dateUsed: Date } | null;
+    ) => { price: number; dateUsed: Date; reliable: boolean } | null;
     currentPriceFromLatest: (marketData: MarketDataPoint[]) => number | null;
     calculateTargetPercentage: (
       buyPrice: number | null,
@@ -125,6 +129,127 @@ Deno.test("adjustHistoricalPriceToCurrent divides out the split", () => {
     GRQProjection.adjustHistoricalPriceToCurrent(30, md, new Date(2025, 0, 1)),
     15,
   );
+});
+
+// --- computeSplitAdjustment (issue #292) ------------------------------------
+
+Deno.test("computeSplitAdjustment: clean single split -> corrected, reliable", () => {
+  // A real 2:1 split halves the price, so the observed pre/post ratio matches
+  // the coefficient and the factor is trustworthy.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 50, 49, 2.0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.factor, 2.0);
+  assertEquals(r.reliable, true);
+});
+
+Deno.test("computeSplitAdjustment: no-split series -> factor 1.0, reliable", () => {
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 105, 103, 1.0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.factor, 1.0);
+  assertEquals(r.reliable, true);
+
+  // Missing data is also a reliable no-op.
+  const empty = GRQProjection.computeSplitAdjustment(undefined, new Date());
+  assertEquals(empty.factor, 1.0);
+  assertEquals(empty.reliable, true);
+});
+
+Deno.test("computeSplitAdjustment: duplicate split rows are de-duplicated", () => {
+  // The same 2:1 event recorded twice three days apart must apply once, not
+  // compound to 4.0.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 50, 49, 2.0),
+    makePoint(new Date(2025, 0, 13), 50, 49, 2.0), // duplicate within 5 days
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.factor, 2.0, "duplicate within the window applies once");
+  assertEquals(r.reliable, true);
+});
+
+Deno.test("computeSplitAdjustment: distinct splits beyond the window compound", () => {
+  // Two genuine events more than five days apart, each with a matching price
+  // drop, multiply to a 4.0 cumulative factor and stay reliable.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 50, 49, 2.0),
+    makePoint(new Date(2025, 1, 10), 25, 24.5, 2.0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.factor, 4.0);
+  assertEquals(r.reliable, true);
+});
+
+Deno.test("computeSplitAdjustment: implausible coefficient -> unreliable", () => {
+  // A 50:1 coefficient is above the plausible 10:1 ceiling.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 2, 1.9, 50.0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.reliable, false);
+});
+
+Deno.test("computeSplitAdjustment: price-ratio mismatch -> unreliable", () => {
+  // Coefficient claims 10:1 but the price barely moved: the cross-check fails,
+  // mirroring the KLAC distortion (current price never split).
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 99, 97, 10.0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.reliable, false);
+});
+
+Deno.test("computeSplitAdjustment: invalid coefficient treated as no split", () => {
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 100, 98, 0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.factor, 1.0);
+  assertEquals(r.reliable, true);
+});
+
+Deno.test("getSplitAdjustment suppresses an unreliable factor (no inflation)", () => {
+  // The unguarded multiply would return 10; the guarded helper refuses to apply
+  // a factor it cannot reconcile and returns 1.0 instead.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 99, 97, 10.0),
+  ];
+  assertEquals(GRQProjection.getSplitAdjustment(md, new Date(2025, 0, 1)), 1.0);
+});
+
+Deno.test("getBuyPrice surfaces the reliability flag", () => {
+  const reliableData = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 50, 49, 2.0),
+  ];
+  const reliable = GRQProjection.getBuyPrice(
+    reliableData,
+    new Date(2025, 0, 1),
+  );
+  assert(reliable !== null);
+  assertEquals(reliable!.reliable, true);
+  // 99 midpoint / 2.0 split = 49.5.
+  assertEquals(reliable!.price, 49.5);
+
+  const distorted = [
+    makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
+    makePoint(new Date(2025, 0, 10), 99, 97, 10.0),
+  ];
+  const flagged = GRQProjection.getBuyPrice(distorted, new Date(2025, 0, 1));
+  assert(flagged !== null);
+  assertEquals(flagged!.reliable, false);
+  // Unreliable -> factor suppressed to 1.0, so the buy price is not over-divided.
+  assertEquals(flagged!.price, 99);
 });
 
 // --- getBuyPrice ------------------------------------------------------------
