@@ -102,6 +102,109 @@ Deno.test("computeJudgement - pending and early-stage reporting", async (t) => {
 });
 
 Deno.test(
+  "computeJudgement - figures are labelled projected vs current (issue #298)",
+  async (t) => {
+    // The parenthetical figure must say what it is so a reader cannot mistake a
+    // projected 90-day return for the realised gain (or vice versa). Before day
+    // 90 a confident projection is labelled "proj." and a current-performance
+    // fallback is labelled "current".
+
+    await t.step("a confident projection is labelled proj.", () => {
+      const onTrack = GRQProjection.computeJudgement({
+        performance: 33.5,
+        daysElapsed: 60,
+        targetPercentage: 50,
+        projection: {
+          projected90DayPerformance: 48.0,
+          projectionMethod: "dampened_trend",
+          confidence: 0.6,
+        },
+      });
+      assert(onTrack.startsWith("On Track"), onTrack);
+      assert(onTrack.includes("(proj. 48.0%)"), onTrack);
+      assert(!onTrack.includes("current"), onTrack);
+
+      const declining = GRQProjection.computeJudgement({
+        performance: -8.0,
+        daysElapsed: 60,
+        targetPercentage: 20,
+        projection: {
+          projected90DayPerformance: -8.0,
+          projectionMethod: "dampened_trend",
+          confidence: 0.6,
+        },
+      });
+      assert(declining.includes("(proj. -8.0%)"), declining);
+
+      const belowTarget = GRQProjection.computeJudgement({
+        performance: 10,
+        daysElapsed: 30,
+        targetPercentage: 60,
+        projection: {
+          projected90DayPerformance: 45,
+          projectionMethod: "dampened_trend",
+          confidence: 0.5,
+        },
+      });
+      assert(belowTarget.startsWith("Below Target"), belowTarget);
+      assert(belowTarget.includes("(proj. 45.0%)"), belowTarget);
+    });
+
+    await t.step(
+      "a current-performance fallback is labelled current",
+      () => {
+        // Early days (< 30) always reports current performance.
+        const earlyUp = GRQProjection.computeJudgement({
+          performance: 3.2,
+          daysElapsed: 10,
+          targetPercentage: 20,
+          projection: null,
+        });
+        assert(earlyUp.includes("(current +3.2%)"), earlyUp);
+        assert(!earlyUp.includes("proj."), earlyUp);
+
+        const earlyDown = GRQProjection.computeJudgement({
+          performance: -2.5,
+          daysElapsed: 10,
+          targetPercentage: 20,
+          projection: null,
+        });
+        assert(earlyDown.includes("(current -2.5%)"), earlyDown);
+
+        // 30-90 days with no confident projection also reports current.
+        const fallback = GRQProjection.computeJudgement({
+          performance: 8.0,
+          daysElapsed: 30,
+          targetPercentage: 25,
+          projection: {
+            projected90DayPerformance: 20,
+            projectionMethod: "target_based",
+            confidence: 0.1, // below the 0.2 gate
+          },
+        });
+        assert(fallback.startsWith("Below Target"), fallback);
+        assert(fallback.includes("(current 8.0%)"), fallback);
+      },
+    );
+
+    await t.step(
+      "realised buckets from day 90 carry no parenthetical figure",
+      () => {
+        const hit = GRQProjection.computeJudgement({
+          performance: 33.5,
+          daysElapsed: 90,
+          targetPercentage: 20,
+          projection: null,
+        });
+        assertEquals(hit, "Hit Target");
+        assert(!hit.includes("proj."), hit);
+        assert(!hit.includes("current"), hit);
+      },
+    );
+  },
+);
+
+Deno.test(
   "computeJudgement - positive projection with a non-positive target (issue #297)",
   async (t) => {
     // Regression for the computeJudgement sign-flip. When a stock's model
