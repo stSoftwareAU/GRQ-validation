@@ -98,12 +98,7 @@
         .market-index-card .h5 {
             font-weight: 700;
         }
-        .performance-positive {
-            color: #047857 !important;
-        }
-        .performance-negative {
-            color: #c81e1e !important;
-        }
+        /* Performance colours live in styles.css (theme-aware, issue #281). */
     </style>
 
   </head>
@@ -315,6 +310,9 @@
 
     <!-- Benchmark-index data extraction (issue #279) — must load before app.js -->
     <script src="market_index.js"></script>
+
+    <!-- Stock deep-link (?stock=) selection helpers (issue #281) — before app.js -->
+    <script src="stock_selection.js"></script>
 
     <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
     <script src="dashboard_boot.js"></script>

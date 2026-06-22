@@ -313,30 +313,32 @@ function getFairValueRange(analysis) {
 
 // Inline CSS colour for a target-price cell, encoding the user-facing display
 // rules (issue #204). Pure given the three prices so the dashboard and tests
-// share one cascade:
-//   - any input null -> '' (default colour)
-//   - target below buy price -> red (always bad)
-//   - target above current AND in profit (current >= buy) -> green (good)
-//   - otherwise -> grey (neutral)
+// share one cascade. Returns a CSS *class* token (not an inline colour) so the
+// colour is theme-aware via the cascade — the dark theme remaps the same class
+// to a higher-contrast colour, meeting WCAG 2 AA in both themes (issue #281):
+//   - any input null -> '' (default colour, inherited)
+//   - target below buy price -> 'price-bad' (red, always bad)
+//   - target above current AND in profit (current >= buy) -> 'price-good' (green)
+//   - otherwise -> 'price-neutral' (grey)
 function getTargetPriceColor(targetPrice, currentPrice, buyPrice) {
     if (targetPrice === null || currentPrice === null || buyPrice === null) {
-        return ""; // Default color
+        return ""; // Default colour (inherits)
     }
 
     // Red (Danger): Target price is below buy price - this is always bad
     if (targetPrice < buyPrice) {
-        return "color: #dc3545; font-weight: bold;"; // Red - danger
+        return "price-bad";
     }
 
     // Green (Good): Target price is above current price AND we're in profit territory
     if (targetPrice > currentPrice && currentPrice >= buyPrice) {
-        return "color: #28a745; font-weight: bold;"; // Green - good
+        return "price-good";
     }
 
-    // Gray (Neutral): Target price is above buy price but we're either:
+    // Grey (Neutral): Target price is above buy price but we're either:
     // - Below current price (target achieved), or
     // - Current price is below buy price (we're in loss territory but target is still above buy price)
-    return "color: #6c757d; font-weight: bold;"; // Gray - neutral
+    return "price-neutral";
 }
 
 // Coefficient of determination (R²) for a linear fit y = slope·x + intercept over
