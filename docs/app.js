@@ -2290,6 +2290,14 @@ class GRQValidator {
 
                     // Calculate buy price using market data on score date
                     const scoreDate = this.getScoreDate(this.selectedFile);
+                    // Exclude unpriceable stocks entirely (issue #289): a stock
+                    // with no usable buy/current price must not drag the
+                    // portfolio series (and the shared trend line) down or
+                    // inject NaN from a null buy price. The remaining included
+                    // stocks are re-weighted by averaging over validStocks.
+                    if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                        return;
+                    }
                     const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
                     const buyPrice = buyPriceObj ? buyPriceObj.price : null;
                     const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
@@ -3265,6 +3273,12 @@ class GRQValidator {
         const scoreDate = this.getScoreDate(this.selectedFile);
 
         this.scoreData.forEach((stock) => {
+            // Only included (priceable) stocks contribute to the portfolio
+            // target so the displayed allocation reflects the re-weighted
+            // remainder (issue #289).
+            if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                return;
+            }
             if (stock.target !== null && !isNaN(stock.target)) {
                 // Use centralized method to calculate target percentage
                 const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
@@ -3278,6 +3292,22 @@ class GRQValidator {
         return validStocks > 0 ? totalTarget / validStocks : 20.0;
     }
 
+    // Whether a stock counts towards portfolio aggregates (issue #289): it must
+    // have BOTH a usable buy price (on the score date) AND a usable current
+    // price (latest market data). Delegates to the shared inclusion predicate
+    // in projection.js so the dashboard, the Rust backend and the shared
+    // helpers all agree on the rule. Excluded stocks (delisted, merged for
+    // cash, renamed) are dropped entirely, re-weighting the portfolio equally
+    // over the remaining included stocks.
+    isStockPriceable(stockSymbol, scoreDate) {
+        const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
+        const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+        const currentPrice = GRQProjection.currentPriceFromLatest(
+            this.marketData[stockSymbol],
+        );
+        return GRQProjection.isStockIncluded(buyPrice, currentPrice);
+    }
+
     calculatePortfolioPerformance90Day() {
         const scoreDate = this.getScoreDate(this.selectedFile);
         const ninetyDayDate = new Date(
@@ -3288,6 +3318,12 @@ class GRQValidator {
         let validStocks = 0;
 
         this.scoreData.forEach((stock) => {
+            // Exclude unpriceable stocks from the totals row (issue #289); the
+            // remaining included stocks are re-weighted by averaging over
+            // validStocks only.
+            if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                return;
+            }
             const marketData = this.marketData[stock.stock];
             if (marketData) {
                 // Find the price at 90 days (or closest available date)
@@ -3347,6 +3383,12 @@ class GRQValidator {
             let validStocks = 0;
 
             this.scoreData.forEach((stock) => {
+                // Mirror the exclusion applied in calculatePortfolioTargetPercentage
+                // so the popover's per-stock list and count reflect only the
+                // included (priceable) stocks (issue #289).
+                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                    return;
+                }
                 if (stock.target !== null && !isNaN(stock.target)) {
                     const buyPrice = this.getBuyPrice(
                         stock.stock,
