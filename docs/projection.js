@@ -103,6 +103,55 @@ function calculatePerformanceReturn(buyPrice, currentPrice, totalDividends) {
     return priceReturn + dividendReturn;
 }
 
+// Single source of truth for the "is this stock included?" rule (issue #288),
+// mirroring the Rust backend's `is_priceable` predicate (src/utils.rs). A stock
+// counts towards portfolio performance ONLY when it has BOTH a usable buy price
+// AND a usable current price — both present and strictly greater than 0. If
+// either is missing/non-positive (delisted, merged for cash, renamed), the
+// stock is excluded entirely from all portfolio calculations. The numeric guard
+// rejects null/undefined/NaN and string inputs so only real positive numbers
+// count as usable.
+function isStockIncluded(buyPrice, currentPrice) {
+    const usable = (price) => typeof price === "number" && price > 0;
+    return usable(buyPrice) && usable(currentPrice);
+}
+
+// Equal-weight portfolio performance over ONLY the included stocks (issue #288).
+// Each stock object provides `buyPrice`, `currentPrice` and optional
+// `totalDividends`. Excluded stocks (per isStockIncluded) are dropped entirely,
+// so excluding one redistributes weight equally over the remainder — e.g. two
+// of three included stocks are weighted 1/2 each, not 1/3. Returns the mean of
+// the included total returns, or null when no stock is included (matching the
+// dashboard's guard before reporting a portfolio figure). Mirrors the backend's
+// equal-weight average of `total_return_percent` over priceable stocks.
+function calculateIncludedPortfolioPerformance(stocks) {
+    if (!Array.isArray(stocks)) {
+        return null;
+    }
+    const includedReturns = [];
+    for (const stock of stocks) {
+        const buyPrice = stock && stock.buyPrice;
+        const currentPrice = stock && stock.currentPrice;
+        if (!isStockIncluded(buyPrice, currentPrice)) {
+            continue;
+        }
+        const totalReturn = calculatePerformanceReturn(
+            buyPrice,
+            currentPrice,
+            stock.totalDividends,
+        );
+        if (totalReturn === null) {
+            continue;
+        }
+        includedReturns.push(totalReturn);
+    }
+    if (includedReturns.length === 0) {
+        return null;
+    }
+    const sum = includedReturns.reduce((total, value) => total + value, 0);
+    return sum / includedReturns.length;
+}
+
 // Dividends whose ex-dividend date falls on or before the 90-day validation
 // window measured from the score date. Pure given the dividend list and score
 // date; the dashboard's GRQValidator looks the list up per stock and delegates
@@ -757,6 +806,8 @@ globalThis.GRQProjection = {
     selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,
+    isStockIncluded,
+    calculateIncludedPortfolioPerformance,
     filterDividendsWithin90Days,
     sumDividends,
     buildHybridProjectionData,
