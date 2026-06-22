@@ -884,22 +884,19 @@ pub fn calculate_portfolio_performance(
         // Use the full ticker (e.g., "NYSE:SEM") to match CSV data
         let full_ticker = &record.stock;
 
-        // Get the buy price (first day close) from CSV data, and the date it
-        // came from (needed to know which splits fall inside the window).
-        let (buy_price, buy_date) = if let Some(first_day_data) = market_data_csv.get(full_ticker) {
+        // Get the buy price (first day close) from CSV data.
+        let buy_price = if let Some(first_day_data) = market_data_csv.get(full_ticker) {
             if let Some(first_day) = first_day_data.get(score_file_date) {
-                (*first_day, score_date)
+                *first_day
             } else {
                 // Find the next available trading day
                 let mut next_trading_day_price = 0.0;
-                let mut next_trading_day_date = score_date;
-                let mut found: Option<NaiveDate> = None;
+                let mut next_trading_day_date: Option<NaiveDate> = None;
 
                 for (date_str, price) in first_day_data {
                     if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-                        if date >= score_date && found.is_none_or(|d| date < d) {
-                            found = Some(date);
-                            next_trading_day_date = date;
+                        if date >= score_date && next_trading_day_date.is_none_or(|d| date < d) {
+                            next_trading_day_date = Some(date);
                             next_trading_day_price = *price;
                         }
                     }
@@ -957,12 +954,11 @@ pub fn calculate_portfolio_performance(
                     .unwrap_or(0.0);
 
             // Calculate total return (price + dividends) on the same basis.
-            let total_return_percent =
-                gain_loss_percent + (dividends_total / adjusted_buy_price * 100.0);
+            let total_return_percent = gain_loss_percent + (dividends_total / buy_price * 100.0);
 
             individual_performances.push(StockPerformance {
                 ticker: record.stock.clone(),
-                buy_price: adjusted_buy_price,
+                buy_price,
                 target_price: record.target,
                 current_price,
                 gain_loss_percent,
