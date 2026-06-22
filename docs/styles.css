@@ -12,6 +12,19 @@
   --dark-color: #343a40;
 }
 
+/* App-wide content width (issue #382, sub-issue of #337).
+ *
+ * The dashboard uses Bootstrap's full-bleed `.container-fluid`. On genuinely
+ * wide monitors that stretches text and tables edge-to-edge, hurting
+ * readability. Cap the content at a comfortable max-width and centre it so the
+ * reclaimed space is balanced on both sides. The cap only binds above ~1600px,
+ * so 1440px-class desktops, tablets and phones are left fluid and unchanged. */
+.container-fluid {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* Header gradient - fix the white on white issue */
 .header-gradient {
   background: linear-gradient(
@@ -284,6 +297,21 @@
   margin-bottom: 0;
 }
 
+/* Keep the Buy Price value + its full 5-moon rating on a single line in the
+ * detail panel, even on a ~375px phone where the value shares a `col-6` with
+ * the rating (issue #383). `nowrap` stops the run breaking between the price
+ * and the moons; the compact `star-rating` glyphs (smaller font + tightened
+ * letter-spacing) keep `$XX.XX 🌕🌕🌕🌕🌕` within the half-row cell without
+ * clipping or overflow. Harmless at larger sizes where there is ample room. */
+#stockDetailCard .buy-price-cell {
+  white-space: nowrap;
+}
+
+#stockDetailCard .buy-price-cell .star-rating {
+  font-size: 0.85em;
+  letter-spacing: -0.08em;
+}
+
 #stockDetailCard h6 {
   font-size: 0.75rem;
   font-weight: 600;
@@ -486,12 +514,24 @@
 /* Ensure proper spacing on mobile (issue #316: tighten section/card gaps and
    the outer body padding so data gets more room on phones). */
 @media (max-width: 768px) {
+  /* Trim the outer container-fluid side padding so it stops stacking with the
+     row gutter and card-body padding into a double-wide margin (issue #382). */
+  .container-fluid {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
   .row {
     margin-left: -0.375rem;
     margin-right: -0.375rem;
   }
 
+  /* Issue #382: `.col-12` (the outer page wrapper, docs/index.html:108) was
+     missed by #316, so it kept Bootstrap's full 0.75rem and still doubled the
+     margin. Tighten it alongside the inner columns so its padding cancels the
+     -0.375rem row gutter and content aligns with the container edge. */
   .col,
+  .col-12,
   .col-md-6,
   .col-lg-4 {
     padding-left: 0.375rem;

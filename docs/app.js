@@ -2608,14 +2608,14 @@ class GRQValidator {
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
-                    <div class="col-6">
+                    <div class="col-6 buy-price-cell">
                         <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}"
                             data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
                             data-bs-title="Buy Price - ${safeStock}"
                             data-field="buy-price"
                             data-stock="${safeStock}"
                         >${this.formatCurrency(buyPrice)}</span>
-                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
+                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value star-rating" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
                     </div>
                   </div>
                   <div class="row mb-2">
