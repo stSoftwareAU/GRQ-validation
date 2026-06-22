@@ -1,10 +1,15 @@
 name: CI/CD Pipeline
 
+# Run the Rust gate on `main` and on milestone integration branches
+# (Issue #342). PRs whose base is a `milestone/**` branch must run the same
+# fmt/clippy/check/test gate as `main`; previously they bypassed it because the
+# triggers listed only `main`. `deploy-pages` stays main-only via its own
+# `github.ref` guard below, so milestone PRs never publish Pages.
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "milestone/**" ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, "milestone/**" ]
 
 env:
   CARGO_TERM_COLOR: always

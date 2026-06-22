@@ -175,7 +175,11 @@ dependency hygiene.
 ### Workflows
 
 1. **CI** (`ci.yml`) — main continuous integration: build, test, formatting,
-   linting, and artifact upload.
+   linting, and artifact upload. Runs on pushes and pull requests to `main`
+   and to `milestone/**` integration branches, so the Rust quality gate
+   (`cargo fmt`/`clippy`/`check`/`test`) also guards milestone PRs. The
+   `deploy-pages` job stays `main`-only, so milestone branches never publish
+   the GitHub Pages dashboard.
 2. **Cargo Audit** (`cargo-audit.yml`) — runs `cargo audit` on every pull
    request and on a weekly schedule to catch newly disclosed advisories.
 3. **Deno Outdated** (`deno-outdated.yml`) — checks for outdated JSR/npm

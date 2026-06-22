@@ -36,12 +36,20 @@ interface Relaxation {
   scope?: string;
 }
 
+interface MilestoneRuleset {
+  branch_pattern: string;
+  required_status_checks: string[];
+  require_branches_up_to_date: boolean;
+  enforcement: string;
+}
+
 interface Descriptor {
   default_branch: string;
   intended_controls: Record<string, boolean>;
   required_approving_review_count: number;
   enforcement: string;
   accepted_relaxations: Relaxation[];
+  milestone_ruleset: MilestoneRuleset;
 }
 
 async function loadDescriptor(): Promise<Descriptor> {
@@ -131,6 +139,48 @@ Deno.test("every relaxation references a declared control", async () => {
       `relaxation control "${relaxation.control}" must match a key in intended_controls`,
     );
   }
+});
+
+// Milestone integration branches require the Rust gate (Issue #342). Like the
+// `main` controls above, the milestone ruleset is a repository setting applied
+// out-of-band by an admin; this descriptor records the intended posture so the
+// gap is documented rather than undetected.
+Deno.test("descriptor declares the milestone ruleset posture", async () => {
+  const descriptor = await loadDescriptor();
+  const ruleset = descriptor.milestone_ruleset;
+  assert(ruleset, "descriptor must declare a milestone_ruleset block");
+  assertEquals(
+    ruleset.branch_pattern,
+    "milestone/**",
+    "milestone ruleset must target the `milestone/**` pattern",
+  );
+});
+
+Deno.test("milestone ruleset requires the Rust status check", async () => {
+  const descriptor = await loadDescriptor();
+  const checks = descriptor.milestone_ruleset.required_status_checks;
+  assert(
+    Array.isArray(checks) && checks.includes("Test and Quality Checks"),
+    "milestone ruleset must require the `Test and Quality Checks` status check",
+  );
+});
+
+Deno.test("milestone ruleset requires up-to-date branches", async () => {
+  const descriptor = await loadDescriptor();
+  assertEquals(
+    descriptor.milestone_ruleset.require_branches_up_to_date,
+    true,
+    "milestone ruleset must require branches to be up to date before merging",
+  );
+});
+
+Deno.test("milestone ruleset records how it is enforced", async () => {
+  const descriptor = await loadDescriptor();
+  assert(
+    typeof descriptor.milestone_ruleset.enforcement === "string" &&
+      descriptor.milestone_ruleset.enforcement.trim().length > 0,
+    "milestone ruleset must record a non-empty enforcement note",
+  );
 });
 
 Deno.test("the direct-push relaxation covers the automated score committer", async () => {

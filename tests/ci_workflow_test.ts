@@ -138,6 +138,54 @@ Deno.test("CI workflow declares a top-level concurrency group", async () => {
   );
 });
 
+// Milestone integration branches must run the Rust gate (Issue #342). PRs
+// whose base is a `milestone/**` branch previously bypassed the gate because
+// the workflow triggered only on `main`. The triggers must list both `main`
+// and `milestone/**` for push and pull_request so the test job (cargo
+// fmt/clippy/check/test) runs on milestone PRs too.
+Deno.test("CI workflow triggers on push to main and milestone branches", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const on = doc.on as { push?: { branches?: string[] } };
+  const branches = on.push?.branches ?? [];
+  assert(branches.includes("main"), "push trigger must keep `main`");
+  assert(
+    branches.includes("milestone/**"),
+    "push trigger must include `milestone/**`",
+  );
+});
+
+Deno.test("CI workflow triggers on pull_request to main and milestone branches", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const on = doc.on as { pull_request?: { branches?: string[] } };
+  const branches = on.pull_request?.branches ?? [];
+  assert(branches.includes("main"), "pull_request trigger must keep `main`");
+  assert(
+    branches.includes("milestone/**"),
+    "pull_request trigger must include `milestone/**`",
+  );
+});
+
+// No regression to Pages: deploy-pages must still run only on `main` so
+// milestone PRs never publish the site (Issue #342 acceptance criterion).
+Deno.test("deploy-pages stays main-only and is not widened to milestone branches", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<string, Record<string, unknown>>;
+  const deploy = jobs["deploy-pages"];
+  assert(deploy, "deploy-pages job must exist");
+  const guard = String(deploy.if ?? "");
+  assert(
+    guard.includes("github.ref == 'refs/heads/main'"),
+    "deploy-pages must remain guarded to refs/heads/main",
+  );
+  assert(
+    !guard.includes("milestone"),
+    "deploy-pages must not be widened to milestone branches",
+  );
+});
+
 // Multi-line bash run: blocks must fail fast (Issue #73). Without
 // `set -euo pipefail` an intermediate command that fails (or an unset
 // variable) is masked by the success of the final command, so the step
