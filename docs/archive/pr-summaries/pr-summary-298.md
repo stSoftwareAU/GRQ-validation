@@ -21,7 +21,7 @@ mislabel. Because both the status column and the detail popover render the same
 `judgement` string, the labelling is automatically consistent across the two.
 
 `GRQValidator.getJudgementClass` (`docs/app.js`) coloured "Early Days" badges by
-matching the old `(+`/`(-` prefix; the new `current ` qualifier moved the sign,
+matching the old `(+`/`(-` prefix; the new `current` qualifier moved the sign,
 so the heuristic now matches on the sign character itself — colours are
 preserved (green for a positive return, red for a negative one).
 
