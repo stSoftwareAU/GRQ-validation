@@ -3059,10 +3059,13 @@ class GRQValidator {
         } else if (judgement.startsWith("Declining") || judgement.startsWith("Missed Target")) {
             return "judgement-miss";
         } else if (judgement.startsWith("Early Days")) {
-            // Check if the performance is positive or negative
-            if (judgement.includes("(-")) {
+            // Colour by the sign of the current return embedded in the label
+            // (e.g. "Early Days (current +3.2%)" / "(current -2.5%)"). The label
+            // gained a "current " qualifier in issue #298, so match on the sign
+            // rather than the old "(+"/"(-" prefix.
+            if (judgement.includes("-")) {
                 return "judgement-miss"; // Red for negative performance
-            } else if (judgement.includes("(+")) {
+            } else if (judgement.includes("+")) {
                 return "judgement-hit"; // Green for positive performance
             } else {
                 return "bg-info"; // Blue for neutral/unknown

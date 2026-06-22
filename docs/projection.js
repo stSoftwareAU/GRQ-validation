@@ -636,11 +636,13 @@ function computeJudgement(
     if (daysElapsed < 90) {
         if (projection && projection.confidence > 0.2) {
             const predicted = projection.projected90DayPerformance;
+            // The parenthetical is the projected 90-day return: label it "proj."
+            // so it cannot be read as the realised gain (issue #298).
             // Judge by the sign of the predicted return first: only a negative
             // projection is "Declining". A positive projection must never read
             // as declining (issue #297).
             if (predicted < 0) {
-                return `Declining (${predicted.toFixed(1)}%)`;
+                return `Declining (proj. ${predicted.toFixed(1)}%)`;
             }
             // predicted >= 0 here. Guard the ratio against a non-positive
             // target: when the model 90-Day Target price sits below the buy
@@ -648,31 +650,33 @@ function computeJudgement(
             // would flip a healthy positive projection's sign and mislabel it
             // as "Declining". Fall back to the sign of the projection instead.
             if (target <= 0) {
-                return `On Track (${predicted.toFixed(1)}%)`;
+                return `On Track (proj. ${predicted.toFixed(1)}%)`;
             }
             const pctOfTarget = predicted / target;
             if (pctOfTarget >= 0.95) {
-                return `On Track (${predicted.toFixed(1)}%)`;
+                return `On Track (proj. ${predicted.toFixed(1)}%)`;
             }
             // A positive projection short of target is below target, not
             // declining.
-            return `Below Target (${predicted.toFixed(1)}%)`;
+            return `Below Target (proj. ${predicted.toFixed(1)}%)`;
         }
 
         // Not enough data for a reliable projection: judge current performance.
+        // The parenthetical is the return so far, not a projection: label it
+        // "current" so the two figures cannot be confused (issue #298).
         const threshold = target * 0.8;
         if (daysElapsed < 30) {
             return performance > 0
-                ? `Early Days (+${performance.toFixed(1)}%)`
-                : `Early Days (${performance.toFixed(1)}%)`;
+                ? `Early Days (current +${performance.toFixed(1)}%)`
+                : `Early Days (current ${performance.toFixed(1)}%)`;
         }
         // 30-60 and 60+ days share the same thresholds.
         if (performance >= threshold) {
-            return `On Track (${performance.toFixed(1)}%)`;
+            return `On Track (current ${performance.toFixed(1)}%)`;
         } else if (performance > 0) {
-            return `Below Target (${performance.toFixed(1)}%)`;
+            return `Below Target (current ${performance.toFixed(1)}%)`;
         }
-        return `Declining (${performance.toFixed(1)}%)`;
+        return `Declining (current ${performance.toFixed(1)}%)`;
     }
 
     // 90 days or more elapsed: report the realised outcome.
