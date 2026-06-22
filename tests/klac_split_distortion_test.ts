@@ -1,26 +1,28 @@
-// KLAC split-distortion reproduction (issue #291, parent #272).
+// KLAC split-distortion regression (issues #291 + #292, parent #272).
 //
-// This is the investigation/spike's deterministic, regression-ready proof. It
-// loads the FROZEN fixtures under tests/fixtures/ and runs the REAL shared
+// This loads the FROZEN fixtures under tests/fixtures/ and runs the REAL shared
 // kernels in docs/projection.js (getBuyPrice, getSplitAdjustment,
-// currentPriceFromLatest, calculatePerformanceReturn) — the same code the
-// dashboard's GRQValidator uses — to pin the root cause with exact numbers:
+// computeSplitAdjustment, currentPriceFromLatest, calculatePerformanceReturn) —
+// the same code the dashboard's GRQValidator uses.
 //
-//   * getSplitAdjustment multiplies EVERY split_coefficient > 1.0 recorded after
-//     the buy date with no de-duplication, no plausibility bound, and no
-//     reconciliation against the observed buy/current price ratio.
-//   * A split applied to the historical buy price while the latest price has NOT
-//     been correspondingly split-adjusted over-divides the buy price and inflates
-//     the % return (klac_split_distorted.csv -> ~+1302.5%).
-//   * Once the same 10:1 split reconciles on BOTH sides the figure collapses to
-//     the correct ~+74% (klac_split_reconciled.csv).
-//   * A duplicate split row (the literal no-de-dup defect) compounds the factor
-//     to 100 and inflates the figure even further (~+1640%).
+// Issue #291 (the spike) pinned the root cause from these fixtures: the old
+// getSplitAdjustment multiplied EVERY split_coefficient > 1.0 with no de-dup,
+// plausibility bound, or price-ratio reconciliation, inflating KLAC to
+// ~+1302.5% (distorted) and ~+1640% (duplicate row).
 //
-// No production code changes are made in this issue; the follow-up projection.js
-// helper and backend guard sub-issues of #272 consume these fixtures + the
-// thresholds documented in docs/fixes/klac-split-distortion-investigation.md.
-import { assertAlmostEquals, assertEquals, assertExists } from "@std/assert";
+// Issue #292 fixes that root cause via computeSplitAdjustment (correct-or-flag).
+// Business-logic change documented here: the two tests that previously asserted
+// the *defective* numbers (distorted return ~+1302.5%, duplicate factor 100)
+// now assert the *corrected* behaviour — the distorted series is flagged
+// `reliable: false` and no longer inflates, and the duplicate row de-duplicates
+// to a factor of 10. The reconciled (+74%) and clean (+15%) controls are
+// unchanged. Thresholds: docs/fixes/klac-split-distortion-investigation.md.
+import {
+  assert,
+  assertAlmostEquals,
+  assertEquals,
+  assertExists,
+} from "@std/assert";
 import { fromFileUrl } from "@std/path";
 import "../docs/projection.js";
 
@@ -38,11 +40,15 @@ const g = globalThis as unknown as {
     getBuyPrice: (
       marketData: MarketDataPoint[] | undefined,
       scoreDate: Date,
-    ) => { price: number; dateUsed: Date } | null;
+    ) => { price: number; dateUsed: Date; reliable: boolean } | null;
     getSplitAdjustment: (
       marketData: MarketDataPoint[] | undefined,
       historicalDate: Date,
     ) => number;
+    computeSplitAdjustment: (
+      marketData: MarketDataPoint[] | undefined,
+      historicalDate: Date,
+    ) => { factor: number; reliable: boolean };
     currentPriceFromLatest: (
       marketData: MarketDataPoint[] | undefined,
     ) => number | null;
@@ -101,23 +107,38 @@ function priceReturn(
   };
 }
 
-Deno.test("KLAC split distortion - inflated return reproduced from fixture", () => {
+Deno.test("KLAC split distortion - corrected: flagged unreliable, no inflation (#292)", () => {
+  // BEFORE #292 this fixture inflated to ~+1302.5% (factor 10 applied while the
+  // latest price was still pre-split). AFTER #292 computeSplitAdjustment's
+  // price-ratio cross-check fails (the price never dropped 10-fold), so the
+  // series is flagged unreliable and the factor is NOT applied.
   const data = loadFixture("klac_split_distorted.csv");
-  const r = priceReturn(data, SCORE_DATE);
 
-  // Single 10:1 coefficient recorded after the buy date.
-  assertEquals(r.factor, 10, "cumulative split factor is 10");
-  // Raw buy midpoint (1495 + 1454) / 2 = 1474.50, divided by the 10:1 factor.
-  assertAlmostEquals(
-    r.buyPrice,
-    147.45,
-    1e-9,
-    "buy price over-divided to 147.45",
+  const split = GRQProjection.computeSplitAdjustment(data, SCORE_DATE);
+  // The suspect cumulative factor is still surfaced for diagnostics...
+  assertEquals(split.factor, 10, "diagnostic cumulative factor is still 10");
+  // ...but the series cannot be reconciled, so it is flagged.
+  assertEquals(split.reliable, false, "distorted series flagged unreliable");
+
+  // getSplitAdjustment refuses to apply the unreliable factor (returns 1.0).
+  assertEquals(
+    GRQProjection.getSplitAdjustment(data, SCORE_DATE),
+    1.0,
+    "unreliable factor suppressed to 1.0",
   );
-  // Latest row is still PRE-split ((2095 + 2041) / 2 = 2068.00): the defect.
-  assertAlmostEquals(r.current, 2068.0, 1e-9, "current price still pre-split");
-  // The over-division inflates the return to the reported ~1302.5%.
-  assertAlmostEquals(r.ret, 1302.5, 0.05, "return inflated to ~+1302.5%");
+
+  const r = priceReturn(data, SCORE_DATE);
+  // getBuyPrice surfaces the same flag.
+  const buy = GRQProjection.getBuyPrice(data, SCORE_DATE);
+  assertExists(buy);
+  assertEquals(buy!.reliable, false, "buy price carries the reliability flag");
+  // Buy price is the raw midpoint (1495 + 1454) / 2 = 1474.50 — no over-division.
+  assertAlmostEquals(r.buyPrice, 1474.5, 1e-9, "buy price not over-divided");
+  // Crucially, the return is no longer the inflated ~+1302.5%.
+  assert(
+    r.ret < 300,
+    `corrected return must not inflate past +300% (was ${r.ret})`,
+  );
 });
 
 Deno.test("KLAC split reconciled - correct return when split applied both sides", () => {
@@ -153,24 +174,34 @@ Deno.test("Clean control - no split, no distortion, modest return", () => {
   assertAlmostEquals(r.ret, 15.0, 1e-9, "return is a plausible +15%");
 });
 
-Deno.test("Duplicate split coefficient compounds the factor (no de-dup defect)", () => {
+Deno.test("Duplicate split coefficient is de-duplicated, not compounded (#292)", () => {
   // Take the reconciled fixture and inject a DUPLICATE of the 2026-06-12 10:1
-  // split row, modelling the same split event recorded twice. getSplitAdjustment
-  // multiplies both, so the factor jumps 10 -> 100 with no de-duplication.
+  // split row, modelling the same split event recorded twice. BEFORE #292 this
+  // compounded the factor to 100 (buy price over-divided to 14.745). AFTER #292
+  // computeSplitAdjustment treats two split rows within five days as one event,
+  // so the factor stays 10 and the buy price is the correct 147.45.
   const data = loadFixture("klac_split_reconciled.csv");
   const splitRow = data.find((p) => p.splitCoefficient === 10.0);
   assertExists(splitRow, "fixture should contain the 10:1 split row");
   data.push({ ...splitRow! });
 
+  const split = GRQProjection.computeSplitAdjustment(data, SCORE_DATE);
+  assertEquals(
+    split.factor,
+    10,
+    "duplicate row de-duplicated to a factor of 10",
+  );
+  assertEquals(split.reliable, true, "de-duplicated series reconciles cleanly");
+
   const factor = GRQProjection.getSplitAdjustment(data, SCORE_DATE);
-  assertEquals(factor, 100, "duplicate split compounds the factor to 100");
+  assertEquals(factor, 10, "applied factor is the de-duplicated 10, not 100");
 
   const buy = GRQProjection.getBuyPrice(data, SCORE_DATE);
   assertExists(buy);
   assertAlmostEquals(
     buy!.price,
-    14.745,
+    147.45,
     1e-9,
-    "buy price over-divided to 14.745",
+    "buy price correctly split-adjusted to 147.45",
   );
 });

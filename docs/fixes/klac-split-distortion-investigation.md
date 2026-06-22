@@ -6,6 +6,16 @@ agreeing the "implausible split coefficient" thresholds. **No production code
 is changed by this issue** — the follow-up `projection.js` helper and backend
 guard consume the fixture and thresholds documented here.
 
+> **Update (issue #292):** the frontend helper is now implemented.
+> `computeSplitAdjustment(marketData, historicalDate) → { factor, reliable }`
+> in `docs/projection.js` applies the thresholds in §3 (de-dup within five
+> days, plausible single coefficient `≤ 10:1`, cumulative cap `≤ 50`, and the
+> ±15% price-ratio cross-check). `getSplitAdjustment`/`getBuyPrice` consume it
+> and refuse to apply an unreconcilable factor (return `1.0` / surface
+> `reliable: false`) instead of silently inflating the return. The inclusion
+> predicate (`isStockIncluded`, #288) consumes the same `reliable` flag, keeping
+> this the single source of split-truth.
+
 ## 1. Root cause confirmed (with numbers)
 
 KLAC's inflated "Capital" figure traces to the frontend split adjustment in
