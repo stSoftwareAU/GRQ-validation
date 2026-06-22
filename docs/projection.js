@@ -20,6 +20,69 @@ function setDateToMidnight(date) {
     return d;
 }
 
+// Choose the default score file for the dashboard (issue #275).
+//
+// By default we select the nearest available score date ON OR BEFORE 90 days
+// ago (the latest scoreDate <= today - 90 days). This deliberately avoids the
+// old absolute-nearest logic, where a score a few days MORE recent than the
+// 90-day target (e.g. 87 days ago) could wrongly win over the correct earlier
+// date (e.g. 90/93 days ago).
+//
+// Only when no score date is on/before the target do we fall back to the
+// earliest available date. `today` is passed in explicitly so the function is
+// pure and deterministic (and unit-testable without a browser). Returns the
+// chosen score object, or null when the list is empty/invalid.
+function selectDefaultScore(scores, today) {
+    if (!Array.isArray(scores) || scores.length === 0) {
+        return null;
+    }
+
+    // Parse a "YYYY-MM-DD" score date as LOCAL midnight. Using new Date(str)
+    // would parse it as UTC midnight, which skews the "on or before" calendar
+    // comparison against the local-time target by a day in some timezones.
+    const parseScoreDate = (value) => {
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+        if (match) {
+            return new Date(
+                Number(match[1]),
+                Number(match[2]) - 1,
+                Number(match[3]),
+            ).getTime();
+        }
+        // Fallback for any unexpected format: normalise to local midnight.
+        return setDateToMidnight(new Date(value)).getTime();
+    };
+
+    // Target = 90 days ago, normalised to local midnight for a date-only
+    // "on or before" comparison.
+    const target = setDateToMidnight(today);
+    target.setDate(target.getDate() - 90); // 90 days ago
+    const targetTime = target.getTime();
+
+    let selected = null;
+    let selectedTime = -Infinity;
+    let earliest = null;
+    let earliestTime = Infinity;
+
+    scores.forEach((score) => {
+        const scoreTime = parseScoreDate(score.date);
+
+        // Track the earliest date for the no-match fallback.
+        if (scoreTime < earliestTime) {
+            earliestTime = scoreTime;
+            earliest = score;
+        }
+
+        // Prefer the LATEST score date on or before the 90-day target.
+        if (scoreTime <= targetTime && scoreTime > selectedTime) {
+            selectedTime = scoreTime;
+            selected = score;
+        }
+    });
+
+    return selected !== null ? selected : earliest;
+}
+
 // Calendar days elapsed between a score date and a reference date (today).
 // `today` is passed in explicitly so the function is pure and deterministic.
 function getDaysElapsed(scoreDate, today) {
@@ -250,30 +313,32 @@ function getFairValueRange(analysis) {
 
 // Inline CSS colour for a target-price cell, encoding the user-facing display
 // rules (issue #204). Pure given the three prices so the dashboard and tests
-// share one cascade:
-//   - any input null -> '' (default colour)
-//   - target below buy price -> red (always bad)
-//   - target above current AND in profit (current >= buy) -> green (good)
-//   - otherwise -> grey (neutral)
+// share one cascade. Returns a CSS *class* token (not an inline colour) so the
+// colour is theme-aware via the cascade — the dark theme remaps the same class
+// to a higher-contrast colour, meeting WCAG 2 AA in both themes (issue #281):
+//   - any input null -> '' (default colour, inherited)
+//   - target below buy price -> 'price-bad' (red, always bad)
+//   - target above current AND in profit (current >= buy) -> 'price-good' (green)
+//   - otherwise -> 'price-neutral' (grey)
 function getTargetPriceColor(targetPrice, currentPrice, buyPrice) {
     if (targetPrice === null || currentPrice === null || buyPrice === null) {
-        return ""; // Default color
+        return ""; // Default colour (inherits)
     }
 
     // Red (Danger): Target price is below buy price - this is always bad
     if (targetPrice < buyPrice) {
-        return "color: #dc3545; font-weight: bold;"; // Red - danger
+        return "price-bad";
     }
 
     // Green (Good): Target price is above current price AND we're in profit territory
     if (targetPrice > currentPrice && currentPrice >= buyPrice) {
-        return "color: #28a745; font-weight: bold;"; // Green - good
+        return "price-good";
     }
 
-    // Gray (Neutral): Target price is above buy price but we're either:
+    // Grey (Neutral): Target price is above buy price but we're either:
     // - Below current price (target achieved), or
     // - Current price is below buy price (we're in loss territory but target is still above buy price)
-    return "color: #6c757d; font-weight: bold;"; // Gray - neutral
+    return "price-neutral";
 }
 
 // Coefficient of determination (R²) for a linear fit y = slope·x + intercept over
@@ -595,6 +660,7 @@ function buildIndexSeriesFromMap(priceMap, indexName, startDate, endDate) {
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
     setDateToMidnight,
+    selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,
     filterDividendsWithin90Days,

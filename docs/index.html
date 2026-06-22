@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.190">
+    <meta name="app-version" content="1.0.193">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -98,12 +98,7 @@
         .market-index-card .h5 {
             font-weight: 700;
         }
-        .performance-positive {
-            color: #047857 !important;
-        }
-        .performance-negative {
-            color: #c81e1e !important;
-        }
+        /* Performance colours live in styles.css (theme-aware, issue #281). */
     </style>
 
   </head>
@@ -205,7 +200,7 @@
                     <div class="row">
                       <div class="col-md-4">
                         <div class="market-index-card">
-                          <h6 class="text-primary mb-2">SP500 Performance</h6>
+                          <h6 id="sp500Title" class="mb-2">SP500 Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="sp500Performance" class="h5 mb-0">-</span>
                             <small id="sp500Details" class="text-muted">-</small>
@@ -214,7 +209,7 @@
                       </div>
                       <div class="col-md-4">
                         <div class="market-index-card">
-                          <h6 class="text-info mb-2">NASDAQ Performance</h6>
+                          <h6 id="nasdaqTitle" class="mb-2">NASDAQ Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="nasdaqPerformance" class="h5 mb-0">-</span>
                             <small id="nasdaqDetails" class="text-muted">-</small>
@@ -223,7 +218,7 @@
                       </div>
                       <div class="col-md-4">
                         <div class="market-index-card">
-                          <h6 class="text-success mb-2">Russell 2000 Performance</h6>
+                          <h6 id="russell2000Title" class="mb-2">Russell 2000 Performance</h6>
                           <div class="d-flex justify-content-between align-items-center">
                             <span id="russell2000Performance" class="h5 mb-0">-</span>
                             <small id="russell2000Details" class="text-muted">-</small>
@@ -231,15 +226,11 @@
                         </div>
                       </div>
                     </div>
-                    <div class="row mt-3">
-                      <div class="col-12">
-                        <div class="alert alert-info mb-0">
-                                                      <small>
-                              <i class="fas fa-info-circle me-1"></i>
-                              Market data is fetched from Yahoo Finance and shows performance from the score date to current date.
-                            </small>
-                        </div>
-                      </div>
+                    <div class="data-source-note text-muted text-end mt-2">
+                      <small>
+                        <i class="fas fa-info-circle me-1" aria-hidden="true"></i>
+                        Market data is fetched from Yahoo Finance and shows performance from the score date to current date.
+                      </small>
                     </div>
                   </div>
                 </div>
@@ -311,11 +302,23 @@
     <!-- Mobile colour-key entry builder (issue #244) — must load before app.js -->
     <script src="color_key.js"></script>
 
+    <!-- Market series title↔line colour pairing (issue #278) — before app.js -->
+    <script src="series_label_colour.js"></script>
+
+    <!-- Shared number-formatting helpers (issue #276) — must load before app.js -->
+    <script src="format.js"></script>
+
+    <!-- Benchmark-index data extraction (issue #279) — must load before app.js -->
+    <script src="market_index.js"></script>
+
+    <!-- Stock deep-link (?stock=) selection helpers (issue #281) — before app.js -->
+    <script src="stock_selection.js"></script>
+
     <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
     <script src="dashboard_boot.js"></script>
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.190"></script>
+    <script src="sw-register.js?v=1.0.193"></script>
   </body>
 </html>

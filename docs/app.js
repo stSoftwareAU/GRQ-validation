@@ -23,6 +23,19 @@ class GRQValidator {
         return GRQProjection.formatCurrency(value);
     }
 
+    // Format a market index level with thousands separators and consistent
+    // decimals (issue #276) via the shared pure module, so the browser and the
+    // Deno tests format identically.
+    formatIndexLevel(value) {
+        return GRQFormat.formatIndexLevel(value);
+    }
+
+    // Format a percentage with an explicit sign, thousands separators and
+    // consistent decimals (issue #276) via the shared pure module.
+    formatPercent(value, decimals = 2) {
+        return GRQFormat.formatPercent(value, decimals);
+    }
+
     // Centralized method to get Bootstrap breakpoint
     getBootstrapBreakpoint() {
         const width = window.innerWidth;
@@ -147,34 +160,27 @@ class GRQValidator {
                         this.selectedFile = matchingScore.file;
                         select.value = this.selectedFile;
                         await this.loadScoreFile();
+                        this.applyStockSelectionFromUrl();
                         return;
                     } else {
                         console.warn(`File parameter '${fileParam}' not found in available scores`);
                     }
                 }
                 
-                // Fallback: Find the score file closest to 90 days ago
-                const targetDate = new Date();
-                targetDate.setDate(targetDate.getDate() - 90); // 90 days ago
-                
-                let closestScore = indexData.scores[0]; // Default to first score
-                let smallestDifference = Infinity;
-                
-                indexData.scores.forEach((score) => {
-                    const scoreDate = new Date(score.date);
-                    const difference = Math.abs(scoreDate.getTime() - targetDate.getTime());
-                    
-                    if (difference < smallestDifference) {
-                        smallestDifference = difference;
-                        closestScore = score;
-                    }
-                });
-                
-                console.log(`Auto-selecting score file closest to 90 days ago: ${closestScore.date} (${closestScore.month} ${closestScore.day})`);
-                
+                // Fallback: select the nearest available score date ON OR
+                // BEFORE 90 days ago (issue #275). Delegates to the shared,
+                // unit-tested helper so the browser and Deno tests agree.
+                const closestScore = GRQProjection.selectDefaultScore(
+                    indexData.scores,
+                    new Date(),
+                );
+
+                console.log(`Auto-selecting score file on or before 90 days ago: ${closestScore.date} (${closestScore.month} ${closestScore.day})`);
+
                 this.selectedFile = closestScore.file;
                 select.value = this.selectedFile;
                 await this.loadScoreFile();
+                this.applyStockSelectionFromUrl();
             }
         } catch (error) {
             this.showError(
@@ -901,34 +907,16 @@ class GRQValidator {
 
 
     calculateMarketPerformance(indexData) {
-        if (!indexData || !indexData.initialPrice || !indexData.currentPrice) {
-            return null;
-        }
-
-        const performance = ((indexData.currentPrice - indexData.initialPrice) / indexData.initialPrice) * 100;
-        return {
-            performance: performance,
-            initialPrice: indexData.initialPrice,
-            currentPrice: indexData.currentPrice
-        };
+        // Delegate to the shared pure module (issue #279) so the browser and the
+        // Deno tests extract the benchmark figure identically.
+        return GRQMarketIndex.indexPerformance(indexData);
     }
 
     getMarketPerformanceData() {
-        const marketPerformance = {};
-        
-        if (this.marketIndexData) {
-            if (this.marketIndexData.sp500) {
-                marketPerformance.sp500 = this.calculateMarketPerformance(this.marketIndexData.sp500);
-            }
-            if (this.marketIndexData.nasdaq) {
-                marketPerformance.nasdaq = this.calculateMarketPerformance(this.marketIndexData.nasdaq);
-            }
-            if (this.marketIndexData.russell2000) {
-                marketPerformance.russell2000 = this.calculateMarketPerformance(this.marketIndexData.russell2000);
-            }
-        }
-
-        return marketPerformance;
+        // Benchmark figures come ONLY from the already-loaded local data
+        // (this.marketIndexData, i.e. docs/market-indices.json) — no live fetch.
+        // The same extraction feeds both the aggregate and single-stock views.
+        return GRQMarketIndex.marketPerformanceData(this.marketIndexData);
     }
 
     showMarketComparisonLoading() {
@@ -978,82 +966,55 @@ class GRQValidator {
             return;
         }
 
+        // Figures come ONLY from the locally-loaded data (this.marketIndexData),
+        // so this renders identically on the aggregate and single-stock views
+        // (issue #279). No live fetch; an absent index renders blank, not an error.
         const marketPerformance = this.getMarketPerformanceData();
         console.log('Market performance data:', marketPerformance);
-        
-        if (marketPerformance.sp500 || marketPerformance.nasdaq || marketPerformance.russell2000) {
-            console.log('Showing market comparison section');
-            marketComparison.style.display = 'block';
-            
-            // Update SP500
-            if (marketPerformance.sp500) {
-                console.log('Updating SP500 display:', marketPerformance.sp500);
-                const sp500Element = document.getElementById('sp500Performance');
-                const sp500DetailsElement = document.getElementById('sp500Details');
-                
-                if (sp500Element && sp500DetailsElement) {
-                    const performance = marketPerformance.sp500.performance;
-                    const sign = performance >= 0 ? '+' : '';
-                    const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-                    
-                    sp500Element.textContent = `${sign}${performance.toFixed(2)}%`;
-                    sp500Element.className = `h5 mb-0 ${performanceClass}`;
-                    
-                    sp500DetailsElement.textContent = 
-                        `${Math.round(marketPerformance.sp500.initialPrice)} → ${Math.round(marketPerformance.sp500.currentPrice)}`;
-                } else {
-                    console.log('SP500 display elements not found');
-                }
-            }
-            
-            // Update NASDAQ
-            if (marketPerformance.nasdaq) {
-                console.log('Updating NASDAQ display:', marketPerformance.nasdaq);
-                const nasdaqElement = document.getElementById('nasdaqPerformance');
-                const nasdaqDetailsElement = document.getElementById('nasdaqDetails');
-                
-                if (nasdaqElement && nasdaqDetailsElement) {
-                    const performance = marketPerformance.nasdaq.performance;
-                    const sign = performance >= 0 ? '+' : '';
-                    const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-                    
-                    nasdaqElement.textContent = `${sign}${performance.toFixed(2)}%`;
-                    nasdaqElement.className = `h5 mb-0 ${performanceClass}`;
-                    
-                    nasdaqDetailsElement.textContent = 
-                        `${Math.round(marketPerformance.nasdaq.initialPrice)} → ${Math.round(marketPerformance.nasdaq.currentPrice)}`;
-                            } else {
-                console.log('NASDAQ display elements not found');
-            }
+
+        const hasAnyIndex = GRQMarketIndex.BENCHMARK_INDICES.some(
+            ({ key }) => marketPerformance[key],
+        );
+        if (!hasAnyIndex) {
+            console.log('No market performance data available, hiding comparison section');
+            marketComparison.style.display = 'none';
+            return;
         }
-        
-        // Update Russell 2000
-        if (marketPerformance.russell2000) {
-            console.log('Updating Russell 2000 display:', marketPerformance.russell2000);
-            const russell2000Element = document.getElementById('russell2000Performance');
-            const russell2000DetailsElement = document.getElementById('russell2000Details');
-            
-            if (russell2000Element && russell2000DetailsElement) {
-                const performance = marketPerformance.russell2000.performance;
-                const sign = performance >= 0 ? '+' : '';
-                const performanceClass = performance >= 0 ? 'performance-positive' : 'performance-negative';
-                
-                russell2000Element.textContent = `${sign}${performance.toFixed(2)}%`;
-                russell2000Element.className = `h5 mb-0 ${performanceClass}`;
-                
-                russell2000DetailsElement.textContent = 
-                    `${Math.round(marketPerformance.russell2000.initialPrice)} → ${Math.round(marketPerformance.russell2000.currentPrice)}`;
+
+        marketComparison.style.display = 'block';
+
+        // Data-driven render so each index uses the same single source of truth.
+        const cells = {
+            sp500: { value: 'sp500Performance', details: 'sp500Details' },
+            nasdaq: { value: 'nasdaqPerformance', details: 'nasdaqDetails' },
+            russell2000: { value: 'russell2000Performance', details: 'russell2000Details' },
+        };
+        for (const { key, name } of GRQMarketIndex.BENCHMARK_INDICES) {
+            const ids = cells[key];
+            const valueElement = document.getElementById(ids.value);
+            const detailsElement = document.getElementById(ids.details);
+            if (!valueElement || !detailsElement) {
+                console.log(`${name} display elements not found`);
+                continue;
+            }
+
+            const perf = marketPerformance[key];
+            if (perf) {
+                const performanceClass = perf.performance >= 0
+                    ? 'performance-positive'
+                    : 'performance-negative';
+                valueElement.textContent = this.formatPercent(perf.performance);
+                valueElement.className = `h5 mb-0 ${performanceClass}`;
+                detailsElement.textContent =
+                    `${this.formatIndexLevel(perf.initialPrice)} → ${this.formatIndexLevel(perf.currentPrice)}`;
             } else {
-                console.log('Russell 2000 display elements not found');
+                // Missing value: render blank (never a fetch, never an error).
+                valueElement.textContent = '-';
+                valueElement.className = 'h5 mb-0 text-muted';
+                detailsElement.textContent = '-';
             }
-        } else {
-            console.log('No Russell 2000 performance data available for display');
         }
-    } else {
-        console.log('No market performance data available, hiding comparison section');
-        marketComparison.style.display = 'none';
     }
-}
 
     updateDisplay() {
         console.log('updateDisplay called');
@@ -1132,9 +1093,19 @@ class GRQValidator {
 
         this.updateChart();
         this.updateStockTable();
-        
-        // Show loading state for market comparison
-        this.showMarketComparisonLoading();
+
+        // Populate the benchmark index numbers from the already-loaded local
+        // data (this.marketIndexData, i.e. docs/market-indices.json). This runs
+        // for every view — including the single-stock view, which previously
+        // never repopulated and so showed no index numbers (issue #279). On the
+        // very first render the data is still loading asynchronously, so fall
+        // back to the loading state; it is repopulated when the load resolves.
+        // Never fetch live for these figures.
+        if (this.marketIndexData) {
+            this.updateMarketComparison();
+        } else {
+            this.showMarketComparisonLoading();
+        }
 
         // Show/hide back button based on view mode
         document.getElementById("backToAggregate").style.display =
@@ -1474,6 +1445,52 @@ class GRQValidator {
 
         // Populate the mobile colour key from the live datasets (issue #244).
         this.renderColorKey();
+
+        // Colour each market series' title to match its own chart line, from
+        // the same dataset borderColor the colour key reads (issue #278).
+        this.applyMarketTitleColours();
+    }
+
+    // Detect the active theme ("light" | "dark") the same way styles.css does:
+    // an explicit body class wins; otherwise follow the OS preference. Used to
+    // pick the AA-compliant title colour for the current background.
+    detectTheme() {
+        const body = document.body;
+        if (body && body.classList.contains("dark-mode-forced")) return "dark";
+        if (body && body.classList.contains("light-mode-forced")) return "light";
+        const prefersDark = typeof globalThis.matchMedia === "function" &&
+            globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
+        return prefersDark ? "dark" : "light";
+    }
+
+    // Paint each market index card title in its own chart line's colour, so the
+    // title/label always agrees with what is drawn (issue #278). The line colour
+    // is read from the live chart datasets — the single source of truth shared
+    // with the colour key — and adjusted to clear WCAG 2 AA contrast against the
+    // current theme's card background by GRQSeriesLabelColour. Works in both the
+    // aggregate and single-stock views; a series absent from the chart leaves
+    // its title at the default colour rather than blanking it.
+    applyMarketTitleColours() {
+        const helper = globalThis.GRQSeriesLabelColour;
+        if (!helper || !this.chart || !this.chart.data) return;
+
+        const datasets = this.chart.data.datasets;
+        const theme = this.detectTheme();
+        const titles = [
+            { id: "sp500Title", label: "SP500" },
+            { id: "nasdaqTitle", label: "NASDAQ" },
+            { id: "russell2000Title", label: "Russell 2000" },
+        ];
+
+        for (const { id, label } of titles) {
+            const element = document.getElementById(id);
+            if (!element) continue;
+            const colour = helper.seriesLabelColour(datasets, label, theme);
+            // Only recolour when the chart actually carries this series.
+            if (colour !== "") {
+                element.style.color = colour;
+            }
+        }
     }
 
     // Populate the mobile colour key (#chartColorKey) from the live chart
@@ -2537,12 +2554,11 @@ class GRQValidator {
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
                     <div class="col-6">
-                        <span class="clickable-value" 
-                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                            data-bs-title="Buy Price - ${safeStock}" 
-                            data-field="buy-price" 
+                        <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}"
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
+                            data-bs-title="Buy Price - ${safeStock}"
+                            data-field="buy-price"
                             data-stock="${safeStock}"
-                            style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
                         >${this.formatCurrency(buyPrice)}</span>
                         ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
                     </div>
@@ -2550,12 +2566,11 @@ class GRQValidator {
                   <div class="row mb-2">
                     <div class="col-6"><strong>90-Day Target:</strong></div>
                     <div class="col-6">
-                        <span class="clickable-value" 
-                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                            data-bs-title="90-Day Target - ${safeStock}" 
-                            data-field="target" 
+                        <span class="clickable-value ${target === null ? 'price-error' : this.getTargetPriceColor(target, currentPriceRaw, buyPrice)}"
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
+                            data-bs-title="90-Day Target - ${safeStock}"
+                            data-field="target"
                             data-stock="${safeStock}"
-                            style="${target === null ? 'color: #c00; font-weight: bold;' : this.getTargetPriceColor(target, currentPriceRaw, buyPrice)}"
                         >${this.formatCurrency(target)}</span>
                     </div>
                   </div>
@@ -2659,12 +2674,12 @@ class GRQValidator {
                             return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}">N/A</span>`;
                         }
                         if (fairValueRange.type === 'range') {
-                            const lowColor = this.getTargetPriceColor(fairValueRange.low, currentPriceRaw, buyPrice);
-                            const highColor = this.getTargetPriceColor(fairValueRange.high, currentPriceRaw, buyPrice);
-                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span style="${lowColor}">$${fairValueRange.low.toFixed(2)}</span>...<span style="${highColor}">$${fairValueRange.high.toFixed(2)}</span></span>`;
+                            const lowClass = this.getTargetPriceColor(fairValueRange.low, currentPriceRaw, buyPrice);
+                            const highClass = this.getTargetPriceColor(fairValueRange.high, currentPriceRaw, buyPrice);
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span class="${lowClass}">$${fairValueRange.low.toFixed(2)}</span>...<span class="${highClass}">$${fairValueRange.high.toFixed(2)}</span></span>`;
                         } else {
-                            const valueColor = this.getTargetPriceColor(fairValueRange.value, currentPriceRaw, buyPrice);
-                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span style="${valueColor}">$${fairValueRange.value.toFixed(2)}</span> (${fairValueRange.source})</span>`;
+                            const valueClass = this.getTargetPriceColor(fairValueRange.value, currentPriceRaw, buyPrice);
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span class="${valueClass}">$${fairValueRange.value.toFixed(2)}</span> (${fairValueRange.source})</span>`;
                         }
                     })()
                 }
@@ -2767,16 +2782,15 @@ class GRQValidator {
                 row.innerHTML = `
             <td class="clickable-stock" data-stock="${safeStock}">${safeStock}</td>
             <td>
-                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}" 
-                    data-field="buy-price" data-stock="${safeStock}" 
-                    style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
+                <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
+                    data-field="buy-price" data-stock="${safeStock}"
                 >${this.formatCurrency(buyPrice)}</span>
             </td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>
             </td>
             <td>
-            <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${safeStock}" data-field="target" data-stock="${safeStock}" style="${this.getTargetPriceColor(target, currentPrice, buyPrice)}">${this.formatCurrency(target)
+            <span class="clickable-value ${this.getTargetPriceColor(target, currentPrice, buyPrice)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${safeStock}" data-field="target" data-stock="${safeStock}">${this.formatCurrency(target)
                 }</span></td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
@@ -2968,7 +2982,9 @@ class GRQValidator {
             this.marketData[stockSymbol],
         );
         if (currentPrice === null) return "N/A";
-        return "$" + currentPrice.toFixed(2);
+        // Route through the shared currency formatter (issue #276) so large
+        // stock prices carry thousands separators and consistent decimals.
+        return this.formatCurrency(currentPrice);
     }
 
     calculateProgressVsCostOfCapital(stock, performance) {
@@ -3046,6 +3062,31 @@ class GRQValidator {
 
         // Show the back button
         document.getElementById("backToAggregate").style.display = "block";
+    }
+
+    // Deep-link straight into the single-stock detail view when the page is
+    // opened with `?stock=<symbol>` (issue #281). Resolves the requested symbol
+    // against the loaded score rows via the shared, unit-tested helper; an
+    // unknown or absent symbol leaves the aggregate view untouched.
+    applyStockSelectionFromUrl() {
+        const requested = globalThis.GRQStockSelection.stockFromSearch(
+            typeof location !== "undefined" ? location.search : "",
+        );
+        if (!requested) {
+            return;
+        }
+        const symbol = globalThis.GRQStockSelection.resolveStockSelection(
+            this.scoreData,
+            requested,
+        );
+        if (symbol) {
+            console.log(`Auto-selecting stock from URL parameter: ${symbol}`);
+            this.showStockDetails(symbol);
+        } else {
+            console.warn(
+                `Stock parameter '${requested}' not found in the loaded score file`,
+            );
+        }
     }
 
     showLoading() {
@@ -4081,6 +4122,26 @@ class GRQValidator {
 
 // Initialize the validator
 const validator = new GRQValidator();
+
+// Re-derive the market title colours when the theme changes so they stay
+// AA-contrast-compliant against the new background (issue #278). The chart is
+// not rebuilt on a theme switch, so without this the titles would keep the
+// other theme's colours. Handlers are attached via addEventListener (no inline
+// on* handlers, issue #268) and deferred so theme.js updates the <body> class
+// before we read it.
+function reapplyMarketTitleColours() {
+    setTimeout(() => validator.applyMarketTitleColours(), 0);
+}
+const themeToggle = document.getElementById("theme-toggle");
+if (themeToggle) {
+    themeToggle.addEventListener("click", reapplyMarketTitleColours);
+}
+if (typeof globalThis.matchMedia === "function") {
+    globalThis.matchMedia("(prefers-color-scheme: dark)").addEventListener(
+        "change",
+        reapplyMarketTitleColours,
+    );
+}
 
 // Re-evaluate the chart legend and the mobile colour key when the viewport
 // changes (window resize / orientation change). Crossing the isMobileDevice()
