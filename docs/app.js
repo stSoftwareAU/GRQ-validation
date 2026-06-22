@@ -160,6 +160,7 @@ class GRQValidator {
                         this.selectedFile = matchingScore.file;
                         select.value = this.selectedFile;
                         await this.loadScoreFile();
+                        this.applyStockSelectionFromUrl();
                         return;
                     } else {
                         console.warn(`File parameter '${fileParam}' not found in available scores`);
@@ -179,6 +180,7 @@ class GRQValidator {
                 this.selectedFile = closestScore.file;
                 select.value = this.selectedFile;
                 await this.loadScoreFile();
+                this.applyStockSelectionFromUrl();
             }
         } catch (error) {
             this.showError(
@@ -2552,12 +2554,11 @@ class GRQValidator {
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
                     <div class="col-6">
-                        <span class="clickable-value" 
-                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                            data-bs-title="Buy Price - ${safeStock}" 
-                            data-field="buy-price" 
+                        <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}"
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
+                            data-bs-title="Buy Price - ${safeStock}"
+                            data-field="buy-price"
                             data-stock="${safeStock}"
-                            style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
                         >${this.formatCurrency(buyPrice)}</span>
                         ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
                     </div>
@@ -2565,12 +2566,11 @@ class GRQValidator {
                   <div class="row mb-2">
                     <div class="col-6"><strong>90-Day Target:</strong></div>
                     <div class="col-6">
-                        <span class="clickable-value" 
-                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                            data-bs-title="90-Day Target - ${safeStock}" 
-                            data-field="target" 
+                        <span class="clickable-value ${target === null ? 'price-error' : this.getTargetPriceColor(target, currentPriceRaw, buyPrice)}"
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
+                            data-bs-title="90-Day Target - ${safeStock}"
+                            data-field="target"
                             data-stock="${safeStock}"
-                            style="${target === null ? 'color: #c00; font-weight: bold;' : this.getTargetPriceColor(target, currentPriceRaw, buyPrice)}"
                         >${this.formatCurrency(target)}</span>
                     </div>
                   </div>
@@ -2674,12 +2674,12 @@ class GRQValidator {
                             return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}">N/A</span>`;
                         }
                         if (fairValueRange.type === 'range') {
-                            const lowColor = this.getTargetPriceColor(fairValueRange.low, currentPriceRaw, buyPrice);
-                            const highColor = this.getTargetPriceColor(fairValueRange.high, currentPriceRaw, buyPrice);
-                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span style="${lowColor}">$${fairValueRange.low.toFixed(2)}</span>...<span style="${highColor}">$${fairValueRange.high.toFixed(2)}</span></span>`;
+                            const lowClass = this.getTargetPriceColor(fairValueRange.low, currentPriceRaw, buyPrice);
+                            const highClass = this.getTargetPriceColor(fairValueRange.high, currentPriceRaw, buyPrice);
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span class="${lowClass}">$${fairValueRange.low.toFixed(2)}</span>...<span class="${highClass}">$${fairValueRange.high.toFixed(2)}</span></span>`;
                         } else {
-                            const valueColor = this.getTargetPriceColor(fairValueRange.value, currentPriceRaw, buyPrice);
-                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span style="${valueColor}">$${fairValueRange.value.toFixed(2)}</span> (${fairValueRange.source})</span>`;
+                            const valueClass = this.getTargetPriceColor(fairValueRange.value, currentPriceRaw, buyPrice);
+                            return `<span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Fair Value Range - ${safeStock}" data-field="fair-value-range" data-stock="${safeStock}"><span class="${valueClass}">$${fairValueRange.value.toFixed(2)}</span> (${fairValueRange.source})</span>`;
                         }
                     })()
                 }
@@ -2782,16 +2782,15 @@ class GRQValidator {
                 row.innerHTML = `
             <td class="clickable-stock" data-stock="${safeStock}">${safeStock}</td>
             <td>
-                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}" 
-                    data-field="buy-price" data-stock="${safeStock}" 
-                    style="${buyPrice === null ? 'color: #c00; font-weight: bold;' : ''}"
+                <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
+                    data-field="buy-price" data-stock="${safeStock}"
                 >${this.formatCurrency(buyPrice)}</span>
             </td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>
             </td>
             <td>
-            <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${safeStock}" data-field="target" data-stock="${safeStock}" style="${this.getTargetPriceColor(target, currentPrice, buyPrice)}">${this.formatCurrency(target)
+            <span class="clickable-value ${this.getTargetPriceColor(target, currentPrice, buyPrice)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${safeStock}" data-field="target" data-stock="${safeStock}">${this.formatCurrency(target)
                 }</span></td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
@@ -3063,6 +3062,31 @@ class GRQValidator {
 
         // Show the back button
         document.getElementById("backToAggregate").style.display = "block";
+    }
+
+    // Deep-link straight into the single-stock detail view when the page is
+    // opened with `?stock=<symbol>` (issue #281). Resolves the requested symbol
+    // against the loaded score rows via the shared, unit-tested helper; an
+    // unknown or absent symbol leaves the aggregate view untouched.
+    applyStockSelectionFromUrl() {
+        const requested = globalThis.GRQStockSelection.stockFromSearch(
+            typeof location !== "undefined" ? location.search : "",
+        );
+        if (!requested) {
+            return;
+        }
+        const symbol = globalThis.GRQStockSelection.resolveStockSelection(
+            this.scoreData,
+            requested,
+        );
+        if (symbol) {
+            console.log(`Auto-selecting stock from URL parameter: ${symbol}`);
+            this.showStockDetails(symbol);
+        } else {
+            console.warn(
+                `Stock parameter '${requested}' not found in the loaded score file`,
+            );
+        }
     }
 
     showLoading() {
