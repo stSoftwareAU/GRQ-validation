@@ -3,7 +3,7 @@
 Adds the pure data kernel that the #333 chart-vs-summary reconciliation needs:
 deriving each benchmark index's performance over a **bounded window** (score
 date → an explicit end date) instead of always running to the latest available
-price. Closes #366.
+price. Closes #366
 
 Two additions to `docs/market_index.js`, both pure (no DOM, no class state) and
 published on `globalThis.GRQMarketIndex` so the browser dashboard and the Deno
