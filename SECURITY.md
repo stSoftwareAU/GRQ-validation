@@ -53,6 +53,14 @@ currently commit unsigned because per-identity signing keys are not yet
 provisioned. Both are accepted, documented postures tracked as future work — see
 `.github/branch-protection.json` for the per-control rationale.
 
+Milestone integration branches (`milestone/**`) carry their own intended
+ruleset, also recorded in `.github/branch-protection.json` under
+`milestone_ruleset`: the `Test and Quality Checks` Rust status check must pass
+and branches must be up to date before merging, so a non-compiling PR cannot
+merge into a milestone branch. The CI workflow already runs the gate on
+`milestone/**` PRs; an administrator must create the matching ruleset to make
+the check **required** (the worker account lacks admin rights).
+
 ## Emergency dependency-bump procedure
 
 When a malicious or vulnerable version of a dependency is disclosed, pin the
