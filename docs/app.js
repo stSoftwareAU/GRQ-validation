@@ -2899,9 +2899,13 @@ class GRQValidator {
 
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
+            // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
+            // headers (issue #406). Column map: 1 Stock, 2 Buy Price, 3 Stars,
+            // 4 90-Day Target (Portfolio Target %), 5 Current Price,
+            // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
+            // 8 Status/Projection, 9 Dividends.
             totalsRow.innerHTML = `
           <td>Days Elapsed: ${actualDaysElapsed}</td>
-          <td>-</td>
           <td>-</td>
           <td>-</td>
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
