@@ -11,6 +11,13 @@
   },
   "required_approving_review_count": 1,
   "enforcement": "Requires a repository administrator to enable on `main` via Settings -> Branches or a repository ruleset; the controls are not applied automatically from this file. The committed `.github/CODEOWNERS` rules become enforced (not merely advisory) once 'Require review from Code Owners' is turned on.",
+  "milestone_ruleset": {
+    "comment": "Intended ruleset for milestone integration branches (Issue #342). PRs into `milestone/**` previously bypassed the Rust quality gate because ci.yml triggered only on `main` and the milestone branches had no branch protection. The workflow trigger gap is fixed in `.github/workflows/ci.yml`; this block records the matching branch-protection posture that a repository administrator must apply (the worker account lacks admin rights, so it cannot create the ruleset itself).",
+    "branch_pattern": "milestone/**",
+    "required_status_checks": ["Test and Quality Checks"],
+    "require_branches_up_to_date": true,
+    "enforcement": "A repository administrator must create a ruleset matching `milestone/**` (Settings -> Rules -> Rulesets) that requires the `Test and Quality Checks` status check to pass and enables 'Require branches to be up to date before merging'. This blocks a non-compiling PR from merging into a milestone branch and prevents a green-in-isolation branch from breaking the target after it moves. Not applied automatically from this file."
+  },
   "accepted_relaxations": [
     {
       "control": "require_pull_request",
