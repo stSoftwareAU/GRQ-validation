@@ -297,6 +297,21 @@
   margin-bottom: 0;
 }
 
+/* Keep the Buy Price value + its full 5-moon rating on a single line in the
+ * detail panel, even on a ~375px phone where the value shares a `col-6` with
+ * the rating (issue #383). `nowrap` stops the run breaking between the price
+ * and the moons; the compact `star-rating` glyphs (smaller font + tightened
+ * letter-spacing) keep `$XX.XX 🌕🌕🌕🌕🌕` within the half-row cell without
+ * clipping or overflow. Harmless at larger sizes where there is ample room. */
+#stockDetailCard .buy-price-cell {
+  white-space: nowrap;
+}
+
+#stockDetailCard .buy-price-cell .star-rating {
+  font-size: 0.85em;
+  letter-spacing: -0.08em;
+}
+
 #stockDetailCard h6 {
   font-size: 0.75rem;
   font-weight: 600;
