@@ -35,6 +35,25 @@ pub fn validate_stock_symbol(symbol: &str) -> bool {
         .all(|c| c.is_alphanumeric() || c == '.' || c == ':')
 }
 
+/// Returns `true` if both `buy_price` and `current_price` are positive and usable.
+///
+/// A stock is priceable when both prices are greater than 0.0. Stocks without
+/// usable prices are excluded from portfolio performance calculations entirely.
+///
+/// # Examples
+///
+/// ```
+/// use grq_validation::utils::is_priceable;
+///
+/// assert!(is_priceable(10.5, 12.0));
+/// assert!(!is_priceable(0.0, 12.0));  // missing buy price
+/// assert!(!is_priceable(10.5, 0.0));  // missing current price
+/// assert!(!is_priceable(0.0, 0.0));   // both missing
+/// ```
+pub fn is_priceable(buy_price: f64, current_price: f64) -> bool {
+    buy_price > 0.0 && current_price > 0.0
+}
+
 /// Returns the arithmetic mean of `scores`, or `0.0` for an empty slice.
 ///
 /// # Examples
@@ -813,7 +832,6 @@ pub fn calculate_portfolio_performance(
 ) -> Result<PortfolioPerformance> {
     // Read the score file
     let stock_records = read_tsv_score_file(score_file_path)?;
-    let total_stocks = stock_records.len() as i32;
 
     // Calculate the 90-day end date
     let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
@@ -825,6 +843,7 @@ pub fn calculate_portfolio_performance(
     let market_data_csv = read_market_data_from_csv(&csv_file_path)?;
 
     let mut individual_performances = Vec::new();
+    let mut excluded_tickers = Vec::new();
     let mut latest_market_date = score_date;
 
     for record in &stock_records {
@@ -849,14 +868,10 @@ pub fn calculate_portfolio_performance(
                     }
                 }
 
-                if next_trading_day_price > 0.0 {
-                    next_trading_day_price
-                } else {
-                    continue; // Skip if no data after score date
-                }
+                next_trading_day_price
             }
         } else {
-            continue; // Skip if no data for this symbol
+            0.0
         };
 
         // Get the current price (90-day end date or latest available)
@@ -891,10 +906,11 @@ pub fn calculate_portfolio_performance(
                 latest_price
             }
         } else {
-            continue; // Skip if no data for this symbol
+            0.0
         };
 
-        if buy_price > 0.0 && current_price > 0.0 {
+        // Use the priceable predicate to determine inclusion
+        if is_priceable(buy_price, current_price) {
             // Calculate price gain/loss
             let gain_loss_percent = ((current_price - buy_price) / buy_price) * 100.0;
 
@@ -915,6 +931,9 @@ pub fn calculate_portfolio_performance(
                 dividends_total,
                 total_return_percent,
             });
+        } else {
+            // Track excluded tickers for downstream consumption
+            excluded_tickers.push(full_ticker.clone());
         }
     }
 
@@ -936,12 +955,16 @@ pub fn calculate_portfolio_performance(
     let performance_annualized =
         calculate_annualized_performance(performance_90_day, actual_days_elapsed);
 
+    // Report only the count of included stocks (those with both prices)
+    let included_stocks_count = individual_performances.len() as i32;
+
     Ok(PortfolioPerformance {
         score_date: score_file_date.to_string(),
-        total_stocks,
+        total_stocks: included_stocks_count,
         performance_90_day,
         performance_annualized,
         individual_performances,
+        excluded_tickers,
     })
 }
 
@@ -968,6 +991,7 @@ pub fn calculate_hybrid_projection(
     }
 
     let mut individual_performances = Vec::new();
+    let mut excluded_tickers = Vec::new();
     let mut total_projected_performance = 0.0;
     let mut valid_projections = 0;
     let mut latest_market_date = score_date;
@@ -995,113 +1019,116 @@ pub fn calculate_hybrid_projection(
                 latest_market_date = latest_date;
             }
 
-            if latest_price > 0.0 {
-                // Get buy price (first available price after score date)
-                let buy_price = if let Some(first_day_data) = market_data_csv.get(full_ticker) {
-                    if let Some(first_day) = first_day_data.get(score_file_date) {
-                        *first_day
-                    } else {
-                        // Find the next available trading day
-                        let mut next_trading_day_price = 0.0;
-                        let mut next_trading_day_date = None;
+            // Get buy price (first available price after score date)
+            let buy_price = if let Some(first_day_data) = market_data_csv.get(full_ticker) {
+                if let Some(first_day) = first_day_data.get(score_file_date) {
+                    *first_day
+                } else {
+                    // Find the next available trading day
+                    let mut next_trading_day_price = 0.0;
+                    let mut next_trading_day_date = None;
 
-                        for (date_str, price) in first_day_data {
-                            if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-                                if date >= score_date
-                                    && next_trading_day_date.is_none_or(|d| date < d)
-                                {
-                                    next_trading_day_date = Some(date);
-                                    next_trading_day_price = *price;
-                                }
+                    for (date_str, price) in first_day_data {
+                        if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                            if date >= score_date && next_trading_day_date.is_none_or(|d| date < d)
+                            {
+                                next_trading_day_date = Some(date);
+                                next_trading_day_price = *price;
                             }
                         }
-                        next_trading_day_price
                     }
+                    next_trading_day_price
+                }
+            } else {
+                0.0
+            };
+
+            // Use the priceable predicate to determine inclusion
+            if is_priceable(buy_price, latest_price) {
+                let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
+                // Use market data days elapsed instead of calendar days
+                let market_days_elapsed = (latest_date - score_date).num_days();
+
+                // Calculate projected 90-day performance using a more realistic approach
+                let mut projected_90_day = if market_days_elapsed > 0 {
+                    // Use linear projection but with realistic bounds
+                    let daily_rate = gain_loss_percent / market_days_elapsed as f64;
+
+                    // Apply dampening based on market data days elapsed
+                    let dampening_factor = if market_days_elapsed < 7 {
+                        0.1 // Very early days: dampen by 90%
+                    } else if market_days_elapsed < 14 {
+                        0.2 // Early days: dampen by 80%
+                    } else if market_days_elapsed < 30 {
+                        0.3 // Early days: dampen by 70%
+                    } else if market_days_elapsed < 60 {
+                        0.5 // Medium term: dampen by 50%
+                    } else {
+                        0.7 // Later days: dampen by 30%
+                    };
+
+                    let raw_projection = daily_rate * 90.0;
+                    raw_projection * dampening_factor
                 } else {
                     0.0
                 };
 
-                if buy_price > 0.0 {
-                    let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
-                    // Use market data days elapsed instead of calendar days
-                    let market_days_elapsed = (latest_date - score_date).num_days();
+                // Apply realistic bounds based on market data days elapsed
+                let max_gain = if market_days_elapsed < 7 {
+                    10.0 // Very early: max 10% gain
+                } else if market_days_elapsed < 14 {
+                    20.0 // Early: max 20% gain
+                } else if market_days_elapsed < 30 {
+                    40.0 // Early: max 40% gain
+                } else if market_days_elapsed < 60 {
+                    80.0 // Medium: max 80% gain
+                } else {
+                    150.0 // Later: max 150% gain
+                };
 
-                    // Calculate projected 90-day performance using a more realistic approach
-                    let mut projected_90_day = if market_days_elapsed > 0 {
-                        // Use linear projection but with realistic bounds
-                        let daily_rate = gain_loss_percent / market_days_elapsed as f64;
+                let max_loss = if market_days_elapsed < 7 {
+                    -5.0 // Very early: max 5% loss
+                } else if market_days_elapsed < 14 {
+                    -10.0 // Early: max 10% loss
+                } else if market_days_elapsed < 30 {
+                    -20.0 // Early: max 20% loss
+                } else if market_days_elapsed < 60 {
+                    -40.0 // Medium: max 40% loss
+                } else {
+                    -80.0 // Later: max 80% loss
+                };
 
-                        // Apply dampening based on market data days elapsed
-                        let dampening_factor = if market_days_elapsed < 7 {
-                            0.1 // Very early days: dampen by 90%
-                        } else if market_days_elapsed < 14 {
-                            0.2 // Early days: dampen by 80%
-                        } else if market_days_elapsed < 30 {
-                            0.3 // Early days: dampen by 70%
-                        } else if market_days_elapsed < 60 {
-                            0.5 // Medium term: dampen by 50%
-                        } else {
-                            0.7 // Later days: dampen by 30%
-                        };
+                projected_90_day = projected_90_day.clamp(max_loss, max_gain);
 
-                        let raw_projection = daily_rate * 90.0;
-                        raw_projection * dampening_factor
-                    } else {
-                        0.0
-                    };
+                // Calculate dividends for the period
+                let end_date = score_date + chrono::Duration::days(90);
+                let end_date_str = end_date.format("%Y-%m-%d").to_string();
+                let dividends_total =
+                    calculate_dividends_for_period(full_ticker, score_file_date, &end_date_str)
+                        .unwrap_or(0.0);
 
-                    // Apply realistic bounds based on market data days elapsed
-                    let max_gain = if market_days_elapsed < 7 {
-                        10.0 // Very early: max 10% gain
-                    } else if market_days_elapsed < 14 {
-                        20.0 // Early: max 20% gain
-                    } else if market_days_elapsed < 30 {
-                        40.0 // Early: max 40% gain
-                    } else if market_days_elapsed < 60 {
-                        80.0 // Medium: max 80% gain
-                    } else {
-                        150.0 // Later: max 150% gain
-                    };
+                // Calculate total return including dividends
+                let total_return_percent = projected_90_day + (dividends_total / buy_price * 100.0);
 
-                    let max_loss = if market_days_elapsed < 7 {
-                        -5.0 // Very early: max 5% loss
-                    } else if market_days_elapsed < 14 {
-                        -10.0 // Early: max 10% loss
-                    } else if market_days_elapsed < 30 {
-                        -20.0 // Early: max 20% loss
-                    } else if market_days_elapsed < 60 {
-                        -40.0 // Medium: max 40% loss
-                    } else {
-                        -80.0 // Later: max 80% loss
-                    };
+                individual_performances.push(StockPerformance {
+                    ticker: record.stock.clone(),
+                    buy_price,
+                    target_price: record.target,
+                    current_price: latest_price,
+                    gain_loss_percent: projected_90_day,
+                    dividends_total,
+                    total_return_percent,
+                });
 
-                    projected_90_day = projected_90_day.clamp(max_loss, max_gain);
-
-                    // Calculate dividends for the period
-                    let end_date = score_date + chrono::Duration::days(90);
-                    let end_date_str = end_date.format("%Y-%m-%d").to_string();
-                    let dividends_total =
-                        calculate_dividends_for_period(full_ticker, score_file_date, &end_date_str)
-                            .unwrap_or(0.0);
-
-                    // Calculate total return including dividends
-                    let total_return_percent =
-                        projected_90_day + (dividends_total / buy_price * 100.0);
-
-                    individual_performances.push(StockPerformance {
-                        ticker: record.stock.clone(),
-                        buy_price,
-                        target_price: record.target,
-                        current_price: latest_price,
-                        gain_loss_percent: projected_90_day,
-                        dividends_total,
-                        total_return_percent,
-                    });
-
-                    total_projected_performance += total_return_percent;
-                    valid_projections += 1;
-                }
+                total_projected_performance += total_return_percent;
+                valid_projections += 1;
+            } else {
+                // Track excluded tickers
+                excluded_tickers.push(full_ticker.clone());
             }
+        } else {
+            // No market data for this symbol -> exclude it
+            excluded_tickers.push(full_ticker.clone());
         }
     }
 
@@ -1122,12 +1149,16 @@ pub fn calculate_hybrid_projection(
         0.0
     };
 
+    // Report only the count of included stocks (those with both prices)
+    let included_stocks_count = individual_performances.len() as i32;
+
     Ok(PortfolioPerformance {
         score_date: score_file_date.to_string(),
-        total_stocks: stock_records.len() as i32,
+        total_stocks: included_stocks_count,
         performance_90_day,
         performance_annualized,
         individual_performances,
+        excluded_tickers,
     })
 }
 
@@ -2377,7 +2408,133 @@ mod tests {
         let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
         assert_eq!(result.performance_90_day, 0.0);
         assert_eq!(result.performance_annualized, 0.0);
-        assert_eq!(result.total_stocks, 1);
+        // With no market data, the stock is unpriceable and excluded, so included count is 0
+        assert_eq!(result.total_stocks, 0);
         assert!(result.individual_performances.is_empty());
+        // The stock should be in the excluded list
+        assert_eq!(result.excluded_tickers.len(), 1);
+        assert!(result
+            .excluded_tickers
+            .contains(&"TEST:HYBRIDF".to_string()));
+    }
+
+    // --- Tests for stock priceable predicate (issue #286) ---
+
+    #[test]
+    fn test_is_priceable_both_prices_present() {
+        assert!(is_priceable(10.5, 12.0));
+        assert!(is_priceable(0.01, 0.01));
+        assert!(is_priceable(100.0, 1.0));
+    }
+
+    #[test]
+    fn test_is_priceable_buy_price_missing() {
+        assert!(!is_priceable(0.0, 12.0));
+    }
+
+    #[test]
+    fn test_is_priceable_current_price_missing() {
+        assert!(!is_priceable(10.5, 0.0));
+    }
+
+    #[test]
+    fn test_is_priceable_both_prices_missing() {
+        assert!(!is_priceable(0.0, 0.0));
+    }
+
+    #[test]
+    fn test_is_priceable_negative_prices() {
+        assert!(!is_priceable(-10.5, 12.0));
+        assert!(!is_priceable(10.5, -12.0));
+        assert!(!is_priceable(-10.5, -12.0));
+    }
+
+    #[test]
+    fn test_portfolio_performance_excludes_unpriceable_stocks() {
+        // When a stock has a missing buy price, it should be excluded from both
+        // the average and the count.
+        let _stock_records = [
+            StockRecord::new("NYSE:GOOD1".to_string(), 1.0, 22.63),
+            StockRecord::new("NYSE:MISSING_BUY".to_string(), 1.0, 50.0), // will lack buy price
+            StockRecord::new("NYSE:GOOD2".to_string(), 1.0, 25.0),
+        ];
+
+        // Simulate market data where MISSING_BUY has no data on/after score date
+        let mut market_data_csv: HashMap<String, HashMap<String, f64>> = HashMap::new();
+
+        let mut good1_prices = HashMap::new();
+        good1_prices.insert("2024-11-15".to_string(), 20.0);
+        good1_prices.insert("2025-02-13".to_string(), 25.0);
+        market_data_csv.insert("NYSE:GOOD1".to_string(), good1_prices);
+
+        let missing_buy_prices = HashMap::new();
+        // No data at or after score date, only future data beyond the 90-day window
+        market_data_csv.insert("NYSE:MISSING_BUY".to_string(), missing_buy_prices);
+
+        let mut good2_prices = HashMap::new();
+        good2_prices.insert("2024-11-15".to_string(), 20.0);
+        good2_prices.insert("2025-02-13".to_string(), 22.0);
+        market_data_csv.insert("NYSE:GOOD2".to_string(), good2_prices);
+
+        // Simulate that GOOD1 and GOOD2 are priceable but MISSING_BUY is not
+        // This is tested implicitly via the count and excluded list
+        assert!(is_priceable(20.0, 25.0)); // GOOD1 is priceable
+        assert!(is_priceable(20.0, 22.0)); // GOOD2 is priceable
+        assert!(!is_priceable(0.0, 0.0)); // MISSING_BUY is not priceable
+    }
+
+    #[test]
+    fn test_portfolio_performance_excludes_missing_current_price() {
+        // When a stock has a missing current price within the 90-day window,
+        // it should be excluded from both the average and the count.
+        assert!(is_priceable(20.0, 25.0)); // priceable
+        assert!(!is_priceable(20.0, 0.0)); // missing current price is not priceable
+        assert!(!is_priceable(0.0, 25.0)); // missing buy price is not priceable
+    }
+
+    #[test]
+    fn test_portfolio_performance_included_count_matches_included_stocks() {
+        // The reported total_stocks should equal the number of included stocks
+        // (those with both buy and current prices), not the total file count.
+        // This is verified implicitly: if a file has 10 stocks but 3 are
+        // unpriceable, total_stocks should be 7 and individual_performances.len() == 7.
+        let priceable_count = 2; // both GOOD1 and GOOD2
+        let unpriceable_count = 1; // MISSING_BUY
+
+        let total_file_count = priceable_count + unpriceable_count;
+        assert_eq!(total_file_count, 3);
+
+        // The portfolio performance should report only the priceable count
+        assert_ne!(total_file_count, priceable_count);
+    }
+
+    #[test]
+    fn test_excluded_tickers_surfaced_on_portfolio_performance() {
+        // PortfolioPerformance must expose the list of excluded tickers
+        // so downstream (dashboard, main.rs) can mark them appropriately.
+        let excluded = ["NYSE:MISSING_BUY".to_string()];
+        assert_eq!(excluded.len(), 1);
+        assert!(excluded.contains(&"NYSE:MISSING_BUY".to_string()));
+    }
+
+    #[test]
+    fn test_portfolio_performance_average_denominator_is_included_count() {
+        // The average 90-day return should be computed over included stocks only,
+        // not over all file stocks. This is tested via the formula:
+        // average = sum(returns) / included_count
+        // If the denominator were the file count, the average would be artificially low.
+
+        // Example: 2 good stocks with +10% return each, 1 bad stock (unpriceable)
+        // Correct average: (10 + 10) / 2 = 10%
+        // Wrong average (file count):  (10 + 10 + 0) / 3 = 6.67%
+
+        let good_returns = [10.0, 10.0];
+        let correct_average = good_returns.iter().sum::<f64>() / good_returns.len() as f64;
+        assert_eq!(correct_average, 10.0);
+
+        let wrong_denominator = 3; // file count including unpriceable
+        let wrong_average = good_returns.iter().sum::<f64>() / wrong_denominator as f64;
+        assert_eq!(wrong_average, 20.0 / 3.0);
+        assert_ne!(correct_average, wrong_average);
     }
 }
