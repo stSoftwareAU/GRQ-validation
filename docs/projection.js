@@ -636,15 +636,27 @@ function computeJudgement(
     if (daysElapsed < 90) {
         if (projection && projection.confidence > 0.2) {
             const predicted = projection.projected90DayPerformance;
-            const pctOfTarget = target === 0 ? 0 : predicted / target;
-            if (predicted < 0 || pctOfTarget < 0.2) {
+            // Judge by the sign of the predicted return first: only a negative
+            // projection is "Declining". A positive projection must never read
+            // as declining (issue #297).
+            if (predicted < 0) {
                 return `Declining (${predicted.toFixed(1)}%)`;
-            } else if (pctOfTarget >= 0.95) {
-                return `On Track (${predicted.toFixed(1)}%)`;
-            } else if (pctOfTarget >= 0.2) {
-                return `Below Target (${predicted.toFixed(1)}%)`;
             }
-            return `Declining (${predicted.toFixed(1)}%)`;
+            // predicted >= 0 here. Guard the ratio against a non-positive
+            // target: when the model 90-Day Target price sits below the buy
+            // price the target return % is negative, and `predicted / target`
+            // would flip a healthy positive projection's sign and mislabel it
+            // as "Declining". Fall back to the sign of the projection instead.
+            if (target <= 0) {
+                return `On Track (${predicted.toFixed(1)}%)`;
+            }
+            const pctOfTarget = predicted / target;
+            if (pctOfTarget >= 0.95) {
+                return `On Track (${predicted.toFixed(1)}%)`;
+            }
+            // A positive projection short of target is below target, not
+            // declining.
+            return `Below Target (${predicted.toFixed(1)}%)`;
         }
 
         // Not enough data for a reliable projection: judge current performance.
