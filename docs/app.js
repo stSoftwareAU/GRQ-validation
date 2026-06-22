@@ -1,3 +1,12 @@
+// Shared label and definition for the "Return above Cost of Capital" column
+// (issue #295). Renamed from the previous confusing column header for
+// clarity. Display/labelling only — the underlying figure is unchanged
+// (performance − the 10% annualised cost-of-capital hurdle, pro-rated by days
+// elapsed).
+const RETURN_ABOVE_COST_OF_CAPITAL_LABEL = "Return above Cost of Capital";
+const RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION =
+    "Return above the 10% annualised cost-of-capital hurdle, pro-rated by days elapsed. Positive = beating the hurdle.";
+
 class GRQValidator {
     constructor() {
         this.scoreData = null;
@@ -2611,11 +2620,11 @@ class GRQValidator {
                     </div>
                   </div>
                   <div class="row mb-2">
-                    <div class="col-6"><strong>Progress vs Cost of Capital:</strong></div>
+                    <div class="col-6"><strong title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}:</strong></div>
                     <div class="col-6">
                       <span class="clickable-value ${
                     this.getPerformanceClass(this.calculateProgressVsCostOfCapitalValue(stock, performance))
-                }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${safeStock}" data-field="progress-vs-cost" data-stock="${safeStock}">${
+                }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} - ${safeStock}" data-field="progress-vs-cost" data-stock="${safeStock}">${
                     this.calculateProgressVsCostOfCapital(
                         stock,
                         performance,
@@ -2738,7 +2747,7 @@ class GRQValidator {
           <th>90-Day Target</th>
           <th>Current Price</th>
           <th>Gain/Loss (%)</th>
-          <th>Progress vs Cost of Capital</th>
+          <th title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
           <th>Status/Projection</th>
           <th>Dividends</th>
         `;
@@ -2812,7 +2821,7 @@ class GRQValidator {
 }</span></td>
             <td><span class="clickable-value ${
                     this.getPerformanceClass(this.calculateProgressVsCostOfCapitalValue(stock, performance))
-                }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Progress vs Cost of Capital - ${safeStock}" data-field="progress-vs-cost" data-stock="${safeStock}">${
+                }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} - ${safeStock}" data-field="progress-vs-cost" data-stock="${safeStock}">${
                     this.calculateProgressVsCostOfCapital(
                         stock,
                         performance,
@@ -3622,7 +3631,8 @@ class GRQValidator {
                 const progressPerformance = this
                     .calculateStockPerformance(stock);
                 if (progressPerformance === null) {
-                    return "Progress vs Cost of Capital working:\nNo market data available";
+                    return header +
+                        `${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}\n\n${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} working:\nNo market data available`;
                 }
                 const daysElapsed = this.getDaysElapsed(
                     this.getScoreDate(this.selectedFile),
@@ -3630,7 +3640,7 @@ class GRQValidator {
                 const costOfCapitalReturn = (this.costOfCapital / 365) *
                     daysElapsed;
                 return header +
-                    `Progress vs Cost of Capital working:\n= Stock Performance - Cost of Capital Return\n= ${
+                    `${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}\n\n${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} working:\n= Stock Performance - Cost of Capital Return\n= ${
                         progressPerformance.toFixed(1)
                     }% - ${costOfCapitalReturn.toFixed(1)}%\n= ${
                         (progressPerformance - costOfCapitalReturn).toFixed(1)
