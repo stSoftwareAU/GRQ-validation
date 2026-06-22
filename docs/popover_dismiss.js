@@ -27,16 +27,23 @@ const POPOVER_TRIGGER_SELECTOR = '.clickable-value, [data-bs-toggle="popover"]';
 const POPOVER_TIP_SELECTOR = ".popover";
 
 // Decide what a click should do, given whether it landed inside an open
-// popover's content and whether it landed on a popover trigger.
-//   - inside popover content -> "ignore" (must NOT close; criterion 3)
-//   - on a trigger           -> "closeAndReopen" (close others, show this one)
-//   - anywhere else outside   -> "closeOnly" (close every popover)
-function decidePopoverAction({ insidePopover, hasTrigger }) {
+// popover's content, whether it landed on a popover trigger, and whether that
+// trigger's own popover was already open (captured BEFORE closing everything).
+//   - inside popover content      -> "ignore" (must NOT close; criterion 3)
+//   - on an already-open trigger  -> "closeOnly" (toggle it shut; issue #372)
+//   - on a different/closed trigger -> "closeAndReopen" (close others, show it)
+//   - anywhere else outside        -> "closeOnly" (close every popover)
+//
+// `triggerAlreadyOpen` defaults to false so existing callers that only pass
+// { insidePopover, hasTrigger } keep the original close-and-reopen behaviour.
+function decidePopoverAction({ insidePopover, hasTrigger, triggerAlreadyOpen }) {
     if (insidePopover) {
         return "ignore";
     }
     if (hasTrigger) {
-        return "closeAndReopen";
+        // Tapping the same value again closes its popover rather than
+        // re-opening it (issue #372).
+        return triggerAlreadyOpen ? "closeOnly" : "closeAndReopen";
     }
     return "closeOnly";
 }

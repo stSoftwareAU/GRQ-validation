@@ -319,6 +319,11 @@
     <!-- Consolidated popover dismissal logic (issue #371) — before app.js -->
     <script src="popover_dismiss.js"></script>
 
+    <!-- Popover cleanup helpers (GRQPopovers, issue #370) — before app.js,
+         which calls globalThis.GRQPopovers.clearAllPopovers() on every
+         re-render. Without this the dashboard throws and never renders. -->
+    <script src="popover_cleanup.js"></script>
+
     <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
     <script src="dashboard_boot.js"></script>
 

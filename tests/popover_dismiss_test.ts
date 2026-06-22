@@ -28,7 +28,11 @@ const g = globalThis as unknown as {
     POPOVER_TRIGGER_SELECTOR: string;
     POPOVER_TIP_SELECTOR: string;
     decidePopoverAction: (
-      ctx: { insidePopover: boolean; hasTrigger: boolean },
+      ctx: {
+        insidePopover: boolean;
+        hasTrigger: boolean;
+        triggerAlreadyOpen?: boolean;
+      },
     ) => string;
     closeAllPopovers: (
       doc: { querySelectorAll: (sel: string) => unknown[] },
@@ -90,6 +94,41 @@ Deno.test("decidePopoverAction - tapping a trigger closes others then reopens it
   assertEquals(
     GRQPopover.decidePopoverAction({ insidePopover: false, hasTrigger: true }),
     "closeAndReopen",
+  );
+});
+
+Deno.test("decidePopoverAction - tapping the SAME already-open trigger toggles it shut (issue #372)", () => {
+  // Second tap on the value whose popover is currently shown: close only, do
+  // not re-open it.
+  assertEquals(
+    GRQPopover.decidePopoverAction({
+      insidePopover: false,
+      hasTrigger: true,
+      triggerAlreadyOpen: true,
+    }),
+    "closeOnly",
+  );
+});
+
+Deno.test("decidePopoverAction - tapping a DIFFERENT (closed) trigger still closes others then reopens it (issue #372)", () => {
+  assertEquals(
+    GRQPopover.decidePopoverAction({
+      insidePopover: false,
+      hasTrigger: true,
+      triggerAlreadyOpen: false,
+    }),
+    "closeAndReopen",
+  );
+});
+
+Deno.test("decidePopoverAction - tapping inside content wins even over an already-open trigger (issue #372)", () => {
+  assertEquals(
+    GRQPopover.decidePopoverAction({
+      insidePopover: true,
+      hasTrigger: true,
+      triggerAlreadyOpen: true,
+    }),
+    "ignore",
   );
 });
 
