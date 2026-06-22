@@ -2823,6 +2823,14 @@ class GRQValidator {
                 }">${judgement}</span></span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${safeStock}" data-field="dividend-info" data-stock="${safeStock}">${dividendInfo}</span></td>
           `;
+                // Strike out excluded stocks (issue #290): a stock dropped from
+                // every portfolio calculation (per the shared inclusion
+                // predicate) gets the `excluded-stock` class so its row renders
+                // with a theme-safe line-through, signalling it is out of all
+                // calculations.
+                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                    row.classList.add("excluded-stock");
+                }
                 // Add highlighting for selected stock in aggregate view
                 if (this.selectedStock === stock.stock) {
                     row.classList.add("table-primary");

@@ -168,6 +168,24 @@
   font-weight: bold;
 }
 
+/* Excluded stock rows (issue #290): a stock that fails the shared inclusion
+ * predicate (missing/non-positive buy OR current price) is dropped from every
+ * portfolio calculation, so its aggregate row is struck through to signal it is
+ * out of all calculations. The strikethrough is drawn on the cell text in
+ * `currentColor`, so it keeps the row's inherited theme text colour at full
+ * strength — no opacity dimming — and therefore preserves the same WCAG 2 AA
+ * contrast as a normal row in BOTH the light and dark themes (issue #281). */
+.excluded-stock td {
+  text-decoration: line-through;
+}
+
+/* The ticker cell sets its own `text-decoration: underline` (link styling),
+ * which would otherwise block the row's line-through on that cell. Combine both
+ * line types so the ticker stays an underlined link AND is struck through. */
+.excluded-stock .clickable-stock {
+  text-decoration: underline line-through;
+}
+
 /* Clickable stock names */
 .clickable-stock {
   cursor: pointer;
