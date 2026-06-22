@@ -20,6 +20,14 @@ Pages.
   The external daily scorer job refreshes it in lockstep with the scores via
   the non-blocking `deno task refresh-indices` wrapper (see _Daily benchmark
   refresh_ below).
+- **Split-Aware Returns** — the backend reads each day's `split_coefficient` and
+  reconciles any stock split inside the 90-day window. A trustworthy split
+  series is corrected (the buy price is restated into current, post-split
+  terms); a series that cannot be reconciled (implausible or duplicated
+  coefficients, or a coefficient that does not match the observed price drop)
+  excludes the stock through the single `is_priceable` gate, dropping it from
+  the average, the included count and into `excluded_tickers`. The thresholds
+  mirror the frontend so backend and dashboard agree.
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`.
