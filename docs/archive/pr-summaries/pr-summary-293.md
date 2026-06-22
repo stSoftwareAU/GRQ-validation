@@ -1,8 +1,8 @@
 ## Summary
 
 Extend the **single** `isStockIncluded` inclusion predicate so a stock whose
-split/merge series cannot be reliably reconciled (`reliable: false` from the
-#292 split-adjustment helper) is excluded from **all** prediction-accuracy /
+split/merge series cannot be reliably reconciled (`reliable: false` from the #292
+split-adjustment helper) is excluded from **all** prediction-accuracy /
 portfolio figures — re-weighting the remainder and striking the row through —
 without adding any parallel "is this stock OK?" mechanism (DRY, per the #272
 scope). Closes #293.
