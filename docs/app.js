@@ -110,9 +110,16 @@ class GRQValidator {
             const trigger = event.target.closest(
                 GRQPopover.POPOVER_TRIGGER_SELECTOR,
             );
+            // Capture whether the tapped trigger's popover is already open
+            // BEFORE the close-all loop runs. Bootstrap sets aria-describedby
+            // on the trigger while its popover is shown, so a second tap on the
+            // same value toggles it shut instead of re-opening it (issue #372).
+            const triggerAlreadyOpen = !!trigger &&
+                trigger.hasAttribute("aria-describedby");
             const action = GRQPopover.decidePopoverAction({
                 insidePopover,
                 hasTrigger: !!trigger,
+                triggerAlreadyOpen,
             });
 
             // Tapping inside an open popover's content must not close it.
