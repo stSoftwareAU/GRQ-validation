@@ -3988,23 +3988,6 @@ class GRQValidator {
         return trendLine;
     }
 
-    // Calculate R-squared for trend line quality
-    calculateRSquared(dataPoints, slope, intercept) {
-        const n = dataPoints.length;
-        const meanY = dataPoints.reduce((sum, point) => sum + point.y, 0) / n;
-        
-        let ssRes = 0; // Sum of squared residuals
-        let ssTot = 0; // Total sum of squares
-        
-        dataPoints.forEach((point) => {
-            const predicted = slope * point.x + intercept;
-            ssRes += Math.pow(point.y - predicted, 2);
-            ssTot += Math.pow(point.y - meanY, 2);
-        });
-        
-        return ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
-    }
-
     // Calculate linear regression for portfolio trend prediction
     calculatePortfolioTrendLine() {
         const scoreDate = this.getScoreDate(this.selectedFile);
@@ -4039,37 +4022,26 @@ class GRQValidator {
             return null;
         }
 
-        // Calculate linear regression (y = mx + b)
-        const n = dataPoints.length;
-        const sumX = dataPoints.reduce((sum, point) => sum + point.x, 0);
-        const sumY = dataPoints.reduce((sum, point) => sum + point.y, 0);
-        const sumXY = dataPoints.reduce((sum, point) => sum + point.x * point.y, 0);
-        const sumXX = dataPoints.reduce((sum, point) => sum + point.x * point.x, 0);
+        // Regression through the origin (issue #303). Day 0 = 0% by definition
+        // (portfolio performance is measured against the buy prices on the score
+        // date), so the line must pass through (0,0); the slope is the
+        // least-squares slope subject to that anchor, m = Σ(x·y) / Σ(x·x). This
+        // delegates to the single shared kernel in docs/projection.js so the
+        // portfolio and single-stock trend lines cannot drift apart (issue #273).
+        const trend = GRQProjection.computeTrendLine(dataPoints);
+        if (!trend) {
+            console.log("Portfolio trend line - regression returned null");
+            return null;
+        }
 
-        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-        const intercept = (sumY - slope * sumX) / n;
-
-        // Force the trend line to start at zero on the score date
-        // Adjust the intercept so that when x=0 (score date), y=0
-        const adjustedIntercept = 0;
-        const adjustedSlope = slope;
-
-        // Predict performance at 90 days using the adjusted line
-        const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
-
-        // Cap the prediction at -100% since you can't lose more than 100% of your investment
-        const cappedPredicted90DayPerformance = Math.max(predicted90DayPerformance, -100);
-
-        const rSquared = this.calculateRSquared(dataPoints, adjustedSlope, adjustedIntercept);
-        
-        console.log("Portfolio trend line - slope:", adjustedSlope, "intercept:", adjustedIntercept, "R²:", rSquared, "Predicted 90-day:", cappedPredicted90DayPerformance, "(original:", predicted90DayPerformance, ")");
+        console.log("Portfolio trend line - slope:", trend.slope, "intercept:", trend.intercept, "R²:", trend.rSquared, "Predicted 90-day:", trend.predicted90DayPerformance);
 
         return {
-            slope: adjustedSlope,
-            intercept: adjustedIntercept,
-            predicted90DayPerformance: cappedPredicted90DayPerformance,
+            slope: trend.slope,
+            intercept: trend.intercept,
+            predicted90DayPerformance: trend.predicted90DayPerformance,
             dataPoints,
-            rSquared: rSquared
+            rSquared: trend.rSquared
         };
     }
 
