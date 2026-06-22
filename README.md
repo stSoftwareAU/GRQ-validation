@@ -195,6 +195,38 @@ dependency hygiene.
     supply-chain backstop that, on every pull request, blocks an external
     Cargo crate or GitHub Action bump whose upstream release is younger than
     24 hours (see _Automated dependency updates_ below).
+12. **Version Bump** (`version-bump.yml`) — on every pull request, runs
+    `scripts/bump_version.ts` to increment the dashboard app version and
+    commits the change back to the PR branch (see _Dashboard versioning_
+    below).
+
+### Dashboard versioning
+
+The dashboard app version is the cache-busting key for the service worker
+(`docs/sw.js`), so a deployed change only reaches clients when that version
+changes. The version lives in four aligned locations — the `APP_VERSION`
+constant in `docs/sw.js`, the `./sw.js?v=` query in `docs/sw-register.js`, and
+the `app-version` meta and `sw-register.js?v=` script tag in `docs/index.html`.
+
+The **Version Bump** workflow keeps this automatic and reliable: on every pull
+request it runs `scripts/bump_version.ts`, which increments the patch component
+across all four locations and commits the result back to the PR branch. The
+bump is idempotent — it compares the branch version against the base branch and
+skips when the branch has already been bumped — so re-runs do not ratchet the
+version. This replaced an unreliable local pre-commit hook that only fired when
+a contributor had installed it.
+
+```mermaid
+flowchart LR
+    A[Open / update PR] --> B[Version Bump workflow]
+    B --> C{Branch already<br/>bumped vs base?}
+    C -- yes --> D[No change]
+    C -- no --> E[bump_version.ts:<br/>patch + 1 in sw.js,<br/>sw-register.js, index.html]
+    E --> F[Commit + push to PR branch]
+    F --> G[Merge to main]
+    G --> H[Pages deploy:<br/>new service-worker cache key]
+    H --> I[Clients fetch the update]
+```
 
 ### Automated dependency updates
 
@@ -267,7 +299,8 @@ GRQ-validation/
 │   └── scores/             # Score files and generated market data
 ├── tests/                  # Rust and Deno tests
 ├── helpers/                # Local development helpers (e.g. static server)
-├── scripts/                # Git hooks and utility scripts
+├── scripts/                # Utility scripts
+│   ├── bump_version.ts            # CI app-version incrementer (#323)
 │   ├── fetch_market_indices.ts    # Server-side benchmark-index fetcher
 │   └── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
 ├── .github/workflows/      # GitHub Actions workflows
