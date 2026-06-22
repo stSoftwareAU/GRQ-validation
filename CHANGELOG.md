@@ -22,12 +22,22 @@ and this project adheres to
   deliberately relaxed for the autonomous committers, so static scans treat the
   posture as documented rather than a gap (Issue #180). Documented in
   `CONTRIBUTING.md` and `SECURITY.md`.
+- `scripts/bump_version.ts` and the **Version Bump** workflow
+  (`.github/workflows/version-bump.yml`): on every pull request the dashboard
+  app version is incremented across `docs/sw.js`, `docs/sw-register.js`, and
+  `docs/index.html` and committed back to the branch, so the service-worker
+  cache key always changes and clients pick up the new build. The bump is
+  idempotent relative to the base branch (Issue #323).
 
 ### Removed
 
 - Dead `[dependencies]` `walkdir` and `thiserror`, which were declared but never
   referenced in `src/` or `tests/`. Removing them trims build time, the
   lockfile, and the supply-chain surface.
+- `setup-hooks.sh` and `scripts/pre-commit`: the local Git pre-commit hook that
+  auto-incremented the version. It only fired when a contributor had installed
+  it, so versions were frequently not bumped and clients did not update. The
+  CI-driven **Version Bump** workflow replaces it (Issue #323).
 - Dead CLI code in `src/main.rs`: the `--performance-only` flag (parsed but
   never read, so it silently did nothing) and the unreachable second
   `--calculate-performance` block (dominated by an earlier early-return).
