@@ -131,6 +131,24 @@ function calculatePerformanceReturn(buyPrice, currentPrice, totalDividends) {
     return priceReturn + dividendReturn;
 }
 
+// Cost-of-capital hurdle as a percentage: the annual cost of capital pro-rated
+// over the elapsed days. `daysElapsed` is already capped at 90 by the caller
+// (≈ 2.5% at 10%/yr). Single source of truth for the hurdle shared by the
+// per-stock "Return above Cost of Capital" column and the portfolio total
+// (issue #407).
+function costOfCapitalHurdle(costOfCapital, daysElapsed) {
+    return (costOfCapital / 365) * daysElapsed;
+}
+
+// Return above the cost-of-capital hurdle: the realised return less the
+// pro-rated hurdle. Reused by both the per-stock column and the portfolio
+// total so the totals figure equals the mean of the per-stock figures
+// (issue #407). Returns null when `performance` is null/undefined.
+function returnAboveCostOfCapital(performance, costOfCapital, daysElapsed) {
+    if (performance === null || performance === undefined) return null;
+    return performance - costOfCapitalHurdle(costOfCapital, daysElapsed);
+}
+
 // Single source of truth for the "is this stock included?" rule (issue #288),
 // mirroring the Rust backend's `is_priceable` predicate (src/utils.rs). A stock
 // counts towards portfolio performance ONLY when it has BOTH a usable buy price
@@ -858,6 +876,8 @@ globalThis.GRQProjection = {
     selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,
+    costOfCapitalHurdle,
+    returnAboveCostOfCapital,
     isStockIncluded,
     calculateIncludedPortfolioPerformance,
     filterDividendsWithin90Days,
