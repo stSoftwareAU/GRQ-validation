@@ -1,12 +1,26 @@
 {
   "defaults": {
     "standard": "WCAG2AA",
-    "timeout": 30000,
+    "timeout": 40000,
     "chromeLaunchConfig": {
       "args": ["--no-sandbox", "--disable-setuid-sandbox"]
     }
   },
   "urls": [
-    "http://localhost:8080/index.html"
+    "http://localhost:8080/index.html",
+    "http://localhost:8080/index.html?theme=dark",
+    {
+      "url": "http://localhost:8080/index.html?file=2026%2FMarch%2F23.tsv&stock=NASDAQ%3AMGRC",
+      "actions": [
+        "wait for element #stockDetailCard to be visible"
+      ]
+    },
+    {
+      "url": "http://localhost:8080/index.html?theme=dark&file=2026%2FMarch%2F23.tsv&stock=NASDAQ%3AMGRC",
+      "actions": [
+        "wait for element body.dark-mode-forced to be added",
+        "wait for element #stockDetailCard to be visible"
+      ]
+    }
   ]
 }

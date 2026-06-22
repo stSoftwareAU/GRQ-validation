@@ -57,6 +57,21 @@
     }
   }
 
+  // Read a transient theme override from a URL query string, e.g.
+  // `?theme=dark`. Returns a valid preference ("auto"/"light"/"dark") or null
+  // when the param is absent or unrecognised. This lets the dashboard be
+  // deep-linked into a specific theme (and lets the automated a11y check audit
+  // dark mode deterministically — issue #281) without writing localStorage, so
+  // the override applies only to the current page load.
+  function preferenceFromSearch(search) {
+    try {
+      const value = new URLSearchParams(search || "").get("theme");
+      return value !== null && PREFERENCES.includes(value) ? value : null;
+    } catch (_err) {
+      return null;
+    }
+  }
+
   // <body> class that forces a mode, or "" for auto (follow the system).
   function bodyClassFor(preference) {
     switch (normalisePreference(preference)) {
@@ -85,6 +100,7 @@
     titleFor,
     bodyClassFor,
     toggleClassFor,
+    preferenceFromSearch,
   };
 
   // ---------------------------------------------------------------------------
@@ -94,9 +110,17 @@
     return;
   }
 
-  // Read the persisted preference, tolerating a privacy mode where
+  // Read the active preference. A `?theme=` URL override (transient, never
+  // persisted) wins so the dashboard can be deep-linked into a theme; otherwise
+  // fall back to the persisted choice, tolerating a privacy mode where
   // localStorage throws on access.
   function readPreference() {
+    const fromUrl = preferenceFromSearch(
+      typeof location !== "undefined" ? location.search : "",
+    );
+    if (fromUrl) {
+      return fromUrl;
+    }
     try {
       return normalisePreference(localStorage.getItem(STORAGE_KEY));
     } catch (_err) {

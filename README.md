@@ -141,6 +141,23 @@ python3 -m http.server 8000
 
 Visit `http://localhost:8000` to access the dashboard.
 
+#### Deep-link URL parameters
+
+The dashboard reads three optional query parameters so a specific view can be
+linked directly (and so the automated accessibility check can audit each view
+deterministically — issue #281):
+
+- `?file=<score-file>` — pre-select a score file, e.g.
+  `?file=2026%2FMarch%2F23.tsv`.
+- `?stock=<symbol>` — open straight into the single-stock detail view, e.g.
+  `?stock=NASDAQ%3AMGRC`. An unknown symbol falls back to the aggregate view.
+- `?theme=auto|light|dark` — force a theme for that page load (a transient
+  override that is **not** persisted to `localStorage`).
+
+All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
+`pa11yci.json` scans the aggregate and single-stock views in both themes on
+every pull request that touches `docs/`.
+
 ## CI/CD Pipeline
 
 This repository ships a set of GitHub Actions workflows in

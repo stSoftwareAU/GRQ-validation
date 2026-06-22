@@ -18,6 +18,7 @@ const g = globalThis as unknown as {
     titleFor: (preference: unknown) => string;
     bodyClassFor: (preference: unknown) => string;
     toggleClassFor: (preference: unknown) => string;
+    preferenceFromSearch: (search: unknown) => string | null;
   };
 };
 
@@ -77,4 +78,29 @@ Deno.test("toggleClassFor namespaces the button state class", () => {
   assertEquals(g.GRQTheme.toggleClassFor("dark"), "theme-toggle-dark");
   assertEquals(g.GRQTheme.toggleClassFor("auto"), "theme-toggle-auto");
   assertEquals(g.GRQTheme.toggleClassFor("junk"), "theme-toggle-auto");
+});
+
+// `?theme=` URL override (issue #281): lets the dashboard be deep-linked into a
+// theme (and lets the automated a11y check audit dark mode deterministically).
+Deno.test("preferenceFromSearch reads a valid theme from the query string", () => {
+  assertEquals(g.GRQTheme.preferenceFromSearch("?theme=dark"), "dark");
+  assertEquals(g.GRQTheme.preferenceFromSearch("?theme=light"), "light");
+  assertEquals(g.GRQTheme.preferenceFromSearch("?theme=auto"), "auto");
+  // Works alongside other params and a leading-?-less search string.
+  assertEquals(
+    g.GRQTheme.preferenceFromSearch("?file=2026%2FMarch%2F23.tsv&theme=dark"),
+    "dark",
+  );
+  assertEquals(g.GRQTheme.preferenceFromSearch("theme=dark"), "dark");
+});
+
+Deno.test("preferenceFromSearch returns null when absent or unrecognised", () => {
+  assertEquals(g.GRQTheme.preferenceFromSearch(""), null);
+  assertEquals(g.GRQTheme.preferenceFromSearch("?file=x.tsv"), null);
+  // Unknown value is not coerced to a preference — the caller falls back to the
+  // stored choice rather than silently forcing a theme.
+  assertEquals(g.GRQTheme.preferenceFromSearch("?theme=purple"), null);
+  assertEquals(g.GRQTheme.preferenceFromSearch("?theme="), null);
+  assertEquals(g.GRQTheme.preferenceFromSearch(null), null);
+  assertEquals(g.GRQTheme.preferenceFromSearch(undefined), null);
 });

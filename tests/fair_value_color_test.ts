@@ -38,9 +38,14 @@ const g = globalThis as unknown as {
 };
 const GRQProjection = g.GRQProjection;
 
-const RED = "color: #dc3545; font-weight: bold;";
-const GREEN = "color: #28a745; font-weight: bold;";
-const GREY = "color: #6c757d; font-weight: bold;";
+// Business-logic change (issue #281): getTargetPriceColor now returns a CSS
+// *class token* rather than an inline `color: …` style string, so the colour is
+// theme-aware via the cascade (the dark theme remaps each class to a
+// higher-contrast colour). The decision tree (red/green/grey/default) is
+// unchanged — only the representation of the result.
+const RED = "price-bad";
+const GREEN = "price-good";
+const GREY = "price-neutral";
 
 Deno.test("getFairValueRange - both values present returns a sorted range", () => {
   assertEquals(
