@@ -518,17 +518,15 @@ function computeTrendLine(dataPoints) {
         return null;
     }
 
-    const n = dataPoints.length;
-    const sumX = dataPoints.reduce((sum, point) => sum + point.x, 0);
-    const sumY = dataPoints.reduce((sum, point) => sum + point.y, 0);
     const sumXY = dataPoints.reduce((sum, point) => sum + point.x * point.y, 0);
     const sumXX = dataPoints.reduce((sum, point) => sum + point.x * point.x, 0);
 
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-
-    // Force the line through zero on the score date (x = 0 -> y = 0).
+    // Regression through the origin. Day 0 = 0% by definition (performance is
+    // measured against the buy price on the score date), so the line must pass
+    // through (0,0); the slope is the least-squares slope subject to that
+    // anchor, minimising Σ(y − m·x)² which gives m = Σ(x·y) / Σ(x·x).
     const adjustedIntercept = 0;
-    const adjustedSlope = slope;
+    const adjustedSlope = sumXX !== 0 ? sumXY / sumXX : 0;
 
     const predicted90DayPerformance = adjustedSlope * 90 + adjustedIntercept;
     // Cannot lose more than 100% of the investment.
