@@ -2893,15 +2893,21 @@ class GRQValidator {
                 .calculatePortfolioPerformance90Day();
             const portfolioTarget = this
                 .calculatePortfolioTargetPercentage();
+            const portfolioReturnAboveCostOfCapital = this
+                .calculatePortfolioReturnAboveCostOfCapital();
 
             // Use market data-based days elapsed (already capped at 90)
             const actualDaysElapsed = marketDataDaysElapsed;
 
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
+            // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
+            // headers (issue #406). Column map: 1 Stock, 2 Buy Price, 3 Stars,
+            // 4 90-Day Target (Portfolio Target %), 5 Current Price,
+            // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
+            // 8 Status/Projection, 9 Dividends.
             totalsRow.innerHTML = `
           <td>Days Elapsed: ${actualDaysElapsed}</td>
-          <td>-</td>
           <td>-</td>
           <td>-</td>
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
@@ -2911,7 +2917,11 @@ class GRQValidator {
           <td class="${this.getPerformanceClass(portfolioPerformance90Day)}">${
                 portfolioPerformance90Day.toFixed(1)
             }%</td>
-          <td>-</td>
+          <td><span class="clickable-value ${
+                this.getPerformanceClass(portfolioReturnAboveCostOfCapital)
+            }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio ${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}" data-field="portfolio-return-above-cost-of-capital" data-stock="">${
+                portfolioReturnAboveCostOfCapital.toFixed(1)
+            }%</span></td>
           <td>-</td>
           <td>-</td>
         `;
@@ -2935,8 +2945,11 @@ class GRQValidator {
 
             // Generate the popover content using the actual values for that stock/field
             let working;
-            if (field === "portfolio-target") {
-                // Special handling for portfolio target - no specific stock
+            if (
+                field === "portfolio-target" ||
+                field === "portfolio-return-above-cost-of-capital"
+            ) {
+                // Portfolio totals - no specific stock (issues #407)
                 working = this.getWorking(field, "", this.scoreData);
             } else {
                 working = this.getWorking(field, stock, this.scoreData);
@@ -3061,10 +3074,27 @@ class GRQValidator {
 
         // Use market data-based days elapsed for cost of capital calculation to match working
         const daysElapsed = this.getDaysElapsedFromMarketData(this.getScoreDate(this.selectedFile));
-        const costOfCapitalReturn = (this.costOfCapital / 365) * daysElapsed;
 
-        const excessReturn = performance - costOfCapitalReturn;
-        return excessReturn;
+        // Subtract the shared cost-of-capital hurdle (issue #407) so the
+        // per-stock column and the portfolio total use one hurdle definition.
+        return GRQProjection.returnAboveCostOfCapital(
+            performance,
+            this.costOfCapital,
+            daysElapsed,
+        );
+    }
+
+    // Portfolio Return above Cost of Capital = average Gain/Loss − shared hurdle
+    // (issue #407). Reuses the equal-weighted average Gain/Loss and the same
+    // single hurdle applied per-stock, so this total equals the mean of the
+    // per-stock "Return above Cost of Capital" values shown in that column.
+    calculatePortfolioReturnAboveCostOfCapital() {
+        const portfolioPerformance90Day = this
+            .calculatePortfolioPerformance90Day();
+        return this.calculateProgressVsCostOfCapitalValue(
+            null,
+            portfolioPerformance90Day,
+        );
     }
 
     calculateJudgement(stock, performance) {
@@ -3470,6 +3500,48 @@ class GRQValidator {
             }% / ${validStocks} stocks\n= Portfolio target: ${
                 portfolioTargetValue.toFixed(1)
             }%`;
+        }
+
+        // Special handling for the portfolio Return above Cost of Capital total
+        // (issue #407) — no specific stock; mirrors the portfolio-target branch.
+        if (field === "portfolio-return-above-cost-of-capital") {
+            const scoreDate = this.getScoreDate(this.selectedFile);
+            const daysElapsed = this.getDaysElapsedFromMarketData(scoreDate);
+            const hurdle = GRQProjection.costOfCapitalHurdle(
+                this.costOfCapital,
+                daysElapsed,
+            );
+            const averageGainLoss = this.calculatePortfolioPerformance90Day();
+            const portfolioReturn = averageGainLoss - hurdle;
+
+            // Per-stock Gain/Loss list, mirroring the exclusion applied in
+            // calculatePortfolioPerformance90Day so only included (priceable)
+            // stocks appear (issue #289).
+            const gainLossDetails = [];
+            this.scoreData.forEach((stock) => {
+                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                    return;
+                }
+                const performance = this.calculateStockPerformanceWithDilution(
+                    stock,
+                    scoreDate,
+                );
+                if (performance !== null) {
+                    gainLossDetails.push(
+                        `${stock.stock}: ${performance.toFixed(1)}%`,
+                    );
+                }
+            });
+
+            return `Portfolio ${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} working:\n= Average Gain/Loss − cost-of-capital hurdle\n= Included stocks' Gain/Loss:\n  ${
+                gainLossDetails.join("\n  ")
+            }\n= Average Gain/Loss: ${
+                averageGainLoss.toFixed(1)
+            }%\n= Hurdle (${this.costOfCapital}%/yr pro-rated over ${daysElapsed} market-data days, capped at 90): ${
+                hurdle.toFixed(1)
+            }%\n= Portfolio ${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}: ${
+                averageGainLoss.toFixed(1)
+            }% − ${hurdle.toFixed(1)}% = ${portfolioReturn.toFixed(1)}%`;
         }
 
         const stock = scoreData.find((s) => s.stock === stockSymbol);
