@@ -12,14 +12,12 @@ const g = globalThis as unknown as {
     isStockIncluded: (
       buyPrice: number | null | undefined,
       currentPrice: number | null | undefined,
-      splitReliable?: boolean,
     ) => boolean;
     calculateIncludedPortfolioPerformance: (
       stocks: Array<{
         buyPrice?: number | null;
         currentPrice?: number | null;
         totalDividends?: number;
-        splitReliable?: boolean;
       }>,
     ) => number | null;
   };
@@ -74,31 +72,6 @@ Deno.test("isStockIncluded - non-numeric prices -> excluded", () => {
   assertEquals(GRQProjection.isStockIncluded(NaN, 12.0), false);
 });
 
-// --- split reliability participates in the SAME predicate (issue #293) ------
-
-Deno.test("isStockIncluded - split-unreliable stock (both prices present) -> excluded", () => {
-  // Both prices are usable, but the split series could not be reconciled
-  // (splitReliable === false) — e.g. the KLAC spike. The single predicate must
-  // exclude it, so the same re-weighting and strikethrough cover it for free.
-  assertEquals(GRQProjection.isStockIncluded(10.5, 12.0, false), false);
-});
-
-Deno.test("isStockIncluded - split-reliable stock -> included", () => {
-  assert(GRQProjection.isStockIncluded(10.5, 12.0, true));
-});
-
-Deno.test("isStockIncluded - omitted split flag defaults to included (backwards compatible)", () => {
-  // Existing callers that pass only two arguments keep their behaviour.
-  assert(GRQProjection.isStockIncluded(10.5, 12.0));
-  assert(GRQProjection.isStockIncluded(10.5, 12.0, undefined));
-});
-
-Deno.test("isStockIncluded - split-unreliable cannot rescue a bad price", () => {
-  // Reliability never overrides the price guard: a missing price is still out.
-  assertEquals(GRQProjection.isStockIncluded(null, 12.0, true), false);
-  assertEquals(GRQProjection.isStockIncluded(0, 12.0, false), false);
-});
-
 // --- calculateIncludedPortfolioPerformance: equal-weight re-weighting ------
 
 Deno.test("re-weighting - averages returns over included stocks only", () => {
@@ -124,22 +97,6 @@ Deno.test("re-weighting - excluding one redistributes weight over the remainder"
   const perf = GRQProjection.calculateIncludedPortfolioPerformance(stocks);
   assert(perf !== null);
   // Average of the two included stocks = (10 + 30) / 2 = 20.
-  assertAlmostEquals(perf as number, 20);
-});
-
-Deno.test("re-weighting - excludes a split-unreliable stock and re-weights remainder", () => {
-  // Three stocks but the middle one is flagged split-unreliable (both prices
-  // present). It must drop out via the SAME predicate, leaving the equal-weight
-  // average of the two reliable stocks (1/2 each), NOT 1/3 across all three.
-  const stocks = [
-    { buyPrice: 100, currentPrice: 110 }, // +10% included (flag omitted)
-    { buyPrice: 100, currentPrice: 200, splitReliable: false }, // excluded
-    { buyPrice: 100, currentPrice: 130, splitReliable: true }, // +30% included
-  ];
-  const perf = GRQProjection.calculateIncludedPortfolioPerformance(stocks);
-  assert(perf !== null);
-  // Average of the two included stocks = (10 + 30) / 2 = 20; the split-distorted
-  // +100% never reaches the aggregate.
   assertAlmostEquals(perf as number, 20);
 });
 

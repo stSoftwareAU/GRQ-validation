@@ -37,7 +37,6 @@ const g = globalThis as unknown as {
     isStockIncluded: (
       buyPrice: number | null | undefined,
       currentPrice: number | null | undefined,
-      splitReliable?: boolean,
     ) => boolean;
     currentPriceFromLatest: (
       marketData: MarketDataPoint[] | undefined,
@@ -45,7 +44,7 @@ const g = globalThis as unknown as {
     getBuyPrice: (
       marketData: MarketDataPoint[] | undefined,
       scoreDate: Date,
-    ) => { price: number; dateUsed: Date; reliable: boolean } | null;
+    ) => { price: number; dateUsed: Date } | null;
     calculatePerformanceReturn: (
       buyPrice: number,
       currentPrice: number,
@@ -62,18 +61,14 @@ const GRQProjection = g.GRQProjection;
 const SCORE_DATE = new Date(2025, 1, 18); // 18 February 2025.
 
 // A flat OHLC bar so the midprice is trivially the supplied price.
-function bar(
-  date: Date,
-  price: number,
-  splitCoefficient = 1.0,
-): MarketDataPoint {
+function bar(date: Date, price: number): MarketDataPoint {
   return {
     date,
     high: price,
     low: price,
     open: price,
     close: price,
-    splitCoefficient,
+    splitCoefficient: 1.0,
   };
 }
 
@@ -93,12 +88,10 @@ class PortfolioValidator {
       scoreDate,
     );
     const buyPrice = buyPriceObj ? buyPriceObj.price : null;
-    // Split-reliability participates in the single predicate (issue #293).
-    const splitReliable = buyPriceObj ? buyPriceObj.reliable : true;
     const currentPrice = GRQProjection.currentPriceFromLatest(
       this.marketData[stockSymbol],
     );
-    return GRQProjection.isStockIncluded(buyPrice, currentPrice, splitReliable);
+    return GRQProjection.isStockIncluded(buyPrice, currentPrice);
   }
 
   // Production: docs/app.js calculatePortfolioData time-series.
@@ -223,54 +216,6 @@ Deno.test("isStockPriceable - no market data (delisted) -> excluded", () => {
   const v = new PortfolioValidator();
   v.marketData = {};
   assertEquals(v.isStockPriceable("DELISTED", SCORE_DATE), false);
-});
-
-Deno.test("isStockPriceable - split-unreliable series -> excluded (issue #293)", () => {
-  // Both a buy price and a current price exist, but an implausible split
-  // coefficient (> 10:1) after the score date means the split series cannot be
-  // reconciled (getBuyPrice -> reliable:false). The single predicate must drop
-  // it — mirroring the KLAC spike — so its distorted return never skews figures.
-  const v = new PortfolioValidator();
-  v.marketData = {
-    SPIKE: [
-      bar(SCORE_DATE, 100),
-      bar(new Date(2025, 1, 25), 5, 20), // 20:1 coefficient -> unreliable
-    ],
-  };
-  // Sanity: both prices ARE usable, so only the reliability flag excludes it.
-  const buy = GRQProjection.getBuyPrice(v.marketData.SPIKE, SCORE_DATE);
-  assert(buy && buy.price > 0, "expected a usable buy price");
-  assertEquals(buy!.reliable, false);
-  assertEquals(v.isStockPriceable("SPIKE", SCORE_DATE), false);
-});
-
-Deno.test("calculatePortfolioPerformance90Day - excludes a split-unreliable stock (issue #293)", () => {
-  const v = new PortfolioValidator();
-  v.scoreData = [
-    { stock: "GOOD", target: 15 },
-    { stock: "SPIKE", target: 99 },
-  ];
-  v.marketData = {
-    GOOD: [bar(SCORE_DATE, 10), bar(new Date(2025, 2, 1), 13)], // +30%
-    // Implausible 20:1 split after the score date -> unreliable -> excluded.
-    SPIKE: [bar(SCORE_DATE, 100), bar(new Date(2025, 2, 1), 5, 20)],
-  };
-  // Totals reflect only GOOD: +30%, never the split-distorted SPIKE figure.
-  assertAlmostEquals(v.calculatePortfolioPerformance90Day(), 30, 1e-9);
-});
-
-Deno.test("calculatePortfolioTargetPercentage - excludes a split-unreliable stock from allocation (issue #293)", () => {
-  const v = new PortfolioValidator();
-  v.scoreData = [
-    { stock: "GOOD", target: 15 }, // buy 10 -> +50% target
-    { stock: "SPIKE", target: 999 },
-  ];
-  v.marketData = {
-    GOOD: [bar(SCORE_DATE, 10), bar(new Date(2025, 1, 25), 12)],
-    SPIKE: [bar(SCORE_DATE, 100), bar(new Date(2025, 1, 25), 5, 20)],
-  };
-  // Only GOOD counts: (15 - 10) / 10 = +50%.
-  assertAlmostEquals(v.calculatePortfolioTargetPercentage(), 50, 1e-9);
 });
 
 Deno.test("isStockPriceable - data exists but no buy price in window -> excluded", () => {

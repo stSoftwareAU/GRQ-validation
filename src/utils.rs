@@ -46,129 +46,13 @@ pub fn validate_stock_symbol(symbol: &str) -> bool {
 /// ```
 /// use grq_validation::utils::is_priceable;
 ///
-/// assert!(is_priceable(10.5, 12.0, true));
-/// assert!(!is_priceable(0.0, 12.0, true));  // missing buy price
-/// assert!(!is_priceable(10.5, 0.0, true));  // missing current price
-/// assert!(!is_priceable(0.0, 0.0, true));   // both missing
-/// assert!(!is_priceable(10.5, 12.0, false)); // split series unreliable
+/// assert!(is_priceable(10.5, 12.0));
+/// assert!(!is_priceable(0.0, 12.0));  // missing buy price
+/// assert!(!is_priceable(10.5, 0.0));  // missing current price
+/// assert!(!is_priceable(0.0, 0.0));   // both missing
 /// ```
-///
-/// `split_reliable` mirrors the frontend `isStockIncluded` predicate (issue
-/// #293): a stock whose split series cannot be trustworthily reconciled is
-/// excluded through this single gate rather than via a parallel path.
-pub fn is_priceable(buy_price: f64, current_price: f64, split_reliable: bool) -> bool {
-    buy_price > 0.0 && current_price > 0.0 && split_reliable
-}
-
-/// Trustworthy split-adjustment thresholds, mirroring `docs/projection.js`
-/// (issues #291/#292, parent #272). Agreed in the #291 investigation — see
-/// `docs/fixes/klac-split-distortion-investigation.md`.
-const MAX_PLAUSIBLE_COEFFICIENT: f64 = 10.0; // a single split of <= 10:1 is plausible
-const DUPLICATE_WINDOW_DAYS: i64 = 5; // splits within 5 days = the same event twice
-const MAX_CUMULATIVE_FACTOR: f64 = 50.0; // cumulative factor cap over the window
-const RECONCILE_TOLERANCE: f64 = 0.15; // +/-15% price-ratio cross-check
-
-/// Cumulative split adjustment for a window plus whether it can be trusted.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SplitAdjustment {
-    /// De-duplicated, plausibility-checked cumulative split factor (kept for
-    /// diagnostics even when `reliable` is `false`).
-    pub factor: f64,
-    /// `false` when the series cannot be reconciled; callers must then exclude
-    /// the stock rather than silently apply `factor`.
-    pub reliable: bool,
-}
-
-impl SplitAdjustment {
-    /// A no-split, trivially-reliable adjustment (factor `1.0`).
-    pub const NONE: SplitAdjustment = SplitAdjustment {
-        factor: 1.0,
-        reliable: true,
-    };
-}
-
-/// Computes the cumulative split adjustment for splits strictly after
-/// `from_date`, judging whether the series can be trusted — the Rust mirror of
-/// the frontend `computeSplitAdjustment` (issue #294, parent #272).
-///
-/// Rules: de-duplicate split events recorded within [`DUPLICATE_WINDOW_DAYS`];
-/// flag any single coefficient above [`MAX_PLAUSIBLE_COEFFICIENT`]; cap the
-/// cumulative factor at [`MAX_CUMULATIVE_FACTOR`]; and cross-check each split
-/// against the observed pre/post price drop (a real N:1 split divides the price
-/// ~N-fold) within [`RECONCILE_TOLERANCE`]. A missing or empty series means no
-/// known splits, so the factor is `1.0` and the series is reliable.
-pub fn compute_split_adjustment(
-    series: &HashMap<String, DailyMarketPoint>,
-    from_date: NaiveDate,
-) -> SplitAdjustment {
-    // Sort by date so "the price immediately before a split" is well-defined
-    // regardless of map iteration order.
-    let mut points: Vec<(NaiveDate, &DailyMarketPoint)> = series
-        .iter()
-        .filter_map(|(date_str, point)| {
-            NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-                .ok()
-                .map(|date| (date, point))
-        })
-        .collect();
-    points.sort_by_key(|(date, _)| *date);
-
-    let mut factor = 1.0;
-    let mut reliable = true;
-    let mut last_event: Option<NaiveDate> = None;
-
-    for (i, (date, point)) in points.iter().enumerate() {
-        let date = *date;
-        let c = point.split_coefficient;
-
-        // Only splits strictly after the buy date adjust the buy price.
-        if date <= from_date {
-            continue;
-        }
-        // Invalid / non-split coefficients mean "no adjustment" (treat as 1.0)
-        // and are not, by themselves, a reliability failure.
-        if !c.is_finite() || c <= 1.0 {
-            continue;
-        }
-        // De-duplicate: a split within DUPLICATE_WINDOW_DAYS of the last kept
-        // one is the same corporate event recorded twice — apply it once.
-        if let Some(prev_event) = last_event {
-            if (date - prev_event).num_days() <= DUPLICATE_WINDOW_DAYS {
-                continue;
-            }
-        }
-        last_event = Some(date);
-
-        // Implausibly large single coefficient: cannot trust unguarded.
-        if c > MAX_PLAUSIBLE_COEFFICIENT {
-            reliable = false;
-        }
-
-        // Price-ratio cross-check: compare the midpoint just before the split
-        // with the split point's own (post-split) midpoint. Only checkable when
-        // a prior point exists; absent one we keep the data-feed invariant.
-        if i > 0 {
-            let prev = points[i - 1].1;
-            let prev_mid = (prev.high + prev.low) / 2.0;
-            let split_mid = (point.high + point.low) / 2.0;
-            if prev_mid.is_finite() && split_mid.is_finite() && split_mid > 0.0 {
-                let observed_ratio = prev_mid / split_mid;
-                if (observed_ratio / c - 1.0).abs() > RECONCILE_TOLERANCE {
-                    reliable = false;
-                }
-            }
-        }
-
-        factor *= c;
-    }
-
-    // Cumulative-factor plausibility bound: a larger factor almost certainly
-    // means duplicated or spurious coefficients.
-    if factor > MAX_CUMULATIVE_FACTOR {
-        reliable = false;
-    }
-
-    SplitAdjustment { factor, reliable }
+pub fn is_priceable(buy_price: f64, current_price: f64) -> bool {
+    buy_price > 0.0 && current_price > 0.0
 }
 
 /// Returns the arithmetic mean of `scores`, or `0.0` for an empty slice.
@@ -1021,10 +905,10 @@ pub fn calculate_portfolio_performance(
                     }
                 }
 
-                (next_trading_day_price, next_trading_day_date)
+                next_trading_day_price
             }
         } else {
-            (0.0, score_date)
+            0.0
         };
 
         // Get the current price (90-day end date or latest available)
@@ -1062,25 +946,10 @@ pub fn calculate_portfolio_performance(
             0.0
         };
 
-        // Reconcile any split between the buy date and the current-price date.
-        // A reliable series is corrected (buy price restated to current terms);
-        // an unreliable one drops the stock through the single is_priceable gate.
-        let split = market
-            .points
-            .get(full_ticker)
-            .map(|series| compute_split_adjustment(series, buy_date))
-            .unwrap_or(SplitAdjustment::NONE);
-
-        // Use the priceable predicate (now split-aware) to determine inclusion.
-        if is_priceable(buy_price, current_price, split.reliable) {
-            // Restate the buy price into current (post-split) terms so the
-            // return is not distorted by a split inside the window. With no
-            // split the factor is 1.0 and the cost basis is unchanged.
-            let adjusted_buy_price = buy_price / split.factor;
-
-            // Calculate price gain/loss against the corrected cost basis.
-            let gain_loss_percent =
-                ((current_price - adjusted_buy_price) / adjusted_buy_price) * 100.0;
+        // Use the priceable predicate to determine inclusion
+        if is_priceable(buy_price, current_price) {
+            // Calculate price gain/loss
+            let gain_loss_percent = ((current_price - buy_price) / buy_price) * 100.0;
 
             // Calculate dividends for the 90-day period
             let dividends_total =
@@ -1212,11 +1081,8 @@ pub fn calculate_hybrid_projection(
                 0.0
             };
 
-            // Use the priceable predicate to determine inclusion. The hybrid
-            // projection does not yet apply split correction (out of scope for
-            // issue #294), so split reliability is left at `true` to preserve
-            // its existing behaviour.
-            if is_priceable(buy_price, latest_price, true) {
+            // Use the priceable predicate to determine inclusion
+            if is_priceable(buy_price, latest_price) {
                 let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
                 // Use market data days elapsed instead of calendar days
                 let market_days_elapsed = (latest_date - score_date).num_days();
@@ -2750,45 +2616,33 @@ mod tests {
 
     // --- Tests for stock priceable predicate (issue #286) ---
 
-    // The third `split_reliable` argument was added in issue #294 so the single
-    // predicate also drops split-unreliable stocks (mirroring the frontend
-    // `isStockIncluded`). These existing cases pass `true` to preserve their
-    // original price-only intent; a dedicated case below covers `false`.
     #[test]
     fn test_is_priceable_both_prices_present() {
-        assert!(is_priceable(10.5, 12.0, true));
-        assert!(is_priceable(0.01, 0.01, true));
-        assert!(is_priceable(100.0, 1.0, true));
+        assert!(is_priceable(10.5, 12.0));
+        assert!(is_priceable(0.01, 0.01));
+        assert!(is_priceable(100.0, 1.0));
     }
 
     #[test]
     fn test_is_priceable_buy_price_missing() {
-        assert!(!is_priceable(0.0, 12.0, true));
+        assert!(!is_priceable(0.0, 12.0));
     }
 
     #[test]
     fn test_is_priceable_current_price_missing() {
-        assert!(!is_priceable(10.5, 0.0, true));
+        assert!(!is_priceable(10.5, 0.0));
     }
 
     #[test]
     fn test_is_priceable_both_prices_missing() {
-        assert!(!is_priceable(0.0, 0.0, true));
+        assert!(!is_priceable(0.0, 0.0));
     }
 
     #[test]
     fn test_is_priceable_negative_prices() {
-        assert!(!is_priceable(-10.5, 12.0, true));
-        assert!(!is_priceable(10.5, -12.0, true));
-        assert!(!is_priceable(-10.5, -12.0, true));
-    }
-
-    #[test]
-    fn test_is_priceable_split_unreliable_excludes_otherwise_priceable_stock() {
-        // Both prices usable, but an unreliable split series drops the stock
-        // through the single gate (issue #294).
-        assert!(!is_priceable(10.5, 12.0, false));
-        assert!(!is_priceable(100.0, 1.0, false));
+        assert!(!is_priceable(-10.5, 12.0));
+        assert!(!is_priceable(10.5, -12.0));
+        assert!(!is_priceable(-10.5, -12.0));
     }
 
     #[test]
@@ -2820,18 +2674,18 @@ mod tests {
 
         // Simulate that GOOD1 and GOOD2 are priceable but MISSING_BUY is not
         // This is tested implicitly via the count and excluded list
-        assert!(is_priceable(20.0, 25.0, true)); // GOOD1 is priceable
-        assert!(is_priceable(20.0, 22.0, true)); // GOOD2 is priceable
-        assert!(!is_priceable(0.0, 0.0, true)); // MISSING_BUY is not priceable
+        assert!(is_priceable(20.0, 25.0)); // GOOD1 is priceable
+        assert!(is_priceable(20.0, 22.0)); // GOOD2 is priceable
+        assert!(!is_priceable(0.0, 0.0)); // MISSING_BUY is not priceable
     }
 
     #[test]
     fn test_portfolio_performance_excludes_missing_current_price() {
         // When a stock has a missing current price within the 90-day window,
         // it should be excluded from both the average and the count.
-        assert!(is_priceable(20.0, 25.0, true)); // priceable
-        assert!(!is_priceable(20.0, 0.0, true)); // missing current price is not priceable
-        assert!(!is_priceable(0.0, 25.0, true)); // missing buy price is not priceable
+        assert!(is_priceable(20.0, 25.0)); // priceable
+        assert!(!is_priceable(20.0, 0.0)); // missing current price is not priceable
+        assert!(!is_priceable(0.0, 25.0)); // missing buy price is not priceable
     }
 
     #[test]
@@ -2878,226 +2732,5 @@ mod tests {
         let wrong_average = good_returns.iter().sum::<f64>() / wrong_denominator as f64;
         assert_eq!(wrong_average, 20.0 / 3.0);
         assert_ne!(correct_average, wrong_average);
-    }
-
-    // --- Split-coefficient guard and correct-or-exclude (issue #294) ---
-
-    /// Builds a split-relevant series for one ticker from
-    /// `(date, high, low, close_unused, split_coefficient)` points. `close` is
-    /// not stored in `DailyMarketPoint`, so only high/low/coefficient matter.
-    fn split_series(points: &[(&str, f64, f64, f64)]) -> HashMap<String, DailyMarketPoint> {
-        let mut series = HashMap::new();
-        for (date, high, low, split_coefficient) in points {
-            series.insert(
-                (*date).to_string(),
-                DailyMarketPoint {
-                    high: *high,
-                    low: *low,
-                    split_coefficient: *split_coefficient,
-                },
-            );
-        }
-        series
-    }
-
-    fn date(s: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
-    }
-
-    #[test]
-    fn test_compute_split_adjustment_no_splits_is_reliable_unity() {
-        let series = split_series(&[
-            ("2024-11-15", 100.0, 100.0, 1.0),
-            ("2024-12-15", 105.0, 105.0, 1.0),
-        ]);
-        let adj = compute_split_adjustment(&series, date("2024-11-15"));
-        assert_eq!(adj, SplitAdjustment::NONE);
-    }
-
-    #[test]
-    fn test_compute_split_adjustment_clean_single_split() {
-        // A real 2:1 split: the day before trades ~110, the split day ~55.
-        let series = split_series(&[
-            ("2024-12-14", 110.0, 110.0, 1.0),
-            ("2024-12-15", 55.0, 55.0, 2.0),
-        ]);
-        let adj = compute_split_adjustment(&series, date("2024-11-15"));
-        assert!(adj.reliable, "a reconcilable 2:1 split must be reliable");
-        assert!((adj.factor - 2.0).abs() < 1e-9, "factor should be 2.0");
-    }
-
-    #[test]
-    fn test_compute_split_adjustment_deduplicates_repeated_event() {
-        // The same 2:1 event recorded twice within five days applies once.
-        let series = split_series(&[
-            ("2024-12-14", 110.0, 110.0, 1.0),
-            ("2024-12-15", 55.0, 55.0, 2.0),
-            ("2024-12-17", 55.0, 55.0, 2.0),
-        ]);
-        let adj = compute_split_adjustment(&series, date("2024-11-15"));
-        assert!(adj.reliable);
-        assert!(
-            (adj.factor - 2.0).abs() < 1e-9,
-            "duplicate within window must not compound to 4.0, got {}",
-            adj.factor
-        );
-    }
-
-    #[test]
-    fn test_compute_split_adjustment_implausible_coefficient_unreliable() {
-        let series = split_series(&[
-            ("2024-12-14", 110.0, 110.0, 1.0),
-            ("2024-12-15", 2.0, 2.0, 50.0), // single coefficient far above 10
-        ]);
-        let adj = compute_split_adjustment(&series, date("2024-11-15"));
-        assert!(
-            !adj.reliable,
-            "an implausibly large single coefficient must be flagged unreliable"
-        );
-    }
-
-    #[test]
-    fn test_compute_split_adjustment_price_ratio_mismatch_unreliable() {
-        // Coefficient claims 2:1 but the price barely moves: cannot reconcile.
-        let series = split_series(&[
-            ("2024-12-14", 100.0, 100.0, 1.0),
-            ("2024-12-15", 98.0, 98.0, 2.0),
-        ]);
-        let adj = compute_split_adjustment(&series, date("2024-11-15"));
-        assert!(
-            !adj.reliable,
-            "a coefficient that does not match the observed price drop is unreliable"
-        );
-    }
-
-    #[test]
-    fn test_compute_split_adjustment_ignores_splits_before_buy_date() {
-        // A split that predates the buy date does not adjust the buy price.
-        let series = split_series(&[
-            ("2024-12-14", 110.0, 110.0, 1.0),
-            ("2024-12-15", 55.0, 55.0, 2.0),
-        ]);
-        let adj = compute_split_adjustment(&series, date("2024-12-31"));
-        assert_eq!(adj, SplitAdjustment::NONE);
-    }
-
-    /// Writes a score TSV and its derived market-data CSV into a temp dir, then
-    /// returns the temp dir (kept alive) and the score-file path.
-    fn write_portfolio_fixture(tsv: &str, csv: &str) -> (tempfile::TempDir, String) {
-        use std::io::Write;
-        let dir = tempfile::tempdir().unwrap();
-        let tsv_path = dir.path().join("score.tsv");
-        let csv_path = dir.path().join("score.csv");
-        std::fs::File::create(&tsv_path)
-            .unwrap()
-            .write_all(tsv.as_bytes())
-            .unwrap();
-        std::fs::File::create(&csv_path)
-            .unwrap()
-            .write_all(csv.as_bytes())
-            .unwrap();
-        (dir, tsv_path.to_string_lossy().to_string())
-    }
-
-    const PERF_CSV_HEADER: &str = "date,ticker,high,low,open,close,split_coefficient\n";
-
-    /// Score-TSV header carrying every column `StockRecord` deserialises.
-    const PERF_TSV_HEADER: &str = "Stock\tScore\tTarget\tExDividendDate\tDividendPerShare\tNotes\tintrinsicValuePerShareBasic\tintrinsicValuePerShareAdjusted\n";
-
-    #[test]
-    fn test_portfolio_performance_corrects_clean_split() {
-        // A clean 2:1 split inside the window must be corrected, not excluded:
-        // raw close 100 -> 55 looks like -45%, but the split-adjusted return is
-        // +10% (buy basis restated to 50).
-        let tsv = format!("{PERF_TSV_HEADER}NYSE:CLEAN\t1.0\t$120.00\t\t\t\t\t\n");
-        let csv = format!(
-            "{PERF_CSV_HEADER}\
-             2024-11-15,NYSE:CLEAN,100,100,100,100,1.0\n\
-             2024-12-14,NYSE:CLEAN,110,110,110,110,1.0\n\
-             2024-12-15,NYSE:CLEAN,55,55,55,55,2.0\n\
-             2025-02-13,NYSE:CLEAN,55,55,55,55,1.0\n"
-        );
-        let (_dir, score_path) = write_portfolio_fixture(&tsv, &csv);
-
-        let result = calculate_portfolio_performance(&score_path, "2024-11-15").unwrap();
-
-        assert_eq!(result.total_stocks, 1, "a clean split stock stays included");
-        assert!(result.excluded_tickers.is_empty());
-        let stock = &result.individual_performances[0];
-        assert!(
-            (stock.buy_price - 50.0).abs() < 1e-6,
-            "buy basis must be restated to 50, got {}",
-            stock.buy_price
-        );
-        assert!(
-            (stock.gain_loss_percent - 10.0).abs() < 1e-6,
-            "corrected return must be +10%, got {}",
-            stock.gain_loss_percent
-        );
-        assert!((result.performance_90_day - 10.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_portfolio_performance_excludes_implausible_split() {
-        // Two stocks: one clean (+10%), one with an implausible coefficient that
-        // cannot be reconciled. The bad one must drop from the average, from the
-        // count, and appear in excluded_tickers (issue #294 + #286 plumbing).
-        let tsv = format!(
-            "{PERF_TSV_HEADER}\
-             NYSE:GOODSPLIT\t1.0\t$120.00\t\t\t\t\t\n\
-             NYSE:BADSPLIT\t1.0\t$120.00\t\t\t\t\t\n"
-        );
-        let csv = format!(
-            "{PERF_CSV_HEADER}\
-             2024-11-15,NYSE:GOODSPLIT,100,100,100,100,1.0\n\
-             2024-12-14,NYSE:GOODSPLIT,110,110,110,110,1.0\n\
-             2024-12-15,NYSE:GOODSPLIT,55,55,55,55,2.0\n\
-             2025-02-13,NYSE:GOODSPLIT,55,55,55,55,1.0\n\
-             2024-11-15,NYSE:BADSPLIT,100,100,100,100,1.0\n\
-             2024-12-15,NYSE:BADSPLIT,2,2,2,2,50.0\n\
-             2025-02-13,NYSE:BADSPLIT,2,2,2,2,1.0\n"
-        );
-        let (_dir, score_path) = write_portfolio_fixture(&tsv, &csv);
-
-        let result = calculate_portfolio_performance(&score_path, "2024-11-15").unwrap();
-
-        assert_eq!(
-            result.total_stocks, 1,
-            "only the reconcilable stock is counted"
-        );
-        assert_eq!(result.individual_performances.len(), 1);
-        assert_eq!(result.individual_performances[0].ticker, "NYSE:GOODSPLIT");
-        assert!(
-            result
-                .excluded_tickers
-                .contains(&"NYSE:BADSPLIT".to_string()),
-            "the unreconcilable split stock must be excluded"
-        );
-        // Average is over the single included stock only.
-        assert!((result.performance_90_day - 10.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_portfolio_performance_no_split_unchanged() {
-        // A stock with no split (coefficient 1.0 throughout) behaves exactly as
-        // before: 100 -> 110 is a straight +10%, buy basis unchanged.
-        let tsv = format!("{PERF_TSV_HEADER}NYSE:NOSPLIT\t1.0\t$120.00\t\t\t\t\t\n");
-        let csv = format!(
-            "{PERF_CSV_HEADER}\
-             2024-11-15,NYSE:NOSPLIT,100,100,100,100,1.0\n\
-             2025-02-13,NYSE:NOSPLIT,110,110,110,110,1.0\n"
-        );
-        let (_dir, score_path) = write_portfolio_fixture(&tsv, &csv);
-
-        let result = calculate_portfolio_performance(&score_path, "2024-11-15").unwrap();
-
-        assert_eq!(result.total_stocks, 1);
-        assert!(result.excluded_tickers.is_empty());
-        let stock = &result.individual_performances[0];
-        assert!(
-            (stock.buy_price - 100.0).abs() < 1e-6,
-            "no-split buy basis is unchanged"
-        );
-        assert!((stock.gain_loss_percent - 10.0).abs() < 1e-6);
     }
 }

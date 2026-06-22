@@ -3300,29 +3300,20 @@ class GRQValidator {
         return validStocks > 0 ? totalTarget / validStocks : 20.0;
     }
 
-    // Whether a stock counts towards portfolio aggregates (issues #289, #293):
-    // it must have BOTH a usable buy price (on the score date) AND a usable
-    // current price (latest market data), AND a reliably reconcilable split
-    // series. Delegates to the shared inclusion predicate in projection.js so
-    // the dashboard, the Rust backend and the shared helpers all agree on the
-    // ONE rule. Excluded stocks (delisted, merged for cash, renamed, or with a
-    // split series that cannot be trustworthily reconciled — the KLAC spike,
-    // issue #292) are dropped entirely, re-weighting the portfolio equally over
-    // the remaining included stocks.
+    // Whether a stock counts towards portfolio aggregates (issue #289): it must
+    // have BOTH a usable buy price (on the score date) AND a usable current
+    // price (latest market data). Delegates to the shared inclusion predicate
+    // in projection.js so the dashboard, the Rust backend and the shared
+    // helpers all agree on the rule. Excluded stocks (delisted, merged for
+    // cash, renamed) are dropped entirely, re-weighting the portfolio equally
+    // over the remaining included stocks.
     isStockPriceable(stockSymbol, scoreDate) {
         const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
         const buyPrice = buyPriceObj ? buyPriceObj.price : null;
-        // `reliable` is false when the split series cannot be reconciled; feed
-        // it into the single predicate so split-distorted stocks drop out too.
-        const splitReliable = buyPriceObj ? buyPriceObj.reliable : true;
         const currentPrice = GRQProjection.currentPriceFromLatest(
             this.marketData[stockSymbol],
         );
-        return GRQProjection.isStockIncluded(
-            buyPrice,
-            currentPrice,
-            splitReliable,
-        );
+        return GRQProjection.isStockIncluded(buyPrice, currentPrice);
     }
 
     calculatePortfolioPerformance90Day() {
