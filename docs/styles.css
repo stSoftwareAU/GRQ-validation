@@ -453,6 +453,20 @@
   .card-body {
     padding: 1rem;
   }
+
+  /* Flatten section-card chrome on phones (issue #317): drop the 1px border
+     and 0.375rem rounded corners so sections read closer to edge-to-edge,
+     giving figures/tables more room. Card-header titles and data are kept. */
+  .card {
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Drop the outer wrapper's drop shadow; !important overrides Bootstrap's
+     .shadow-sm utility. */
+  .shadow-sm {
+    box-shadow: none !important;
+  }
 }
 
 /* Mobile-friendly form controls */
