@@ -46,9 +46,10 @@ function formatNumber(value, decimals = 2) {
     }).format(number);
 }
 
-// Format a market index level (e.g. 4742.83 → "4,742.83"). Two decimals by
-// default so every index reads consistently.
-function formatIndexLevel(value, decimals = 2) {
+// Format a market index level (e.g. 7500.42 → "7,500"). Index levels are large
+// whole-number figures, so no decimals by default (issue #313); thousands
+// separators still apply. Callers can pass an explicit decimals count.
+function formatIndexLevel(value, decimals = 0) {
     return formatNumber(value, decimals);
 }
 
