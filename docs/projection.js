@@ -364,29 +364,37 @@ function getFairValueRange(analysis) {
 // rules (issue #204). Pure given the three prices so the dashboard and tests
 // share one cascade. Returns a CSS *class* token (not an inline colour) so the
 // colour is theme-aware via the cascade — the dark theme remaps the same class
-// to a higher-contrast colour, meeting WCAG 2 AA in both themes (issue #281):
+// to a higher-contrast colour, meeting WCAG 2 AA in both themes (issue #281).
+//
+// Red ("danger") must signal a genuine problem, never sit next to a positive
+// return (issue #299, part of #274): when the position is in profit
+// (current >= buy) the target is never red — a target below the buy price there
+// is simply already met by the market, not "bad". Red is reserved for a
+// position that is underwater with a target that stays below entry.
 //   - any input null -> '' (default colour, inherited)
-//   - target below buy price -> 'price-bad' (red, always bad)
-//   - target above current AND in profit (current >= buy) -> 'price-good' (green)
+//   - in profit (current >= buy): target above current -> 'price-good' (green),
+//     otherwise -> 'price-neutral' (grey)
+//   - underwater (current < buy) AND target below buy -> 'price-bad' (red)
 //   - otherwise -> 'price-neutral' (grey)
 function getTargetPriceColor(targetPrice, currentPrice, buyPrice) {
     if (targetPrice === null || currentPrice === null || buyPrice === null) {
         return ""; // Default colour (inherits)
     }
 
-    // Red (Danger): Target price is below buy price - this is always bad
+    // In profit (current at or above buy): the realised return is positive, so
+    // the target must never read as danger (issue #299). Green when the target
+    // still implies upside from here, grey when it is already met/below entry.
+    if (currentPrice >= buyPrice) {
+        return targetPrice > currentPrice ? "price-good" : "price-neutral";
+    }
+
+    // Underwater (current below buy): a target below the buy price means the
+    // model expects the price to stay below entry - genuinely bad -> red.
     if (targetPrice < buyPrice) {
         return "price-bad";
     }
 
-    // Green (Good): Target price is above current price AND we're in profit territory
-    if (targetPrice > currentPrice && currentPrice >= buyPrice) {
-        return "price-good";
-    }
-
-    // Grey (Neutral): Target price is above buy price but we're either:
-    // - Below current price (target achieved), or
-    // - Current price is below buy price (we're in loss territory but target is still above buy price)
+    // Underwater but the target is still above entry (recovery implied) -> grey.
     return "price-neutral";
 }
 
