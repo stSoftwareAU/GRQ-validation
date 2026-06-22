@@ -326,6 +326,25 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  /*
+   * Shrink the gradient header banner on phones (issue #315) so data reaches
+   * the first screen sooner. Override Bootstrap's py-4 (1.5rem) padding and
+   * de-emphasise the display-4 title and lead subtitle — the title text,
+   * subtitle and theme toggle all stay; only the size shrinks.
+   */
+  .card-header.header-gradient {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .header-gradient .display-4 {
+    font-size: 1.75rem;
+  }
+
+  .header-gradient .lead {
+    font-size: 0.95rem;
+  }
+
   .chart-container {
     height: 400px; /* Still taller than before on mobile */
   }
