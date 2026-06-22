@@ -62,10 +62,18 @@ Deno.test("formatNumber returns N/A for non-finite input", () => {
   assertEquals(formatNumber(""), "N/A");
 });
 
-Deno.test("formatIndexLevel formats an index level with separators", () => {
-  assertEquals(formatIndexLevel(4742.83), "4,742.83");
-  assertEquals(formatIndexLevel(16057.44), "16,057.44");
+Deno.test("formatIndexLevel formats an index level with no decimals by default (issue #313)", () => {
+  // Index levels (e.g. SP500) read as whole numbers with thousands separators:
+  // 7500.42 → "7,500", not "7,500.42".
+  assertEquals(formatIndexLevel(7500.42), "7,500");
+  assertEquals(formatIndexLevel(4742.83), "4,743");
+  assertEquals(formatIndexLevel(16057.44), "16,057");
   assertEquals(formatIndexLevel(null), "N/A");
+});
+
+Deno.test("formatIndexLevel still honours an explicit decimals argument", () => {
+  assertEquals(formatIndexLevel(4742.83, 2), "4,742.83");
+  assertEquals(formatIndexLevel(4742.83, 1), "4,742.8");
 });
 
 Deno.test("formatPercent adds an explicit + sign and trailing %", () => {
