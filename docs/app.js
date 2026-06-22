@@ -98,35 +98,48 @@ class GRQValidator {
             });
         }
 
-        // Global click handler to manage popover behavior
+        // Single global popover click handler — the one source of truth for
+        // "tap outside to close" (issue #371). Replaces the two competing
+        // handlers that previously lived here and at module load. The dismissal
+        // logic is the shared, tested GRQPopover module, so an orphaned tip with
+        // no live trigger is still removed.
         document.addEventListener("click", (event) => {
-            const popoverTrigger = event.target.closest(
-                '[data-bs-toggle="popover"]',
+            const insidePopover = !!event.target.closest(
+                GRQPopover.POPOVER_TIP_SELECTOR,
             );
-            const popoverContent = event.target.closest(".popover");
+            const trigger = event.target.closest(
+                GRQPopover.POPOVER_TRIGGER_SELECTOR,
+            );
+            // Capture whether the tapped trigger's popover is already open
+            // BEFORE the close-all loop runs. Bootstrap sets aria-describedby
+            // on the trigger while its popover is shown, so a second tap on the
+            // same value toggles it shut instead of re-opening it (issue #372).
+            const triggerAlreadyOpen = !!trigger &&
+                trigger.hasAttribute("aria-describedby");
+            const action = GRQPopover.decidePopoverAction({
+                insidePopover,
+                hasTrigger: !!trigger,
+                triggerAlreadyOpen,
+            });
 
-            // Don't do anything if clicking inside the popover content
-            if (popoverContent) {
+            // Tapping inside an open popover's content must not close it.
+            if (action === "ignore") {
                 return;
             }
 
-            // Close all existing popovers
-            const popovers = document.querySelectorAll(
-                '[data-bs-toggle="popover"]',
+            // Close every popover: hide live instances AND remove orphaned
+            // tips. Not gated on a trigger's aria-describedby.
+            GRQPopover.closeAllPopovers(
+                document,
+                (element) => bootstrap.Popover.getInstance(element),
             );
-            popovers.forEach((element) => {
-                const popover = bootstrap.Popover.getInstance(element);
-                if (popover && element.hasAttribute("aria-describedby")) {
-                    popover.hide();
-                }
-            });
 
-            // If we clicked on a popover trigger, show the new one after a brief delay
-            if (popoverTrigger) {
+            // Re-open the tapped trigger after the close settles (the popovers
+            // use a manual trigger, so they are shown here rather than by
+            // Bootstrap itself).
+            if (action === "closeAndReopen" && trigger) {
                 setTimeout(() => {
-                    const popover = bootstrap.Popover.getInstance(
-                        popoverTrigger,
-                    );
+                    const popover = bootstrap.Popover.getInstance(trigger);
                     if (popover) {
                         popover.show();
                     }
@@ -2482,6 +2495,11 @@ class GRQValidator {
     }
 
     updateStockTable() {
+        // Start every re-render from a clean popover state (issue #370): hide
+        // and dispose all live popovers, then sweep any orphaned `.popover`
+        // tips before the innerHTML="" below destroys their triggers.
+        globalThis.GRQPopovers.clearAllPopovers(document, bootstrap.Popover);
+
         const tbody = document.getElementById("stockTableBody");
         tbody.innerHTML = "";
 
@@ -2882,16 +2900,11 @@ class GRQValidator {
             tbody.appendChild(totalsRow);
         }
 
-        // Dispose of existing popovers
-        const existingPopovers = document.querySelectorAll(
-            '.clickable-value[data-bs-toggle="popover"]',
-        );
-        existingPopovers.forEach((element) => {
-            const popover = bootstrap.Popover.getInstance(element);
-            if (popover) {
-                popover.dispose();
-            }
-        });
+        // Dispose of existing popovers and sweep any orphaned tips before
+        // recreating instances (issue #370). Hiding before disposing and
+        // sweeping stray `.popover` nodes ensures no popover survives into the
+        // freshly rendered DOM.
+        globalThis.GRQPopovers.clearAllPopovers(document, bootstrap.Popover);
 
         // Loop through all .clickable-value elements
         const clickableValues = document.querySelectorAll(
@@ -2924,6 +2937,10 @@ class GRQValidator {
     }
 
     updateBasicStockTable() {
+        // Clean popover state before re-rendering the basic view too (issue
+        // #370) so no tip survives a basic ↔ market view change.
+        globalThis.GRQPopovers.clearAllPopovers(document, bootstrap.Popover);
+
         const tbody = document.getElementById("stockTableBody");
         tbody.innerHTML = "";
 
@@ -4222,24 +4239,6 @@ const debouncedSyncChartForViewport = globalThis.GRQColorKey.debounce(
 globalThis.addEventListener("resize", debouncedSyncChartForViewport);
 globalThis.addEventListener("orientationchange", debouncedSyncChartForViewport);
 
-// Add document click handler to close popovers when clicking outside
-document.addEventListener("click", (event) => {
-    // Check if the click was on a popover trigger or inside a popover
-    const isPopoverTrigger = event.target.closest(
-        ".clickable-value",
-    );
-    const isInsidePopover = event.target.closest(".popover");
-
-    if (!isPopoverTrigger && !isInsidePopover) {
-        // Close all open popovers
-        const clickableValues = document.querySelectorAll(
-            ".clickable-value",
-        );
-        clickableValues.forEach((element) => {
-            const popover = bootstrap.Popover.getInstance(element);
-            if (popover && element.hasAttribute("aria-describedby")) {
-                popover.hide();
-            }
-        });
-    }
-});
+// The second global popover click handler that used to live here was removed in
+// issue #371. Dismissal is now handled by the single consolidated handler in
+// initializeEventListeners() above, via the shared GRQPopover module.
