@@ -2418,6 +2418,161 @@ mod tests {
             .contains(&"TEST:HYBRIDF".to_string()));
     }
 
+    // --- Unpriceable-stock exclusion for the hybrid path (issue #287) ---
+    //
+    // These mirror the exclusion cases proven for the full-period
+    // `calculate_portfolio_performance` so recent (hybrid) and mature scores
+    // apply identical semantics: a stock is included only when BOTH its buy
+    // price and its current/latest price are usable, and counts/averages are
+    // computed over the included stocks alone.
+
+    /// Builds a market-data map covering several tickers, each from its own
+    /// `(date, price)` points.
+    fn hybrid_market_data_multi(
+        entries: &[(&str, &[(NaiveDate, f64)])],
+    ) -> HashMap<String, HashMap<String, f64>> {
+        let mut outer = HashMap::new();
+        for (ticker, points) in entries {
+            let mut inner = HashMap::new();
+            for (date, price) in *points {
+                inner.insert(date.format("%Y-%m-%d").to_string(), *price);
+            }
+            outer.insert((*ticker).to_string(), inner);
+        }
+        outer
+    }
+
+    #[test]
+    fn test_hybrid_projection_includes_when_both_prices_present() {
+        let ticker = "TEST:HYBRIDBOTH";
+        let today = chrono::Utc::now().naive_utc().date();
+        let score_date = today - Duration::days(41);
+        let latest_date = score_date + Duration::days(40);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Usable buy price (on the score date) and usable latest price.
+        let market = hybrid_market_data(ticker, &[(score_date, 100.0), (latest_date, 110.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 120.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        assert_eq!(result.total_stocks, 1, "priceable stock must be included");
+        assert_eq!(result.individual_performances.len(), 1);
+        assert!(
+            result.excluded_tickers.is_empty(),
+            "a fully priceable stock must not be excluded"
+        );
+    }
+
+    #[test]
+    fn test_hybrid_projection_excludes_when_buy_price_missing() {
+        let ticker = "TEST:HYBRIDNOBUY";
+        let today = chrono::Utc::now().naive_utc().date();
+        let score_date = today - Duration::days(41);
+        let latest_date = score_date + Duration::days(40);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Buy price unusable (0.0 on the score date) but a usable latest price.
+        let market = hybrid_market_data(ticker, &[(score_date, 0.0), (latest_date, 110.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 120.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        assert_eq!(
+            result.total_stocks, 0,
+            "stock without a usable buy price must be excluded"
+        );
+        assert!(result.individual_performances.is_empty());
+        assert!(result.excluded_tickers.contains(&ticker.to_string()));
+    }
+
+    #[test]
+    fn test_hybrid_projection_excludes_when_latest_price_missing() {
+        let ticker = "TEST:HYBRIDNOLATEST";
+        let today = chrono::Utc::now().naive_utc().date();
+        let score_date = today - Duration::days(41);
+        let latest_date = score_date + Duration::days(40);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Usable buy price but the latest available price is unusable (0.0).
+        let market = hybrid_market_data(ticker, &[(score_date, 100.0), (latest_date, 0.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 120.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        assert_eq!(
+            result.total_stocks, 0,
+            "stock without a usable current/latest price must be excluded"
+        );
+        assert!(result.individual_performances.is_empty());
+        assert!(result.excluded_tickers.contains(&ticker.to_string()));
+    }
+
+    #[test]
+    fn test_hybrid_projection_excludes_when_both_prices_missing() {
+        let ticker = "TEST:HYBRIDNONE";
+        let today = chrono::Utc::now().naive_utc().date();
+        let score_date = today - Duration::days(41);
+        let latest_date = score_date + Duration::days(40);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Neither price is usable.
+        let market = hybrid_market_data(ticker, &[(score_date, 0.0), (latest_date, 0.0)]);
+        let records = vec![StockRecord::new(ticker.to_string(), 5.0, 120.0)];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        assert_eq!(
+            result.total_stocks, 0,
+            "stock with neither price usable must be excluded"
+        );
+        assert!(result.individual_performances.is_empty());
+        assert!(result.excluded_tickers.contains(&ticker.to_string()));
+    }
+
+    #[test]
+    fn test_hybrid_projection_count_and_average_over_included_only() {
+        let today = chrono::Utc::now().naive_utc().date();
+        let score_date = today - Duration::days(41);
+        let latest_date = score_date + Duration::days(40);
+        let score_str = score_date.format("%Y-%m-%d").to_string();
+
+        // Two priceable stocks with identical 100 -> 110 trends (projection
+        // 11.25 each) plus one unpriceable stock (buy price 0.0).
+        let included_a = "TEST:HYBRIDINCA";
+        let included_b = "TEST:HYBRIDINCB";
+        let excluded = "TEST:HYBRIDEXC";
+        let market = hybrid_market_data_multi(&[
+            (included_a, &[(score_date, 100.0), (latest_date, 110.0)]),
+            (included_b, &[(score_date, 100.0), (latest_date, 110.0)]),
+            (excluded, &[(score_date, 0.0), (latest_date, 0.0)]),
+        ]);
+        let records = vec![
+            StockRecord::new(included_a.to_string(), 5.0, 120.0),
+            StockRecord::new(included_b.to_string(), 5.0, 120.0),
+            StockRecord::new(excluded.to_string(), 5.0, 120.0),
+        ];
+
+        let result = calculate_hybrid_projection(&records, &score_str, &market).unwrap();
+
+        // Count is over included stocks only.
+        assert_eq!(result.total_stocks, 2);
+        assert_eq!(result.individual_performances.len(), 2);
+
+        // Average is computed over the two included stocks only; the excluded
+        // stock contributes nothing (otherwise the mean would be dragged down).
+        let expected = 11.25;
+        assert!(
+            (result.performance_90_day - expected).abs() < 1e-6,
+            "average must be over included stocks only, got {}",
+            result.performance_90_day
+        );
+
+        // The unpriceable stock is surfaced as excluded.
+        assert_eq!(result.excluded_tickers.len(), 1);
+        assert!(result.excluded_tickers.contains(&excluded.to_string()));
+    }
+
     // --- Tests for stock priceable predicate (issue #286) ---
 
     #[test]
