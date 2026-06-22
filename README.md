@@ -7,7 +7,7 @@ Pages.
 ## Features
 
 - **Performance Tracking** — calculate 90-day and annualised performance for
-  stock portfolios.
+  stock portfolios
 - **Market Data Integration** — fetch and process historical stock data into
   per-score-file CSVs.
 - **Benchmark Comparison** — S&P 500, NASDAQ and Russell 2000 index data is
