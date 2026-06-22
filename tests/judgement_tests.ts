@@ -100,3 +100,94 @@ Deno.test("computeJudgement - pending and early-stage reporting", async (t) => {
     },
   );
 });
+
+Deno.test(
+  "computeJudgement - positive projection with a non-positive target (issue #297)",
+  async (t) => {
+    // Regression for the computeJudgement sign-flip. When a stock's model
+    // 90-Day Target price sits below its buy price the target return % is
+    // negative, so the old `predicted / target` ratio flipped the sign of a
+    // healthy positive projection and mislabelled it as a red "Declining".
+    // A positive projected return must never read as "Declining".
+
+    await t.step(
+      "STLD-like: strong positive projection, negative target",
+      () => {
+        const result = GRQProjection.computeJudgement({
+          performance: 33.5,
+          daysElapsed: 60,
+          targetPercentage: -2, // target price below buy price
+          projection: {
+            projected90DayPerformance: 45.5,
+            projectionMethod: "dampened_trend",
+            confidence: 0.6,
+          },
+        });
+        assert(
+          !result.startsWith("Declining"),
+          `expected not declining, got "${result}"`,
+        );
+      },
+    );
+
+    await t.step(
+      "GE-like: smaller positive projection, negative target",
+      () => {
+        const result = GRQProjection.computeJudgement({
+          performance: 14.7,
+          daysElapsed: 60,
+          targetPercentage: -1.5,
+          projection: {
+            projected90DayPerformance: 12.3,
+            projectionMethod: "dampened_trend",
+            confidence: 0.5,
+          },
+        });
+        assert(
+          !result.startsWith("Declining"),
+          `expected not declining, got "${result}"`,
+        );
+      },
+    );
+
+    await t.step(
+      "a negative projection still declines regardless of target sign",
+      () => {
+        const result = GRQProjection.computeJudgement({
+          performance: -8.0,
+          daysElapsed: 60,
+          targetPercentage: -2,
+          projection: {
+            projected90DayPerformance: -8.0,
+            projectionMethod: "dampened_trend",
+            confidence: 0.6,
+          },
+        });
+        assert(
+          result.startsWith("Declining"),
+          `expected declining, got "${result}"`,
+        );
+      },
+    );
+
+    await t.step(
+      "a small positive projection short of a positive target is below target, not declining",
+      () => {
+        const result = GRQProjection.computeJudgement({
+          performance: 2.0,
+          daysElapsed: 60,
+          targetPercentage: 20, // predicted 2% is < 0.2 * target
+          projection: {
+            projected90DayPerformance: 2.0,
+            projectionMethod: "dampened_trend",
+            confidence: 0.6,
+          },
+        });
+        assert(
+          !result.startsWith("Declining"),
+          `expected not declining, got "${result}"`,
+        );
+      },
+    );
+  },
+);
