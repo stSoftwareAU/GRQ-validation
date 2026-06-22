@@ -2488,6 +2488,11 @@ class GRQValidator {
     }
 
     updateStockTable() {
+        // Start every re-render from a clean popover state (issue #370): hide
+        // and dispose all live popovers, then sweep any orphaned `.popover`
+        // tips before the innerHTML="" below destroys their triggers.
+        globalThis.GRQPopovers.clearAllPopovers(document, bootstrap.Popover);
+
         const tbody = document.getElementById("stockTableBody");
         tbody.innerHTML = "";
 
@@ -2888,16 +2893,11 @@ class GRQValidator {
             tbody.appendChild(totalsRow);
         }
 
-        // Dispose of existing popovers
-        const existingPopovers = document.querySelectorAll(
-            '.clickable-value[data-bs-toggle="popover"]',
-        );
-        existingPopovers.forEach((element) => {
-            const popover = bootstrap.Popover.getInstance(element);
-            if (popover) {
-                popover.dispose();
-            }
-        });
+        // Dispose of existing popovers and sweep any orphaned tips before
+        // recreating instances (issue #370). Hiding before disposing and
+        // sweeping stray `.popover` nodes ensures no popover survives into the
+        // freshly rendered DOM.
+        globalThis.GRQPopovers.clearAllPopovers(document, bootstrap.Popover);
 
         // Loop through all .clickable-value elements
         const clickableValues = document.querySelectorAll(
@@ -2930,6 +2930,10 @@ class GRQValidator {
     }
 
     updateBasicStockTable() {
+        // Clean popover state before re-rendering the basic view too (issue
+        // #370) so no tip survives a basic ↔ market view change.
+        globalThis.GRQPopovers.clearAllPopovers(document, bootstrap.Popover);
+
         const tbody = document.getElementById("stockTableBody");
         tbody.innerHTML = "";
 
