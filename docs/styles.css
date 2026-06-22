@@ -469,26 +469,34 @@
   }
 }
 
-/* Ensure proper spacing on mobile */
+/* Ensure proper spacing on mobile (issue #316: tighten section/card gaps and
+   the outer body padding so data gets more room on phones). */
 @media (max-width: 768px) {
   .row {
-    margin-left: -0.5rem;
-    margin-right: -0.5rem;
+    margin-left: -0.375rem;
+    margin-right: -0.375rem;
   }
 
   .col,
   .col-md-6,
   .col-lg-4 {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
   }
 
+  /* Tighten the stacked section/card gaps below Bootstrap's 1.5rem / 1rem. */
   .mb-4 {
-    margin-bottom: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
   }
 
   .mb-3 {
-    margin-bottom: 1rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  /* The outer body uses Bootstrap's p-4 (1.5rem !important); override it so
+     the dashboard body padding is reduced on phones. */
+  .card-body.p-4 {
+    padding: 1rem !important;
   }
 }
 
