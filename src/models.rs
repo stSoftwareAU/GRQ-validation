@@ -177,6 +177,35 @@ pub struct DailyData {
     pub split_coefficient: String,
 }
 
+/// Split-relevant daily figures parsed from the derived market-data CSV.
+///
+/// `high`/`low` feed the price-ratio reconciliation cross-check used to judge
+/// whether a split series can be trusted (issue #294). The close price is held
+/// separately in [`MarketDataCsv::closes`] and is not duplicated here.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DailyMarketPoint {
+    /// Highest traded price for the day.
+    pub high: f64,
+    /// Lowest traded price for the day.
+    pub low: f64,
+    /// Split coefficient applied on this date (`1.0` means no split).
+    pub split_coefficient: f64,
+}
+
+/// Result of parsing a derived market-data CSV.
+///
+/// `closes` preserves the original `ticker -> date -> close` shape consumed by
+/// existing callers; `points` carries the split-relevant figures used to
+/// correct-or-exclude split-distorted stocks (issue #294).
+#[derive(Debug, Default)]
+pub struct MarketDataCsv {
+    /// `ticker -> date -> close price`.
+    pub closes: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
+    /// `ticker -> date -> split-relevant daily figures`.
+    pub points:
+        std::collections::HashMap<String, std::collections::HashMap<String, DailyMarketPoint>>,
+}
+
 /// A full market-data file: metadata plus the daily time series keyed by date.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MarketData {

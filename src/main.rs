@@ -149,7 +149,8 @@ fn main() -> Result<()> {
             let market_data_csv = grq_validation::utils::read_market_data_from_csv(
                 &grq_validation::utils::derive_csv_output_path(&score_file_path),
             )
-            .context("reading market data CSV")?;
+            .context("reading market data CSV")?
+            .closes;
             let performance = grq_validation::utils::calculate_hybrid_projection(
                 &stock_records,
                 score_file_date,

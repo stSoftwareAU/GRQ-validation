@@ -1,5 +1,6 @@
 use crate::models::{
-    DividendData, IndexData, MarketData, PortfolioPerformance, StockPerformance, StockRecord,
+    DailyMarketPoint, DividendData, IndexData, MarketData, MarketDataCsv, PortfolioPerformance,
+    StockPerformance, StockRecord,
 };
 use anyhow::{anyhow, Result};
 use chrono::{Duration, NaiveDate};
@@ -301,25 +302,28 @@ fn parse_financial_value(field: &str, context: &str, raw: &str) -> Option<f64> {
     }
 }
 
-/// Reads a derived market-data CSV into a map of `ticker → (date → close)`.
+/// Reads a derived market-data CSV into a [`MarketDataCsv`].
 ///
-/// Rows with a non-numeric or non-positive close price are skipped (and a
-/// warning is written to stderr).
+/// The long-format columns are `date,ticker,high,low,open,close,
+/// split_coefficient`. `closes` keeps the original `ticker → (date → close)`
+/// shape; `points` additionally carries the `high`/`low`/`split_coefficient`
+/// figures the backend needs to correct-or-exclude split-distorted stocks
+/// (issue #294). Rows with a non-numeric or non-positive close price are
+/// skipped (and a warning is written to stderr). A missing or unparseable
+/// `split_coefficient` is treated as `1.0` (no split).
 ///
 /// # Errors
 ///
 /// Returns an error if the CSV file cannot be opened or a record cannot be
 /// read.
-pub fn read_market_data_from_csv(
-    csv_file_path: &str,
-) -> Result<HashMap<String, HashMap<String, f64>>> {
+pub fn read_market_data_from_csv(csv_file_path: &str) -> Result<MarketDataCsv> {
     use csv::ReaderBuilder;
     use std::fs::File;
 
     let file = File::open(csv_file_path)?;
     let mut reader = ReaderBuilder::new().has_headers(true).from_reader(file);
 
-    let mut market_data: HashMap<String, HashMap<String, f64>> = HashMap::new();
+    let mut market_data = MarketDataCsv::default();
 
     for result in reader.records() {
         let record = result?;
@@ -336,13 +340,42 @@ pub fn read_market_data_from_csv(
                 None => continue,
             };
 
-            if close_price > 0.0 {
-                // Store data using the full ticker (e.g., "NYSE:MBC")
-                market_data
-                    .entry(full_ticker)
-                    .or_default()
-                    .insert(date, close_price);
+            if close_price <= 0.0 {
+                continue;
             }
+
+            // high/low (columns 2/3) drive the split reconciliation cross-check;
+            // fall back to the close so a missing pair simply no-ops the check.
+            let high = record
+                .get(2)
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(close_price);
+            let low = record
+                .get(3)
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(close_price);
+            // split_coefficient (column 6) is optional; absent or invalid means
+            // "no split" (1.0) rather than a parse failure.
+            let split_coefficient = record
+                .get(6)
+                .and_then(|v| v.parse::<f64>().ok())
+                .filter(|c| c.is_finite() && *c > 0.0)
+                .unwrap_or(1.0);
+
+            // Store data using the full ticker (e.g., "NYSE:MBC").
+            market_data
+                .closes
+                .entry(full_ticker.clone())
+                .or_default()
+                .insert(date.clone(), close_price);
+            market_data.points.entry(full_ticker).or_default().insert(
+                date,
+                DailyMarketPoint {
+                    high,
+                    low,
+                    split_coefficient,
+                },
+            );
         }
     }
 
@@ -840,7 +873,8 @@ pub fn calculate_portfolio_performance(
 
     // Read market data from the CSV file that was created by the program
     let csv_file_path = derive_csv_output_path(score_file_path);
-    let market_data_csv = read_market_data_from_csv(&csv_file_path)?;
+    let market = read_market_data_from_csv(&csv_file_path)?;
+    let market_data_csv = &market.closes;
 
     let mut individual_performances = Vec::new();
     let mut excluded_tickers = Vec::new();
@@ -850,14 +884,14 @@ pub fn calculate_portfolio_performance(
         // Use the full ticker (e.g., "NYSE:SEM") to match CSV data
         let full_ticker = &record.stock;
 
-        // Get the buy price (first day close) from CSV data
+        // Get the buy price (first day close) from CSV data.
         let buy_price = if let Some(first_day_data) = market_data_csv.get(full_ticker) {
             if let Some(first_day) = first_day_data.get(score_file_date) {
                 *first_day
             } else {
                 // Find the next available trading day
                 let mut next_trading_day_price = 0.0;
-                let mut next_trading_day_date = None;
+                let mut next_trading_day_date: Option<NaiveDate> = None;
 
                 for (date_str, price) in first_day_data {
                     if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
@@ -919,7 +953,7 @@ pub fn calculate_portfolio_performance(
                 calculate_dividends_for_period(full_ticker, score_file_date, &end_date_str)
                     .unwrap_or(0.0);
 
-            // Calculate total return (price + dividends)
+            // Calculate total return (price + dividends) on the same basis.
             let total_return_percent = gain_loss_percent + (dividends_total / buy_price * 100.0);
 
             individual_performances.push(StockPerformance {
@@ -1222,11 +1256,11 @@ pub fn update_index_with_performance(docs_path: &str) -> Result<()> {
             match read_tsv_score_file(&score_file_path) {
                 Ok(stock_records) => {
                     match read_market_data_from_csv(&derive_csv_output_path(&score_file_path)) {
-                        Ok(market_data_csv) => {
+                        Ok(market) => {
                             match calculate_hybrid_projection(
                                 &stock_records,
                                 &score_entry.date,
-                                &market_data_csv,
+                                &market.closes,
                             ) {
                                 Ok(performance) => {
                                     score_entry.performance_90_day =
@@ -2224,7 +2258,10 @@ mod tests {
         tmp.write_all(csv.as_bytes()).unwrap();
         let path = tmp.path().to_string_lossy().to_string();
 
-        let market_data = read_market_data_from_csv(&path).unwrap();
+        // `read_market_data_from_csv` now returns a `MarketDataCsv`; the close
+        // map lives under `.closes` (issue #294). Behaviour for close parsing is
+        // otherwise unchanged.
+        let market_data = read_market_data_from_csv(&path).unwrap().closes;
 
         // Previously the bad close became 0.0 and was dropped by the > 0.0
         // guard; now it is explicitly skipped with a warning. Either way only
