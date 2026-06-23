@@ -2357,10 +2357,6 @@ class GRQValidator {
                                 dataPoint.date,
                             );
 
-                        // Calculate price return
-                        const priceReturn =
-                            ((currentPrice - buyPrice) / buyPrice) * 100;
-
                         // Add dividend return up to this date (but only count dividends within 90 days)
                         const dividends = this.getDividendsWithin90Days(
                             stock.stock,
@@ -2372,14 +2368,23 @@ class GRQValidator {
                             (sum, div) => sum + div.amount,
                             0,
                         );
-                        const dividendReturn = (totalDividends / buyPrice) *
-                            100;
 
-                        // Total return including dividends
-                        const totalReturn = priceReturn + dividendReturn;
+                        // Total return (price + dividends) via the shared
+                        // projection kernel (issue #424) so the chart, the
+                        // summary and the portfolio mean can never disagree.
+                        // Honour the helper's null guard (buyPrice <= 0) the
+                        // same way the summary path does.
+                        const totalReturn = GRQProjection
+                            .calculatePerformanceReturn(
+                                buyPrice,
+                                currentPrice,
+                                totalDividends,
+                            );
 
-                        totalPerformance += totalReturn;
-                        validStocks++;
+                        if (totalReturn !== null) {
+                            totalPerformance += totalReturn;
+                            validStocks++;
+                        }
                     } else if (timestamp === scoreDate.getTime()) {
                         // For the score date, performance is 0%
                         validStocks++;

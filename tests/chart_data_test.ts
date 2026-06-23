@@ -56,6 +56,11 @@ const g = globalThis as unknown as {
       buyPrice: number | null,
       adjustedTarget: number | null,
     ) => number | null;
+    calculateIncludedPortfolioPerformance: (
+      stocks: Array<
+        { buyPrice: number; currentPrice: number; totalDividends?: number }
+      >,
+    ) => number | null;
   };
 };
 const GRQProjection = g.GRQProjection;
@@ -271,4 +276,104 @@ Deno.test("Market Index Data Clearing", async (t) => {
       assertEquals(actual.length, expected.length, "Only portfolio data shown");
     },
   );
+});
+
+// Issue #424: the "Performance Over Time" chart time-series loop must compute
+// each stock's actual total return (price + dividends) via the SAME shared
+// kernel the summary and portfolio mean use — GRQProjection
+// .calculatePerformanceReturn — so the chart, the summary and the per-stock
+// views can never disagree. This models the per-point portfolio loop from
+// docs/app.js (the equal-weight average over priceable stocks) and pins it to
+// the shared functions using the issue's ABC/XYZ worked example.
+
+interface ChartStock {
+  buyPrice: number;
+  currentPrice: number;
+  totalDividends: number;
+}
+
+// Mirror of the chart's per-point portfolio computation in docs/app.js: for
+// each included stock, delegate to the shared kernel, honour its null guard
+// (buyPrice <= 0), then equal-weight the included total returns.
+function chartPortfolioReturnAtPoint(stocks: ChartStock[]): number | null {
+  let totalPerformance = 0;
+  let validStocks = 0;
+  for (const stock of stocks) {
+    const totalReturn = GRQProjection.calculatePerformanceReturn(
+      stock.buyPrice,
+      stock.currentPrice,
+      stock.totalDividends,
+    );
+    if (totalReturn !== null) {
+      totalPerformance += totalReturn;
+      validStocks++;
+    }
+  }
+  return validStocks > 0 ? totalPerformance / validStocks : null;
+}
+
+Deno.test("Chart actual-performance maths (issue #424)", async (t) => {
+  // ABC: $1 buy, $1 current, $0.01 dividends -> 1.0% dividend return.
+  const abc: ChartStock = {
+    buyPrice: 1,
+    currentPrice: 1,
+    totalDividends: 0.01,
+  };
+  // XYZ: $20 buy, $20 current, $0.05 dividends -> 0.25% dividend return.
+  const xyz: ChartStock = {
+    buyPrice: 20,
+    currentPrice: 20,
+    totalDividends: 0.05,
+  };
+
+  await t.step("ABC dividend return is 1.0% via the shared kernel", () => {
+    const abcReturn = GRQProjection.calculatePerformanceReturn(
+      abc.buyPrice,
+      abc.currentPrice,
+      abc.totalDividends,
+    );
+    assertEquals(abcReturn, 1.0);
+  });
+
+  await t.step("XYZ dividend return is 0.25% via the shared kernel", () => {
+    const xyzReturn = GRQProjection.calculatePerformanceReturn(
+      xyz.buyPrice,
+      xyz.currentPrice,
+      xyz.totalDividends,
+    );
+    assertEquals(xyzReturn, 0.25);
+  });
+
+  await t.step("ABC dividend return is 4x XYZ for an equal-dollar buy", () => {
+    const abcReturn = GRQProjection.calculatePerformanceReturn(1, 1, 0.01)!;
+    const xyzReturn = GRQProjection.calculatePerformanceReturn(20, 20, 0.05)!;
+    assertEquals(abcReturn / xyzReturn, 4);
+  });
+
+  await t.step(
+    "chart point equals the equal-weight portfolio mean (0.625%)",
+    () => {
+      const chartPoint = chartPortfolioReturnAtPoint([abc, xyz]);
+      assertEquals(chartPoint, 0.625);
+      // The chart loop must agree with the shared portfolio kernel for the
+      // same inputs — any future divergence between the two implementations
+      // fails the suite.
+      const portfolioMean = GRQProjection.calculateIncludedPortfolioPerformance(
+        [abc, xyz],
+      );
+      assertEquals(chartPoint, portfolioMean);
+    },
+  );
+
+  await t.step("chart point honours the null guard (buyPrice <= 0)", () => {
+    // A stock with a non-positive buy price returns null from the kernel and
+    // must be dropped from the equal-weight average, not counted as 0%.
+    const zeroBuy: ChartStock = {
+      buyPrice: 0,
+      currentPrice: 5,
+      totalDividends: 0,
+    };
+    const chartPoint = chartPortfolioReturnAtPoint([abc, xyz, zeroBuy]);
+    assertEquals(chartPoint, 0.625, "zero-buy stock excluded from the mean");
+  });
 });
