@@ -6,7 +6,7 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.0.211";
+const APP_VERSION = "1.0.212";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
@@ -34,6 +34,13 @@ const STATIC_ASSETS = [
   "./manifest.json",
   "./logo.png",
   "./sw-register.js",
+  // Trend view (issue #430) and the headless engines it reuses (#429/#431/#432).
+  "./trend.html",
+  "./trend.js",
+  "./trend_predictions.js",
+  "./trend_series.js",
+  "./index_overlay.js",
+  "./trend_settings.js",
   // SRI-pinned CDN assets from docs/index.html (issue #79).
   // Bump APP_VERSION whenever these pins change so the integrity hashes are
   // re-validated.

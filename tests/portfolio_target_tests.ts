@@ -29,6 +29,15 @@ const g = globalThis as unknown as {
       currentPrice: number,
       totalDividends?: number,
     ) => number | null;
+    calculatePortfolioTargetPercentage: (
+      stocks: Array<
+        {
+          buyPrice: number | null;
+          currentPrice: number | null;
+          adjustedTarget: number | null;
+        }
+      >,
+    ) => number;
   };
 };
 const GRQProjection = g.GRQProjection;
@@ -159,4 +168,42 @@ Deno.test("Portfolio Target Tests", async (t) => {
       "NYSE:WFG should have 2 dividends within 90 days",
     );
   });
+});
+
+// Direct coverage for the lifted, shared portfolio-target helper (issue #429).
+// The dashboard's GRQValidator.calculatePortfolioTargetPercentage now delegates
+// here, so the chart and the trend view share ONE target calculation.
+Deno.test("calculatePortfolioTargetPercentage - mean over included stocks", () => {
+  const portfolioTarget = GRQProjection.calculatePortfolioTargetPercentage([
+    { buyPrice: 100, currentPrice: 110, adjustedTarget: 120 }, // 20%
+    { buyPrice: 100, currentPrice: 90, adjustedTarget: 110 }, // 10%
+  ]);
+  assertAlmostEquals(portfolioTarget, 15.0);
+});
+
+Deno.test("calculatePortfolioTargetPercentage - excludes unpriceable stocks", () => {
+  // The second stock has a non-positive current price, so it is dropped from
+  // the average entirely — only the 50% target remains.
+  const portfolioTarget = GRQProjection.calculatePortfolioTargetPercentage([
+    { buyPrice: 100, currentPrice: 130, adjustedTarget: 150 }, // 50%
+    { buyPrice: 100, currentPrice: 0, adjustedTarget: 999 }, // excluded
+  ]);
+  assertAlmostEquals(portfolioTarget, 50.0);
+});
+
+Deno.test("calculatePortfolioTargetPercentage - 20% default when none qualify", () => {
+  // No usable stocks → the same 20.0% fallback the dashboard totals row uses.
+  assertEquals(GRQProjection.calculatePortfolioTargetPercentage([]), 20.0);
+  assertEquals(
+    GRQProjection.calculatePortfolioTargetPercentage([
+      { buyPrice: 100, currentPrice: 110, adjustedTarget: null },
+    ]),
+    20.0,
+  );
+  assertEquals(
+    GRQProjection.calculatePortfolioTargetPercentage(
+      null as unknown as [],
+    ),
+    20.0,
+  );
 });

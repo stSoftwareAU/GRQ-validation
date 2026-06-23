@@ -3374,29 +3374,32 @@ class GRQValidator {
     }
 
     calculatePortfolioTargetPercentage() {
-        // Calculate portfolio target based on the actual targets of all stocks
-        let totalTarget = 0;
-        let validStocks = 0;
+        // Portfolio target = equal-weight mean of the included stocks' target
+        // percentages. The maths lives in the shared projection module
+        // (issue #429) so the dashboard chart and the trend view call ONE
+        // function. Build the per-stock {buyPrice, currentPrice, adjustedTarget}
+        // inputs here, then delegate; the shared helper applies the same
+        // inclusion gate (issue #289) and 20.0% fallback.
         const scoreDate = this.getScoreDate(this.selectedFile);
-
-        this.scoreData.forEach((stock) => {
-            // Only included (priceable) stocks contribute to the portfolio
-            // target so the displayed allocation reflects the re-weighted
-            // remainder (issue #289).
-            if (!this.isStockPriceable(stock.stock, scoreDate)) {
-                return;
-            }
-            if (stock.target !== null && !isNaN(stock.target)) {
-                // Use centralized method to calculate target percentage
-                const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
-                if (targetPercentage !== null) {
-                    totalTarget += targetPercentage;
-                    validStocks++;
-                }
-            }
+        const stocks = this.scoreData.map((stock) => {
+            const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+            const hasTarget = stock.target !== null && !isNaN(stock.target);
+            return {
+                buyPrice: buyPriceObj ? buyPriceObj.price : null,
+                currentPrice: GRQProjection.currentPriceFromLatest(
+                    this.marketData[stock.stock],
+                ),
+                adjustedTarget: hasTarget
+                    ? this.adjustHistoricalPriceToCurrent(
+                        stock.target,
+                        stock.stock,
+                        scoreDate,
+                    )
+                    : null,
+            };
         });
 
-        return validStocks > 0 ? totalTarget / validStocks : 20.0;
+        return GRQProjection.calculatePortfolioTargetPercentage(stocks);
     }
 
     // Whether a stock counts towards portfolio aggregates (issue #289): it must
