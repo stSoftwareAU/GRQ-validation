@@ -516,6 +516,46 @@ function calculateTargetPercentage(buyPrice, adjustedTarget) {
     return null;
 }
 
+// Equal-weight portfolio target percentage over ONLY the included stocks
+// (issue #429, lifted from docs/app.js so the dashboard chart and the trend
+// view share ONE target calculation). Each stock object provides `buyPrice`,
+// `currentPrice` and `adjustedTarget` (the model's 90-day target restated into
+// current, post-split terms). Excluded stocks (per isStockIncluded) and stocks
+// with no usable target are dropped; the result is the mean of the remaining
+// per-stock target percentages, or the 20.0% default when none qualify (the
+// same fallback the dashboard's totals row applies). Returns 20.0 for a missing
+// or empty list so callers always have a usable figure.
+function calculatePortfolioTargetPercentage(stocks) {
+    if (!Array.isArray(stocks)) {
+        return 20.0;
+    }
+    let totalTarget = 0;
+    let validStocks = 0;
+    for (const stock of stocks) {
+        const buyPrice = stock && stock.buyPrice;
+        const currentPrice = stock && stock.currentPrice;
+        if (!isStockIncluded(buyPrice, currentPrice)) {
+            continue;
+        }
+        const adjustedTarget = stock.adjustedTarget;
+        if (
+            adjustedTarget === null || adjustedTarget === undefined ||
+            Number.isNaN(adjustedTarget)
+        ) {
+            continue;
+        }
+        const targetPercentage = calculateTargetPercentage(
+            buyPrice,
+            adjustedTarget,
+        );
+        if (targetPercentage !== null) {
+            totalTarget += targetPercentage;
+            validStocks++;
+        }
+    }
+    return validStocks > 0 ? totalTarget / validStocks : 20.0;
+}
+
 // Fair-value display band for a stock's analysis. Pure given the analysis
 // object so the dashboard (via GRQValidator) and the Deno tests share one set
 // of branch rules (issue #204):
@@ -936,6 +976,7 @@ globalThis.GRQProjection = {
     getBuyPrice,
     currentPriceFromLatest,
     calculateTargetPercentage,
+    calculatePortfolioTargetPercentage,
     getFairValueRange,
     getTargetPriceColor,
     calculateRSquared,
