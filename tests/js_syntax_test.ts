@@ -98,3 +98,19 @@ Deno.test("checkJsSyntax - production docs/trend_settings.js parses cleanly", as
   const result = checkJsSyntax(source);
   assertEquals(result.valid, true, result.error);
 });
+
+Deno.test("checkJsSyntax - production docs/trend_predictions.js parses cleanly", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../docs/trend_predictions.js", import.meta.url),
+  );
+  const result = checkJsSyntax(source);
+  assertEquals(result.valid, true, result.error);
+});
+
+Deno.test("checkJsSyntax - production docs/trend.js parses cleanly", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../docs/trend.js", import.meta.url),
+  );
+  const result = checkJsSyntax(source);
+  assertEquals(result.valid, true, result.error);
+});

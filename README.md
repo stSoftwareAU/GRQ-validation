@@ -168,8 +168,35 @@ deterministically — issue #281):
   override that is **not** persisted to `localStorage`).
 
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
-`pa11yci.json` scans the aggregate and single-stock views in both themes on
-every pull request that touches `docs/`.
+`pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
+on every pull request that touches `docs/`.
+
+#### Prediction Trend view (`docs/trend.html`)
+
+A separate, purely additive page (reached via the **Prediction Trend** link on
+the dashboard, and back again) charts the portfolio's **average Actual %**
+against its **average Target %** over the matured-prediction history, so you can
+see whether predictions are improving — are we consistently over- or
+under-predicting, and do Actual and Target converge as training progresses. A
+**Group by** control buckets the history by **day / week / month / quarter**
+(default **month**), and each benchmark index (SP500 / NASDAQ / Russell 2000)
+can be overlaid on/off; both choices are remembered across visits. Only
+**matured** predictions appear — a score date joins the trend once its full
+90-day window has elapsed.
+
+The view never recomputes the actuals: it reuses the same shared kernels the
+dashboard does, so the two always agree.
+
+```mermaid
+flowchart LR
+    A[scores/index.json] -->|matured dates only| B[trend.js loader]
+    B -->|fetch tsv/csv/dividends| C[trend_predictions.js<br/>resolve per-stock figures]
+    C -->|reuse projection.js kernels| D[trend_series.js<br/>Actual/Target series + buckets]
+    D --> E[Chart.js line chart]
+    F[market-indices.json] --> G[index_overlay.js<br/>benchmark datasets]
+    G --> E
+    H[trend_settings.js<br/>grouping + toggles] --> B
+```
 
 ## CI/CD Pipeline
 
@@ -307,11 +334,14 @@ GRQ-validation/
 │   └── utils.rs            # Utility functions
 ├── docs/                   # Static dashboard (published via GitHub Pages)
 │   ├── index.html          # Main dashboard
-│   ├── list.html           # Score files list
+│   ├── trend.html          # Prediction Trend view (Actual vs Target over time)
 │   ├── app.js              # Main dashboard logic
-│   ├── list.js             # List page logic
+│   ├── trend.js            # Trend view controller
+│   ├── trend_predictions.js # Per-score-date prediction resolver (shared calc)
+│   ├── trend_series.js     # Trend data engine (matured series + bucketing)
+│   ├── index_overlay.js    # Benchmark-index overlay engine for the Trend view
+│   ├── trend_settings.js   # Remembers Trend grouping + index toggles
 │   ├── styles.css          # Main dashboard styling
-│   ├── list.css            # List page styling
 │   ├── market-indices.json # First-party benchmark index data (same-origin)
 │   └── scores/             # Score files and generated market data
 ├── tests/                  # Rust and Deno tests
