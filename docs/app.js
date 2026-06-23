@@ -170,25 +170,43 @@ class GRQValidator {
             });
 
             if (indexData.scores.length > 0) {
-                // Check for file parameter in URL first
+                // Check for file/date parameters in URL first. ?file= takes
+                // the exact score-file path; ?date= (issue #436) is the
+                // friendlier alternative, matching a score by its YYYY-MM-DD
+                // date. ?file= wins when both are present.
                 const urlParams = new URLSearchParams(window.location.search);
                 const fileParam = urlParams.get('file');
-                
+
+                let requestedFile = null;
                 if (fileParam) {
                     // Check if the file parameter matches any available score file
                     const matchingScore = indexData.scores.find(score => score.file === fileParam);
                     if (matchingScore) {
-                        console.log(`Auto-selecting score file from URL parameter: ${matchingScore.date} (${matchingScore.month} ${matchingScore.day})`);
-                        this.selectedFile = matchingScore.file;
-                        select.value = this.selectedFile;
-                        await this.loadScoreFile();
-                        this.applyStockSelectionFromUrl();
-                        return;
+                        requestedFile = matchingScore.file;
                     } else {
                         console.warn(`File parameter '${fileParam}' not found in available scores`);
                     }
                 }
-                
+
+                if (!requestedFile) {
+                    const dateParam = GRQDateSelection.dateFromSearch(window.location.search);
+                    if (dateParam) {
+                        requestedFile = GRQDateSelection.resolveDateSelection(indexData.scores, dateParam);
+                        if (!requestedFile) {
+                            console.warn(`Date parameter '${dateParam}' not found in available scores`);
+                        }
+                    }
+                }
+
+                if (requestedFile) {
+                    console.log(`Auto-selecting score file from URL parameter: ${requestedFile}`);
+                    this.selectedFile = requestedFile;
+                    select.value = this.selectedFile;
+                    await this.loadScoreFile();
+                    this.applyStockSelectionFromUrl();
+                    return;
+                }
+
                 // Fallback: select the nearest available score date ON OR
                 // BEFORE 90 days ago (issue #275). Delegates to the shared,
                 // unit-tested helper so the browser and Deno tests agree.

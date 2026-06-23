@@ -151,12 +151,17 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads three optional query parameters so a specific view can be
+The dashboard reads four optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
 - `?file=<score-file>` — pre-select a score file, e.g.
   `?file=2026%2FMarch%2F23.tsv`.
+- `?date=<YYYY-MM-DD>` — pre-select the score for a date (issue #436), e.g.
+  `?date=2026-03-23`. This is the friendlier alternative to `?file=` — no
+  URL-encoded path needed. Unpadded month/day (`?date=2026-3-23`) is accepted;
+  an unknown or malformed date falls back to the default selection. When both
+  `?file=` and `?date=` are present, `?file=` wins.
 - `?stock=<symbol>` — open straight into the single-stock detail view, e.g.
   `?stock=NASDAQ%3AMGRC`. An unknown symbol falls back to the aggregate view.
 - `?theme=auto|light|dark` — force a theme for that page load (a transient
