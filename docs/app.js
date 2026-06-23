@@ -2900,6 +2900,9 @@ class GRQValidator {
                 .calculatePortfolioTargetPercentage();
             const portfolioReturnAboveCostOfCapital = this
                 .calculatePortfolioReturnAboveCostOfCapital();
+            // Equal-weighted dividend component of the Actual figure (issue #426).
+            const portfolioDividendYield = this
+                .calculatePortfolioDividendYield();
 
             // Use market data-based days elapsed (already capped at 90)
             const actualDaysElapsed = marketDataDaysElapsed;
@@ -2919,16 +2922,20 @@ class GRQValidator {
                 portfolioTarget.toFixed(1)
             }%</span></td>
           <td>-</td>
-          <td class="${this.getPerformanceClass(portfolioPerformance90Day)}">${
+          <td><span class="clickable-value ${
+                this.getPerformanceClass(portfolioPerformance90Day)
+            }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Actual" data-field="portfolio-actual" data-stock="">${
                 portfolioPerformance90Day.toFixed(1)
-            }%</td>
+            }%</span></td>
           <td><span class="clickable-value ${
                 this.getPerformanceClass(portfolioReturnAboveCostOfCapital)
             }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio ${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}" data-field="portfolio-return-above-cost-of-capital" data-stock="">${
                 portfolioReturnAboveCostOfCapital.toFixed(1)
             }%</span></td>
           <td>-</td>
-          <td>-</td>
+          <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends" data-field="portfolio-dividends" data-stock="">${
+                portfolioDividendYield.toFixed(2)
+            }%</span></td>
         `;
 
             tbody.appendChild(totalsRow);
@@ -2952,9 +2959,11 @@ class GRQValidator {
             let working;
             if (
                 field === "portfolio-target" ||
-                field === "portfolio-return-above-cost-of-capital"
+                field === "portfolio-return-above-cost-of-capital" ||
+                field === "portfolio-actual" ||
+                field === "portfolio-dividends"
             ) {
-                // Portfolio totals - no specific stock (issues #407)
+                // Portfolio totals - no specific stock (issues #407, #426)
                 working = this.getWorking(field, "", this.scoreData);
             } else {
                 working = this.getWorking(field, stock, this.scoreData);
@@ -3549,6 +3558,74 @@ class GRQValidator {
             }% − ${hurdle.toFixed(1)}% = ${portfolioReturn.toFixed(1)}%`;
         }
 
+        // Portfolio "Actual" total (issue #426) — equal-weighted mean of each
+        // included stock's total return, decomposed into its price and dividend
+        // components so the working reconciles with the displayed Actual figure
+        // and the chart's latest blue point.
+        if (field === "portfolio-actual") {
+            const actualScoreDate = this.getScoreDate(this.selectedFile);
+            const actualValue = this.calculatePortfolioPerformance90Day();
+            const lines = [];
+            let priceSum = 0;
+            let dividendSum = 0;
+            let included = 0;
+            this.scoreData.forEach((stock) => {
+                if (!this.isStockPriceable(stock.stock, actualScoreDate)) {
+                    return;
+                }
+                const b = this.getStockReturnBreakdown(stock, actualScoreDate);
+                if (b === null) return;
+                lines.push(
+                    `${stock.stock}: price ${b.priceReturn.toFixed(1)}% + dividend ${
+                        b.dividendReturn.toFixed(2)
+                    }% = ${b.totalReturn.toFixed(1)}%`,
+                );
+                priceSum += b.priceReturn;
+                dividendSum += b.dividendReturn;
+                included++;
+            });
+            const avgPrice = included > 0 ? priceSum / included : 0;
+            const avgDividend = included > 0 ? dividendSum / included : 0;
+            return `Actual working:\n= Equal-weighted average total return (price + dividend) of included stocks\n= Per stock:\n  ${
+                lines.join("\n  ")
+            }\n= Average price return: ${
+                avgPrice.toFixed(1)
+            }%\n= Average dividend return: ${
+                avgDividend.toFixed(2)
+            }%\n= Actual: ${avgPrice.toFixed(1)}% + ${
+                avgDividend.toFixed(2)
+            }% = ${actualValue.toFixed(1)}% / ${included} stocks`;
+        }
+
+        // Portfolio "Dividends" total (issue #426) — equal-weighted mean of each
+        // included stock's dividend yield (dividends ÷ buy price). Lists each
+        // stock's buy price, 90-day dividends and yield so the ABC-vs-XYZ ratio
+        // is legible, and the total equals the dividend slice of Actual.
+        if (field === "portfolio-dividends") {
+            const divScoreDate = this.getScoreDate(this.selectedFile);
+            const dividendValue = this.calculatePortfolioDividendYield();
+            const lines = [];
+            let included = 0;
+            this.scoreData.forEach((stock) => {
+                if (!this.isStockPriceable(stock.stock, divScoreDate)) {
+                    return;
+                }
+                const b = this.getStockReturnBreakdown(stock, divScoreDate);
+                if (b === null) return;
+                lines.push(
+                    `${stock.stock}: buy $${b.buyPrice.toFixed(2)}, dividends $${
+                        b.totalDividends.toFixed(2)
+                    } → yield ${b.dividendReturn.toFixed(2)}%`,
+                );
+                included++;
+            });
+            return `Dividends working:\n= Equal-weighted average dividend yield (dividends ÷ buy price) of included stocks\n= Per stock:\n  ${
+                lines.join("\n  ")
+            }\n= Portfolio dividends: ${
+                dividendValue.toFixed(2)
+            }% / ${included} stocks`;
+        }
+
         const stock = scoreData.find((s) => s.stock === stockSymbol);
         if (!stock) return "Stock not found";
 
@@ -4026,33 +4103,88 @@ class GRQValidator {
         );
     }
 
-    // Centralized method to calculate stock performance with proper dilution handling
-    calculateStockPerformanceWithDilution(stock, scoreDate) {
+    // Decompose a stock's 90-day total return into its price and dividend
+    // components (issue #426). Single source of truth for both the totals-row
+    // Actual/Dividends figures and their "show-the-working" popovers, so a
+    // popover can never disagree with the plotted/summarised value. Returns null
+    // when the stock has no usable market data or buy price.
+    getStockReturnBreakdown(stock, scoreDate) {
         const marketData = this.marketData[stock.stock];
         if (!marketData || marketData.length === 0) return null;
 
-        const ninetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-        
+        const ninetyDayDate = new Date(
+            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+        );
+
         // Find the last price within 90 days
-        const within90Days = marketData.filter((point) => point.date <= ninetyDayDate);
+        const within90Days = marketData.filter((point) =>
+            point.date <= ninetyDayDate
+        );
         if (within90Days.length === 0) return null;
 
         const lastData = within90Days[within90Days.length - 1];
         const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
-        
+
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-        
-        if (buyPriceObj === null) return null;
+        if (buyPriceObj === null || !buyPriceObj.price || buyPriceObj.price <= 0) {
+            return null;
+        }
+        const buyPrice = buyPriceObj.price;
 
-        // Calculate price return
-        const priceReturn = ((currentPrice - buyPriceObj.price) / buyPriceObj.price) * 100;
-
-        // Add dividend return within 90 days
+        // Dividend cash within the 90-day window, then split into the
+        // price-return and dividend-return components via the shared helpers
+        // (issue #424) so production and tests share one implementation.
         const dividends = this.getDividendsWithin90Days(stock.stock);
         const totalDividends = GRQProjection.sumDividends(dividends);
-        const dividendReturn = (totalDividends / buyPriceObj.price) * 100;
+        const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
+        const dividendReturn = GRQProjection.dividendReturnPercent(
+            buyPrice,
+            totalDividends,
+        );
+        const totalReturn = GRQProjection.calculatePerformanceReturn(
+            buyPrice,
+            currentPrice,
+            totalDividends,
+        );
 
-        return priceReturn + dividendReturn;
+        return {
+            buyPrice,
+            currentPrice,
+            totalDividends,
+            priceReturn,
+            dividendReturn,
+            totalReturn,
+        };
+    }
+
+    // Centralized method to calculate stock performance with proper dilution handling
+    calculateStockPerformanceWithDilution(stock, scoreDate) {
+        const breakdown = this.getStockReturnBreakdown(stock, scoreDate);
+        return breakdown === null ? null : breakdown.totalReturn;
+    }
+
+    // Equal-weighted dividend component of the Actual figure (issue #426): the
+    // mean of each included stock's dividend yield (dividends ÷ buy price). This
+    // is the dividend slice of calculatePortfolioPerformance90Day, so Actual =
+    // average price return + this value. Returns 0 when nothing is included,
+    // mirroring calculatePortfolioPerformance90Day's guard.
+    calculatePortfolioDividendYield() {
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        let totalYield = 0;
+        let validStocks = 0;
+
+        this.scoreData.forEach((stock) => {
+            if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                return;
+            }
+            const breakdown = this.getStockReturnBreakdown(stock, scoreDate);
+            if (breakdown !== null) {
+                totalYield += breakdown.dividendReturn;
+                validStocks++;
+            }
+        });
+
+        return validStocks > 0 ? totalYield / validStocks : 0;
     }
 
     // Calculate linear regression for trend prediction
