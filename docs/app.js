@@ -1281,27 +1281,15 @@ class GRQValidator {
                                 const value = context.parsed.y;
                                 const dataPoint = context.raw;
 
-                                let tooltipText = "";
-                                if (label.includes("Target")) {
-                                    tooltipText = `${label}: ${
-                                        value.toFixed(1)
-                                    }%`;
-                                } else if (
-                                    label.includes("Price") &&
-                                    !label.includes("Performance")
-                                ) {
-                                    tooltipText = `${label}: $${
-                                        value.toFixed(2)
-                                    }`;
-                                } else if (label.includes("Actual")) {
-                                    tooltipText = `${label}: $${
-                                        value.toFixed(2)
-                                    }`;
-                                } else {
-                                    tooltipText = `${label}: ${
-                                        value.toFixed(1)
-                                    }%`;
-                                }
+                                // Unit selection lives in the shared GRQFormat
+                                // helper (issue #425) so the browser and tests
+                                // pick the same unit: the renamed blue "Actual"
+                                // series and "Target" are percentages; only
+                                // genuine price series are dollars.
+                                let tooltipText = GRQFormat.formatTooltipValue(
+                                    label,
+                                    value,
+                                );
 
                                 // Add dividend information if available
                                 if (dataPoint && dataPoint.dividend) {
@@ -1732,7 +1720,7 @@ class GRQValidator {
                     console.log(`prepareChartData - ${stock.stock} cleanAfter90 points:`, cleanAfter90.length);
                     if (cleanBefore90.length > 0) {
                         datasets.push({
-                            label: "Performance",
+                            label: "Actual",
                             data: cleanBefore90,
                             borderColor: "rgba(102, 126, 234, 1)",
                             backgroundColor: "rgba(102, 126, 234, 0.1)",
@@ -1746,7 +1734,7 @@ class GRQValidator {
                     }
                     if (cleanAfter90.length > 0 && !isMobile) {
                         datasets.push({
-                            label: "Performance (After 90 Days)",
+                            label: "Actual (After 90 Days)",
                             data: cleanAfter90,
                             borderColor: "rgba(108, 117, 125, 0.5)",
                             backgroundColor: "rgba(108, 117, 125, 0.1)",
@@ -1828,7 +1816,7 @@ class GRQValidator {
             console.log("prepareChartData - portfolio cleanAfter90 points:", cleanAfter90.length);
             if (cleanBefore90.length > 0) {
                 datasets.push({
-                    label: "Performance",
+                    label: "Actual",
                     data: cleanBefore90,
                     borderColor: "rgba(102, 126, 234, 1)",
                     backgroundColor: "rgba(102, 126, 234, 0.1)",
@@ -1839,7 +1827,7 @@ class GRQValidator {
             }
             if (cleanAfter90.length > 0 && !isMobile) {
                 datasets.push({
-                    label: "Performance (After 90 Days)",
+                    label: "Actual (After 90 Days)",
                     data: cleanAfter90,
                     borderColor: "rgba(108, 117, 125, 0.5)",
                     backgroundColor: "rgba(108, 117, 125, 0.1)",

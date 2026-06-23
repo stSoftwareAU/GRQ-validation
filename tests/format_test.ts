@@ -21,6 +21,10 @@ const g = globalThis as unknown as {
 const { toFiniteNumber, formatNumber, formatIndexLevel, formatPercent } =
   g.GRQFormat;
 
+const formatTooltipValue = (g.GRQFormat as unknown as {
+  formatTooltipValue: (label: unknown, value: unknown) => string;
+}).formatTooltipValue;
+
 Deno.test("format.js publishes helpers on globalThis.GRQFormat", () => {
   assertEquals(typeof toFiniteNumber, "function");
   assertEquals(typeof formatNumber, "function");
@@ -99,4 +103,49 @@ Deno.test("toFiniteNumber coerces numbers and numeric strings, else null", () =>
   assertEquals(toFiniteNumber(null), null);
   assertEquals(toFiniteNumber("abc"), null);
   assertEquals(toFiniteNumber(Infinity), null);
+});
+
+// formatTooltipValue — chart tooltip unit selection (issue #425).
+//
+// The blue series was renamed from "Performance" to "Actual" (#425). "Actual"
+// and "Target" are percentages; only genuine price series render as dollars.
+// These verify the renamed series still formats as a percentage (no regression
+// from the old "Performance" path) and that the Price guard now excludes
+// "Actual".
+Deno.test("formatTooltipValue renders the renamed Actual series as a percentage", () => {
+  assertEquals(formatTooltipValue("Actual", 12.34), "Actual: 12.3%");
+  assertEquals(
+    formatTooltipValue("Actual (After 90 Days)", -3.27),
+    "Actual (After 90 Days): -3.3%",
+  );
+});
+
+Deno.test("formatTooltipValue renders the Target series as a percentage", () => {
+  assertEquals(formatTooltipValue("Target", 25), "Target: 25.0%");
+});
+
+Deno.test("formatTooltipValue renders a genuine price series as dollars", () => {
+  assertEquals(formatTooltipValue("Buy Price", 12.5), "Buy Price: $12.50");
+});
+
+Deno.test("formatTooltipValue price guard excludes the Actual series", () => {
+  // A label carrying both "Actual" and "Price" stays a percentage — the renamed
+  // blue series is never misread as a dollar value (old guard excluded
+  // "Performance"; the new guard excludes "Actual").
+  assertEquals(
+    formatTooltipValue("Actual Price", 8),
+    "Actual Price: 8.0%",
+  );
+});
+
+Deno.test("formatTooltipValue treats other series as percentages", () => {
+  assertEquals(
+    formatTooltipValue("Projection (Trend Line)", 4.5),
+    "Projection (Trend Line): 4.5%",
+  );
+});
+
+Deno.test("formatTooltipValue is defensive against non-finite values", () => {
+  assertEquals(formatTooltipValue("Actual", NaN), "Actual: ");
+  assertEquals(formatTooltipValue("Actual", undefined), "Actual: ");
 });
