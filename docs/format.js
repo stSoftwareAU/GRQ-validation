@@ -66,6 +66,27 @@ function formatPercent(value, decimals = 2) {
     return `${sign}${formatNumber(number, decimals)}%`;
 }
 
+// Choose the unit for a chart tooltip value from its series label (issue #425).
+//
+// The blue series was renamed from "Performance" to "Actual"; like "Target" it
+// is a percentage (the chart's left axis is "Performance (%)"). Only genuine
+// price series render as dollars. The Price branch excludes "Actual" so the
+// renamed blue series is never misread as a dollar value — the old guard
+// excluded "Performance". Plain `toFixed` (no sign, no grouping) preserves the
+// exact tooltip text the dashboard shipped before the rename. Pure: no DOM.
+function formatTooltipValue(label, value) {
+    const text = typeof label === "string" ? label : "";
+    const number = toFiniteNumber(value);
+    if (number === null) {
+        return `${text}: `;
+    }
+    if (text.includes("Price") && !text.includes("Actual")) {
+        return `${text}: $${number.toFixed(2)}`;
+    }
+    // "Target", the renamed "Actual" series and everything else are percentages.
+    return `${text}: ${number.toFixed(1)}%`;
+}
+
 // Publish on globalThis so classic-script callers (the browser dashboard via
 // `GRQValidator`) and the Deno test importer both reach the same helpers,
 // mirroring docs/escape.js and docs/projection.js.
@@ -74,4 +95,5 @@ globalThis.GRQFormat = {
     formatNumber,
     formatIndexLevel,
     formatPercent,
+    formatTooltipValue,
 };
