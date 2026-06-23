@@ -1,0 +1,231 @@
+// Headless prediction resolver for the "Portfolio Actual vs Target over time"
+// Trend view (issue #430, milestone #422).
+//
+// The headless data engine (docs/trend_series.js) consumes predictions shaped
+// as { date, stocks } where each stock is
+// { buyPrice, currentPrice, totalDividends, adjustedTarget }. The engine
+// deliberately stays DOM-free and leaves "load each score date's files and
+// resolve those figures" to the Trend view. THIS module is that resolver: it
+// parses a score date's raw files (the score TSV, the market-data CSV and the
+// dividend CSV) and builds the per-stock inputs.
+//
+// Single source of truth (critical): every figure is produced by reusing the
+// shared kernels already used by the per-prediction dashboard —
+//   - buyPrice:       GRQProjection.getBuyPrice (5-day forward search + split
+//                     adjustment),
+//   - currentPrice:   the midpoint of the last market point within the 90-day
+//                     window (exactly how GRQValidator.getStockReturnBreakdown
+//                     derives the Actual figure the chart/summary show),
+//   - totalDividends: GRQProjection.sumDividends over
+//                     GRQProjection.filterDividendsWithin90Days,
+//   - adjustedTarget: GRQProjection.adjustHistoricalPriceToCurrent (the model's
+//                     target restated into current, post-split terms).
+// No new actuals or target maths is added here, so the Trend view's Actual /
+// Target equal the existing dashboard's for the same score date.
+//
+// Mirrors docs/projection.js and docs/trend_series.js: loaded as a classic
+// <script>, no module syntax, published on globalThis.GRQTrendPredictions, and
+// it depends on docs/projection.js being loaded first.
+
+// The 90-day validation window, matching GRQValidator and the Trend engine.
+const PREDICTION_WINDOW_DAYS = 90;
+
+// Parse a "YYYY-MM-DD" score date (possibly with unpadded month/day) to local
+// midnight, mirroring GRQTrendSeries' own parsing so the resolved score date
+// lines up with the engine's bucketing and maturity checks.
+function parseScoreDateString(value) {
+    if (value instanceof Date) {
+        return GRQProjection.setDateToMidnight(value);
+    }
+    const match = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(value));
+    if (match) {
+        return new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+        );
+    }
+    return GRQProjection.setDateToMidnight(new Date(value));
+}
+
+// Parse a score TSV (the prediction file) into rows. Mirrors
+// GRQValidator.loadScoreData's column layout so the Trend view reads the same
+// fields the dashboard does. Skips the header line and any blank lines.
+function parseScoreTsv(text) {
+    const rows = [];
+    if (typeof text !== "string") {
+        return rows;
+    }
+    const lines = text.trim().split("\n");
+    for (const line of lines.slice(1)) {
+        if (!line.trim()) {
+            continue;
+        }
+        const values = line.split("\t");
+        rows.push({
+            stock: values[0],
+            score: parseFloat(values[1]),
+            target: parseFloat(values[2]),
+            exDividendDate: values[3] || null,
+            dividendPerShare: values[4] ? parseFloat(values[4]) : 0,
+            notes: values[5] || "",
+            intrinsicValuePerShareBasic: values[6]
+                ? parseFloat(values[6])
+                : null,
+            intrinsicValuePerShareAdjusted: values[7]
+                ? parseFloat(values[7])
+                : null,
+        });
+    }
+    return rows;
+}
+
+// Parse a market-data CSV into a { ticker: [points] } map, mirroring
+// GRQValidator.loadMarketData (dates snapped to local midnight). Each point is
+// { date, high, low, open, close, splitCoefficient }. Points are returned in
+// chronological order so "the last point within 90 days" is well-defined.
+function parseMarketCsv(text) {
+    const marketData = {};
+    if (typeof text !== "string" || !text.trim()) {
+        return marketData;
+    }
+    const lines = text.split("\n").filter((line) => line.trim());
+    for (const line of lines.slice(1)) {
+        const values = line.split(",");
+        const ticker = values[1];
+        if (!ticker) {
+            continue;
+        }
+        if (!marketData[ticker]) {
+            marketData[ticker] = [];
+        }
+        marketData[ticker].push({
+            date: GRQProjection.setDateToMidnight(new Date(values[0])),
+            high: parseFloat(values[2]),
+            low: parseFloat(values[3]),
+            open: parseFloat(values[4]),
+            close: parseFloat(values[5]),
+            splitCoefficient: parseFloat(values[6]),
+        });
+    }
+    for (const ticker of Object.keys(marketData)) {
+        marketData[ticker].sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+    return marketData;
+}
+
+// Parse a dividend CSV into a { ticker: [{ exDivDate, amount }] } map, mirroring
+// GRQValidator.loadDividendData (ex-dividend dates snapped to local midnight).
+function parseDividendCsv(text) {
+    const dividendData = {};
+    if (typeof text !== "string" || !text.trim()) {
+        return dividendData;
+    }
+    const lines = text.split("\n").filter((line) => line.trim());
+    for (const line of lines.slice(1)) {
+        const values = line.split(",");
+        const ticker = values[1];
+        if (!ticker) {
+            continue;
+        }
+        if (!dividendData[ticker]) {
+            dividendData[ticker] = [];
+        }
+        dividendData[ticker].push({
+            exDivDate: GRQProjection.setDateToMidnight(new Date(values[0])),
+            amount: parseFloat(values[2]),
+        });
+    }
+    return dividendData;
+}
+
+// The midpoint of the last market point on or before the 90-day window end —
+// the "current" price the dashboard's Actual figure uses
+// (GRQValidator.getStockReturnBreakdown). Returns null when the stock has no
+// usable point within the window, so the inclusion gate drops it.
+function currentPriceWithinWindow(points, scoreDate) {
+    if (!Array.isArray(points) || points.length === 0) {
+        return null;
+    }
+    const windowEnd = new Date(
+        scoreDate.getTime() + (PREDICTION_WINDOW_DAYS * 24 * 60 * 60 * 1000),
+    );
+    let last = null;
+    for (const point of points) {
+        if (point && point.date instanceof Date && point.date <= windowEnd) {
+            last = point;
+        }
+    }
+    if (!last) {
+        return null;
+    }
+    return (last.high + last.low) / 2;
+}
+
+// Resolve the per-stock { buyPrice, currentPrice, totalDividends, adjustedTarget }
+// inputs for one score date, delegating every figure to the shared kernels.
+// `scoreRows` come from parseScoreTsv; `marketData` / `dividendData` from the
+// matching CSV parsers; `scoreDate` is a local-midnight Date. Stocks with no
+// usable price resolve to null buy/current prices, which the engine's inclusion
+// gate (GRQProjection.isStockIncluded) drops — matching the dashboard's
+// exclusion of unpriceable stocks.
+function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate) {
+    if (!Array.isArray(scoreRows)) {
+        return [];
+    }
+    const market = marketData && typeof marketData === "object"
+        ? marketData
+        : {};
+    const dividends = dividendData && typeof dividendData === "object"
+        ? dividendData
+        : {};
+    return scoreRows.map((row) => {
+        const points = market[row.stock];
+        const buyPriceObj = GRQProjection.getBuyPrice(points, scoreDate);
+        const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+        const currentPrice = currentPriceWithinWindow(points, scoreDate);
+        const totalDividends = GRQProjection.sumDividends(
+            GRQProjection.filterDividendsWithin90Days(
+                dividends[row.stock] || [],
+                scoreDate,
+            ),
+        );
+        const hasTarget = row.target !== null && !Number.isNaN(row.target);
+        const adjustedTarget = hasTarget
+            ? GRQProjection.adjustHistoricalPriceToCurrent(
+                row.target,
+                points,
+                scoreDate,
+            )
+            : null;
+        return { buyPrice, currentPrice, totalDividends, adjustedTarget };
+    });
+}
+
+// Convenience composition for the Trend view loader: given a score date and the
+// raw text of its three files, return the { date, stocks } prediction the data
+// engine consumes. `date` is preserved verbatim so the engine re-parses it for
+// maturity and bucketing exactly as it does for every other prediction.
+function buildPrediction(date, tsvText, csvText, dividendCsvText) {
+    const scoreDate = parseScoreDateString(date);
+    const stocks = resolvePredictionStocks(
+        parseScoreTsv(tsvText),
+        parseMarketCsv(csvText),
+        parseDividendCsv(dividendCsvText),
+        scoreDate,
+    );
+    return { date, stocks };
+}
+
+// Publish on globalThis so the browser dashboard and the Deno tests reach the
+// same helpers, mirroring docs/projection.js and docs/trend_series.js.
+globalThis.GRQTrendPredictions = {
+    PREDICTION_WINDOW_DAYS,
+    parseScoreDateString,
+    parseScoreTsv,
+    parseMarketCsv,
+    parseDividendCsv,
+    currentPriceWithinWindow,
+    resolvePredictionStocks,
+    buildPrediction,
+};
