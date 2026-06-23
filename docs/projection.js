@@ -198,6 +198,50 @@ function calculateIncludedPortfolioPerformance(stocks) {
     return sum / includedReturns.length;
 }
 
+// Dividend yield as a percentage of the buy price — the dividend-return
+// component of the total return (issue #426). Mirrors the dividend term inside
+// calculatePerformanceReturn so a "Dividends working" popover can never disagree
+// with the Actual figure. Returns null when the buy price is missing or
+// non-positive (the same guard the total return applies).
+function dividendReturnPercent(buyPrice, totalDividends) {
+    if (!buyPrice || buyPrice <= 0) {
+        return null;
+    }
+    return ((totalDividends || 0) / buyPrice) * 100;
+}
+
+// Equal-weight portfolio dividend yield over ONLY the included stocks
+// (issue #426). Mirrors calculateIncludedPortfolioPerformance exactly but
+// averages each stock's dividend yield instead of its total return, so this
+// figure equals the dividend-return component of the portfolio Actual figure.
+// Returns null when no stock is included.
+function calculateIncludedPortfolioDividendYield(stocks) {
+    if (!Array.isArray(stocks)) {
+        return null;
+    }
+    const includedYields = [];
+    for (const stock of stocks) {
+        const buyPrice = stock && stock.buyPrice;
+        const currentPrice = stock && stock.currentPrice;
+        if (!isStockIncluded(buyPrice, currentPrice)) {
+            continue;
+        }
+        const yieldPercent = dividendReturnPercent(
+            buyPrice,
+            stock.totalDividends,
+        );
+        if (yieldPercent === null) {
+            continue;
+        }
+        includedYields.push(yieldPercent);
+    }
+    if (includedYields.length === 0) {
+        return null;
+    }
+    const sum = includedYields.reduce((total, value) => total + value, 0);
+    return sum / includedYields.length;
+}
+
 // Dividends whose ex-dividend date falls on or before the 90-day validation
 // window measured from the score date. Pure given the dividend list and score
 // date; the dashboard's GRQValidator looks the list up per stock and delegates
@@ -880,6 +924,8 @@ globalThis.GRQProjection = {
     returnAboveCostOfCapital,
     isStockIncluded,
     calculateIncludedPortfolioPerformance,
+    dividendReturnPercent,
+    calculateIncludedPortfolioDividendYield,
     filterDividendsWithin90Days,
     sumDividends,
     buildHybridProjectionData,
