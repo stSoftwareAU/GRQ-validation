@@ -82,3 +82,11 @@ Deno.test("checkJsSyntax - production docs/trend_series.js parses cleanly", asyn
   const result = checkJsSyntax(source);
   assertEquals(result.valid, true, result.error);
 });
+
+Deno.test("checkJsSyntax - production docs/index_overlay.js parses cleanly", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../docs/index_overlay.js", import.meta.url),
+  );
+  const result = checkJsSyntax(source);
+  assertEquals(result.valid, true, result.error);
+});
