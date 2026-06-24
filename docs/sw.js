@@ -25,6 +25,7 @@ const STATIC_ASSETS = [
   "./color_key.js",
   "./series_label_colour.js",
   "./chart_theme.js",
+  "./chart_title.js",
   "./format.js",
   "./market_index.js",
   "./escape.js",

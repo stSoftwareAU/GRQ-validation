@@ -1366,21 +1366,18 @@ class GRQValidator {
         }
 
         const chartData = this.prepareChartData();
-        let chartTitle;
-        if (this.selectedStock) {
-            const stock = this.scoreData.find((s) =>
-                s.stock === this.selectedStock
-            );
-            if (stock) {
-                chartTitle = `Stock Performance: ${this.selectedStock} (Score: ${
-                    stock.score.toFixed(3)
-                }, Target: $${stock.target.toFixed(2)})`;
-            } else {
-                chartTitle = `Stock Performance: ${this.selectedStock}`;
-            }
-        } else {
-            chartTitle = "Portfolio Performance Over Time";
-        }
+        // Issue #519: the portfolio (aggregate) view no longer shows the big
+        // "Portfolio Performance Over Time" heading — it wrapped to two lines on
+        // mobile and just wasted vertical space. The shared GRQChartTitle helper
+        // returns "" for the portfolio view (so the heading and the canvas title
+        // are hidden) and keeps the informative stock-specific title.
+        const stock = this.selectedStock
+            ? this.scoreData.find((s) => s.stock === this.selectedStock)
+            : null;
+        const chartTitle = globalThis.GRQChartTitle.chartTitle({
+            selectedStock: this.selectedStock,
+            stock,
+        });
 
         // Debug logging for chart data
         console.log("Chart data for rendering:", JSON.stringify(chartData, null, 2));
@@ -1398,6 +1395,9 @@ class GRQValidator {
         const htmlTitleElement = document.getElementById("chartTitle");
         if (htmlTitleElement) {
             htmlTitleElement.textContent = chartTitle;
+            // Issue #519: hide the heading entirely (don't reserve the row)
+            // when the portfolio view returns no title.
+            htmlTitleElement.style.display = chartTitle ? "" : "none";
         }
 
         const breakpoint = this.getBootstrapBreakpoint();
@@ -1445,7 +1445,9 @@ class GRQValidator {
                 },
                 plugins: {
                     title: {
-                        display: true,
+                        // Issue #519: no canvas title for the portfolio view
+                        // (chartTitle is "") so it wastes no chart space either.
+                        display: Boolean(chartTitle),
                         text: chartTitle,
                         font: {
                             size: isMobile ? 14 : 16,
