@@ -1106,3 +1106,36 @@ body.chart-popout-open {
     color: var(--grq-text);
   }
 }
+
+/* Footer "Share" control (issue #495). Low-prominence chrome: a quiet link-
+ * style button that builds and copies a deep-link URL of the current view. */
+.share-footer .share-button {
+  text-decoration: none;
+  font-weight: 600;
+  /* Override Bootstrap's default btn-link blue (#0d6efd), which only reaches
+   * 4.27:1 on the light footer and 4.1:1 on the dark footer — both below the
+   * WCAG 2.1 AA 4.5:1 minimum. Reuse the theme-aware link colour (light
+   * #0067d6 ≈ 5.4:1; dark --grq-link #6ea8fe ≈ 7.8:1) already proven by
+   * .clickable-value (issues #281, #495). */
+  color: var(--grq-link, #0067d6);
+}
+
+.share-footer .share-button:hover,
+.share-footer .share-button:focus {
+  color: var(--grq-link-hover, #0056b3);
+}
+
+.share-footer .share-button:focus-visible {
+  outline: 2px solid var(--grq-link, #0d6efd);
+  outline-offset: 2px;
+}
+
+.share-footer .share-status {
+  margin-left: 0.5rem;
+}
+
+/* The select-the-text fallback input shown only where the async Clipboard API
+ * is unavailable; constrained so it never dominates the footer. */
+.share-footer .share-fallback {
+  max-width: 28rem;
+}

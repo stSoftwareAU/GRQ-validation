@@ -182,6 +182,14 @@ deterministically — issue #281):
   windows end on the same date (#367); an absent or invalid value falls back to
   the saved choice, then the device default.
 
+A low-prominence **🔗 Share** button in the page footer does the inverse: it
+builds an absolute URL encoding the current selections (score file, stock,
+theme, 90/180 window, and the transient mobile pop-out flag) and copies it to
+the clipboard (issue #495). It is **read-only** — generating a link never
+mutates your saved settings — and degrades to a select-the-text fallback where
+the async Clipboard API is unavailable. Pasting the link into a fresh tab
+reproduces the same view.
+
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
 on every pull request that touches `docs/`.
