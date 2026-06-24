@@ -4540,6 +4540,20 @@ if (typeof globalThis.matchMedia === "function") {
 let lastViewportIsMobile;
 
 function syncChartForViewport() {
+    // While the chart pop-out overlay owns the canvas, the device class has not
+    // actually changed — the overlay is a presentation surface, not a resize.
+    // Suspend the breakpoint reconciliation so opening/closing (or rotating
+    // inside) the pop-out never triggers a spurious chart/summary rebuild and
+    // never clears the dashboard's mobile colour key behind the overlay. The
+    // close path reconciles once the canvas is back in .chart-container (#453).
+    if (
+        globalThis.GRQChartPopout &&
+        typeof globalThis.GRQChartPopout.isPopoutOpen === "function" &&
+        globalThis.GRQChartPopout.isPopoutOpen(document)
+    ) {
+        return;
+    }
+
     const isMobile = validator.isMobileDevice();
 
     // Crossing the mobile/desktop boundary changes the visible window (90 vs
@@ -4590,6 +4604,27 @@ const debouncedSyncChartForViewport = globalThis.GRQColorKey.debounce(
 );
 globalThis.addEventListener("resize", debouncedSyncChartForViewport);
 globalThis.addEventListener("orientationchange", debouncedSyncChartForViewport);
+
+// Mobile chart pop-out overlay (issue #451, milestone #446). Re-parents the
+// single live #performanceChart canvas into a full-viewport overlay and back,
+// resizing the chart on each move. The trigger is CSS-hidden at >=768px, so
+// desktop is untouched. getChart() returns the current instance because the
+// canvas persists across re-renders even though validator.chart is replaced.
+if (
+    globalThis.GRQChartPopout &&
+    typeof globalThis.GRQChartPopout.createChartPopout === "function"
+) {
+    globalThis.GRQChartPopout.createChartPopout({
+        document,
+        getChart: () => validator.chart,
+        // On close, reconcile the dashboard to the real current viewport now the
+        // canvas is back in .chart-container: re-runs the legend sync and
+        // renderColorKey() so the mobile colour key and native legend match
+        // their pre-pop-out state (issue #453). Reuses the shared viewport sync
+        // rather than duplicating that logic.
+        onClose: () => syncChartForViewport(),
+    });
+}
 
 // The second global popover click handler that used to live here was removed in
 // issue #371. Dismissal is now handled by the single consolidated handler in
