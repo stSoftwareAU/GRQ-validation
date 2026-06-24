@@ -113,6 +113,37 @@ class GRQValidator {
         return GRQChartWindow.effectiveWindowDays(search, saved);
     }
 
+    // Capture the CURRENT dashboard selections for the footer "Share" deep-link
+    // builder (issue #495). Pure read — gathers state from the live view and
+    // helpers, never writing storage. The theme is read from the applied <body>
+    // class (what the user actually sees) so a forced light/dark mode is
+    // reproduced; "auto" is left implicit. fullscreen is set only while the
+    // mobile chart pop-out owns the canvas (issue #482/#451).
+    shareState() {
+        let theme = "auto";
+        if (typeof document !== "undefined" && document.body) {
+            const classes = document.body.classList;
+            if (classes.contains("dark-mode-forced")) {
+                theme = "dark";
+            } else if (classes.contains("light-mode-forced")) {
+                theme = "light";
+            }
+        }
+        const fullscreen =
+            typeof GRQChartPopout !== "undefined" &&
+            typeof GRQChartPopout.isPopoutOpen === "function" &&
+            GRQChartPopout.isPopoutOpen(
+                typeof document !== "undefined" ? document : undefined,
+            );
+        return {
+            file: this.selectedFile || null,
+            stock: this.selectedStock || null,
+            theme,
+            window: this.currentWindowDays(),
+            fullscreen,
+        };
+    }
+
     // Restore the 90/180-day toggle to THIS device's stored choice and, on
     // change, persist it to THIS device's store and re-render the chart AND the
     // Market Performance summary together so they always cover the identical
@@ -4623,6 +4654,20 @@ if (
         // their pre-pop-out state (issue #453). Reuses the shared viewport sync
         // rather than duplicating that logic.
         onClose: () => syncChartForViewport(),
+    });
+}
+
+// Footer "Share" deep-link control (issue #495, milestone #484). Wires the
+// footer button to the live selections via validator.shareState(), which the
+// pure GRQShare helpers serialise into a shareable URL and copy to the
+// clipboard. Read-only — sharing never writes storage.
+if (
+    globalThis.GRQShare &&
+    typeof globalThis.GRQShare.initShareButton === "function"
+) {
+    globalThis.GRQShare.initShareButton({
+        document,
+        getState: () => validator.shareState(),
     });
 }
 
