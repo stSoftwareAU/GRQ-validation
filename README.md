@@ -32,7 +32,10 @@ Pages.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`. On mobile, a pop-out control expands the
   performance chart into a full-viewport overlay (dismissed by ✕, Esc or the
-  device back-gesture); desktop is unchanged.
+  device back-gesture) and presents it in landscape — rotated via CSS on a
+  portrait phone so a wide chart fills the screen, with an optional Screen
+  Orientation lock where the platform supports it (iOS Safari falls back to the
+  CSS rotation). Desktop is unchanged.
 - **Hybrid Projection** — for score files less than 90 days old, project
   performance from the current actual prices.
 - **Automated Processing** — batch process score files with inline performance
