@@ -30,19 +30,37 @@ function setDateToMidnight(date) {
 const MOBILE_WINDOW_DAYS = 90;
 const DESKTOP_WINDOW_DAYS = 180;
 
+// The mobile window is selectable (issue #448, milestone #445): the user may
+// keep the 90-day default or opt into the full 180-day window. Desktop is
+// always 180 and the toggle never affects it. Only these two values are
+// permitted; anything else falls back to the 90-day default so a bad stored
+// value can never widen the window unexpectedly.
+const PERMITTED_MOBILE_WINDOW_DAYS = [MOBILE_WINDOW_DAYS, DESKTOP_WINDOW_DAYS];
+
 // Days in the visible window for the current device.
-function deviceWindowDays(isMobile) {
-    return isMobile ? MOBILE_WINDOW_DAYS : DESKTOP_WINDOW_DAYS;
+//
+// `mobileWindowDays` carries the chosen mobile window (90 or 180). It is honoured
+// only on mobile and only when permitted; otherwise the 90-day default applies.
+// Desktop always returns DESKTOP_WINDOW_DAYS (180) — the toggle is mobile-only.
+// projection.js stays pure: the caller supplies the value, this never reads
+// localStorage. The default keeps every existing caller unchanged until the UI
+// passes a value (preserves the #367 single-source guarantee).
+function deviceWindowDays(isMobile, mobileWindowDays = MOBILE_WINDOW_DAYS) {
+    if (!isMobile) return DESKTOP_WINDOW_DAYS;
+    return PERMITTED_MOBILE_WINDOW_DAYS.includes(mobileWindowDays)
+        ? mobileWindowDays
+        : MOBILE_WINDOW_DAYS;
 }
 
-// The window's end date: scoreDate + (mobile 90 / desktop 180) days, at local
-// midnight. Returns null when the score date is missing or unparseable so the
-// caller renders blank rather than erroring (preserves blank-on-missing).
-function deviceWindowEnd(scoreDate, isMobile) {
+// The window's end date: scoreDate + resolved-device-days, at local midnight.
+// `mobileWindowDays` is threaded through to deviceWindowDays (mobile-only, 90 or
+// 180). Returns null when the score date is missing or unparseable so the caller
+// renders blank rather than erroring (preserves blank-on-missing).
+function deviceWindowEnd(scoreDate, isMobile, mobileWindowDays = MOBILE_WINDOW_DAYS) {
     if (scoreDate === null || scoreDate === undefined) return null;
     const start = setDateToMidnight(new Date(scoreDate));
     if (Number.isNaN(start.getTime())) return null;
-    const days = deviceWindowDays(isMobile);
+    const days = deviceWindowDays(isMobile, mobileWindowDays);
     return setDateToMidnight(
         new Date(start.getTime() + days * 24 * 60 * 60 * 1000),
     );

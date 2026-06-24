@@ -54,6 +54,55 @@ Deno.test("deviceWindowEnd - end is scoreDate + per-device days at local midnigh
   assert(desktopEnd.getTime() > mobileEnd.getTime());
 });
 
+Deno.test("deviceWindowDays/deviceWindowEnd - selectable mobile window keeps chart and summary on the SAME end date (issue #448)", () => {
+  // The chart (prepareChartData) and the summary (getMarketPerformanceData) both
+  // resolve their window through these same helpers, so for any
+  // (isMobile, mobileWindowDays) pair they MUST agree. Modelling both callers as
+  // identical calls proves they cannot drift for the new selectable window.
+  const scoreDate = new Date("2026-01-01T09:30:00");
+  const pairs: Array<[boolean, number | undefined]> = [
+    [true, undefined], // mobile default -> 90
+    [true, 90], // mobile explicit 90
+    [true, 180], // mobile opting into the full window (the new case)
+    [true, 999], // bad value -> falls back to 90
+    [false, 90], // desktop ignores the override -> 180
+    [false, 180], // desktop -> 180
+  ];
+
+  for (const [isMobile, mobileWindowDays] of pairs) {
+    const chartEnd = GRQProjection.deviceWindowEnd(
+      scoreDate,
+      isMobile,
+      mobileWindowDays,
+    );
+    const summaryEnd = GRQProjection.deviceWindowEnd(
+      scoreDate,
+      isMobile,
+      mobileWindowDays,
+    );
+    assertEquals(
+      chartEnd!.getTime(),
+      summaryEnd!.getTime(),
+      `chart and summary must share the window for (${isMobile}, ${mobileWindowDays})`,
+    );
+    // The end is exactly the resolved device days after the score date.
+    const days = GRQProjection.deviceWindowDays(isMobile, mobileWindowDays);
+    const base = GRQProjection.setDateToMidnight(new Date("2026-01-01"));
+    assertEquals(
+      chartEnd!.getTime(),
+      GRQProjection.setDateToMidnight(new Date(base.getTime() + days * DAY_MS))
+        .getTime(),
+    );
+  }
+
+  // The mobile (mobile, 180) window must land on the same end date the desktop
+  // window does — the toggle simply gives mobile the full desktop window.
+  assertEquals(
+    GRQProjection.deviceWindowEnd(scoreDate, true, 180)!.getTime(),
+    GRQProjection.deviceWindowEnd(scoreDate, false)!.getTime(),
+  );
+});
+
 Deno.test("deviceWindowEnd - unparseable / missing score date returns null (blank, never throws)", () => {
   assertEquals(
     GRQProjection.deviceWindowEnd(new Date("not-a-date"), true),
