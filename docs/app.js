@@ -4494,6 +4494,21 @@ const debouncedSyncChartForViewport = globalThis.GRQColorKey.debounce(
 globalThis.addEventListener("resize", debouncedSyncChartForViewport);
 globalThis.addEventListener("orientationchange", debouncedSyncChartForViewport);
 
+// Mobile chart pop-out overlay (issue #451, milestone #446). Re-parents the
+// single live #performanceChart canvas into a full-viewport overlay and back,
+// resizing the chart on each move. The trigger is CSS-hidden at >=768px, so
+// desktop is untouched. getChart() returns the current instance because the
+// canvas persists across re-renders even though validator.chart is replaced.
+if (
+    globalThis.GRQChartPopout &&
+    typeof globalThis.GRQChartPopout.createChartPopout === "function"
+) {
+    globalThis.GRQChartPopout.createChartPopout({
+        document,
+        getChart: () => validator.chart,
+    });
+}
+
 // The second global popover click handler that used to live here was removed in
 // issue #371. Dismissal is now handled by the single consolidated handler in
 // initializeEventListeners() above, via the shared GRQPopover module.

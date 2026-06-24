@@ -111,6 +111,71 @@
   color: inherit;
 }
 
+/* ---------------------------------------------------------------------------
+ * Mobile chart pop-out overlay (issue #451, milestone #446)
+ *
+ * A mobile-only expand control pops the single live #performanceChart canvas
+ * into a full-viewport overlay (#chartPopout). Desktop never sees the trigger:
+ * the controls row is display:none by default and only revealed below the
+ * 768px breakpoint isMobileDevice() uses, so the overlay can never be opened
+ * at >=768px. Landscape presentation (#452) and chart-only chrome (#453) build
+ * on the #chartPopout / body.chart-popout-open contract defined here.
+ * ------------------------------------------------------------------------- */
+.chart-popout-controls {
+  display: none; /* desktop: no expand control */
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+/* Reveal the expand trigger only on mobile widths. */
+@media (max-width: 767.98px) {
+  .chart-popout-controls {
+    display: flex;
+  }
+}
+
+/* Full-viewport overlay that hosts the chart while open. */
+.chart-popout {
+  position: fixed;
+  inset: 0;
+  z-index: 1080; /* above Bootstrap's fixed elements */
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  background: var(--grq-surface, #fff);
+}
+
+/* The [hidden] attribute must win over the display:flex above. */
+.chart-popout[hidden] {
+  display: none;
+}
+
+.chart-popout-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The chart body grows to fill the remaining viewport. min-height:0 lets the
+ * flex child shrink so the re-parented canvas can claim the full height. */
+.chart-popout-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The re-parented canvas fills the overlay body. */
+.chart-popout-body canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Lock background scroll while the overlay is open (the contract class the
+ * sibling sub-issues #452/#453 also key off). */
+body.chart-popout-open {
+  overflow: hidden;
+}
+
 /* Loading and message styles */
 .loading {
   text-align: center;

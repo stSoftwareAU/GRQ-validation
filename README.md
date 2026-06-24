@@ -30,7 +30,9 @@ Pages.
   mirror the frontend so backend and dashboard agree.
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
-  served as a static site from `docs/`.
+  served as a static site from `docs/`. On mobile, a pop-out control expands the
+  performance chart into a full-viewport overlay (dismissed by ✕, Esc or the
+  device back-gesture); desktop is unchanged.
 - **Hybrid Projection** — for score files less than 90 days old, project
   performance from the current actual prices.
 - **Automated Processing** — batch process score files with inline performance
@@ -336,6 +338,7 @@ GRQ-validation/
 │   ├── index.html          # Main dashboard
 │   ├── trend.html          # Prediction Trend view (Actual vs Target over time)
 │   ├── app.js              # Main dashboard logic
+│   ├── chart_popout.js     # Mobile full-screen chart pop-out overlay engine
 │   ├── trend.js            # Trend view controller
 │   ├── trend_predictions.js # Per-score-date prediction resolver (shared calc)
 │   ├── trend_series.js     # Trend data engine (matured series + bucketing)
