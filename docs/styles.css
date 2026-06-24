@@ -121,7 +121,16 @@
   display: flex; /* issue #466: shown on every device; per-device 90/180 choice */
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+}
+
+/* Issue #518: the 90/180 toggle and the expand ⤢ button now ride on the chart
+ * heading row (to the right of #chartTitle) on a SINGLE horizontal line,
+ * instead of stacking on two rows below the heading. This flex wrapper keeps
+ * them inline and vertically centred with the title on every device. */
+.chart-heading-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -137,7 +146,6 @@
 .chart-popout-controls {
   display: none; /* desktop: no expand control */
   justify-content: flex-end;
-  margin-bottom: 0.5rem;
 }
 
 /* Reveal the expand trigger only on mobile widths. */
