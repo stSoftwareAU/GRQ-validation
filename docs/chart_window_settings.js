@@ -124,6 +124,42 @@
     );
   }
 
+  // --- transient `?window=` deep link (issues #450, #467) --------------------
+  // The single shared `?window=` parser. Parsing of `?window=` is owned by
+  // #450 (which mirrors `?theme=` / `?date=`); it lives here — beside
+  // `normaliseWindowDays` and `ALLOWED_WINDOW_DAYS` — so the parameter is
+  // implemented ONCE and both #450 and the desktop wiring (#467) consume the
+  // same helper. The value is TRANSIENT: applying it must never write storage.
+
+  // Read a transient chart-window override from a URL query string, e.g.
+  // `?window=90` or `?window=180`. Returns 90 or 180 when the value is a
+  // permitted window, else null (absent / blank / disallowed) so callers fall
+  // back to the saved choice or device default. Mirrors theme.js's
+  // preferenceFromSearch — guarded so malformed input never throws.
+  function windowDaysFromSearch(search) {
+    try {
+      const value = new URLSearchParams(search || "").get("window");
+      if (value === null) {
+        return null;
+      }
+      const num = Number(value.trim());
+      return ALLOWED_WINDOW_DAYS.includes(num) ? num : null;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  // Resolve the effective chart window for a visit, applying the visit-only
+  // precedence (issue #467): a `?window=` URL override (transient, never
+  // persisted) wins over `savedWindowDays` — the already-resolved saved
+  // per-device choice or device default (mobile 90 / desktop 180). An absent or
+  // invalid override leaves the saved value in place. Pure: writes nothing, so
+  // a URL-supplied window is honoured for the visit without persisting.
+  function effectiveWindowDays(search, savedWindowDays) {
+    const fromUrl = windowDaysFromSearch(search);
+    return fromUrl === null ? savedWindowDays : fromUrl;
+  }
+
   // Publish the helpers for the dashboard and the tests.
   globalThis.GRQChartWindow = {
     STORAGE_KEY,
@@ -136,5 +172,7 @@
     writeMobileWindowDays,
     readDesktopWindowDays,
     writeDesktopWindowDays,
+    windowDaysFromSearch,
+    effectiveWindowDays,
   };
 })();

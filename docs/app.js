@@ -90,10 +90,27 @@ class GRQValidator {
     // window-sizing call site (chart, summary, cost-of-capital floor) resolves
     // through this single accessor so the chart and the summary always cover the
     // identical window (#367) — a desktop 90 choice narrows both together.
+    //
+    // A `?window=90|180` deep link (issue #467) takes precedence for THIS visit
+    // only: the transient URL value (parsed by the shared #450 helper) wins over
+    // the saved per-device choice, which wins over the device default. The URL
+    // value is NEVER persisted, so a reload without the param returns to the
+    // saved/180 window and mobile's 90 default is never regressed. Guarded so a
+    // missing helper degrades cleanly to the saved per-device value.
     currentWindowDays() {
-        return this.isMobileDevice()
+        const saved = this.isMobileDevice()
             ? this.mobileWindowDays()
             : this.desktopWindowDays();
+        if (
+            typeof GRQChartWindow === "undefined" ||
+            typeof GRQChartWindow.effectiveWindowDays !== "function"
+        ) {
+            return saved;
+        }
+        const search = (typeof window !== "undefined" && window.location)
+            ? window.location.search
+            : "";
+        return GRQChartWindow.effectiveWindowDays(search, saved);
     }
 
     // Restore the 90/180-day toggle to THIS device's stored choice and, on
