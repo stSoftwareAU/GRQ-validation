@@ -12,9 +12,7 @@ pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2026Q2";
 
 /// Returns `true` when the share-price data repository is present on disk.
 pub fn market_data_repository_available() -> bool {
-    Path::new(MARKET_DATA_BASE_PATH)
-        .join("data")
-        .is_dir()
+    Path::new(MARKET_DATA_BASE_PATH).join("data").is_dir()
 }
 
 /// Ensures the share-price data repository is present before batch processing.
@@ -39,7 +37,10 @@ pub fn is_market_data_csv_empty(csv_path: &str) -> bool {
 
     match fs::read_to_string(csv_path) {
         Ok(content) => {
-            let lines: Vec<_> = content.lines().filter(|line| !line.trim().is_empty()).collect();
+            let lines: Vec<_> = content
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .collect();
             lines.len() <= 1
         }
         Err(_) => true,

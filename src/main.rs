@@ -4,8 +4,8 @@ use clap::Parser;
 use grq_validation::utils::{
     build_score_file_path, create_dividend_csv_for_score_file,
     create_market_data_long_csv_for_score_file, derive_csv_output_path,
-    ensure_market_data_repository, extract_ticker_codes_from_score_file,
-    is_market_data_csv_empty, read_index_json,
+    ensure_market_data_repository, extract_ticker_codes_from_score_file, is_market_data_csv_empty,
+    read_index_json,
 };
 use log::info;
 use std::path::Path;
