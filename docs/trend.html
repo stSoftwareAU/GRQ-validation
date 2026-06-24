@@ -78,6 +78,7 @@
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <a
                   href="index.html"
+                  id="backToDashboardLink"
                   class="btn btn-outline-light btn-sm"
                 >← Dashboard</a>
                 <h1 class="display-4 mb-0">Prediction Trend</h1>
@@ -197,6 +198,10 @@
     <!-- View deep-link (?view=portfolio|trend) selection helpers (issue #479) —
          before trend.js, which routes ?view=portfolio back to index.html. -->
     <script src="view_selection.js"></script>
+
+    <!-- Date deep-link helpers (issue #436/#517) — before trend.js, which uses
+         them to forward the selected ?date= onto the "← Dashboard" link. -->
+    <script src="date_selection.js"></script>
 
     <!-- Trend view controller (issue #430) -->
     <script src="trend.js"></script>
