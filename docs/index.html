@@ -229,6 +229,19 @@
                         >180 days</label>
                       </div>
                     </div>
+                    <!-- Mobile-only pop-out control (issue #451). Hidden at
+                         >=768px via CSS so desktop is untouched. -->
+                    <div class="chart-popout-controls">
+                      <button
+                        id="chartPopoutExpand"
+                        type="button"
+                        class="btn btn-outline-primary btn-sm chart-popout-expand"
+                        aria-label="Expand chart to full screen"
+                        title="Expand chart to full screen"
+                      >
+                        <span aria-hidden="true">⤢</span>
+                      </button>
+                    </div>
                     <div class="chart-container">
                       <canvas id="performanceChart"></canvas>
                     </div>
