@@ -159,7 +159,7 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads six optional query parameters so a specific view can be
+The dashboard reads seven optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
@@ -189,6 +189,10 @@ deterministically — issue #281):
   on load only and **not** persisted to `localStorage` — reloading without the
   param restores the saved choice. An absent param leaves the saved/default
   toggles unchanged.
+- `?fullscreen=1` — on **mobile**, open the performance-chart pop-out on page
+  load (issue #482); truthy only for the exact value `1`. A **no-op on
+  desktop**, which has ample chart space. Read on load only and **not**
+  persisted — reloading without the param does not re-open the pop-out.
 
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
