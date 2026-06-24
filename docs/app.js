@@ -4443,6 +4443,20 @@ if (typeof globalThis.matchMedia === "function") {
 let lastViewportIsMobile;
 
 function syncChartForViewport() {
+    // While the chart pop-out overlay owns the canvas, the device class has not
+    // actually changed — the overlay is a presentation surface, not a resize.
+    // Suspend the breakpoint reconciliation so opening/closing (or rotating
+    // inside) the pop-out never triggers a spurious chart/summary rebuild and
+    // never clears the dashboard's mobile colour key behind the overlay. The
+    // close path reconciles once the canvas is back in .chart-container (#453).
+    if (
+        globalThis.GRQChartPopout &&
+        typeof globalThis.GRQChartPopout.isPopoutOpen === "function" &&
+        globalThis.GRQChartPopout.isPopoutOpen(document)
+    ) {
+        return;
+    }
+
     const isMobile = validator.isMobileDevice();
 
     // Crossing the mobile/desktop boundary changes the visible window (90 vs
@@ -4506,6 +4520,12 @@ if (
     globalThis.GRQChartPopout.createChartPopout({
         document,
         getChart: () => validator.chart,
+        // On close, reconcile the dashboard to the real current viewport now the
+        // canvas is back in .chart-container: re-runs the legend sync and
+        // renderColorKey() so the mobile colour key and native legend match
+        // their pre-pop-out state (issue #453). Reuses the shared viewport sync
+        // rather than duplicating that logic.
+        onClose: () => syncChartForViewport(),
     });
 }
 

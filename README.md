@@ -35,7 +35,10 @@ Pages.
   device back-gesture) and presents it in landscape — rotated via CSS on a
   portrait phone so a wide chart fills the screen, with an optional Screen
   Orientation lock where the platform supports it (iOS Safari falls back to the
-  CSS rotation). Desktop is unchanged.
+  CSS rotation). The overlay shows **only the chart** with readable axes and
+  scales — the mobile colour key and dashboard chrome stay behind it — and on
+  close the dashboard's colour key and native legend are reconciled back to
+  their pre-pop-out state. Desktop is unchanged.
 - **Hybrid Projection** — for score files less than 90 days old, project
   performance from the current actual prices.
 - **Automated Processing** — batch process score files with inline performance

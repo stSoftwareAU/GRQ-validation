@@ -32,6 +32,22 @@ const EXPAND_ID = "chartPopoutExpand";
 const CLOSE_ID = "chartPopoutClose";
 const CANVAS_ID = "performanceChart";
 
+// True while the chart pop-out overlay owns the canvas, detected from the body
+// contract class set on open (issue #453). The dashboard's viewport sync
+// consults this to stay idle while the pop-out is open: the device class has
+// NOT actually changed, so rebuilding the chart/summary or flipping the native
+// legend then would be a spurious rebuild and would leave the dashboard's mobile
+// colour key stale when the canvas returns on close. `doc` is injectable so the
+// Deno tests drive it headless.
+function isPopoutOpen(doc) {
+    const d = doc || globalThis.document;
+    return !!(
+        d && d.body && d.body.classList &&
+        typeof d.body.classList.contains === "function" &&
+        d.body.classList.contains(BODY_OPEN_CLASS)
+    );
+}
+
 // Resize-and-update the live chart, guarded so a missing/half-built chart (no
 // data loaded yet) is a silent no-op rather than a throw. Chart.js needs both:
 // resize() recomputes the canvas box for its new parent, update() repaints.
@@ -211,6 +227,12 @@ function createChartPopout(options) {
     const getChart = typeof opts.getChart === "function"
         ? opts.getChart
         : () => null;
+    // Reconciliation hook run once the canvas is back in the dashboard on close
+    // (issue #453). The app passes its viewport sync here so the mobile colour
+    // key + native legend are restored to match the real current device class —
+    // reusing renderColorKey()/syncChartForViewport() rather than duplicating
+    // that logic. Optional: a page without it just closes with no reconcile.
+    const onClose = typeof opts.onClose === "function" ? opts.onClose : null;
     if (!doc || typeof doc.getElementById !== "function") return null;
 
     const overlay = doc.getElementById(OVERLAY_ID);
@@ -271,7 +293,20 @@ function createChartPopout(options) {
     // Close the overlay and release any orientation lock taken on open.
     function finishClose() {
         const closed = closePopout(ctx);
-        if (closed) releaseOrientationLock(screen);
+        if (closed) {
+            releaseOrientationLock(screen);
+            // Reconcile the dashboard now the canvas is restored: the colour key
+            // and native legend are re-synced to the real current viewport so
+            // they match their pre-pop-out state (issue #453). Guarded so a hook
+            // that throws never leaves the overlay half-closed.
+            if (onClose) {
+                try {
+                    onClose();
+                } catch (_e) {
+                    // Reconciliation is best-effort; the close itself succeeded.
+                }
+            }
+        }
         return closed;
     }
 
@@ -341,6 +376,7 @@ function createChartPopout(options) {
 // test importer reach the same code, mirroring docs/color_key.js.
 globalThis.GRQChartPopout = {
     BODY_OPEN_CLASS,
+    isPopoutOpen,
     resizeChart,
     openPopout,
     closePopout,
