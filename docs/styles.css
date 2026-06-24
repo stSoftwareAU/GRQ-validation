@@ -112,13 +112,13 @@
 }
 
 /* -------------------------------------------------------------------------
- * Mobile-only 90/180-day chart window toggle (issue #449, milestone #445).
- * Desktop always renders the full 180-day window, so the control is hidden
- * there and only revealed below the mobile breakpoint (< 768px) — the same
- * boundary isMobileDevice() uses. The reveal lives in the @media block below.
+ * 90/180-day chart window toggle (issue #449, milestone #445; extended to
+ * desktop in issue #466). The control now renders on EVERY device — each keeps
+ * its own default and store (mobile 90, desktop 180). The @media block below
+ * keeps the phone reveal explicit at the < 768px boundary isMobileDevice() uses.
  * ------------------------------------------------------------------------- */
 .chart-window-control {
-  display: none; /* desktop: window is always 180 days, no choice offered */
+  display: flex; /* issue #466: shown on every device; per-device 90/180 choice */
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
@@ -500,7 +500,8 @@ body.chart-popout-open {
     display: flex;
   }
 
-  /* Reveal the 90/180-day chart window toggle on phones only (issue #449). */
+  /* Keep the 90/180-day chart window toggle revealed on phones (issue #449;
+     now also shown on desktop per issue #466 — this phone reveal stays explicit). */
   .chart-window-control {
     display: flex;
   }

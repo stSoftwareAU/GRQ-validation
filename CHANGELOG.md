@@ -29,6 +29,15 @@ and this project adheres to
   cache key always changes and clients pick up the new build. The bump is
   idempotent relative to the base branch (Issue #323).
 
+### Changed
+
+- `GRQProjection.deviceWindowDays`/`deviceWindowEnd` (`docs/projection.js`) now
+  honour an explicit permitted window (90 or 180) on **either** device, relaxing
+  the old desktop-180 lock so a desktop 90-day choice can take effect. Each
+  device keeps its own default when the value is missing or invalid (mobile 90,
+  desktop 180). The helper stays pure — the caller supplies the value — and the
+  allow-list constant is renamed `PERMITTED_WINDOW_DAYS` (Issue #464).
+
 ### Removed
 
 - Dead `[dependencies]` `walkdir` and `thiserror`, which were declared but never

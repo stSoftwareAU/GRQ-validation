@@ -3,12 +3,15 @@
 // (Issue #323).
 //
 // This replaces the unreliable local pre-commit hook (removed in #323) with a
-// deterministic, CI-driven bump. The version lives in four places that must
-// stay aligned (see tests/sw_precache_list_test.ts):
+// deterministic, CI-driven bump. The version lives in several places that must
+// stay aligned (see tests/sw_precache_list_test.ts and
+// tests/trend_view_wiring_test.ts):
 //   - docs/sw.js          const APP_VERSION = "X.Y.Z";
 //   - docs/sw-register.js  ./sw.js?v=X.Y.Z
 //   - docs/index.html      <meta name="app-version" content="X.Y.Z">
 //   - docs/index.html      sw-register.js?v=X.Y.Z
+//   - docs/trend.html      <meta name="app-version" content="X.Y.Z">
+//   - docs/trend.html      sw-register.js?v=X.Y.Z
 //
 // The bump is idempotent relative to a base version: when `baseVersion` is
 // supplied (the version on the PR's base branch) and the working copy already
@@ -32,11 +35,13 @@ export interface VersionFiles {
   sw: string;
   swRegister: string;
   index: string;
+  trend: string;
 }
 
 const SW = "sw.js";
 const SW_REGISTER = "sw-register.js";
 const INDEX = "index.html";
+const TREND = "trend.html";
 
 /** Increment the patch component of a strict `major.minor.patch` version. */
 export function bumpPatch(version: string): string {
@@ -70,7 +75,10 @@ export function updateSwRegister(text: string, newVersion: string): string {
   return text.replace(/(\.\/sw\.js\?v=)[0-9.]+/, `$1${newVersion}`);
 }
 
-/** Rewrite the app-version meta and the sw-register.js cache-buster in index.html. */
+/**
+ * Rewrite the app-version meta and the sw-register.js cache-buster in an HTML
+ * page. Used for both index.html and trend.html, which share these patterns.
+ */
 export function updateIndex(text: string, newVersion: string): string {
   return text
     .replace(
@@ -106,6 +114,7 @@ export function bumpVersionContents(
       sw: updateSw(files.sw, newVersion),
       swRegister: updateSwRegister(files.swRegister, newVersion),
       index: updateIndex(files.index, newVersion),
+      trend: updateIndex(files.trend, newVersion),
     },
   };
 }
@@ -123,11 +132,13 @@ export async function bumpVersionFiles(
   const swPath = join(docsDir, SW);
   const swRegisterPath = join(docsDir, SW_REGISTER);
   const indexPath = join(docsDir, INDEX);
+  const trendPath = join(docsDir, TREND);
 
   const before: VersionFiles = {
     sw: await Deno.readTextFile(swPath),
     swRegister: await Deno.readTextFile(swRegisterPath),
     index: await Deno.readTextFile(indexPath),
+    trend: await Deno.readTextFile(trendPath),
   };
 
   const { result, files } = bumpVersionContents(before, baseVersion);
@@ -136,6 +147,7 @@ export async function bumpVersionFiles(
     await Deno.writeTextFile(swPath, files.sw);
     await Deno.writeTextFile(swRegisterPath, files.swRegister);
     await Deno.writeTextFile(indexPath, files.index);
+    await Deno.writeTextFile(trendPath, files.trend);
   }
 
   return result;

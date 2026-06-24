@@ -159,7 +159,7 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads four optional query parameters so a specific view can be
+The dashboard reads five optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
@@ -174,6 +174,13 @@ deterministically — issue #281):
   `?stock=NASDAQ%3AMGRC`. An unknown symbol falls back to the aggregate view.
 - `?theme=auto|light|dark` — force a theme for that page load (a transient
   override that is **not** persisted to `localStorage`).
+- `?window=90|180` — switch the chart (and aligned Market Performance summary)
+  to a 90- or 180-day window for that page load, on **both** desktop and mobile
+  (issues #450, #467). Like `?theme=`, this is a **transient** override: it
+  wins over the saved per-device choice but is **never** persisted, so a reload
+  without the param returns to the saved window (desktop 180 / mobile 90). Both
+  windows end on the same date (#367); an absent or invalid value falls back to
+  the saved choice, then the device default.
 
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes

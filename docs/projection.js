@@ -30,37 +30,41 @@ function setDateToMidnight(date) {
 const MOBILE_WINDOW_DAYS = 90;
 const DESKTOP_WINDOW_DAYS = 180;
 
-// The mobile window is selectable (issue #448, milestone #445): the user may
-// keep the 90-day default or opt into the full 180-day window. Desktop is
-// always 180 and the toggle never affects it. Only these two values are
-// permitted; anything else falls back to the 90-day default so a bad stored
-// value can never widen the window unexpectedly.
-const PERMITTED_MOBILE_WINDOW_DAYS = [MOBILE_WINDOW_DAYS, DESKTOP_WINDOW_DAYS];
+// The chart window is selectable (issue #448, milestone #445; relaxed by #464,
+// milestone #457): the user may keep their device default or opt into the other
+// permitted window. Only these two values are permitted; anything else falls
+// back to the device default so a bad stored value can never widen the window
+// unexpectedly.
+const PERMITTED_WINDOW_DAYS = [MOBILE_WINDOW_DAYS, DESKTOP_WINDOW_DAYS];
 
 // Days in the visible window for the current device.
 //
-// `mobileWindowDays` carries the chosen mobile window (90 or 180). It is honoured
-// only on mobile and only when permitted; otherwise the 90-day default applies.
-// Desktop always returns DESKTOP_WINDOW_DAYS (180) — the toggle is mobile-only.
+// `windowDays` carries an explicit chosen window (90 or 180). An explicit
+// permitted value is honoured on EITHER device — desktop may now opt into 90
+// just as mobile may opt into 180 (issue #464 relaxes the old desktop-180 lock
+// from #448). When the value is missing (undefined) or not permitted, each
+// device keeps its own default: 90 on mobile, 180 on desktop.
 // projection.js stays pure: the caller supplies the value, this never reads
-// localStorage. The default keeps every existing caller unchanged until the UI
-// passes a value (preserves the #367 single-source guarantee).
-function deviceWindowDays(isMobile, mobileWindowDays = MOBILE_WINDOW_DAYS) {
-    if (!isMobile) return DESKTOP_WINDOW_DAYS;
-    return PERMITTED_MOBILE_WINDOW_DAYS.includes(mobileWindowDays)
-        ? mobileWindowDays
-        : MOBILE_WINDOW_DAYS;
+// localStorage. Omitting the argument keeps every existing caller unchanged
+// (preserves the #367 single-source guarantee).
+function deviceWindowDays(isMobile, windowDays) {
+    const deviceDefault = isMobile ? MOBILE_WINDOW_DAYS : DESKTOP_WINDOW_DAYS;
+    if (windowDays === undefined) return deviceDefault;
+    return PERMITTED_WINDOW_DAYS.includes(windowDays)
+        ? windowDays
+        : deviceDefault;
 }
 
 // The window's end date: scoreDate + resolved-device-days, at local midnight.
-// `mobileWindowDays` is threaded through to deviceWindowDays (mobile-only, 90 or
-// 180). Returns null when the score date is missing or unparseable so the caller
-// renders blank rather than erroring (preserves blank-on-missing).
-function deviceWindowEnd(scoreDate, isMobile, mobileWindowDays = MOBILE_WINDOW_DAYS) {
+// `windowDays` is threaded through to deviceWindowDays (an explicit permitted
+// 90/180 honoured on either device). Returns null when the score date is missing
+// or unparseable so the caller renders blank rather than erroring (preserves
+// blank-on-missing).
+function deviceWindowEnd(scoreDate, isMobile, windowDays) {
     if (scoreDate === null || scoreDate === undefined) return null;
     const start = setDateToMidnight(new Date(scoreDate));
     if (Number.isNaN(start.getTime())) return null;
-    const days = deviceWindowDays(isMobile, mobileWindowDays);
+    const days = deviceWindowDays(isMobile, windowDays);
     return setDateToMidnight(
         new Date(start.getTime() + days * 24 * 60 * 60 * 1000),
     );
