@@ -169,7 +169,11 @@ deterministically — issue #281):
   `?date=2026-03-23`. This is the friendlier alternative to `?file=` — no
   URL-encoded path needed. Unpadded month/day (`?date=2026-3-23`) is accepted;
   an unknown or malformed date falls back to the default selection. When both
-  `?file=` and `?date=` are present, `?file=` wins.
+  `?file=` and `?date=` are present, `?file=` wins. Picking a date in the
+  **Score File** dropdown now also writes `?date=` back into the dashboard URL
+  (issue #517), so a refresh and copied/shared links reopen on that exact date,
+  and the date is carried onto the **📈 Prediction Trend** link so the Trend
+  page's **← Dashboard** button returns you to the same date.
 - `?stock=<symbol>` — open straight into the single-stock detail view, e.g.
   `?stock=NASDAQ%3AMGRC`. An unknown symbol falls back to the aggregate view.
 - `?theme=auto|light|dark` — force a theme for that page load (a transient

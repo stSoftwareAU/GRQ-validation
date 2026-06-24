@@ -69,8 +69,67 @@
     return match && typeof match.file === "string" ? match.file : null;
   }
 
+  // Reverse of resolveDateSelection: given the loaded score index and a selected
+  // score-file path, return that file's canonical YYYY-MM-DD date, or null when
+  // the file is unknown. Used to mirror the dropdown selection into the
+  // dashboard URL (issue #517). Each entry is expected to expose a `.file` path
+  // and a `.date` (YYYY-MM-DD).
+  function dateForFile(scores, file) {
+    if (!Array.isArray(scores) || typeof file !== "string" || file === "") {
+      return null;
+    }
+    const match = scores.find((row) => row && row.file === file);
+    return match && typeof match.date === "string"
+      ? normaliseDate(match.date)
+      : null;
+  }
+
+  // Build a query string (no leading "?") that carries the selected score date,
+  // for the dashboard's OWN URL (issue #517). The `date` param is set to the
+  // normalised value and the `file` param is removed — the loader resolves
+  // `?file=` before `?date=`, so a stale file would otherwise win on reload.
+  // Every other param is preserved. An invalid/missing date leaves `date`
+  // untouched so the caller can choose not to write the URL.
+  function searchWithDate(search, date) {
+    const params = new URLSearchParams(search || "");
+    const norm = normaliseDate(date);
+    if (norm === null) {
+      return params.toString();
+    }
+    params.set("date", norm);
+    params.delete("file");
+    return params.toString();
+  }
+
+  // Build a navigation href carrying the selected date, e.g.
+  // linkWithDate("trend.html", "2026-03-25") → "trend.html?date=2026-03-25".
+  // Used for the dashboard's "📈 Prediction Trend" link and the Trend page's
+  // "← Dashboard" link so the chosen date survives the round trip (issue #517).
+  // Any existing query params (with `date` replaced) and hash on `base` are
+  // preserved; an invalid/missing date returns `base` unchanged so the link
+  // stays the plain page (the Trend page must not depend on the date).
+  function linkWithDate(base, date) {
+    const raw = base == null ? "" : String(base);
+    const hashIndex = raw.indexOf("#");
+    const hash = hashIndex >= 0 ? raw.slice(hashIndex) : "";
+    const withoutHash = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
+    const queryIndex = withoutHash.indexOf("?");
+    const path = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+    const search = queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : "";
+    const params = new URLSearchParams(search);
+    const norm = normaliseDate(date);
+    if (norm !== null) {
+      params.set("date", norm);
+    }
+    const query = params.toString();
+    return query ? `${path}?${query}${hash}` : `${path}${hash}`;
+  }
+
   globalThis.GRQDateSelection = {
     dateFromSearch,
     resolveDateSelection,
+    dateForFile,
+    searchWithDate,
+    linkWithDate,
   };
 })();

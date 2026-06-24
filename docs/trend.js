@@ -421,6 +421,22 @@
         return;
     }
 
+    // Forward any ?date= on this page onto the "← Dashboard" link so returning
+    // reopens the dashboard on the exact score date the user had selected
+    // (issue #517). The Trend page stays independent of the date: it is used
+    // ONLY to build the return link, never to choose what the page displays.
+    function updateDashboardBackLink() {
+        if (!globalThis.GRQDateSelection) {
+            return;
+        }
+        const link = document.getElementById("backToDashboardLink");
+        if (!link) {
+            return;
+        }
+        const date = GRQDateSelection.dateFromSearch(location.search);
+        link.setAttribute("href", GRQDateSelection.linkWithDate("index.html", date));
+    }
+
     function start() {
         // View deep-link routing (?view=portfolio, issue #479): when the URL
         // requests the aggregate view, navigate back to index.html before any
@@ -435,6 +451,7 @@
                 return;
             }
         }
+        updateDashboardBackLink();
         new GRQTrendView().init();
     }
 

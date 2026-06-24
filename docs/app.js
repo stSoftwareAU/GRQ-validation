@@ -326,6 +326,10 @@ class GRQValidator {
             select.innerHTML =
                 '<option value="">Select a score file...</option>';
 
+            // Remember the score index so a selected file can be mapped back to
+            // its YYYY-MM-DD date for the ?date= deep link (issue #517).
+            this.scoresIndex = indexData.scores;
+
             indexData.scores.forEach((score) => {
                 const option = document.createElement("option");
                 option.value = score.file;
@@ -394,9 +398,53 @@ class GRQValidator {
         }
     }
 
+    // Mirror the selected score file into the dashboard URL as ?date= and
+    // forward it to the Prediction Trend link, so a refresh, a shared/copied
+    // link and the Trend page's "← Dashboard" button all reopen on the exact
+    // chosen date (issue #517). Pure URL/link plumbing — no data is refetched.
+    updateDateDeepLinks() {
+        if (typeof GRQDateSelection === "undefined") {
+            return;
+        }
+        const date = GRQDateSelection.dateForFile(
+            this.scoresIndex,
+            this.selectedFile,
+        );
+
+        // Write the date into the dashboard's own URL (replace, not push, so the
+        // back button still leaves the page). A missing/invalid date is left as
+        // the helper found it rather than guessing.
+        if (
+            date && typeof window !== "undefined" && window.history &&
+            typeof window.history.replaceState === "function" && window.location
+        ) {
+            const query = GRQDateSelection.searchWithDate(
+                window.location.search,
+                date,
+            );
+            const newUrl = window.location.pathname +
+                (query ? "?" + query : "") + window.location.hash;
+            window.history.replaceState(null, "", newUrl);
+        }
+
+        // Carry the date onto the Trend page link so its "← Dashboard" button
+        // can return here on the same date. The Trend page only uses it to build
+        // that return link — it never opens on / changes content by date.
+        const trendLink = document.getElementById("trendViewLink");
+        if (trendLink) {
+            trendLink.setAttribute(
+                "href",
+                GRQDateSelection.linkWithDate("trend.html", date),
+            );
+        }
+    }
+
     async loadScoreFile() {
         this.showLoading();
         console.log('loadScoreFile called for:', this.selectedFile);
+
+        // Keep the URL and Trend link in sync with the chosen date (issue #517).
+        this.updateDateDeepLinks();
 
         // Clear market index data to prevent showing stale SP500/NASDAQ data
         this.marketIndexData = null;
