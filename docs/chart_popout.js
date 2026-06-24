@@ -48,6 +48,76 @@ function resizeChart(getChart) {
     if (typeof chart.update === "function") chart.update();
 }
 
+// --- Landscape presentation (issue #452) -------------------------------------
+//
+// Inside the pop-out a wide chart is hard to read on a portrait phone. The
+// robust baseline is a CSS rotation (see docs/styles.css) that needs no JS at
+// all. The optional progressive enhancement asks the platform to rotate the
+// device for us via the Screen Orientation API; iOS Safari exposes
+// `screen.orientation` but NOT `.lock()`, so every helper degrades silently and
+// the CSS fallback is always the safety net. These functions are pure with
+// respect to their injected `screen` / `viewport`, so the Deno tests drive them
+// headless.
+
+// True when the device is held portrait (taller than wide). `viewport` is the
+// window-like object carrying innerWidth/innerHeight.
+function isPortraitViewport(viewport) {
+    if (!viewport) return false;
+    const w = Number(viewport.innerWidth);
+    const h = Number(viewport.innerHeight);
+    if (!isFinite(w) || !isFinite(h)) return false;
+    return h > w;
+}
+
+// Capability gate for the optional orientation lock. iOS Safari fails this, so
+// the CSS fallback carries those devices.
+function supportsOrientationLock(screen) {
+    return !!(screen && screen.orientation &&
+        typeof screen.orientation.lock === "function");
+}
+
+// Pure decision: how should the popped-out chart be presented in landscape?
+//   - "orientation-lock": the platform can rotate the device for us.
+//   - "css-rotate": no lock (e.g. iOS) and the phone is held portrait, so the
+//     CSS fallback rotates the chart to use the long edge.
+//   - "native": already landscape, the chart fills the viewport as-is.
+function chooseLandscapePresentation({ portrait, lockSupported } = {}) {
+    if (!portrait) return "native";
+    return lockSupported ? "orientation-lock" : "css-rotate";
+}
+
+// Attempt to lock to landscape, swallowing the inevitable rejection where the
+// API exists but the platform refuses (so the CSS fallback still applies).
+// Returns the branch taken so callers/tests can assert it.
+function requestLandscapeLock(screen) {
+    if (!supportsOrientationLock(screen)) return "unsupported";
+    try {
+        const result = screen.orientation.lock("landscape");
+        if (result && typeof result.catch === "function") {
+            result.catch(() => {});
+        }
+        return "requested";
+    } catch (_e) {
+        return "unsupported";
+    }
+}
+
+// Release any landscape lock on close. Silent no-op when unsupported.
+function releaseOrientationLock(screen) {
+    if (
+        !screen || !screen.orientation ||
+        typeof screen.orientation.unlock !== "function"
+    ) {
+        return false;
+    }
+    try {
+        screen.orientation.unlock();
+        return true;
+    } catch (_e) {
+        return false;
+    }
+}
+
 // Open the overlay. Pure with respect to its `ctx` — it mutates only the
 // injected elements and ctx state, returning true when it actually opened
 // (false if it was already open or the required elements are missing).
@@ -134,6 +204,10 @@ function togglePopout(ctx) {
 function createChartPopout(options) {
     const opts = options || {};
     const doc = opts.document || globalThis.document;
+    // The Screen Orientation API surface and the window-like viewport drive the
+    // optional landscape lock (issue #452); both are injectable for tests.
+    const screen = opts.screen || globalThis.screen;
+    const viewport = opts.viewport || globalThis;
     const getChart = typeof opts.getChart === "function"
         ? opts.getChart
         : () => null;
@@ -179,7 +253,26 @@ function createChartPopout(options) {
                 pushedHistory = false;
             }
         }
+        // Optional landscape enhancement: only attempt the lock when the device
+        // is portrait AND the platform supports it; the CSS fallback covers the
+        // rest (issue #452). The lock itself silently no-ops where refused.
+        if (opened) {
+            const presentation = chooseLandscapePresentation({
+                portrait: isPortraitViewport(viewport),
+                lockSupported: supportsOrientationLock(screen),
+            });
+            if (presentation === "orientation-lock") {
+                requestLandscapeLock(screen);
+            }
+        }
         return opened;
+    }
+
+    // Close the overlay and release any orientation lock taken on open.
+    function finishClose() {
+        const closed = closePopout(ctx);
+        if (closed) releaseOrientationLock(screen);
+        return closed;
     }
 
     // Close requested by ✕ or Esc: unwind the pushed history entry so the back
@@ -191,7 +284,7 @@ function createChartPopout(options) {
             history.back();
             return true;
         }
-        return closePopout(ctx);
+        return finishClose();
     }
 
     function onKeydown(event) {
@@ -208,7 +301,16 @@ function createChartPopout(options) {
         // The device/browser back-gesture (or our own history.back()) lands
         // here — close the overlay if it is open.
         pushedHistory = false;
-        if (ctx.isOpen) closePopout(ctx);
+        if (ctx.isOpen) finishClose();
+    }
+
+    // Keep the chart filling the (rotated) landscape area when the device is
+    // rotated while the pop-out is open. resize() recomputes the canvas box for
+    // its new dimensions; without it a rotated canvas is clipped/letterboxed
+    // (issue #452). Only acts while open so the inline dashboard path is
+    // untouched (the app's own debounced sync owns that).
+    function onViewportChange() {
+        if (ctx.isOpen) resizeChart(ctx.getChart);
     }
 
     if (typeof trigger.addEventListener === "function") {
@@ -222,6 +324,9 @@ function createChartPopout(options) {
     }
     if (typeof globalThis.addEventListener === "function") {
         globalThis.addEventListener("popstate", onPopState);
+        // Re-fit the chart on rotation/resize while open (issue #452).
+        globalThis.addEventListener("resize", onViewportChange);
+        globalThis.addEventListener("orientationchange", onViewportChange);
     }
 
     return {
@@ -241,4 +346,10 @@ globalThis.GRQChartPopout = {
     closePopout,
     togglePopout,
     createChartPopout,
+    // Landscape presentation helpers (issue #452).
+    isPortraitViewport,
+    supportsOrientationLock,
+    chooseLandscapePresentation,
+    requestLandscapeLock,
+    releaseOrientationLock,
 };

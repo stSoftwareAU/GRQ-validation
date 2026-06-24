@@ -176,6 +176,35 @@ body.chart-popout-open {
   overflow: hidden;
 }
 
+/* Landscape presentation inside the pop-out (issue #452, milestone #446).
+ *
+ * On a portrait phone the Screen Orientation lock is unavailable (iOS Safari),
+ * so the robust baseline is a pure-CSS rotation: the chart body is sized to the
+ * SWAPPED viewport (width = the longer edge, 100vh) and rotated 90° about its
+ * centre, so a wide chart fills the screen and reads as landscape in the
+ * natural portrait hold. Chart.js (responsive, maintainAspectRatio:false) fits
+ * the canvas to this rotated box, and chart_popout.js calls chart.resize() on
+ * open/rotate so nothing is clipped or letterboxed. In landscape (device
+ * rotated, or where the orientation lock took effect) this query does not
+ * match and the chart fills the viewport directly with no rotation. */
+@media (max-width: 767.98px) and (orientation: portrait) {
+  .chart-popout-body {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vh;
+    height: 100vw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center center;
+  }
+
+  /* Keep the close control above the rotated chart and reachable. */
+  .chart-popout-toolbar {
+    position: relative;
+    z-index: 1;
+  }
+}
+
 /* Loading and message styles */
 .loading {
   text-align: center;
