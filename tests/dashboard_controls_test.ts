@@ -28,3 +28,25 @@ Deno.test("dashboard - Score File dropdown is preserved", () => {
     "the #scoreFileSelect dropdown must remain",
   );
 });
+
+// Issue #530: "Score File" is an implementation detail outsiders do not
+// understand. The user-facing label and placeholder must read "Prediction
+// Date" instead, while the underlying control id stays unchanged.
+Deno.test("dashboard - control is labelled 'Prediction Date', not 'Score File'", () => {
+  assert(
+    /<label for="scoreFileSelect"[^>]*>Prediction Date:<\/label>/.test(html),
+    "the label must read 'Prediction Date:'",
+  );
+  assert(
+    !html.includes(">Score File:</label>"),
+    "the old 'Score File:' label must not remain",
+  );
+  assert(
+    html.includes("Select a prediction date..."),
+    "the placeholder option must read 'Select a prediction date...'",
+  );
+  assert(
+    !html.includes("Select a score file..."),
+    "the old 'Select a score file...' placeholder must not remain",
+  );
+});

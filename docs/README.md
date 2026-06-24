@@ -39,7 +39,7 @@ This GitHub Pages application validates AI stock predictions by comparing actual
 
 ## Usage
 
-1. **Select Score File**: Choose from available prediction dates
+1. **Select Prediction Date**: Choose from available prediction dates
 2. **Adjust Cost of Capital**: Modify the annual rate (default: 10%)
 3. **View Performance**: See real-time comparison against targets
 4. **Track Progress**: Monitor how predictions are performing over time
