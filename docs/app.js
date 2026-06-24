@@ -4587,11 +4587,12 @@ globalThis.addEventListener("orientationchange", debouncedSyncChartForViewport);
 // resizing the chart on each move. The trigger is CSS-hidden at >=768px, so
 // desktop is untouched. getChart() returns the current instance because the
 // canvas persists across re-renders even though validator.chart is replaced.
+let chartPopoutController = null;
 if (
     globalThis.GRQChartPopout &&
     typeof globalThis.GRQChartPopout.createChartPopout === "function"
 ) {
-    globalThis.GRQChartPopout.createChartPopout({
+    chartPopoutController = globalThis.GRQChartPopout.createChartPopout({
         document,
         getChart: () => validator.chart,
         // On close, reconcile the dashboard to the real current viewport now the
@@ -4601,6 +4602,38 @@ if (
         // rather than duplicating that logic.
         onClose: () => syncChartForViewport(),
     });
+}
+
+// ?fullscreen=1 (issue #482): on mobile, open the chart pop-out on page load.
+// Transient (read once), visit-only (never persisted), and a hard no-op on
+// desktop — the same isMobileDevice() gate the rest of app.js uses. Degrades
+// cleanly when the pop-out controller is absent. We poll briefly for the first
+// chart render so the overlay hosts a live canvas, capped so a never-loading
+// page can't poll forever; the gating decision itself lives in the pure
+// GRQChartPopout.openFullscreenOnLoad() helper.
+if (
+    chartPopoutController &&
+    globalThis.GRQChartPopout &&
+    typeof globalThis.GRQChartPopout.fullscreenRequested === "function" &&
+    globalThis.GRQChartPopout.fullscreenRequested(
+        typeof location !== "undefined" ? location.search : "",
+    ) &&
+    validator.isMobileDevice()
+) {
+    let fullscreenAttempts = 0;
+    const openFullscreenWhenReady = () => {
+        if (validator.chart || fullscreenAttempts >= 50) {
+            globalThis.GRQChartPopout.openFullscreenOnLoad({
+                search: typeof location !== "undefined" ? location.search : "",
+                isMobile: validator.isMobileDevice(),
+                popout: chartPopoutController,
+            });
+            return;
+        }
+        fullscreenAttempts += 1;
+        setTimeout(openFullscreenWhenReady, 100);
+    };
+    openFullscreenWhenReady();
 }
 
 // The second global popover click handler that used to live here was removed in
