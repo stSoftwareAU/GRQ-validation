@@ -16,8 +16,21 @@ const PA11Y_CONFIG_PATH = "pa11yci.json";
 interface Pa11yUrlObject {
   url: string;
   actions?: string[];
+  viewport?: { width: number; height: number };
 }
 type Pa11yUrl = string | Pa11yUrlObject;
+
+// A "mobile" entry is one whose viewport width is at most a phone-class width.
+// Below this, mobile-only chrome (hidden legend, compact controls, the mobile
+// colour key) is exercised — the desktop-only default viewport never reaches it
+// (issue #497).
+const MOBILE_MAX_WIDTH = 480;
+
+function isMobileViewport(entry: Pa11yUrl): boolean {
+  if (typeof entry === "string") return false;
+  const width = entry.viewport?.width;
+  return typeof width === "number" && width <= MOBILE_MAX_WIDTH;
+}
 
 interface Pa11yConfig {
   defaults?: { standard?: string };
@@ -102,5 +115,28 @@ Deno.test("pa11yci.json audits the single-stock view in dark mode", async () => 
     ),
     "pa11y-ci must audit the single-stock detail view in dark mode, where the " +
       "contrast regressions were worst (issue #281)",
+  );
+});
+
+Deno.test("pa11yci.json scans a mobile viewport (issue #497)", async () => {
+  const config = await loadConfig();
+  assert(
+    (config.urls ?? []).some(isMobileViewport),
+    "pa11y-ci must scan at a phone-class viewport so mobile-only chrome is " +
+      "contrast-checked, not just the desktop default (issue #497)",
+  );
+});
+
+Deno.test("pa11yci.json scans the mobile viewport in both light and dark themes", async () => {
+  const config = await loadConfig();
+  const mobile = (config.urls ?? []).filter(isMobileViewport);
+  assert(
+    mobile.some((e) => !isDarkTheme(e)),
+    "pa11y-ci must scan the mobile viewport in the light theme (issue #497)",
+  );
+  assert(
+    mobile.some(isDarkTheme),
+    "pa11y-ci must scan the mobile viewport in the dark theme, where the " +
+      "reported labels were unreadable (issue #497)",
   );
 });

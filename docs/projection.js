@@ -70,6 +70,19 @@ function deviceWindowEnd(scoreDate, isMobile, windowDays) {
     );
 }
 
+// Whether the chart's "Actual (After 90 Days)" tail belongs in the visible
+// window (issue #496). The main chart splits the actuals into the first-90-day
+// "Actual" series and a day-90 -> window-end tail; the tail exists only when the
+// resolved window runs past day 90. This used to be gated on `!isMobile`, which
+// silently dropped the tail once mobile could opt into the 180-day window
+// (issue #464), so the mobile 180-day view showed no actuals while the desktop
+// 180-day view did. Deriving the decision from the shared window resolver keeps
+// the two devices in parity: the tail is a function of the WINDOW, never the
+// device.
+function windowShowsActualsAfter90(isMobile, windowDays) {
+    return deviceWindowDays(isMobile, windowDays) > MOBILE_WINDOW_DAYS;
+}
+
 // Choose the default score file for the dashboard (issue #275).
 //
 // By default we select the nearest available score date ON OR BEFORE 90 days
@@ -979,6 +992,7 @@ globalThis.GRQProjection = {
     setDateToMidnight,
     deviceWindowDays,
     deviceWindowEnd,
+    windowShowsActualsAfter90,
     selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,

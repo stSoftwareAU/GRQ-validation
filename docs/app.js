@@ -136,6 +136,37 @@ class GRQValidator {
         return GRQChartWindow.effectiveWindowDays(search, saved);
     }
 
+    // Capture the CURRENT dashboard selections for the footer "Share" deep-link
+    // builder (issue #495). Pure read — gathers state from the live view and
+    // helpers, never writing storage. The theme is read from the applied <body>
+    // class (what the user actually sees) so a forced light/dark mode is
+    // reproduced; "auto" is left implicit. fullscreen is set only while the
+    // mobile chart pop-out owns the canvas (issue #482/#451).
+    shareState() {
+        let theme = "auto";
+        if (typeof document !== "undefined" && document.body) {
+            const classes = document.body.classList;
+            if (classes.contains("dark-mode-forced")) {
+                theme = "dark";
+            } else if (classes.contains("light-mode-forced")) {
+                theme = "light";
+            }
+        }
+        const fullscreen =
+            typeof GRQChartPopout !== "undefined" &&
+            typeof GRQChartPopout.isPopoutOpen === "function" &&
+            GRQChartPopout.isPopoutOpen(
+                typeof document !== "undefined" ? document : undefined,
+            );
+        return {
+            file: this.selectedFile || null,
+            stock: this.selectedStock || null,
+            theme,
+            window: this.currentWindowDays(),
+            fullscreen,
+        };
+    }
+
     // Restore the 90/180-day toggle to THIS device's stored choice and, on
     // change, persist it to THIS device's store and re-render the chart AND the
     // Market Performance summary together so they always cover the identical
@@ -1351,6 +1382,19 @@ class GRQValidator {
         const breakpoint = this.getBootstrapBreakpoint();
         const isMobile = this.isMobileDevice();
 
+        // Theme-aware colours for the CANVAS-drawn chart text (title, axis
+        // titles, tick labels, legend) and grid lines. Pulled from the shared
+        // GRQChartTheme single source of truth so the chart text clears WCAG 2.1
+        // AA contrast in dark mode (issue #497) — the previous hard-coded '#333'
+        // title was invisible on the dark card and, being canvas pixels, the
+        // DOM a11y gate (pa11y) could never catch it. Fall back to readable
+        // defaults if the helper script is unavailable.
+        const chartTheme = globalThis.GRQChartTheme
+            ? globalThis.GRQChartTheme.chartTheme(this.detectTheme())
+            : { text: "#212529", grid: "rgba(0, 0, 0, 0.1)" };
+        const chartTextColour = chartTheme.text;
+        const chartGridColour = chartTheme.grid;
+
         // Debug logging
         console.log("updateChart - Bootstrap breakpoint:", breakpoint);
         console.log("updateChart - isMobile:", isMobile);
@@ -1363,6 +1407,13 @@ class GRQValidator {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                // Default colour for every CANVAS-drawn text element (legend
+                // labels, and a safety net for any tick/title not set below).
+                // Chart.js falls back to this when an element has no explicit
+                // `color`, so the desktop legend — which renders from Chart.js
+                // defaults here — picks up the AA-compliant theme colour instead
+                // of the unreadable default grey in dark mode (issue #497).
+                color: chartTextColour,
                 layout: {
                     padding: {
                         top: 20,
@@ -1379,7 +1430,7 @@ class GRQValidator {
                             size: isMobile ? 14 : 16,
                             weight: 'bold',
                         },
-                        color: '#333',
+                        color: chartTextColour,
                         padding: {
                             top: 10,
                             bottom: 10,
@@ -1395,6 +1446,7 @@ class GRQValidator {
                         labels: {
                             boxWidth: isMobile ? 12 : 16,
                             padding: isMobile ? 8 : 12,
+                            color: chartTextColour,
                             font: {
                                 size: isMobile ? 10 : 12,
                             },
@@ -1455,15 +1507,20 @@ class GRQValidator {
                         title: {
                             display: true,
                             text: "Date",
+                            color: chartTextColour,
                             font: {
                                 size: isMobile ? 10 : 12,
                             },
                         },
                         ticks: {
                             maxTicksLimit: isMobile ? 6 : 10,
+                            color: chartTextColour,
                             font: {
                                 size: isMobile ? 8 : 10,
                             },
+                        },
+                        grid: {
+                            color: chartGridColour,
                         },
                         // Extend x-axis to show full 90-day period when trend line is present
                         min: this.selectedStock ? this.getScoreDate(this.selectedFile) : undefined,
@@ -1477,17 +1534,22 @@ class GRQValidator {
                         title: {
                             display: true, // Show for both views
                             text: "Performance (%)",
+                            color: chartTextColour,
                             font: {
                                 size: isMobile ? 10 : 12,
                             },
                         },
                         ticks: {
+                            color: chartTextColour,
                             font: {
                                 size: isMobile ? 8 : 10,
                             },
                             callback: function (value) {
                                 return value + "%";
                             },
+                        },
+                        grid: {
+                            color: chartGridColour,
                         },
                         // Add padding to ensure target dot is fully visible
                         afterFit: function(axis) {
@@ -1869,7 +1931,11 @@ class GRQValidator {
                             ),
                         });
                     }
-                    if (cleanAfter90.length > 0 && !isMobile) {
+                    // Show the day-90 -> window-end actuals tail whenever the
+                    // visible window runs past day 90, on EITHER device (issue
+                    // #496): the old `!isMobile` guard dropped it on the mobile
+                    // 180-day view, breaking parity with desktop.
+                    if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
                         datasets.push({
                             label: "Actual (After 90 Days)",
                             data: cleanAfter90,
@@ -1962,7 +2028,11 @@ class GRQValidator {
                     pointRadius: 3,
                 });
             }
-            if (cleanAfter90.length > 0 && !isMobile) {
+            // Show the day-90 -> window-end actuals tail whenever the visible
+            // window runs past day 90, on EITHER device (issue #496): the old
+            // `!isMobile` guard dropped it on the mobile 180-day view, breaking
+            // parity with desktop.
+            if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
                 datasets.push({
                     label: "Actual (After 90 Days)",
                     data: cleanAfter90,

@@ -12,6 +12,28 @@
     "http://localhost:8080/trend.html",
     "http://localhost:8080/trend.html?theme=dark",
     {
+      "url": "http://localhost:8080/index.html",
+      "viewport": { "width": 390, "height": 844 }
+    },
+    {
+      "url": "http://localhost:8080/index.html?theme=dark",
+      "viewport": { "width": 390, "height": 844 },
+      "actions": [
+        "wait for element body.dark-mode-forced to be added"
+      ]
+    },
+    {
+      "url": "http://localhost:8080/trend.html",
+      "viewport": { "width": 390, "height": 844 }
+    },
+    {
+      "url": "http://localhost:8080/trend.html?theme=dark",
+      "viewport": { "width": 390, "height": 844 },
+      "actions": [
+        "wait for element body.dark-mode-forced to be added"
+      ]
+    },
+    {
       "url": "http://localhost:8080/index.html?file=2026%2FMarch%2F23.tsv&stock=NASDAQ%3AMGRC",
       "actions": [
         "wait for element #stockDetailCard to be visible"
