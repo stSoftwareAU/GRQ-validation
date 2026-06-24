@@ -211,10 +211,19 @@ body.chart-popout-open {
     transform-origin: center center;
   }
 
-  /* Keep the close control above the rotated chart and reachable. */
+  /* Float the close control above the rotated chart, pinned to the physical
+   * top-right of the viewport (issue #494). The rotated chart body is
+   * position:absolute and visually covers the whole screen, which removes the
+   * toolbar from the flex flow and can strand the ✕ behind the rotated
+   * coordinate space. Pinning the toolbar with a fixed position and a z-index
+   * above the overlay (1080) keeps the ✕ upright and tappable no matter how the
+   * chart is rotated underneath. */
   .chart-popout-toolbar {
-    position: relative;
-    z-index: 1;
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1090;
+    padding: 0.5rem;
   }
 }
 
