@@ -1877,7 +1877,11 @@ class GRQValidator {
                             ),
                         });
                     }
-                    if (cleanAfter90.length > 0 && !isMobile) {
+                    // Show the day-90 -> window-end actuals tail whenever the
+                    // visible window runs past day 90, on EITHER device (issue
+                    // #496): the old `!isMobile` guard dropped it on the mobile
+                    // 180-day view, breaking parity with desktop.
+                    if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
                         datasets.push({
                             label: "Actual (After 90 Days)",
                             data: cleanAfter90,
@@ -1970,7 +1974,11 @@ class GRQValidator {
                     pointRadius: 3,
                 });
             }
-            if (cleanAfter90.length > 0 && !isMobile) {
+            // Show the day-90 -> window-end actuals tail whenever the visible
+            // window runs past day 90, on EITHER device (issue #496): the old
+            // `!isMobile` guard dropped it on the mobile 180-day view, breaking
+            // parity with desktop.
+            if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
                 datasets.push({
                     label: "Actual (After 90 Days)",
                     data: cleanAfter90,
