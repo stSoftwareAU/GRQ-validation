@@ -66,7 +66,10 @@ Deno.test("README documents the ?group= granularities", async () => {
 
 Deno.test("README documents ?fullscreen=1 as mobile-only / no-op on desktop", async () => {
   const section = await deepLinkSection();
-  assert(section.includes("?fullscreen=1"), "README must document ?fullscreen=1");
+  assert(
+    section.includes("?fullscreen=1"),
+    "README must document ?fullscreen=1",
+  );
   assert(
     /no-op on desktop/i.test(section),
     "README must note ?fullscreen=1 is a no-op on desktop",
@@ -97,8 +100,17 @@ Deno.test("README lead-in count matches the number of documented parameters", as
   );
   assert(params.size > 0, "expected documented parameters");
   const words = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
-    "nine", "ten",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
   ];
   const expected = words[params.size] ?? String(params.size);
   assert(

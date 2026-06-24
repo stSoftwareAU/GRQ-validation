@@ -48,6 +48,8 @@ const STATIC_ASSETS = [
   "./trend_settings.js",
   // Transient ?group= grouping deep-link for the Trend view (issue #481).
   "./trend_grouping_link.js",
+  // Transient ?indices= benchmark-index deep-link for the Trend view (issue #480).
+  "./trend_indices_deeplink.js",
   // SRI-pinned CDN assets from docs/index.html (issue #79).
   // Bump APP_VERSION whenever these pins change so the integrity hashes are
   // re-validated.

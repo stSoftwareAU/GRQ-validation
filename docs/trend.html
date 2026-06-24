@@ -24,7 +24,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.215">
+    <meta name="app-version" content="1.0.216">
     <meta name="app-title" content="GRQ Validation Trend">
 
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
@@ -187,6 +187,10 @@
          after trend_settings.js (reuses its granularities), before trend.js. -->
     <script src="trend_grouping_link.js"></script>
 
+    <!-- Transient ?indices= benchmark-index deep-link (issue #480) —
+         after index_overlay.js, before trend.js. -->
+    <script src="trend_indices_deeplink.js"></script>
+
     <!-- Per-score-date prediction resolver (issue #430) -->
     <script src="trend_predictions.js"></script>
 
@@ -198,6 +202,6 @@
     <script src="trend.js"></script>
 
     <!-- Service Worker Registration (issue #224) -->
-    <script src="sw-register.js?v=1.0.215"></script>
+    <script src="sw-register.js?v=1.0.216"></script>
   </body>
 </html>
