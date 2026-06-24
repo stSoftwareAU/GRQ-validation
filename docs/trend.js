@@ -66,7 +66,17 @@
                 ? GRQTrendSettings.readTrendSettings()
                 : { grouping: "month", toggles: {} };
             this.granularity = settings.grouping;
-            this.toggles = settings.toggles;
+            // `?indices=` deep-link (issue #480): a transient URL override of
+            // the benchmark-index overlays wins for this visit but is never
+            // persisted; an absent param keeps the saved toggles. Read on page
+            // load only — the toggle UI reflects the result without writing
+            // storage.
+            this.toggles = globalThis.GRQTrendDeepLink
+                ? GRQTrendDeepLink.effectiveToggles(
+                    typeof location !== "undefined" ? location.search : "",
+                    settings.toggles,
+                )
+                : settings.toggles;
 
             // Visit-only `?group=day|week|month|quarter` deep-link (issue #481):
             // a valid grouping in the URL overrides the saved choice for this
