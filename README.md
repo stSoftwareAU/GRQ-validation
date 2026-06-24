@@ -159,7 +159,7 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads four optional query parameters so a specific view can be
+The dashboard reads five optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
@@ -174,6 +174,14 @@ deterministically — issue #281):
   `?stock=NASDAQ%3AMGRC`. An unknown symbol falls back to the aggregate view.
 - `?theme=auto|light|dark` — force a theme for that page load (a transient
   override that is **not** persisted to `localStorage`).
+- `?view=portfolio|trend` — select which top-level view loads (issue #479).
+  `?view=trend` routes to the **Prediction Trend** page (`docs/trend.html`);
+  `?view=portfolio` shows the default aggregate view. Because the Trend view is
+  a separate page, `index.html?view=trend` redirects to `trend.html` and
+  `trend.html?view=portfolio` redirects back, mirroring the on-page nav links.
+  Read on load only and **not** persisted to `localStorage`; an absent or
+  unknown value falls back to the current default. (Single-stock is already
+  reachable via `?stock=`, so `?view=` does not duplicate it.)
 
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes

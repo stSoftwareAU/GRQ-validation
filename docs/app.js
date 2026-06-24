@@ -8,7 +8,30 @@ const RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION =
     "Return above the 10% annualised cost-of-capital hurdle, pro-rated by days elapsed. Positive = beating the hurdle.";
 
 class GRQValidator {
+    // View deep-link routing (?view=portfolio|trend, issue #479). When the URL
+    // requests the Trend view, navigate to the separate trend.html page before
+    // any setup. Visit-only and one-way: reads the URL on load, never rewrites
+    // it and never writes localStorage. Returns true when it has navigated away.
+    static applyViewRoutingFromUrl() {
+        if (typeof location === "undefined" || !globalThis.GRQViewSelection) {
+            return false;
+        }
+        const target = globalThis.GRQViewSelection.viewRedirectTarget(
+            location.pathname,
+            location.search,
+        );
+        if (target) {
+            location.replace(target);
+            return true;
+        }
+        return false;
+    }
+
     constructor() {
+        // Honour ?view=trend before doing any work — it redirects to trend.html.
+        if (GRQValidator.applyViewRoutingFromUrl()) {
+            return;
+        }
         this.scoreData = null;
         this.marketData = null;
         this.dividendData = null;
