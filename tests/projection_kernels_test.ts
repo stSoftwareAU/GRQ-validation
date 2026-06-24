@@ -272,6 +272,27 @@ Deno.test("computeSplitAdjustment: price-ratio mismatch -> unreliable", () => {
   assertEquals(r.reliable, false);
 });
 
+Deno.test("computeSplitAdjustment: clean reverse split -> corrected, reliable", () => {
+  // A real 10:1 reverse split: price rises ~10-fold; coefficient is 0.1.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 10, 9.8, 1.0),
+    makePoint(new Date(2025, 0, 10), 100, 98, 0.1),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.factor, 0.1);
+  assertEquals(r.reliable, true);
+});
+
+Deno.test("computeSplitAdjustment: implausible reverse split -> unreliable", () => {
+  // A 200:1 reverse split (coefficient 0.005) exceeds the 10:1 ceiling.
+  const md = [
+    makePoint(new Date(2025, 7, 8), 0.0322, 0.0313, 1.0),
+    makePoint(new Date(2025, 7, 11), 5.13, 4.12, 0.005),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 6, 10));
+  assertEquals(r.reliable, false);
+});
+
 Deno.test("computeSplitAdjustment: invalid coefficient treated as no split", () => {
   const md = [
     makePoint(new Date(2025, 0, 1), 100, 98, 1.0),

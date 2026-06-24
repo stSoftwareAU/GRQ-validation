@@ -103,7 +103,18 @@ pub fn is_priceable(buy_price: f64, current_price: f64, split_reliable: bool) ->
 const MAX_PLAUSIBLE_COEFFICIENT: f64 = 10.0; // a single split of <= 10:1 is plausible
 const DUPLICATE_WINDOW_DAYS: i64 = 5; // splits within 5 days = the same event twice
 const MAX_CUMULATIVE_FACTOR: f64 = 50.0; // cumulative factor cap over the window
+const MIN_CUMULATIVE_FACTOR: f64 = 1.0 / MAX_CUMULATIVE_FACTOR; // reverse-split floor
 const RECONCILE_TOLERANCE: f64 = 0.15; // +/-15% price-ratio cross-check
+
+/// Effective N:1 split magnitude for forward (`c`) and reverse (`1/c`) events.
+fn split_event_magnitude(c: f64) -> f64 {
+    if c >= 1.0 { c } else { 1.0 / c }
+}
+
+/// Returns `true` when `c` is a valid split coefficient (not 1.0, positive, finite).
+fn is_split_coefficient(c: f64) -> bool {
+    c.is_finite() && c > 0.0 && (c - 1.0).abs() > f64::EPSILON
+}
 
 /// Cumulative split adjustment for a window plus whether it can be trusted.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -129,11 +140,12 @@ impl SplitAdjustment {
 /// the frontend `computeSplitAdjustment` (issue #294, parent #272).
 ///
 /// Rules: de-duplicate split events recorded within [`DUPLICATE_WINDOW_DAYS`];
-/// flag any single coefficient above [`MAX_PLAUSIBLE_COEFFICIENT`]; cap the
-/// cumulative factor at [`MAX_CUMULATIVE_FACTOR`]; and cross-check each split
-/// against the observed pre/post price drop (a real N:1 split divides the price
-/// ~N-fold) within [`RECONCILE_TOLERANCE`]. A missing or empty series means no
-/// known splits, so the factor is `1.0` and the series is reliable.
+/// flag any single event whose effective ratio exceeds [`MAX_PLAUSIBLE_COEFFICIENT`]
+/// (forward *or* reverse); bound the cumulative factor between
+/// [`MIN_CUMULATIVE_FACTOR`] and [`MAX_CUMULATIVE_FACTOR`]; and cross-check each
+/// split against the observed pre/post price move within [`RECONCILE_TOLERANCE`].
+/// A missing or empty series means no known splits, so the factor is `1.0` and
+/// the series is reliable.
 pub fn compute_split_adjustment(
     series: &HashMap<String, DailyMarketPoint>,
     from_date: NaiveDate,
@@ -162,9 +174,8 @@ pub fn compute_split_adjustment(
         if date <= from_date {
             continue;
         }
-        // Invalid / non-split coefficients mean "no adjustment" (treat as 1.0)
-        // and are not, by themselves, a reliability failure.
-        if !c.is_finite() || c <= 1.0 {
+        // Invalid / unity coefficients mean "no adjustment" (treat as 1.0).
+        if !is_split_coefficient(c) {
             continue;
         }
         // De-duplicate: a split within DUPLICATE_WINDOW_DAYS of the last kept
@@ -176,14 +187,14 @@ pub fn compute_split_adjustment(
         }
         last_event = Some(date);
 
-        // Implausibly large single coefficient: cannot trust unguarded.
-        if c > MAX_PLAUSIBLE_COEFFICIENT {
+        // Implausibly large single event (forward or reverse): cannot trust.
+        if split_event_magnitude(c) > MAX_PLAUSIBLE_COEFFICIENT {
             reliable = false;
         }
 
-        // Price-ratio cross-check: compare the midpoint just before the split
-        // with the split point's own (post-split) midpoint. Only checkable when
-        // a prior point exists; absent one we keep the data-feed invariant.
+        // Price-ratio cross-check: prev_mid / split_mid should match `c` for
+        // both forward splits (c > 1, price falls) and reverse splits (c < 1,
+        // price rises).
         if i > 0 {
             let prev = points[i - 1].1;
             let prev_mid = (prev.high + prev.low) / 2.0;
@@ -199,9 +210,9 @@ pub fn compute_split_adjustment(
         factor *= c;
     }
 
-    // Cumulative-factor plausibility bound: a larger factor almost certainly
-    // means duplicated or spurious coefficients.
-    if factor > MAX_CUMULATIVE_FACTOR {
+    // Cumulative-factor plausibility bound (forward product too large, or reverse
+    // product too small, almost certainly means duplicated/spurious coefficients).
+    if factor > MAX_CUMULATIVE_FACTOR || factor < MIN_CUMULATIVE_FACTOR {
         reliable = false;
     }
 
@@ -3028,6 +3039,32 @@ mod tests {
         assert!(
             !adj.reliable,
             "a coefficient that does not match the observed price drop is unreliable"
+        );
+    }
+
+    #[test]
+    fn test_compute_split_adjustment_clean_single_reverse_split() {
+        // A real 10:1 reverse split: price rises ~10-fold; coefficient is 0.1.
+        let series = split_series(&[
+            ("2024-12-14", 10.0, 10.0, 1.0),
+            ("2024-12-15", 100.0, 100.0, 0.1),
+        ]);
+        let adj = compute_split_adjustment(&series, date("2024-11-15"));
+        assert!(adj.reliable, "a reconcilable 10:1 reverse split must be reliable");
+        assert!((adj.factor - 0.1).abs() < 1e-9, "factor should be 0.1");
+    }
+
+    #[test]
+    fn test_compute_split_adjustment_implausible_reverse_split_unreliable() {
+        // A 200:1 reverse split (coefficient 0.005) exceeds the 10:1 ceiling.
+        let series = split_series(&[
+            ("2025-08-08", 0.0322, 0.0322, 1.0),
+            ("2025-08-11", 4.47, 4.47, 0.005),
+        ]);
+        let adj = compute_split_adjustment(&series, date("2025-07-10"));
+        assert!(
+            !adj.reliable,
+            "an implausibly large reverse split must be flagged unreliable"
         );
     }
 

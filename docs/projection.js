@@ -396,8 +396,18 @@ function formatCurrency(value) {
 const MAX_PLAUSIBLE_COEFFICIENT = 10.0; // a single split of <= 10:1 is plausible
 const DUPLICATE_WINDOW_DAYS = 5; // splits within 5 days = the same event twice
 const MAX_CUMULATIVE_FACTOR = 50.0; // cumulative factor cap over the window
+const MIN_CUMULATIVE_FACTOR = 1.0 / MAX_CUMULATIVE_FACTOR; // reverse-split floor
 const RECONCILE_TOLERANCE = 0.15; // +/-15% price-ratio cross-check
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Effective N:1 split magnitude for forward (c) and reverse (1/c) events.
+function splitEventMagnitude(c) {
+    return c >= 1.0 ? c : 1.0 / c;
+}
+
+function isSplitCoefficient(c) {
+    return typeof c === "number" && isFinite(c) && c > 0 && c !== 1.0;
+}
 
 // Compute the cumulative split adjustment from `historicalDate` to "now" AND
 // judge whether it can be trusted — the single "correct-or-flag" place (issue
@@ -407,9 +417,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 //   - `reliable` is false when the series cannot be reconciled, so callers must
 //     NOT silently apply `factor` — treat an unreliable series as no split.
 // Rules: de-duplicate split events recorded within DUPLICATE_WINDOW_DAYS; flag
-// any single coefficient above MAX_PLAUSIBLE_COEFFICIENT; cap the cumulative
-// factor at MAX_CUMULATIVE_FACTOR; and cross-check each split against the
-// observed pre/post price drop (a real N:1 split divides the price ~N-fold).
+// any single event whose effective ratio exceeds MAX_PLAUSIBLE_COEFFICIENT
+// (forward or reverse); bound the cumulative factor between MIN_CUMULATIVE_FACTOR
+// and MAX_CUMULATIVE_FACTOR; and cross-check each split against the observed
+// pre/post price move (forward or reverse).
 function computeSplitAdjustment(marketData, historicalDate) {
     if (!marketData || marketData.length === 0) {
         return { factor: 1.0, reliable: true };
@@ -433,9 +444,8 @@ function computeSplitAdjustment(marketData, historicalDate) {
         // Only splits strictly after the historical date adjust the buy price.
         if (!(point.date > historicalDate)) continue;
 
-        // Invalid / non-split coefficients mean "no adjustment" (treat as 1.0)
-        // and are not, by themselves, a reliability failure.
-        if (typeof c !== "number" || !isFinite(c) || c <= 1.0) continue;
+        // Invalid / unity coefficients mean "no adjustment" (treat as 1.0).
+        if (!isSplitCoefficient(c)) continue;
 
         // De-duplicate: a split within DUPLICATE_WINDOW_DAYS of the last kept
         // one is the same corporate event recorded twice — apply it once.
@@ -448,14 +458,14 @@ function computeSplitAdjustment(marketData, historicalDate) {
         }
         lastEventTime = point.date.getTime();
 
-        // Implausibly large single coefficient: cannot trust unguarded.
-        if (c > MAX_PLAUSIBLE_COEFFICIENT) {
+        // Implausibly large single event (forward or reverse): cannot trust.
+        if (splitEventMagnitude(c) > MAX_PLAUSIBLE_COEFFICIENT) {
             reliable = false;
         }
 
-        // Price-ratio cross-check: compare the midpoint just before the split
-        // with the split point's own (post-split) midpoint. Only checkable when
-        // a prior point exists; absent one we keep the data-feed invariant.
+        // Price-ratio cross-check: prev_mid / split_mid should match `c` for
+        // both forward splits (c > 1, price falls) and reverse splits (c < 1,
+        // price rises).
         const prev = sorted[i - 1];
         if (prev) {
             const prevMid = (prev.high + prev.low) / 2;
@@ -471,9 +481,9 @@ function computeSplitAdjustment(marketData, historicalDate) {
         factor *= c;
     }
 
-    // Cumulative-factor plausibility bound: a larger factor almost certainly
-    // means duplicated or spurious coefficients.
-    if (factor > MAX_CUMULATIVE_FACTOR) {
+    // Cumulative-factor plausibility bound (forward product too large, or reverse
+    // product too small).
+    if (factor > MAX_CUMULATIVE_FACTOR || factor < MIN_CUMULATIVE_FACTOR) {
         reliable = false;
     }
 
