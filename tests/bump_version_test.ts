@@ -23,6 +23,8 @@ function fixture(version: string): VersionFiles {
       `(function () {\n  navigator.serviceWorker.register("./sw.js?v=${version}");\n})();\n`,
     index:
       `<meta name="app-version" content="${version}">\n<script src="sw-register.js?v=${version}"></script>\n`,
+    trend:
+      `<meta name="app-version" content="${version}">\n<script src="sw-register.js?v=${version}"></script>\n`,
   };
 }
 
@@ -76,10 +78,13 @@ Deno.test("bumpVersionContents increments and keeps all files aligned", () => {
   assertEquals(files.swRegister.includes("./sw.js?v=1.0.194"), true);
   assertEquals(files.index.includes('content="1.0.194"'), true);
   assertEquals(files.index.includes("sw-register.js?v=1.0.194"), true);
+  assertEquals(files.trend.includes('content="1.0.194"'), true);
+  assertEquals(files.trend.includes("sw-register.js?v=1.0.194"), true);
   // No stale references to the old version remain.
   assertEquals(files.sw.includes("1.0.193"), false);
   assertEquals(files.swRegister.includes("1.0.193"), false);
   assertEquals(files.index.includes("1.0.193"), false);
+  assertEquals(files.trend.includes("1.0.193"), false);
 });
 
 Deno.test("bumpVersionContents bumps when current equals the base version", () => {

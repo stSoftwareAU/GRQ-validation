@@ -54,39 +54,41 @@ Deno.test("deviceWindowEnd - end is scoreDate + per-device days at local midnigh
   assert(desktopEnd.getTime() > mobileEnd.getTime());
 });
 
-Deno.test("deviceWindowDays/deviceWindowEnd - selectable mobile window keeps chart and summary on the SAME end date (issue #448)", () => {
+Deno.test("deviceWindowDays/deviceWindowEnd - selectable window keeps chart and summary on the SAME end date (issue #448; desktop-90 opt-in #464)", () => {
   // The chart (prepareChartData) and the summary (getMarketPerformanceData) both
   // resolve their window through these same helpers, so for any
-  // (isMobile, mobileWindowDays) pair they MUST agree. Modelling both callers as
-  // identical calls proves they cannot drift for the new selectable window.
+  // (isMobile, windowDays) pair they MUST agree. Modelling both callers as
+  // identical calls proves they cannot drift for the selectable window.
   const scoreDate = new Date("2026-01-01T09:30:00");
   const pairs: Array<[boolean, number | undefined]> = [
     [true, undefined], // mobile default -> 90
     [true, 90], // mobile explicit 90
-    [true, 180], // mobile opting into the full window (the new case)
-    [true, 999], // bad value -> falls back to 90
-    [false, 90], // desktop ignores the override -> 180
-    [false, 180], // desktop -> 180
+    [true, 180], // mobile opting into the full window
+    [true, 999], // bad value -> falls back to mobile 90
+    [false, undefined], // desktop default -> 180
+    [false, 90], // desktop opting into 90 (the new #464 case)
+    [false, 180], // desktop explicit 180
+    [false, 999], // bad value -> falls back to desktop 180
   ];
 
-  for (const [isMobile, mobileWindowDays] of pairs) {
+  for (const [isMobile, windowDays] of pairs) {
     const chartEnd = GRQProjection.deviceWindowEnd(
       scoreDate,
       isMobile,
-      mobileWindowDays,
+      windowDays,
     );
     const summaryEnd = GRQProjection.deviceWindowEnd(
       scoreDate,
       isMobile,
-      mobileWindowDays,
+      windowDays,
     );
     assertEquals(
       chartEnd!.getTime(),
       summaryEnd!.getTime(),
-      `chart and summary must share the window for (${isMobile}, ${mobileWindowDays})`,
+      `chart and summary must share the window for (${isMobile}, ${windowDays})`,
     );
     // The end is exactly the resolved device days after the score date.
-    const days = GRQProjection.deviceWindowDays(isMobile, mobileWindowDays);
+    const days = GRQProjection.deviceWindowDays(isMobile, windowDays);
     const base = GRQProjection.setDateToMidnight(new Date("2026-01-01"));
     assertEquals(
       chartEnd!.getTime(),
@@ -96,10 +98,17 @@ Deno.test("deviceWindowDays/deviceWindowEnd - selectable mobile window keeps cha
   }
 
   // The mobile (mobile, 180) window must land on the same end date the desktop
-  // window does — the toggle simply gives mobile the full desktop window.
+  // default window does — the toggle simply gives mobile the full desktop window.
   assertEquals(
     GRQProjection.deviceWindowEnd(scoreDate, true, 180)!.getTime(),
     GRQProjection.deviceWindowEnd(scoreDate, false)!.getTime(),
+  );
+
+  // Symmetrically, a desktop (desktop, 90) window must land on the same end date
+  // the mobile default window does — the relaxed lock gives desktop the 90 window.
+  assertEquals(
+    GRQProjection.deviceWindowEnd(scoreDate, false, 90)!.getTime(),
+    GRQProjection.deviceWindowEnd(scoreDate, true)!.getTime(),
   );
 });
 
@@ -163,6 +172,51 @@ Deno.test("marketPerformanceData - summary follows the per-device window, not th
     "run-to-latest is the buggy UP case",
   );
   assert(mobile.sp500.performance < unwindowed.sp500.performance);
+});
+
+Deno.test("marketPerformanceData - a DESKTOP 90 choice narrows the summary to the dip (issue #466)", () => {
+  // Issue #466: desktop may now opt into the 90-day window. With the same
+  // #333-shaped fixture, a desktop 90 choice (deviceWindowEnd(scoreDate, false,
+  // 90)) must land inside the dip and read DOWN — exactly as mobile's default
+  // 90 does — and land on the IDENTICAL end date, proving chart and summary
+  // narrow together to the same window.
+  const series = GRQProjection.buildIndexSeriesFromMap(
+    PRICE_MAP,
+    "SP500",
+    SCORE_DATE,
+    "2026-09-01",
+  );
+  const marketIndexData = { sp500: series };
+
+  // Desktop, explicit 90 (the new opt-in): window ends 2026-04-01, in the dip.
+  const desktop90End = GRQProjection.deviceWindowEnd(
+    new Date(SCORE_DATE),
+    false,
+    90,
+  );
+  const desktop90 = GRQMarketIndex.marketPerformanceData(
+    marketIndexData,
+    desktop90End,
+  );
+  assert(
+    desktop90.sp500.performance < 0,
+    "desktop 90 summary must be negative (narrowed to the dip)",
+  );
+  assertEquals(desktop90.sp500.currentPrice, 80);
+
+  // Same end date as mobile's default 90 window — chart and summary coincide.
+  const mobile90End = GRQProjection.deviceWindowEnd(new Date(SCORE_DATE), true);
+  assertEquals(desktop90End!.getTime(), mobile90End!.getTime());
+
+  // And strictly narrower than the desktop DEFAULT 180 window.
+  const desktop180End = GRQProjection.deviceWindowEnd(
+    new Date(SCORE_DATE),
+    false,
+  );
+  assert(
+    desktop90End!.getTime() < desktop180End!.getTime(),
+    "desktop 90 window must end before the desktop 180 window",
+  );
 });
 
 Deno.test("marketPerformanceData - index with no usable price in the window renders blank, never errors", () => {

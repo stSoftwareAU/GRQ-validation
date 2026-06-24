@@ -16,11 +16,15 @@ import "../docs/chart_window_settings.js";
 const g = globalThis as unknown as {
   GRQChartWindow: {
     STORAGE_KEY: string;
+    DESKTOP_STORAGE_KEY: string;
     MOBILE_WINDOW_DAYS_DEFAULT: number;
+    DESKTOP_WINDOW_DAYS_DEFAULT: number;
     ALLOWED_WINDOW_DAYS: number[];
-    normaliseWindowDays: (value: unknown) => number;
+    normaliseWindowDays: (value: unknown, fallback?: number) => number;
     readMobileWindowDays: (storage?: unknown) => number;
     writeMobileWindowDays: (value: unknown, storage?: unknown) => boolean;
+    readDesktopWindowDays: (storage?: unknown) => number;
+    writeDesktopWindowDays: (value: unknown, storage?: unknown) => boolean;
   };
 };
 
@@ -146,4 +150,101 @@ Deno.test("read/write fall back to default when no storage is available", () => 
   // environment without depending on the ambient global.
   assertEquals(S.readMobileWindowDays(null), 90);
   assertEquals(S.writeMobileWindowDays(180, null), false);
+});
+
+// --- desktop chart window (issue #465) -------------------------------------
+
+Deno.test("GRQChartWindow publishes desktop helpers and a 180 default", () => {
+  assertEquals(S.DESKTOP_WINDOW_DAYS_DEFAULT, 180);
+  assertEquals(typeof S.readDesktopWindowDays, "function");
+  assertEquals(typeof S.writeDesktopWindowDays, "function");
+});
+
+Deno.test("DESKTOP_STORAGE_KEY is its own grq.chart.* key", () => {
+  assert(S.DESKTOP_STORAGE_KEY.startsWith("grq.chart."));
+  assertEquals(S.DESKTOP_STORAGE_KEY, "grq.chart.desktopWindowDays");
+  // Desktop must not reuse the mobile key, or a desktop write would regress
+  // mobile's 90-day default.
+  assert(S.DESKTOP_STORAGE_KEY !== S.STORAGE_KEY);
+});
+
+Deno.test("normaliseWindowDays honours an explicit desktop fallback of 180", () => {
+  assertEquals(S.normaliseWindowDays("junk", 180), 180);
+  assertEquals(S.normaliseWindowDays(30, 180), 180);
+  assertEquals(S.normaliseWindowDays(null, 180), 180);
+  // Allowed values still pass through unchanged.
+  assertEquals(S.normaliseWindowDays(90, 180), 90);
+  assertEquals(S.normaliseWindowDays(180, 180), 180);
+});
+
+Deno.test("readDesktopWindowDays returns 180 when storage is empty", () => {
+  assertEquals(S.readDesktopWindowDays(fakeStorage()), 180);
+});
+
+Deno.test("readDesktopWindowDays returns 180 when no storage is available", () => {
+  assertEquals(S.readDesktopWindowDays(null), 180);
+});
+
+Deno.test("desktop write then read round-trips 90", () => {
+  const store = fakeStorage();
+  assertEquals(S.writeDesktopWindowDays(90, store), true);
+  assertEquals(S.readDesktopWindowDays(store), 90);
+  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], "90");
+});
+
+Deno.test("desktop write then read round-trips 180", () => {
+  const store = fakeStorage();
+  assertEquals(S.writeDesktopWindowDays(180, store), true);
+  assertEquals(S.readDesktopWindowDays(store), 180);
+  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], "180");
+});
+
+Deno.test("writeDesktopWindowDays normalises out-of-range to 180 before persisting", () => {
+  const store = fakeStorage();
+  assertEquals(S.writeDesktopWindowDays(365, store), true);
+  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], "180");
+  assertEquals(S.readDesktopWindowDays(store), 180);
+});
+
+Deno.test("readDesktopWindowDays tolerates a corrupt stored value (→180)", () => {
+  const store = fakeStorage({ [S.DESKTOP_STORAGE_KEY]: "garbage" });
+  assertEquals(S.readDesktopWindowDays(store), 180);
+});
+
+Deno.test("desktop read falls back to 180 when storage throws", () => {
+  assertEquals(S.readDesktopWindowDays(throwingStorage()), 180);
+});
+
+Deno.test("desktop write reports failure (not throw) when storage is unavailable", () => {
+  assertEquals(S.writeDesktopWindowDays(90, throwingStorage()), false);
+  assertEquals(S.writeDesktopWindowDays(90, null), false);
+});
+
+// --- independence: desktop and mobile never cross-contaminate ---------------
+
+Deno.test("writing the desktop key never changes readMobileWindowDays", () => {
+  const store = fakeStorage();
+  assertEquals(S.writeDesktopWindowDays(180, store), true);
+  // Mobile still reads its own default — the desktop write did not touch it.
+  assertEquals(S.readMobileWindowDays(store), 90);
+  // Only the desktop key was written.
+  assertEquals(store._dump()[S.STORAGE_KEY], undefined);
+  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], "180");
+});
+
+Deno.test("writing the mobile key never changes readDesktopWindowDays", () => {
+  const store = fakeStorage();
+  assertEquals(S.writeMobileWindowDays(90, store), true);
+  // Desktop still reads its own 180 default — the mobile write did not touch it.
+  assertEquals(S.readDesktopWindowDays(store), 180);
+  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], undefined);
+  assertEquals(store._dump()[S.STORAGE_KEY], "90");
+});
+
+Deno.test("desktop and mobile choices coexist independently", () => {
+  const store = fakeStorage();
+  assertEquals(S.writeMobileWindowDays(180, store), true);
+  assertEquals(S.writeDesktopWindowDays(90, store), true);
+  assertEquals(S.readMobileWindowDays(store), 180);
+  assertEquals(S.readDesktopWindowDays(store), 90);
 });

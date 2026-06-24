@@ -1,13 +1,15 @@
-// Tests for the mobile-only 90/180-day chart window toggle (issue #449,
-// sub-issue of milestone #445).
+// Tests for the 90/180-day chart window toggle (issue #449, sub-issue of
+// milestone #445; extended to desktop in issue #466).
 //
-// On a phone (< 768px) the user can switch the visible chart/summary window
-// between 90 days (default) and the full 180 days. Desktop never shows the
-// toggle and always renders 180 days. These assertions pin:
-//   - the control markup in docs/index.html (present, default 90, accessible);
-//   - the mobile-only CSS in docs/styles.css (hidden on desktop, shown < 768px);
-//   - the wiring in docs/app.js (reads GRQChartWindow on init, persists on
-//     change, and re-renders BOTH the chart and the Market Performance summary).
+// Both phone (< 768px) and desktop now show the control, letting the user
+// switch the visible chart/summary window between 90 and 180 days. Each device
+// keeps its OWN default and store: mobile defaults to 90, desktop to 180. These
+// assertions pin:
+//   - the control markup in docs/index.html (present, accessible);
+//   - the CSS in docs/styles.css (shown on every device, phone reveal kept);
+//   - the wiring in docs/app.js (restores from, and persists to, the CURRENT
+//     device's GRQChartWindow store on init/change, and re-renders BOTH the
+//     chart and the Market Performance summary).
 //
 // The control markup is verified by reading the shipped files and asserting on
 // their structure — the same approach used by dashboard_card_chrome_mobile_test
@@ -150,57 +152,101 @@ Deno.test("index.html: toggle is accessible (labelled radio group, focusable lab
   );
 });
 
-// --- mobile-only visibility ------------------------------------------------
+// --- visibility on every device (issue #466) -------------------------------
 
-Deno.test("styles.css: toggle is hidden by default (desktop) and revealed on mobile", () => {
-  // Base rule hides the control so desktop (>= 768px) never shows it.
+Deno.test("styles.css: toggle is shown on desktop by default (issue #466)", () => {
+  // The base rule now reveals the control so desktop (>= 768px) shows it too —
+  // the old `display: none` desktop hide is relaxed.
   const base = ruleBody(css, ".chart-window-control");
   assert(base, ".chart-window-control must be styled");
   assert(
-    /display\s*:\s*none/i.test(base),
-    "desktop default must hide the control (display: none)",
+    /display\s*:\s*(flex|block)/i.test(base),
+    "desktop default must show the control (display: flex/block)",
   );
+  assert(
+    !/display\s*:\s*none/i.test(base),
+    "the base rule must NOT hide the control on desktop any more",
+  );
+});
 
-  // The mobile media block reveals it.
+Deno.test("styles.css: the phone reveal block is kept (issue #466)", () => {
+  // The mobile media block keeps revealing the control explicitly.
   const mobile = mediaBlock(css, "(max-width: 768px)");
   assert(mobile, "a (max-width: 768px) mobile media block must exist");
   const mobileBody = ruleBody(mobile, ".chart-window-control");
   assert(
     mobileBody,
-    ".chart-window-control must be revealed inside the mobile block",
+    ".chart-window-control reveal must remain inside the mobile block",
   );
   assert(
     /display\s*:\s*(flex|block)/i.test(mobileBody),
-    "mobile block must reveal the control (display: flex/block)",
+    "mobile block must keep revealing the control (display: flex/block)",
   );
-});
-
-Deno.test("styles.css: the toggle reveal is confined to the mobile block (desktop untouched)", () => {
-  // No (min-width: 768px) desktop rule may re-show it.
-  const desktop = mediaBlock(css, "(min-width: 768px)");
-  if (desktop) {
-    const desktopBody = ruleBody(desktop, ".chart-window-control");
-    assert(
-      desktopBody === null,
-      "the desktop block must not re-show the toggle",
-    );
-  }
 });
 
 // --- wiring ----------------------------------------------------------------
 
-Deno.test("app.js: init reads the stored mobile window and wires the toggle", () => {
+Deno.test("app.js: init reads each device's stored window and wires the toggle", () => {
   assert(
     appJs.includes("initChartWindowToggle"),
     "app.js must define/call initChartWindowToggle",
   );
+  // Mobile path (unchanged).
   assert(
     appJs.includes("GRQChartWindow.readMobileWindowDays"),
-    "init must read the stored choice via GRQChartWindow.readMobileWindowDays",
+    "init must read the mobile choice via GRQChartWindow.readMobileWindowDays",
   );
   assert(
     appJs.includes("GRQChartWindow.writeMobileWindowDays"),
-    "change must persist the choice via GRQChartWindow.writeMobileWindowDays",
+    "change must persist mobile via GRQChartWindow.writeMobileWindowDays",
+  );
+  // Desktop path (issue #466) — now reads and persists the desktop key too.
+  assert(
+    appJs.includes("GRQChartWindow.readDesktopWindowDays"),
+    "init must read the desktop choice via GRQChartWindow.readDesktopWindowDays",
+  );
+  assert(
+    appJs.includes("GRQChartWindow.writeDesktopWindowDays"),
+    "change must persist desktop via GRQChartWindow.writeDesktopWindowDays",
+  );
+});
+
+Deno.test("app.js: a per-device effective-window accessor resolves the choice (issue #466)", () => {
+  // currentWindowDays() picks the mobile or desktop store based on the device,
+  // so every window-sizing call site shares ONE source of truth.
+  assert(
+    appJs.includes("currentWindowDays()"),
+    "app.js must define currentWindowDays() as the effective-window accessor",
+  );
+  assert(
+    appJs.includes("desktopWindowDays()"),
+    "app.js must define desktopWindowDays() parallel to mobileWindowDays()",
+  );
+  // The accessor must branch on the device between the two stores.
+  const start = appJs.indexOf("currentWindowDays()");
+  const body = appJs.slice(start, start + 300);
+  assert(
+    body.includes("isMobileDevice()") &&
+      body.includes("mobileWindowDays()") &&
+      body.includes("desktopWindowDays()"),
+    "currentWindowDays() must choose mobile vs desktop window by device",
+  );
+});
+
+Deno.test("app.js: the toggle change handler persists to the CURRENT device's store (issue #466)", () => {
+  const start = appJs.indexOf("initChartWindowToggle()");
+  assert(start !== -1, "initChartWindowToggle must exist");
+  const body = appJs.slice(start, start + 1600);
+  // The change handler branches on the device so a desktop flip writes the
+  // desktop key and a mobile flip writes the mobile key (mobile unaffected).
+  assert(
+    body.includes("writeMobileWindowDays") &&
+      body.includes("writeDesktopWindowDays"),
+    "the change handler must persist to both stores depending on the device",
+  );
+  assert(
+    body.includes("isMobileDevice()"),
+    "the change handler must branch on isMobileDevice() to pick the store",
   );
 });
 
@@ -220,20 +266,26 @@ Deno.test("app.js: changing the toggle re-renders BOTH chart and summary (#367)"
   );
 });
 
-Deno.test("app.js: chart and summary call sites pass the chosen mobile window", () => {
-  // Both the summary (deviceWindowEnd) and the chart (deviceWindowDays /
-  // deviceWindowEnd) feed the chosen window through, so they share ONE window.
+Deno.test("app.js: chart and summary call sites pass the per-device window (issue #466)", () => {
+  // Every window-sizing call site now resolves through currentWindowDays() so
+  // the chart and the summary share ONE per-device window (a desktop 90 choice
+  // narrows both together).
   assert(
-    appJs.includes("this.mobileWindowDays()"),
-    "call sites must pass this.mobileWindowDays() into the window helpers",
+    appJs.includes("this.currentWindowDays()"),
+    "call sites must pass this.currentWindowDays() into the window helpers",
   );
-  // The summary window end must receive the chosen window argument.
+  // The call sites must NOT hard-wire the mobile-only accessor any more.
   assert(
-    /deviceWindowEnd\([\s\S]*?this\.mobileWindowDays\(\)/.test(appJs),
-    "deviceWindowEnd call(s) must pass the chosen mobile window",
+    !/deviceWindowEnd\([\s\S]*?this\.mobileWindowDays\(\)/.test(appJs),
+    "deviceWindowEnd must no longer be fed the mobile-only window",
+  );
+  // The summary window end must receive the per-device window argument.
+  assert(
+    /deviceWindowEnd\([\s\S]*?(currentWindowDays\(\)|windowDays)/.test(appJs),
+    "deviceWindowEnd call(s) must pass the per-device window",
   );
   assert(
-    /deviceWindowDays\([^)]*this\.mobileWindowDays\(\)/.test(appJs),
-    "deviceWindowDays call(s) must pass the chosen mobile window",
+    /deviceWindowDays\([^)]*(currentWindowDays\(\)|windowDays)/.test(appJs),
+    "deviceWindowDays call(s) must pass the per-device window",
   );
 });
