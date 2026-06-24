@@ -124,11 +124,6 @@
   margin-bottom: 0.5rem;
 }
 
-.chart-window-control-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
 /* ---------------------------------------------------------------------------
  * Mobile chart pop-out overlay (issue #451, milestone #446)
  *

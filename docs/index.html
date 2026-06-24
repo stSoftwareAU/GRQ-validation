@@ -194,13 +194,13 @@
                          store via GRQChartWindow (mobile 90, desktop 180); the
                          static 90 default below is corrected per device on init. -->
                     <div class="chart-window-control mb-2" id="chartWindowControl">
-                      <span class="chart-window-control-label" id="chartWindowLabel">
-                        Chart window
-                      </span>
+                      <!-- Issue #493: the visible "Chart window" label was
+                           removed (the 90/180 buttons are self-explanatory).
+                           The group keeps an accessible name via aria-label. -->
                       <div
                         class="btn-group btn-group-sm"
                         role="group"
-                        aria-labelledby="chartWindowLabel"
+                        aria-label="Chart window"
                       >
                         <input
                           type="radio"

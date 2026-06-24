@@ -124,15 +124,14 @@ Deno.test("index.html: default selection is 90 days (reflects the stored default
 // --- accessibility ---------------------------------------------------------
 
 Deno.test("index.html: toggle is accessible (labelled radio group, focusable labels)", () => {
-  // Group is announced as a radio group with an accessible name.
+  // Group is announced as a radio group with an accessible name. Issue #493
+  // removed the redundant visible "Chart window" label; the group now carries
+  // its accessible name via aria-label instead of aria-labelledby a visible
+  // span, so the 90/180 buttons render without surrounding chrome.
   assert(html.includes('role="group"'), "the control must be a role=group");
   assert(
-    html.includes('aria-labelledby="chartWindowLabel"'),
-    "the group must reference its visible label via aria-labelledby",
-  );
-  assert(
-    html.includes('id="chartWindowLabel"'),
-    "the visible label element must exist",
+    html.includes('aria-label="Chart window"'),
+    'the group must carry its accessible name via aria-label="Chart window"',
   );
   // Each radio is associated with a <label for=...> so it is keyboard-operable
   // and screen-reader labelled.
@@ -149,6 +148,32 @@ Deno.test("index.html: toggle is accessible (labelled radio group, focusable lab
     /type="radio"[\s\S]*id="chartWindow90"/.test(html) ||
       /id="chartWindow90"[\s\S]*type="radio"/.test(html),
     "the 90-day control must be a native radio input (keyboard-operable)",
+  );
+});
+
+// --- no redundant visible label (issue #493) -------------------------------
+
+Deno.test("index.html: the visible 'Chart window' label is removed (issue #493)", () => {
+  // The self-explanatory 90/180 buttons need no preceding text label. The
+  // redundant visible label and its id/aria-labelledby wiring are gone.
+  assert(
+    !html.includes('id="chartWindowLabel"'),
+    "the visible chartWindowLabel span must be removed",
+  );
+  assert(
+    !html.includes('aria-labelledby="chartWindowLabel"'),
+    "the group must no longer reference the removed visible label",
+  );
+  assert(
+    !html.includes("chart-window-control-label"),
+    "the visible label element and its class must be removed",
+  );
+});
+
+Deno.test("styles.css: the unused label rule is removed (issue #493)", () => {
+  assert(
+    !css.includes(".chart-window-control-label"),
+    "the now-unused .chart-window-control-label rule must be removed",
   );
 });
 
