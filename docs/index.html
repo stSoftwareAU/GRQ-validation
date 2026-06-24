@@ -186,18 +186,48 @@
                 </div>
                 <div class="card mb-4">
                   <div class="card-body">
-                    <!-- Mobile-only pop-out control (issue #451). Hidden at
-                         >=768px via CSS so desktop is untouched. -->
-                    <div class="chart-popout-controls">
-                      <button
-                        id="chartPopoutExpand"
-                        type="button"
-                        class="btn btn-outline-primary btn-sm chart-popout-expand"
-                        aria-label="Expand chart to full screen"
-                        title="Expand chart to full screen"
+                    <!-- Mobile-only 90/180-day chart window toggle (issue #449).
+                         Hidden on desktop via CSS (desktop always renders the
+                         full 180 days); on phones it switches the visible window
+                         between 90 (default) and 180 days, re-rendering the chart
+                         AND the Market Performance summary together (#367). The
+                         choice persists per device via GRQChartWindow. -->
+                    <div class="chart-window-control mb-2" id="chartWindowControl">
+                      <span class="chart-window-control-label" id="chartWindowLabel">
+                        Chart window
+                      </span>
+                      <div
+                        class="btn-group btn-group-sm"
+                        role="group"
+                        aria-labelledby="chartWindowLabel"
                       >
-                        <span aria-hidden="true">⤢</span>
-                      </button>
+                        <input
+                          type="radio"
+                          class="btn-check"
+                          name="chartWindowDays"
+                          id="chartWindow90"
+                          value="90"
+                          autocomplete="off"
+                          checked
+                        />
+                        <label
+                          class="btn btn-outline-primary"
+                          for="chartWindow90"
+                        >90 days</label>
+
+                        <input
+                          type="radio"
+                          class="btn-check"
+                          name="chartWindowDays"
+                          id="chartWindow180"
+                          value="180"
+                          autocomplete="off"
+                        />
+                        <label
+                          class="btn btn-outline-primary"
+                          for="chartWindow180"
+                        >180 days</label>
+                      </div>
                     </div>
                     <div class="chart-container">
                       <canvas id="performanceChart"></canvas>
@@ -352,6 +382,9 @@
 
     <!-- Shared projection/scoring maths (issue #80) — must load before app.js -->
     <script src="projection.js"></script>
+
+    <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->
+    <script src="chart_window_settings.js"></script>
 
     <!-- Mobile colour-key entry builder (issue #244) — must load before app.js -->
     <script src="color_key.js"></script>

@@ -62,7 +62,53 @@ class GRQValidator {
         return breakpoint === 'xs' || breakpoint === 'sm';
     }
 
+    // The user's chosen mobile chart window in days (issue #449): 90 by default,
+    // or the full 180 when opted in via the mobile-only toggle. Read from the
+    // per-device persistence helper (docs/chart_window_settings.js); guarded so a
+    // missing helper or unavailable storage falls back to 90 and never throws.
+    // Desktop ignores this value — its window is always 180 days.
+    mobileWindowDays() {
+        if (typeof GRQChartWindow === "undefined") {
+            return 90;
+        }
+        return GRQChartWindow.readMobileWindowDays();
+    }
+
+    // Restore the 90/180-day toggle to the stored choice and, on change, persist
+    // it and re-render the chart AND the Market Performance summary together so
+    // they always cover the identical window (issue #449, #367). The control is
+    // mobile-only (hidden on desktop by CSS); wiring it on every device is
+    // harmless because desktop never shows or flips it.
+    initChartWindowToggle() {
+        const control = document.getElementById("chartWindowControl");
+        if (!control) {
+            return;
+        }
+        const stored = this.mobileWindowDays();
+        const radios = control.querySelectorAll(
+            'input[name="chartWindowDays"]',
+        );
+        radios.forEach((radio) => {
+            radio.checked = Number(radio.value) === stored;
+            radio.addEventListener("change", (event) => {
+                if (!event.target.checked) {
+                    return;
+                }
+                const chosen = Number(event.target.value);
+                if (typeof GRQChartWindow !== "undefined") {
+                    GRQChartWindow.writeMobileWindowDays(chosen);
+                }
+                // Re-render chart and summary on the SAME new window (#367).
+                this.updateChart();
+                this.updateMarketComparison();
+            });
+        });
+    }
+
     initializeEventListeners() {
+        // Mobile-only 90/180-day chart window toggle (issue #449).
+        this.initChartWindowToggle();
+
         document
             .getElementById("scoreFileSelect")
             .addEventListener("change", (e) => {
@@ -967,6 +1013,7 @@ class GRQValidator {
         const windowEnd = GRQProjection.deviceWindowEnd(
             this.getScoreDate(this.selectedFile),
             this.isMobileDevice(),
+            this.mobileWindowDays(),
         );
         return GRQMarketIndex.marketPerformanceData(
             this.marketIndexData,
@@ -1632,18 +1679,21 @@ class GRQValidator {
         const breakpoint = this.getBootstrapBreakpoint();
         const isMobile = this.isMobileDevice();
         
-        // Per-device visible window (mobile 90 days, desktop 180). Shared with
-        // the Market Performance summary via GRQProjection so the chart and the
-        // summary cover the identical window and cannot disagree (issue #367).
-        const maxDays = GRQProjection.deviceWindowDays(isMobile);
+        // Per-device visible window (mobile 90 or 180 days, desktop 180). The
+        // mobile window honours the user's 90/180 toggle (issue #449). Shared
+        // with the Market Performance summary via GRQProjection so the chart and
+        // the summary cover the identical window and cannot disagree (issue #367).
+        const mobileWindowDays = this.mobileWindowDays();
+        const maxDays = GRQProjection.deviceWindowDays(isMobile, mobileWindowDays);
         const maxDate = GRQProjection.deviceWindowEnd(
             this.getScoreDate(this.selectedFile),
             isMobile,
+            mobileWindowDays,
         );
 
         // Debug logging for mobile data limitation
         if (isMobile) {
-            console.log("Mobile detected - limiting chart data to 90 days for better readability");
+            console.log(`Mobile detected - limiting chart data to ${maxDays} days for better readability`);
             console.log("Max date for chart data:", maxDate.toISOString().split('T')[0]);
         }
 
@@ -2464,8 +2514,9 @@ class GRQValidator {
         const isMobile = this.isMobileDevice();
 
         // Per-device visible window, shared with the chart and summary via the
-        // single source of truth (issue #367) — mobile 90 days, desktop 180.
-        const maxDays = GRQProjection.deviceWindowDays(isMobile);
+        // single source of truth (issue #367) — mobile 90 or 180 days (the user's
+        // toggle choice, issue #449), desktop 180.
+        const maxDays = GRQProjection.deviceWindowDays(isMobile, this.mobileWindowDays());
         const maxDate = new Date(
             this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
         );
