@@ -30,9 +30,9 @@ Captured at a 390px-wide phone viewport via headless Chromium. The tighter
 banner lets the title sit on one line and lifts the Market Performance
 Comparison section into the first screen.
 
-Before (#315 baseline) | After (#492)
-:---:|:---:
-![Before — mobile dashboard with taller header chrome](docs/evidence/issue-492-before-mobile.png) | ![After — mobile dashboard with compacted header chrome](docs/evidence/issue-492-after-mobile.png)
+| Before (#315 baseline) | After (#492) |
+| :---: | :---: |
+| ![Before — mobile dashboard with taller header chrome](docs/evidence/issue-492-before-mobile.png) | ![After — mobile dashboard with compacted header chrome](docs/evidence/issue-492-after-mobile.png) |
 
 ```mermaid
 flowchart LR
