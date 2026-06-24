@@ -402,6 +402,19 @@
     }
 
     function start() {
+        // View deep-link routing (?view=portfolio, issue #479): when the URL
+        // requests the aggregate view, navigate back to index.html before any
+        // setup. Visit-only and one-way — never writes the URL or localStorage.
+        if (globalThis.GRQViewSelection) {
+            const target = globalThis.GRQViewSelection.viewRedirectTarget(
+                location.pathname,
+                location.search,
+            );
+            if (target) {
+                location.replace(target);
+                return;
+            }
+        }
         new GRQTrendView().init();
     }
 
