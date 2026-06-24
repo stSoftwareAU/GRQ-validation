@@ -68,6 +68,16 @@
             this.granularity = settings.grouping;
             this.toggles = settings.toggles;
 
+            // Visit-only `?group=day|week|month|quarter` deep-link (issue #481):
+            // a valid grouping in the URL overrides the saved choice for this
+            // page load only. Read on load, never written to localStorage.
+            if (globalThis.GRQTrendGroupingLink && typeof location !== "undefined") {
+                this.granularity = GRQTrendGroupingLink.effectiveGrouping(
+                    location.search,
+                    this.granularity,
+                );
+            }
+
             this.elements = {
                 loading: document.getElementById("trendLoading"),
                 error: document.getElementById("trendError"),
