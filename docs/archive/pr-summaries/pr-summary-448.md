@@ -2,8 +2,8 @@
 
 Taught the single source-of-truth window helpers in `docs/projection.js` to
 honour a chosen mobile window of **90 (default) or 180** days, while desktop
-stays at **180** and the chart and summary keep ending on the same date (the
-#367 invariant). Pure-function change only — no DOM, no storage. `Closes #448`.
+stays at **180** and the chart and summary keep ending on the same date (the #367
+invariant). Pure-function change only — no DOM, no storage. `Closes #448`.
 
 - `deviceWindowDays(isMobile, mobileWindowDays = 90)` — on mobile returns the
   chosen value only when permitted (90 or 180), else falls back to 90; on
