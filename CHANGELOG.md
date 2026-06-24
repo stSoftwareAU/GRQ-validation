@@ -38,6 +38,14 @@ and this project adheres to
   desktop 180). The helper stays pure — the caller supplies the value — and the
   allow-list constant is renamed `PERMITTED_WINDOW_DAYS` (Issue #464).
 
+### Fixed
+
+- Footer **🔗 Share** button now copies a deep-link to the clipboard. The
+  link-builder and clipboard/fallback handling shipped in `docs/share_link.js`
+  (Issue #495) but the dashboard never called `GRQShare.initShareButton(...)`,
+  so a tap did nothing — no copy, no confirmation. `docs/app.js` now wires the
+  button to the live selections via `shareState()` on init (Issue #515).
+
 ### Removed
 
 - Dead `[dependencies]` `walkdir` and `thiserror`, which were declared but never
