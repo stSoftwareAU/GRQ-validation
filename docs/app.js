@@ -3705,7 +3705,11 @@ class GRQValidator {
         const currentPrice = GRQProjection.currentPriceFromLatest(
             this.marketData[stockSymbol],
         );
-        return GRQProjection.isStockIncluded(buyPrice, currentPrice);
+        return GRQProjection.isStockIncluded(
+            buyPrice,
+            currentPrice,
+            buyPriceObj ? buyPriceObj.reliable !== false : true,
+        );
     }
 
     calculatePortfolioPerformance90Day() {

@@ -108,7 +108,11 @@ const RECONCILE_TOLERANCE: f64 = 0.15; // +/-15% price-ratio cross-check
 
 /// Effective N:1 split magnitude for forward (`c`) and reverse (`1/c`) events.
 fn split_event_magnitude(c: f64) -> f64 {
-    if c >= 1.0 { c } else { 1.0 / c }
+    if c >= 1.0 {
+        c
+    } else {
+        1.0 / c
+    }
 }
 
 /// Returns `true` when `c` is a valid split coefficient (not 1.0, positive, finite).
@@ -212,7 +216,7 @@ pub fn compute_split_adjustment(
 
     // Cumulative-factor plausibility bound (forward product too large, or reverse
     // product too small, almost certainly means duplicated/spurious coefficients).
-    if factor > MAX_CUMULATIVE_FACTOR || factor < MIN_CUMULATIVE_FACTOR {
+    if !(MIN_CUMULATIVE_FACTOR..=MAX_CUMULATIVE_FACTOR).contains(&factor) {
         reliable = false;
     }
 
@@ -3050,7 +3054,10 @@ mod tests {
             ("2024-12-15", 100.0, 100.0, 0.1),
         ]);
         let adj = compute_split_adjustment(&series, date("2024-11-15"));
-        assert!(adj.reliable, "a reconcilable 10:1 reverse split must be reliable");
+        assert!(
+            adj.reliable,
+            "a reconcilable 10:1 reverse split must be reliable"
+        );
         assert!((adj.factor - 0.1).abs() < 1e-9, "factor should be 0.1");
     }
 

@@ -12,6 +12,7 @@ const g = globalThis as unknown as {
     isStockIncluded: (
       buyPrice: number | null | undefined,
       currentPrice: number | null | undefined,
+      splitReliable?: boolean,
     ) => boolean;
     calculateIncludedPortfolioPerformance: (
       stocks: Array<{
@@ -54,6 +55,12 @@ Deno.test("isStockIncluded - both missing -> excluded", () => {
   assertEquals(GRQProjection.isStockIncluded(null, null), false);
   assertEquals(GRQProjection.isStockIncluded(undefined, undefined), false);
   assertEquals(GRQProjection.isStockIncluded(0, 0), false);
+});
+
+Deno.test("isStockIncluded - split-unreliable -> excluded even with both prices", () => {
+  assertEquals(GRQProjection.isStockIncluded(10.5, 12.0, false), false);
+  assertEquals(GRQProjection.isStockIncluded(10.5, 12.0, true), true);
+  assert(GRQProjection.isStockIncluded(10.5, 12.0));
 });
 
 Deno.test("isStockIncluded - negative prices -> excluded", () => {

@@ -183,6 +183,7 @@ function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate)
         const points = market[row.stock];
         const buyPriceObj = GRQProjection.getBuyPrice(points, scoreDate);
         const buyPrice = buyPriceObj ? buyPriceObj.price : null;
+        const splitReliable = buyPriceObj ? buyPriceObj.reliable !== false : true;
         const currentPrice = currentPriceWithinWindow(points, scoreDate);
         const totalDividends = GRQProjection.sumDividends(
             GRQProjection.filterDividendsWithin90Days(
@@ -198,7 +199,7 @@ function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate)
                 scoreDate,
             )
             : null;
-        return { buyPrice, currentPrice, totalDividends, adjustedTarget };
+        return { buyPrice, currentPrice, totalDividends, adjustedTarget, splitReliable };
     });
 }
 

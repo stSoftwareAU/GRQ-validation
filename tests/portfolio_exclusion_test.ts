@@ -37,6 +37,7 @@ const g = globalThis as unknown as {
     isStockIncluded: (
       buyPrice: number | null | undefined,
       currentPrice: number | null | undefined,
+      splitReliable?: boolean,
     ) => boolean;
     currentPriceFromLatest: (
       marketData: MarketDataPoint[] | undefined,

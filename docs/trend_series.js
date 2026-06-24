@@ -72,7 +72,8 @@ function includedStockCount(stocks) {
     for (const stock of stocks) {
         const buyPrice = stock && stock.buyPrice;
         const currentPrice = stock && stock.currentPrice;
-        if (GRQProjection.isStockIncluded(buyPrice, currentPrice)) {
+        const splitReliable = stock && stock.splitReliable;
+        if (GRQProjection.isStockIncluded(buyPrice, currentPrice, splitReliable)) {
             count++;
         }
     }
