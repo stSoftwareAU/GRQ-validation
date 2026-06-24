@@ -134,10 +134,14 @@ const FIXTURES: Array<
   },
 ];
 
-// Per-device chart windows. maxDays mirrors docs/app.js:1602.
+// Per-device chart windows. maxDays mirrors docs/app.js:1602. Desktop may now
+// opt into the 90-day window (issue #466), so a "desktop-90" case is included:
+// the chart and summary must stay aligned and read DOWN at that narrowed window
+// exactly as the mobile default 90 does.
 const WINDOWS = [
   { label: "mobile", maxDays: 90 },
   { label: "desktop", maxDays: 180 },
+  { label: "desktop-90", maxDays: 90 },
 ];
 
 // The shared window end the fix introduces, computed exactly as the chart does

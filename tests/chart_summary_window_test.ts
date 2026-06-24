@@ -174,6 +174,51 @@ Deno.test("marketPerformanceData - summary follows the per-device window, not th
   assert(mobile.sp500.performance < unwindowed.sp500.performance);
 });
 
+Deno.test("marketPerformanceData - a DESKTOP 90 choice narrows the summary to the dip (issue #466)", () => {
+  // Issue #466: desktop may now opt into the 90-day window. With the same
+  // #333-shaped fixture, a desktop 90 choice (deviceWindowEnd(scoreDate, false,
+  // 90)) must land inside the dip and read DOWN — exactly as mobile's default
+  // 90 does — and land on the IDENTICAL end date, proving chart and summary
+  // narrow together to the same window.
+  const series = GRQProjection.buildIndexSeriesFromMap(
+    PRICE_MAP,
+    "SP500",
+    SCORE_DATE,
+    "2026-09-01",
+  );
+  const marketIndexData = { sp500: series };
+
+  // Desktop, explicit 90 (the new opt-in): window ends 2026-04-01, in the dip.
+  const desktop90End = GRQProjection.deviceWindowEnd(
+    new Date(SCORE_DATE),
+    false,
+    90,
+  );
+  const desktop90 = GRQMarketIndex.marketPerformanceData(
+    marketIndexData,
+    desktop90End,
+  );
+  assert(
+    desktop90.sp500.performance < 0,
+    "desktop 90 summary must be negative (narrowed to the dip)",
+  );
+  assertEquals(desktop90.sp500.currentPrice, 80);
+
+  // Same end date as mobile's default 90 window — chart and summary coincide.
+  const mobile90End = GRQProjection.deviceWindowEnd(new Date(SCORE_DATE), true);
+  assertEquals(desktop90End!.getTime(), mobile90End!.getTime());
+
+  // And strictly narrower than the desktop DEFAULT 180 window.
+  const desktop180End = GRQProjection.deviceWindowEnd(
+    new Date(SCORE_DATE),
+    false,
+  );
+  assert(
+    desktop90End!.getTime() < desktop180End!.getTime(),
+    "desktop 90 window must end before the desktop 180 window",
+  );
+});
+
 Deno.test("marketPerformanceData - index with no usable price in the window renders blank, never errors", () => {
   const series = GRQProjection.buildIndexSeriesFromMap(
     PRICE_MAP,
