@@ -111,6 +111,24 @@
   color: inherit;
 }
 
+/* -------------------------------------------------------------------------
+ * Mobile-only 90/180-day chart window toggle (issue #449, milestone #445).
+ * Desktop always renders the full 180-day window, so the control is hidden
+ * there and only revealed below the mobile breakpoint (< 768px) — the same
+ * boundary isMobileDevice() uses. The reveal lives in the @media block below.
+ * ------------------------------------------------------------------------- */
+.chart-window-control {
+  display: none; /* desktop: window is always 180 days, no choice offered */
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.chart-window-control-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 /* Loading and message styles */
 .loading {
   text-align: center;
@@ -385,6 +403,11 @@
 
   /* Reveal the compact colour key in place of the hidden Chart.js legend. */
   .chart-color-key {
+    display: flex;
+  }
+
+  /* Reveal the 90/180-day chart window toggle on phones only (issue #449). */
+  .chart-window-control {
     display: flex;
   }
 }
