@@ -201,7 +201,7 @@ Deno.test("styles.css: #492 chrome overrides stay confined to the mobile block (
   }
 });
 
-Deno.test("index.html: banner keeps its h1, lead subtitle, theme toggle and Score File control", async () => {
+Deno.test("index.html: banner keeps its h1, lead subtitle, theme toggle and Prediction Date control", async () => {
   const html = await Deno.readTextFile(INDEX);
   assert(
     /<h1 class="display-4[^"]*">GRQ Validation Dashboard<\/h1>/.test(html),
@@ -209,8 +209,11 @@ Deno.test("index.html: banner keeps its h1, lead subtitle, theme toggle and Scor
   );
   assert(/<p class="lead[^"]*">/.test(html), "the lead subtitle must remain");
   assert(html.includes('id="theme-toggle"'), "the theme toggle must remain");
+  // Issue #530: the user-facing label reads "Prediction Date", not the
+  // implementation detail "Score File", but it must keep its association
+  // with the #scoreFileSelect control.
   assert(
-    /<label for="scoreFileSelect"[^>]*>Score File:<\/label>/.test(html),
-    "the Score File control must keep its associated <label>",
+    /<label for="scoreFileSelect"[^>]*>Prediction Date:<\/label>/.test(html),
+    "the Prediction Date control must keep its associated <label>",
   );
 });

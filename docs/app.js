@@ -324,7 +324,7 @@ class GRQValidator {
 
             const select = document.getElementById("scoreFileSelect");
             select.innerHTML =
-                '<option value="">Select a score file...</option>';
+                '<option value="">Select a prediction date...</option>';
 
             // Remember the score index so a selected file can be mapped back to
             // its YYYY-MM-DD date for the ?date= deep link (issue #517).
