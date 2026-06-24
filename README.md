@@ -159,7 +159,7 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads five optional query parameters so a specific view can be
+The dashboard reads nine optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
@@ -181,6 +181,37 @@ deterministically — issue #281):
   without the param returns to the saved window (desktop 180 / mobile 90). Both
   windows end on the same date (#367); an absent or invalid value falls back to
   the saved choice, then the device default.
+- `?view=portfolio|trend` — deep-link straight to a top-level view (issue #479).
+  `?view=trend` routes to the Prediction Trend page (`trend.html`);
+  `?view=portfolio` routes back to the aggregate dashboard (`index.html`). Like
+  `?theme=`, this is read on page load only (one-way) and is **never** persisted
+  to `localStorage`; an absent, blank or unrecognised value (or a value that
+  already matches the current page) leaves you where you are.
+- `?indices=sp500,nasdaq,russell2000` — on the Trend view, turn the listed
+  benchmark-index overlays **on** for this visit; any index **not** listed is
+  turned off (issue #480). The keys are the canonical index keys `sp500`,
+  `nasdaq` and `russell2000`; unknown keys are ignored and a present-but-empty
+  value (`?indices=`) turns every overlay off. A **transient / visit-only**
+  override that wins over the saved toggles but is **never** persisted; an
+  absent param leaves the saved/default toggles unchanged.
+- `?group=day|week|month|quarter` — on the Trend view, set the **Group by**
+  granularity for this visit (issue #481). A **transient / visit-only** override
+  that wins over the saved `grq.trend.grouping` choice but is **never**
+  persisted; an absent or unrecognised value falls back to the saved choice,
+  then the **month** default.
+- `?fullscreen=1` — **mobile-only**: open the chart pop-out (landscape,
+  maximised chart) on page load (issue #482). Only the exact value `1` triggers
+  it; it is a **no-op on desktop**, where the expand control is hidden. Like
+  `?theme=`, it is read once on load (one-way) and is **never** persisted.
+
+**Worked examples**
+
+- `index.html?date=2026-01-01&window=180&fullscreen=1` — 180 days from
+  1 January, landscape (maximised chart) on a phone.
+- `trend.html?group=week&indices=sp500,nasdaq` — the Trend view grouped by week
+  with the S&P 500 and NASDAQ overlays on (Russell 2000 off) for this visit.
+- `index.html?view=trend` — jump straight from the dashboard to the Prediction
+  Trend page.
 
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
