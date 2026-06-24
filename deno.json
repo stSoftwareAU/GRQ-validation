@@ -24,14 +24,15 @@
   "include": [
     "tests/**/*",
     "helpers/**/*.ts",
+    "scripts/**/*.ts",
     "*.ts"
   ],
   "lint": {
-    "include": ["tests/**/*", "helpers/**/*.ts", "*.ts"],
+    "include": ["tests/**/*", "helpers/**/*.ts", "scripts/**/*.ts", "*.ts"],
     "exclude": ["docs/**/*", "src/**/*"]
   },
   "fmt": {
-    "include": ["tests/**/*", "helpers/**/*.ts", "*.ts"],
+    "include": ["tests/**/*", "helpers/**/*.ts", "scripts/**/*.ts", "*.ts"],
     "exclude": ["docs/**/*", "src/**/*"]
   },
   "test": {
