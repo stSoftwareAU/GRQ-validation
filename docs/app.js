@@ -203,9 +203,30 @@ class GRQValidator {
         });
     }
 
+    // Wire the footer "Share" button (issue #515). The deep-link builder and
+    // clipboard/select-the-text fallback live in docs/share_link.js (issue
+    // #495); the dashboard only has to supply the live selections via
+    // shareState(). Without this call the button has no click handler, so a tap
+    // does nothing — the exact bug #515 fixes. Guarded so a missing helper
+    // degrades cleanly (the footer simply stays inert) and is read-only.
+    initShareButton() {
+        if (
+            typeof GRQShare === "undefined" ||
+            typeof GRQShare.initShareButton !== "function"
+        ) {
+            return;
+        }
+        GRQShare.initShareButton({
+            getState: () => this.shareState(),
+        });
+    }
+
     initializeEventListeners() {
         // 90/180-day chart window toggle, now on every device (issue #449, #466).
         this.initChartWindowToggle();
+
+        // Footer "Share" deep-link button (issue #515 wires #495's builder).
+        this.initShareButton();
 
         document
             .getElementById("scoreFileSelect")
