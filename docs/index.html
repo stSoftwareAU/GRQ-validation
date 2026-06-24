@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.215">
+    <meta name="app-version" content="1.0.216">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -418,6 +418,10 @@
     <!-- Date deep-link (?date=) selection helpers (issue #436) — before app.js -->
     <script src="date_selection.js"></script>
 
+    <!-- View deep-link (?view=portfolio|trend) selection helpers (issue #479) —
+         before app.js, which routes ?view=trend to trend.html on load. -->
+    <script src="view_selection.js"></script>
+
     <!-- Consolidated popover dismissal logic (issue #371) — before app.js -->
     <script src="popover_dismiss.js"></script>
 
@@ -435,6 +439,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.215"></script>
+    <script src="sw-register.js?v=1.0.216"></script>
   </body>
 </html>

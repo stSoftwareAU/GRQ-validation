@@ -33,6 +33,7 @@ Deno.test("trend.html loads the shared engines and the controller", () => {
       "trend_series.js",
       "index_overlay.js",
       "trend_settings.js",
+      "trend_indices_deeplink.js",
       "trend_predictions.js",
       "trend.js",
     ]
@@ -66,6 +67,7 @@ Deno.test("sw.js precaches the Trend view assets", () => {
       "./trend_series.js",
       "./index_overlay.js",
       "./trend_settings.js",
+      "./trend_indices_deeplink.js",
     ]
   ) {
     assert(

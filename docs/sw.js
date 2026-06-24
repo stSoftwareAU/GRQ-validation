@@ -6,7 +6,7 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.0.215";
+const APP_VERSION = "1.0.216";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
@@ -27,6 +27,8 @@ const STATIC_ASSETS = [
   "./format.js",
   "./market_index.js",
   "./escape.js",
+  // View deep-link (?view=portfolio|trend) selection helpers (issue #479).
+  "./view_selection.js",
   "./popover_cleanup.js",
   // Mobile chart pop-out overlay engine (issue #451).
   "./chart_popout.js",
@@ -44,6 +46,10 @@ const STATIC_ASSETS = [
   "./trend_series.js",
   "./index_overlay.js",
   "./trend_settings.js",
+  // Transient ?group= grouping deep-link for the Trend view (issue #481).
+  "./trend_grouping_link.js",
+  // Transient ?indices= benchmark-index deep-link for the Trend view (issue #480).
+  "./trend_indices_deeplink.js",
   // SRI-pinned CDN assets from docs/index.html (issue #79).
   // Bump APP_VERSION whenever these pins change so the integrity hashes are
   // re-validated.
