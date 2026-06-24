@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.212">
+    <meta name="app-version" content="1.0.213">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -186,6 +186,49 @@
                 </div>
                 <div class="card mb-4">
                   <div class="card-body">
+                    <!-- Mobile-only 90/180-day chart window toggle (issue #449).
+                         Hidden on desktop via CSS (desktop always renders the
+                         full 180 days); on phones it switches the visible window
+                         between 90 (default) and 180 days, re-rendering the chart
+                         AND the Market Performance summary together (#367). The
+                         choice persists per device via GRQChartWindow. -->
+                    <div class="chart-window-control mb-2" id="chartWindowControl">
+                      <span class="chart-window-control-label" id="chartWindowLabel">
+                        Chart window
+                      </span>
+                      <div
+                        class="btn-group btn-group-sm"
+                        role="group"
+                        aria-labelledby="chartWindowLabel"
+                      >
+                        <input
+                          type="radio"
+                          class="btn-check"
+                          name="chartWindowDays"
+                          id="chartWindow90"
+                          value="90"
+                          autocomplete="off"
+                          checked
+                        />
+                        <label
+                          class="btn btn-outline-primary"
+                          for="chartWindow90"
+                        >90 days</label>
+
+                        <input
+                          type="radio"
+                          class="btn-check"
+                          name="chartWindowDays"
+                          id="chartWindow180"
+                          value="180"
+                          autocomplete="off"
+                        />
+                        <label
+                          class="btn btn-outline-primary"
+                          for="chartWindow180"
+                        >180 days</label>
+                      </div>
+                    </div>
                     <div class="chart-container">
                       <canvas id="performanceChart"></canvas>
                     </div>
@@ -312,6 +355,9 @@
     <!-- Shared projection/scoring maths (issue #80) — must load before app.js -->
     <script src="projection.js"></script>
 
+    <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->
+    <script src="chart_window_settings.js"></script>
+
     <!-- Mobile colour-key entry builder (issue #244) — must load before app.js -->
     <script src="color_key.js"></script>
 
@@ -343,6 +389,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.212"></script>
+    <script src="sw-register.js?v=1.0.213"></script>
   </body>
 </html>
