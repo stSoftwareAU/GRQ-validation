@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.219">
+    <meta name="app-version" content="1.0.220">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -454,6 +454,9 @@
     <!-- AA-compliant themed colours for canvas chart text (issue #497) — before app.js -->
     <script src="chart_theme.js"></script>
 
+    <!-- Performance-chart heading text (issue #519) — before app.js -->
+    <script src="chart_title.js"></script>
+
     <!-- Shared number-formatting helpers (issue #276) — must load before app.js -->
     <script src="format.js"></script>
 
@@ -491,6 +494,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.219"></script>
+    <script src="sw-register.js?v=1.0.220"></script>
   </body>
 </html>

@@ -1366,21 +1366,18 @@ class GRQValidator {
         }
 
         const chartData = this.prepareChartData();
-        let chartTitle;
-        if (this.selectedStock) {
-            const stock = this.scoreData.find((s) =>
-                s.stock === this.selectedStock
-            );
-            if (stock) {
-                chartTitle = `Stock Performance: ${this.selectedStock} (Score: ${
-                    stock.score.toFixed(3)
-                }, Target: $${stock.target.toFixed(2)})`;
-            } else {
-                chartTitle = `Stock Performance: ${this.selectedStock}`;
-            }
-        } else {
-            chartTitle = "Portfolio Performance Over Time";
-        }
+        // Issue #519: the portfolio (aggregate) view no longer shows the big
+        // "Portfolio Performance Over Time" heading — it wrapped to two lines on
+        // mobile and just wasted vertical space. The shared GRQChartTitle helper
+        // returns "" for the portfolio view (so the heading and the canvas title
+        // are hidden) and keeps the informative stock-specific title.
+        const stock = this.selectedStock
+            ? this.scoreData.find((s) => s.stock === this.selectedStock)
+            : null;
+        const chartTitle = globalThis.GRQChartTitle.chartTitle({
+            selectedStock: this.selectedStock,
+            stock,
+        });
 
         // Debug logging for chart data
         console.log("Chart data for rendering:", JSON.stringify(chartData, null, 2));
@@ -1394,10 +1391,42 @@ class GRQValidator {
             });
         });
 
-        // Update the HTML title element as well
-        const htmlTitleElement = document.getElementById("chartTitle");
+        // Update the HTML title element as well.
+        //
+        // Issue #519 hides the heading for the portfolio view. An empty <h2>
+        // left in the DOM (even with display:none) fails WCAG 2.1 AA — pa11y's
+        // H42.2 sniff flags "Heading tag found with no content" regardless of
+        // CSS visibility (PR #521 CI failure). So when there is no title we
+        // DETACH the heading from the DOM entirely (no empty heading exists),
+        // and re-attach it at its original position when a title returns. A
+        // cached comment node marks the slot so re-insertion is order-stable.
+        if (!this.chartTitleElement) {
+            this.chartTitleElement = document.getElementById("chartTitle");
+            if (this.chartTitleElement) {
+                this.chartTitleAnchor = document.createComment("chartTitle");
+                this.chartTitleElement.parentNode.insertBefore(
+                    this.chartTitleAnchor,
+                    this.chartTitleElement,
+                );
+            }
+        }
+        const htmlTitleElement = this.chartTitleElement;
         if (htmlTitleElement) {
-            htmlTitleElement.textContent = chartTitle;
+            const decision = globalThis.GRQChartTitle.resolveChartHeading(
+                chartTitle,
+                Boolean(htmlTitleElement.parentNode),
+            );
+            if (decision.action === "detach") {
+                htmlTitleElement.remove();
+            } else {
+                htmlTitleElement.textContent = decision.text;
+                if (decision.action === "attach") {
+                    this.chartTitleAnchor.parentNode.insertBefore(
+                        htmlTitleElement,
+                        this.chartTitleAnchor.nextSibling,
+                    );
+                }
+            }
         }
 
         const breakpoint = this.getBootstrapBreakpoint();
@@ -1445,7 +1474,9 @@ class GRQValidator {
                 },
                 plugins: {
                     title: {
-                        display: true,
+                        // Issue #519: no canvas title for the portfolio view
+                        // (chartTitle is "") so it wastes no chart space either.
+                        display: Boolean(chartTitle),
                         text: chartTitle,
                         font: {
                             size: isMobile ? 14 : 16,
