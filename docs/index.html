@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.0.222">
+    <meta name="app-version" content="1.0.223">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -171,7 +171,14 @@
                       <div class="chart-window-control" id="chartWindowControl">
                         <!-- Issue #493: the visible "Chart window" label was
                              removed (the 90/180 buttons are self-explanatory).
-                             The group keeps an accessible name via aria-label. -->
+                             The group keeps an accessible name via aria-label.
+                             Issue #527: the buttons show the number alone ("90"
+                             / "180") and the unit "days" is shown ONCE, beside
+                             the group, so the control fits on one line in
+                             portrait mode on a phone. Each radio keeps its full
+                             "90 days" / "180 days" accessible name via
+                             aria-label; the shared "days" unit is decorative
+                             (aria-hidden) so it is not announced twice. -->
                         <div
                           class="btn-group btn-group-sm"
                           role="group"
@@ -184,12 +191,13 @@
                             id="chartWindow90"
                             value="90"
                             autocomplete="off"
+                            aria-label="90 days"
                             checked
                           />
                           <label
                             class="btn btn-outline-primary"
                             for="chartWindow90"
-                          >90 days</label>
+                          >90</label>
 
                           <input
                             type="radio"
@@ -198,12 +206,17 @@
                             id="chartWindow180"
                             value="180"
                             autocomplete="off"
+                            aria-label="180 days"
                           />
                           <label
                             class="btn btn-outline-primary"
                             for="chartWindow180"
-                          >180 days</label>
+                          >180</label>
                         </div>
+                        <span
+                          class="chart-window-unit"
+                          aria-hidden="true"
+                        >days</span>
                       </div>
                       <!-- Mobile-only pop-out control (issue #451). Hidden at
                            >=768px via CSS so desktop is untouched. -->
@@ -500,6 +513,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.0.222"></script>
+    <script src="sw-register.js?v=1.0.223"></script>
   </body>
 </html>

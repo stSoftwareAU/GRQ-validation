@@ -123,6 +123,15 @@
   gap: 0.5rem;
 }
 
+/* Issue #527: the shared "days" unit shown once beside the 90/180 buttons.
+ * Keeping the numbers alone on the buttons lets the toggle fit on one line in
+ * portrait mode on a phone; the unit sits inline, vertically centred, and does
+ * not wrap away from the group. */
+.chart-window-unit {
+  white-space: nowrap;
+  line-height: 1;
+}
+
 /* Issue #518: the 90/180 toggle and the expand ⤢ button now ride on the chart
  * heading row (to the right of #chartTitle) on a SINGLE horizontal line,
  * instead of stacking on two rows below the heading. This flex wrapper keeps
