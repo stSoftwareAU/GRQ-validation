@@ -211,6 +211,48 @@ function togglePopout(ctx) {
     return ctx && ctx.isOpen ? closePopout(ctx) : openPopout(ctx);
 }
 
+// --- ?fullscreen=1 boot parameter (issue #482) -------------------------------
+//
+// A transient `?fullscreen=1` URL parameter opens the mobile pop-out on page
+// load. It mirrors `?theme=` (docs/theme.js): read ONCE on load (one-way),
+// visit-only (never persisted to localStorage). It is mobile-only — desktop is
+// a hard no-op because the expand control is CSS-hidden there and desktop has
+// ample chart space. These helpers are pure (no DOM) so the Deno tests drive
+// them headless.
+
+// True only when the query string carries exactly `fullscreen=1`. Any other
+// value ("0", "true", "2", absent) is false, and a malformed search degrades to
+// false rather than throwing.
+function fullscreenRequested(search) {
+    try {
+        return new URLSearchParams(search || "").get("fullscreen") === "1";
+    } catch (_e) {
+        return false;
+    }
+}
+
+// Pure boot decision: should the pop-out auto-open on load? Every gate must
+// pass — the URL asked for it (`?fullscreen=1`), we are on mobile, a pop-out
+// controller exists with an open() method, and it is not already open. Desktop
+// (isMobile false) always returns false, satisfying the "no-op on desktop"
+// contract without ever touching the DOM.
+function shouldOpenFullscreen({ search, isMobile, popout } = {}) {
+    if (!fullscreenRequested(search)) return false;
+    if (!isMobile) return false;
+    if (!popout || typeof popout.open !== "function") return false;
+    if (typeof popout.isOpen === "function" && popout.isOpen()) return false;
+    return true;
+}
+
+// Open the mobile pop-out on load when the `?fullscreen=1` gates pass. Delegates
+// the decision to shouldOpenFullscreen() and, when it passes, calls the
+// controller's open(). Returns true only when it actually opened; degrades to a
+// silent no-op when the controller is absent or any gate fails (e.g. desktop).
+function openFullscreenOnLoad(opts) {
+    if (!shouldOpenFullscreen(opts)) return false;
+    return opts.popout.open() === true;
+}
+
 // Wire the live dashboard: resolve the overlay/trigger elements, build the
 // open/close context, and attach the event listeners that drive the lifecycle —
 // tap-to-expand, ✕ to close, Esc to close, and the device back-gesture (a
@@ -388,4 +430,8 @@ globalThis.GRQChartPopout = {
     chooseLandscapePresentation,
     requestLandscapeLock,
     releaseOrientationLock,
+    // ?fullscreen=1 boot parameter (issue #482).
+    fullscreenRequested,
+    shouldOpenFullscreen,
+    openFullscreenOnLoad,
 };

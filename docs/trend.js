@@ -66,7 +66,27 @@
                 ? GRQTrendSettings.readTrendSettings()
                 : { grouping: "month", toggles: {} };
             this.granularity = settings.grouping;
-            this.toggles = settings.toggles;
+            // `?indices=` deep-link (issue #480): a transient URL override of
+            // the benchmark-index overlays wins for this visit but is never
+            // persisted; an absent param keeps the saved toggles. Read on page
+            // load only — the toggle UI reflects the result without writing
+            // storage.
+            this.toggles = globalThis.GRQTrendDeepLink
+                ? GRQTrendDeepLink.effectiveToggles(
+                    typeof location !== "undefined" ? location.search : "",
+                    settings.toggles,
+                )
+                : settings.toggles;
+
+            // Visit-only `?group=day|week|month|quarter` deep-link (issue #481):
+            // a valid grouping in the URL overrides the saved choice for this
+            // page load only. Read on load, never written to localStorage.
+            if (globalThis.GRQTrendGroupingLink && typeof location !== "undefined") {
+                this.granularity = GRQTrendGroupingLink.effectiveGrouping(
+                    location.search,
+                    this.granularity,
+                );
+            }
 
             this.elements = {
                 loading: document.getElementById("trendLoading"),
@@ -402,6 +422,19 @@
     }
 
     function start() {
+        // View deep-link routing (?view=portfolio, issue #479): when the URL
+        // requests the aggregate view, navigate back to index.html before any
+        // setup. Visit-only and one-way — never writes the URL or localStorage.
+        if (globalThis.GRQViewSelection) {
+            const target = globalThis.GRQViewSelection.viewRedirectTarget(
+                location.pathname,
+                location.search,
+            );
+            if (target) {
+                location.replace(target);
+                return;
+            }
+        }
         new GRQTrendView().init();
     }
 

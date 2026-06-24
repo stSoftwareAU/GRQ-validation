@@ -17,8 +17,8 @@ Pages.
   Refresh it with `deno task fetch-indices`; the write is safe for unattended
   daily runs (fails fast on an empty response, refuses to overwrite committed
   history with a regressed payload, and skips the write when nothing changed).
-  The external daily scorer job refreshes it in lockstep with the scores via
-  the non-blocking `deno task refresh-indices` wrapper (see _Daily benchmark
+  The external daily scorer job refreshes it in lockstep with the scores via the
+  non-blocking `deno task refresh-indices` wrapper (see _Daily benchmark
   refresh_ below).
 - **Split-Aware Returns** — the backend reads each day's `split_coefficient` and
   reconciles any stock split inside the 90-day window. A trustworthy split
@@ -58,9 +58,9 @@ flowchart LR
 ```
 
 The dashboard reads every input from its own origin: per-score market CSVs, the
-score index, and the benchmark-index file. Benchmark data is fetched
-server-side and committed, so a visitor's browser never calls an untrusted
-third-party relay (issue #93).
+score index, and the benchmark-index file. Benchmark data is fetched server-side
+and committed, so a visitor's browser never calls an untrusted third-party relay
+(issue #93).
 
 ### Daily benchmark refresh (in lockstep with the scores)
 
@@ -111,8 +111,8 @@ date in `docs/market-indices.json` against the newest date in the actuals
 (`docs/USDAUD.json`) and fails when the indices lag by more than
 `FRESHNESS_TOLERANCE_TRADING_DAYS` (3) trading days. The gap is measured in
 trading days (weekends skipped), so the acceptable one-trading-day end-of-day
-publishing lag — and an intervening public holiday — never raises a false
-alarm. When the guard trips it names both newest dates and the gap, e.g.
+publishing lag — and an intervening public holiday — never raises a false alarm.
+When the guard trips it names both newest dates and the gap, e.g.
 `benchmark indices are stale: newest index date 2026-06-08 lags the newest
 actuals date 2026-06-18 by 7 trading days (tolerance is 3 trading days)`.
 
@@ -159,7 +159,7 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads five optional query parameters so a specific view can be
+The dashboard reads nine optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
@@ -181,6 +181,37 @@ deterministically — issue #281):
   without the param returns to the saved window (desktop 180 / mobile 90). Both
   windows end on the same date (#367); an absent or invalid value falls back to
   the saved choice, then the device default.
+- `?view=portfolio|trend` — deep-link straight to a top-level view (issue #479).
+  `?view=trend` routes to the Prediction Trend page (`trend.html`);
+  `?view=portfolio` routes back to the aggregate dashboard (`index.html`). Like
+  `?theme=`, this is read on page load only (one-way) and is **never** persisted
+  to `localStorage`; an absent, blank or unrecognised value (or a value that
+  already matches the current page) leaves you where you are.
+- `?indices=sp500,nasdaq,russell2000` — on the Trend view, turn the listed
+  benchmark-index overlays **on** for this visit; any index **not** listed is
+  turned off (issue #480). The keys are the canonical index keys `sp500`,
+  `nasdaq` and `russell2000`; unknown keys are ignored and a present-but-empty
+  value (`?indices=`) turns every overlay off. A **transient / visit-only**
+  override that wins over the saved toggles but is **never** persisted; an
+  absent param leaves the saved/default toggles unchanged.
+- `?group=day|week|month|quarter` — on the Trend view, set the **Group by**
+  granularity for this visit (issue #481). A **transient / visit-only** override
+  that wins over the saved `grq.trend.grouping` choice but is **never**
+  persisted; an absent or unrecognised value falls back to the saved choice,
+  then the **month** default.
+- `?fullscreen=1` — **mobile-only**: open the chart pop-out (landscape,
+  maximised chart) on page load (issue #482). Only the exact value `1` triggers
+  it; it is a **no-op on desktop**, where the expand control is hidden. Like
+  `?theme=`, it is read once on load (one-way) and is **never** persisted.
+
+**Worked examples**
+
+- `index.html?date=2026-01-01&window=180&fullscreen=1` — 180 days from
+  1 January, landscape (maximised chart) on a phone.
+- `trend.html?group=week&indices=sp500,nasdaq` — the Trend view grouped by week
+  with the S&P 500 and NASDAQ overlays on (Russell 2000 off) for this visit.
+- `index.html?view=trend` — jump straight from the dashboard to the Prediction
+  Trend page.
 
 A low-prominence **🔗 Share** button in the page footer does the inverse: it
 builds an absolute URL encoding the current selections (score file, stock,
@@ -223,35 +254,34 @@ flowchart LR
 
 ## CI/CD Pipeline
 
-This repository ships a set of GitHub Actions workflows in
-`.github/workflows/` covering continuous integration, security scanning, and
-dependency hygiene.
+This repository ships a set of GitHub Actions workflows in `.github/workflows/`
+covering continuous integration, security scanning, and dependency hygiene.
 
 ### Workflows
 
 1. **CI** (`ci.yml`) — main continuous integration: build, test, formatting,
-   linting, and artifact upload. Runs on pushes and pull requests to `main`
-   and to `milestone/**` integration branches, so the Rust quality gate
+   linting, and artifact upload. Runs on pushes and pull requests to `main` and
+   to `milestone/**` integration branches, so the Rust quality gate
    (`cargo fmt`/`clippy`/`check`/`test`) also guards milestone PRs. The
-   `deploy-pages` job stays `main`-only, so milestone branches never publish
-   the GitHub Pages dashboard.
+   `deploy-pages` job stays `main`-only, so milestone branches never publish the
+   GitHub Pages dashboard.
 2. **Cargo Audit** (`cargo-audit.yml`) — runs `cargo audit` on every pull
    request and on a weekly schedule to catch newly disclosed advisories.
-3. **Deno Outdated** (`deno-outdated.yml`) — checks for outdated JSR/npm
-   imports used by the TypeScript dashboard tests.
+3. **Deno Outdated** (`deno-outdated.yml`) — checks for outdated JSR/npm imports
+   used by the TypeScript dashboard tests.
 4. **Deno Quality** (`deno-quality.yml`) — runs `deno fmt`, `deno lint`,
-   `deno check`, `deno audit`, and `deno test` against `tests/` on every
-   pull request and on a weekly schedule. `deno audit` scans the resolved
-   JSR/`@std` dependency graph for known vulnerabilities — the Deno-side
-   counterpart to `cargo audit`.
-5. **Dependency Review** (`dependency-review.yml`) — reviews dependency
-   changes on pull requests for known vulnerabilities and licence issues.
+   `deno check`, `deno audit`, and `deno test` against `tests/` on every pull
+   request and on a weekly schedule. `deno audit` scans the resolved JSR/`@std`
+   dependency graph for known vulnerabilities — the Deno-side counterpart to
+   `cargo audit`.
+5. **Dependency Review** (`dependency-review.yml`) — reviews dependency changes
+   on pull requests for known vulnerabilities and licence issues.
 6. **Gitleaks** (`gitleaks.yml`) — scans the repository for accidentally
    committed secrets.
 7. **Markdown Lint** (`markdown-lint.yml`) — enforces the rules in
    `.markdownlint-cli2.jsonc` against every Markdown file.
-8. **Semgrep** (`semgrep.yml`) — runs Semgrep static analysis for security
-   and correctness issues.
+8. **Semgrep** (`semgrep.yml`) — runs Semgrep static analysis for security and
+   correctness issues.
 9. **Shellcheck** (`shellcheck.yml`) — lints every `*.sh` script in the
    repository.
 10. **Accessibility** (`a11y.yml`) — runs `pa11y-ci` against the rendered
@@ -259,13 +289,12 @@ dependency hygiene.
     build on WCAG 2.1 AA violations so accessibility regressions are caught on
     the PR that introduces them.
 11. **Dependency Quarantine Gate** (`bump-quarantine-gate.yml`) — deterministic
-    supply-chain backstop that, on every pull request, blocks an external
-    Cargo crate or GitHub Action bump whose upstream release is younger than
-    24 hours (see _Automated dependency updates_ below).
+    supply-chain backstop that, on every pull request, blocks an external Cargo
+    crate or GitHub Action bump whose upstream release is younger than 24 hours
+    (see _Automated dependency updates_ below).
 12. **Version Bump** (`version-bump.yml`) — on every pull request, runs
-    `scripts/bump_version.ts` to increment the dashboard app version and
-    commits the change back to the PR branch (see _Dashboard versioning_
-    below).
+    `scripts/bump_version.ts` to increment the dashboard app version and commits
+    the change back to the PR branch (see _Dashboard versioning_ below).
 
 ### Dashboard versioning
 
@@ -277,11 +306,11 @@ the `app-version` meta and `sw-register.js?v=` script tag in `docs/index.html`.
 
 The **Version Bump** workflow keeps this automatic and reliable: on every pull
 request it runs `scripts/bump_version.ts`, which increments the patch component
-across all four locations and commits the result back to the PR branch. The
-bump is idempotent — it compares the branch version against the base branch and
-skips when the branch has already been bumped — so re-runs do not ratchet the
-version. This replaced an unreliable local pre-commit hook that only fired when
-a contributor had installed it.
+across all four locations and commits the result back to the PR branch. The bump
+is idempotent — it compares the branch version against the base branch and skips
+when the branch has already been bumped — so re-runs do not ratchet the version.
+This replaced an unreliable local pre-commit hook that only fired when a
+contributor had installed it.
 
 ```mermaid
 flowchart LR
@@ -330,13 +359,13 @@ flowchart TD
 
 The CI pipeline (`ci.yml`) complements this by building the **committed,
 reviewed `Cargo.lock`** rather than floating dependencies: every `cargo`
-build/test/check step runs with `--locked`, so a stale lockfile fails the
-build instead of silently resolving (and executing the `build.rs` /
-proc-macros of) a freshly-published, unquarantined crate. CI tool installs
-(`cargo-tarpaulin`, `cargo-cyclonedx`, `cargo-audit`) are pinned to explicit
-versions with `--locked` so they do not compile an arbitrary newest
-tool-dependency tree on each run. Crate bumps therefore arrive only through
-the quarantined Dependabot PRs above, never inline on a PR build.
+build/test/check step runs with `--locked`, so a stale lockfile fails the build
+instead of silently resolving (and executing the `build.rs` / proc-macros of) a
+freshly-published, unquarantined crate. CI tool installs (`cargo-tarpaulin`,
+`cargo-cyclonedx`, `cargo-audit`) are pinned to explicit versions with
+`--locked` so they do not compile an arbitrary newest tool-dependency tree on
+each run. Crate bumps therefore arrive only through the quarantined Dependabot
+PRs above, never inline on a PR build.
 
 ### Setup
 
