@@ -25,7 +25,7 @@ cargo build --release
 # Build the release binary
 cargo build --release
 
-# Process recent score files (within 100 days)
+# Process recent score files (within 180 days)
 ./run.sh
 
 # Process every score file, including older ones

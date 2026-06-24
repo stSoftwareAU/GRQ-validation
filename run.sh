@@ -5,11 +5,12 @@
 # This script builds and runs the GRQ validation program.
 # 
 # Usage:
-#   ./run.sh                    # Process recent files only (within 100 days)
+#   ./run.sh                    # Process recent files only (within 180 days)
 #   ./run.sh --process-all      # Process all available files
 #   ./run.sh --full-reload      # Process all files (same as --process-all)
-# 
-# The program validates 90-day predictions, so processing files older than 100 days
+#   ./run.sh --regenerate-empty # Process only missing or header-only market CSVs
+#
+# The program validates 90-day predictions, so processing files older than 180 days
 # is typically not necessary for performance reasons.
 
 # Configuration
@@ -79,17 +80,29 @@ log "Running GRQ validation program"
 
 # Check for command line arguments
 PROCESS_ALL=false
+REGENERATE_EMPTY=false
 if [[ "$1" == "--process-all" || "$1" == "--full-reload" ]]; then
     PROCESS_ALL=true
-    log "Processing all files (including those past 100 days)"
+    log "Processing all files (including those past 180 days)"
+elif [[ "$1" == "--regenerate-empty" ]]; then
+    REGENERATE_EMPTY=true
+    log "Processing score files with missing or header-only market CSVs"
 else
-    log "Processing recent files only (within 100 days)"
+    log "Processing recent files only (within 180 days)"
 fi
 
-# Use --process-all flag to process all dates, or omit for recent dates only (within 100 days)
+# Use --process-all to process all dates, --regenerate-empty for broken CSVs,
+# or omit for recent dates only (within 180 days)
 if [ "$PROCESS_ALL" = true ]; then
     # For full reload, process all files (performance is calculated inline)
     if ./target/release/grq-validation --docs-path docs --process-all; then
+        log "Program completed successfully"
+    else
+        log "ERROR: Program failed"
+        exit 1
+    fi
+elif [ "$REGENERATE_EMPTY" = true ]; then
+    if ./target/release/grq-validation --docs-path docs --regenerate-empty; then
         log "Program completed successfully"
     else
         log "ERROR: Program failed"

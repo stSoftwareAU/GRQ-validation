@@ -3,8 +3,9 @@ use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use grq_validation::utils::{
     build_score_file_path, create_dividend_csv_for_score_file,
-    create_market_data_long_csv_for_score_file, extract_ticker_codes_from_score_file,
-    read_index_json,
+    create_market_data_long_csv_for_score_file, derive_csv_output_path,
+    ensure_market_data_repository, extract_ticker_codes_from_score_file,
+    is_market_data_csv_empty, read_index_json,
 };
 use log::info;
 use std::path::Path;
@@ -23,6 +24,10 @@ struct Args {
     /// Process all score files, including those more than 180 days old
     #[arg(long)]
     process_all: bool,
+
+    /// Process only score files whose market-data CSV is missing or header-only
+    #[arg(long)]
+    regenerate_empty: bool,
 
     /// Calculate performance metrics for score files
     #[arg(long)]
@@ -225,14 +230,28 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    ensure_market_data_repository()?;
+
     // Read the index to get all score files
     let index_data = read_index_json(&args.docs_path)?;
     info!("Found {} score files to process", index_data.scores.len());
 
-    // Filter out score files that are more than 180 days old (unless --process-all is specified)
+    // Filter score files by age, empty CSVs, or --process-all.
     let current_date = Utc::now().naive_utc().date();
     let scores_to_process: Vec<_> = if args.process_all {
         index_data.scores.iter().collect()
+    } else if args.regenerate_empty {
+        index_data
+            .scores
+            .iter()
+            .filter(|score_entry| {
+                build_score_file_path(&args.docs_path, &score_entry.file)
+                    .map(|score_file_path| {
+                        is_market_data_csv_empty(&derive_csv_output_path(&score_file_path))
+                    })
+                    .unwrap_or(false)
+            })
+            .collect()
     } else {
         index_data
             .scores
@@ -248,14 +267,23 @@ fn main() -> Result<()> {
             .collect()
     };
 
-    info!(
-        "Filtered to {} recent score files (within 180 days)",
-        scores_to_process.len()
-    );
-    info!(
-        "Skipped {} old score files (more than 180 days old)",
-        index_data.scores.len() - scores_to_process.len()
-    );
+    if args.regenerate_empty {
+        info!(
+            "Filtered to {} score files with missing or header-only market CSVs",
+            scores_to_process.len()
+        );
+    } else if args.process_all {
+        info!("Processing all {} score files", scores_to_process.len());
+    } else {
+        info!(
+            "Filtered to {} recent score files (within 180 days)",
+            scores_to_process.len()
+        );
+        info!(
+            "Skipped {} old score files (more than 180 days old)",
+            index_data.scores.len() - scores_to_process.len()
+        );
+    }
 
     // Process each score file
     for (i, score_entry) in scores_to_process.iter().enumerate() {

@@ -135,12 +135,15 @@ cargo build --release
 ### Usage
 
 ```bash
-# Process recent score files (within 100 days)
+# Process recent score files (within 180 days)
 ./run.sh
 
-# Process all score files (including those older than 100 days)
+# Process every score file, including older ones
 ./run.sh --process-all
 # (alias: ./run.sh --full-reload)
+
+# Rebuild only missing or header-only market CSVs
+./run.sh --regenerate-empty
 
 # Process a specific date
 ./target/release/grq-validation --docs-path docs --date 2025-01-15

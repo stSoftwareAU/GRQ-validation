@@ -9,6 +9,42 @@ use std::path::Path;
 
 /// Base path of the external share-price data repository.
 pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2026Q2";
+
+/// Returns `true` when the share-price data repository is present on disk.
+pub fn market_data_repository_available() -> bool {
+    Path::new(MARKET_DATA_BASE_PATH)
+        .join("data")
+        .is_dir()
+}
+
+/// Ensures the share-price data repository is present before batch processing.
+///
+/// # Errors
+///
+/// Returns an error when [`MARKET_DATA_BASE_PATH`]/`data` is missing.
+pub fn ensure_market_data_repository() -> Result<()> {
+    if market_data_repository_available() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Market data repository not found at {MARKET_DATA_BASE_PATH}/data — \
+             clone GRQ-shareprices2026Q2 as a sibling directory"
+        ))
+    }
+}
+
+/// Returns `true` when a market-data CSV is missing or contains only the header row.
+pub fn is_market_data_csv_empty(csv_path: &str) -> bool {
+    use std::fs;
+
+    match fs::read_to_string(csv_path) {
+        Ok(content) => {
+            let lines: Vec<_> = content.lines().filter(|line| !line.trim().is_empty()).collect();
+            lines.len() <= 1
+        }
+        Err(_) => true,
+    }
+}
 /// Base path of the external dividend data repository.
 pub const DIVIDEND_DATA_BASE_PATH: &str = "../GRQ-dividends";
 
@@ -658,9 +694,10 @@ pub fn create_market_data_csv(
 ///
 /// # Errors
 ///
-/// Returns an error if `score_file_date` is not a valid date or the output CSV
-/// cannot be created or written. Tickers with missing market data are skipped
-/// rather than failing.
+/// Returns an error if `score_file_date` is not a valid date, the output CSV
+/// cannot be created or written, or every ticker was skipped so no data rows
+/// were written. Individual tickers with missing market data are skipped rather
+/// than failing the whole file.
 pub fn create_market_data_long_csv(
     tickers: &[String],
     score_file_date: &str,
@@ -686,17 +723,31 @@ pub fn create_market_data_long_csv(
         "split_coefficient",
     ])?;
 
+    let mut rows_written = 0u64;
+
     for ticker in tickers {
         let symbol = extract_symbol_from_ticker(ticker);
         let market_data = match read_market_data(&symbol) {
             Ok(md) => md,
-            Err(_) => continue, // skip missing data
+            Err(error) => {
+                log::warn!("Skipping {ticker} ({symbol}): {error}");
+                continue;
+            }
         };
         let filtered =
             match filter_market_data_by_date_range(&market_data, score_file_date, &end_date_str) {
                 Ok(f) => f,
-                Err(_) => continue,
+                Err(error) => {
+                    log::warn!("Skipping {ticker} ({symbol}): date filter failed: {error}");
+                    continue;
+                }
             };
+        if filtered.is_empty() {
+            log::warn!(
+                "Skipping {ticker} ({symbol}): no market data between {score_file_date} and {end_date_str}"
+            );
+            continue;
+        }
         for (date, _close) in filtered {
             if let Some(day) = market_data.time_series_daily.get(&date) {
                 writer.write_record([
@@ -708,10 +759,19 @@ pub fn create_market_data_long_csv(
                     &day.close.to_string(),
                     &day.split_coefficient.to_string(),
                 ])?;
+                rows_written += 1;
             }
         }
     }
     writer.flush()?;
+
+    if !tickers.is_empty() && rows_written == 0 {
+        return Err(anyhow!(
+            "No market data rows written for {score_file_date} — \
+             is {MARKET_DATA_BASE_PATH} available and up to date?"
+        ));
+    }
+
     Ok(())
 }
 
