@@ -186,12 +186,13 @@
                 </div>
                 <div class="card mb-4">
                   <div class="card-body">
-                    <!-- Mobile-only 90/180-day chart window toggle (issue #449).
-                         Hidden on desktop via CSS (desktop always renders the
-                         full 180 days); on phones it switches the visible window
-                         between 90 (default) and 180 days, re-rendering the chart
-                         AND the Market Performance summary together (#367). The
-                         choice persists per device via GRQChartWindow. -->
+                    <!-- 90/180-day chart window toggle (issue #449; extended to
+                         desktop in issue #466). Shown on every device: it
+                         switches the visible window between 90 and 180 days,
+                         re-rendering the chart AND the Market Performance summary
+                         together (#367). Each device keeps its own default and
+                         store via GRQChartWindow (mobile 90, desktop 180); the
+                         static 90 default below is corrected per device on init. -->
                     <div class="chart-window-control mb-2" id="chartWindowControl">
                       <span class="chart-window-control-label" id="chartWindowLabel">
                         Chart window
