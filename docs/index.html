@@ -172,77 +172,91 @@
                 <!-- Chart -->
                 <div class="row mb-4">
                   <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div
+                      class="d-flex justify-content-between align-items-center flex-wrap gap-2"
+                    >
                       <h2 id="chartTitle" class="mb-0">Performance Chart</h2>
-                      <button
-                        id="backToAggregate"
-                        class="btn btn-outline-primary"
-                        style="display: none"
+                      <!-- Issue #518: the 90/180-day toggle and the expand ⤢
+                           button were repeatedly asked to be MOVED. They used to
+                           sit stacked on two rows below this heading, wasting
+                           mobile vertical space. They now ride on the heading row
+                           itself (a single horizontal line to the right of the
+                           title), above the chart card. Desktop keeps the toggle
+                           and hides the expand button via CSS as before. -->
+                      <div
+                        class="chart-heading-controls d-flex align-items-center gap-2"
                       >
-                        ← Back to Portfolio View
-                      </button>
+                        <!-- 90/180-day chart window toggle (issue #449; extended
+                             to desktop in issue #466). Shown on every device: it
+                             switches the visible window between 90 and 180 days,
+                             re-rendering the chart AND the Market Performance
+                             summary together (#367). Each device keeps its own
+                             default and store via GRQChartWindow (mobile 90,
+                             desktop 180); the static 90 default below is
+                             corrected per device on init. -->
+                        <div class="chart-window-control" id="chartWindowControl">
+                          <!-- Issue #493: the visible "Chart window" label was
+                               removed (the 90/180 buttons are self-explanatory).
+                               The group keeps an accessible name via aria-label. -->
+                          <div
+                            class="btn-group btn-group-sm"
+                            role="group"
+                            aria-label="Chart window"
+                          >
+                            <input
+                              type="radio"
+                              class="btn-check"
+                              name="chartWindowDays"
+                              id="chartWindow90"
+                              value="90"
+                              autocomplete="off"
+                              checked
+                            />
+                            <label
+                              class="btn btn-outline-primary"
+                              for="chartWindow90"
+                            >90 days</label>
+
+                            <input
+                              type="radio"
+                              class="btn-check"
+                              name="chartWindowDays"
+                              id="chartWindow180"
+                              value="180"
+                              autocomplete="off"
+                            />
+                            <label
+                              class="btn btn-outline-primary"
+                              for="chartWindow180"
+                            >180 days</label>
+                          </div>
+                        </div>
+                        <!-- Mobile-only pop-out control (issue #451). Hidden at
+                             >=768px via CSS so desktop is untouched. -->
+                        <div class="chart-popout-controls">
+                          <button
+                            id="chartPopoutExpand"
+                            type="button"
+                            class="btn btn-outline-primary btn-sm chart-popout-expand"
+                            aria-label="Expand chart to full screen"
+                            title="Expand chart to full screen"
+                          >
+                            <span aria-hidden="true">⤢</span>
+                          </button>
+                        </div>
+                        <button
+                          id="backToAggregate"
+                          class="btn btn-outline-primary"
+                          style="display: none"
+                        >
+                          ← Back to Portfolio View
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div class="card mb-4">
                   <div class="card-body">
-                    <!-- 90/180-day chart window toggle (issue #449; extended to
-                         desktop in issue #466). Shown on every device: it
-                         switches the visible window between 90 and 180 days,
-                         re-rendering the chart AND the Market Performance summary
-                         together (#367). Each device keeps its own default and
-                         store via GRQChartWindow (mobile 90, desktop 180); the
-                         static 90 default below is corrected per device on init. -->
-                    <div class="chart-window-control mb-2" id="chartWindowControl">
-                      <!-- Issue #493: the visible "Chart window" label was
-                           removed (the 90/180 buttons are self-explanatory).
-                           The group keeps an accessible name via aria-label. -->
-                      <div
-                        class="btn-group btn-group-sm"
-                        role="group"
-                        aria-label="Chart window"
-                      >
-                        <input
-                          type="radio"
-                          class="btn-check"
-                          name="chartWindowDays"
-                          id="chartWindow90"
-                          value="90"
-                          autocomplete="off"
-                          checked
-                        />
-                        <label
-                          class="btn btn-outline-primary"
-                          for="chartWindow90"
-                        >90 days</label>
-
-                        <input
-                          type="radio"
-                          class="btn-check"
-                          name="chartWindowDays"
-                          id="chartWindow180"
-                          value="180"
-                          autocomplete="off"
-                        />
-                        <label
-                          class="btn btn-outline-primary"
-                          for="chartWindow180"
-                        >180 days</label>
-                      </div>
-                    </div>
-                    <!-- Mobile-only pop-out control (issue #451). Hidden at
-                         >=768px via CSS so desktop is untouched. -->
-                    <div class="chart-popout-controls">
-                      <button
-                        id="chartPopoutExpand"
-                        type="button"
-                        class="btn btn-outline-primary btn-sm chart-popout-expand"
-                        aria-label="Expand chart to full screen"
-                        title="Expand chart to full screen"
-                      >
-                        <span aria-hidden="true">⤢</span>
-                      </button>
-                    </div>
                     <div class="chart-container">
                       <canvas id="performanceChart"></canvas>
                     </div>
