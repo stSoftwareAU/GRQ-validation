@@ -40,6 +40,28 @@ function chartTitle(selection) {
     return `Stock Performance: ${selectedStock}`;
 }
 
+// Decide how the HTML <h2 id="chartTitle"> heading should reflect the resolved
+// title text (issue #519, PR #521).
+//
+// The portfolio view resolves to an EMPTY title. An empty <h2> left in the DOM
+// fails WCAG 2.1 AA: pa11y's H42.2 sniff reports "Heading tag found with no
+// content" even when the element is display:none. So an empty title must
+// DETACH the heading from the DOM entirely — never just blank or hide it.
+//
+//   title    — the resolved heading text ("" for the portfolio view).
+//   attached — whether the heading is currently present in the DOM.
+// Returns:
+//   { action: "detach" }          — empty title: remove the heading (no empty
+//                                    heading may remain in the DOM).
+//   { action: "attach", text }    — non-empty title, heading currently absent:
+//                                    re-insert it and set its text.
+//   { action: "update", text }    — non-empty title, heading already present:
+//                                    just set its text.
+function resolveChartHeading(title, attached) {
+    if (!title) return { action: "detach" };
+    return { action: attached ? "update" : "attach", text: title };
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // tests both reach the exact same helper, mirroring docs/projection.js.
-globalThis.GRQChartTitle = { chartTitle };
+globalThis.GRQChartTitle = { chartTitle, resolveChartHeading };

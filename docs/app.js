@@ -1391,13 +1391,42 @@ class GRQValidator {
             });
         });
 
-        // Update the HTML title element as well
-        const htmlTitleElement = document.getElementById("chartTitle");
+        // Update the HTML title element as well.
+        //
+        // Issue #519 hides the heading for the portfolio view. An empty <h2>
+        // left in the DOM (even with display:none) fails WCAG 2.1 AA — pa11y's
+        // H42.2 sniff flags "Heading tag found with no content" regardless of
+        // CSS visibility (PR #521 CI failure). So when there is no title we
+        // DETACH the heading from the DOM entirely (no empty heading exists),
+        // and re-attach it at its original position when a title returns. A
+        // cached comment node marks the slot so re-insertion is order-stable.
+        if (!this.chartTitleElement) {
+            this.chartTitleElement = document.getElementById("chartTitle");
+            if (this.chartTitleElement) {
+                this.chartTitleAnchor = document.createComment("chartTitle");
+                this.chartTitleElement.parentNode.insertBefore(
+                    this.chartTitleAnchor,
+                    this.chartTitleElement,
+                );
+            }
+        }
+        const htmlTitleElement = this.chartTitleElement;
         if (htmlTitleElement) {
-            htmlTitleElement.textContent = chartTitle;
-            // Issue #519: hide the heading entirely (don't reserve the row)
-            // when the portfolio view returns no title.
-            htmlTitleElement.style.display = chartTitle ? "" : "none";
+            const decision = globalThis.GRQChartTitle.resolveChartHeading(
+                chartTitle,
+                Boolean(htmlTitleElement.parentNode),
+            );
+            if (decision.action === "detach") {
+                htmlTitleElement.remove();
+            } else {
+                htmlTitleElement.textContent = decision.text;
+                if (decision.action === "attach") {
+                    this.chartTitleAnchor.parentNode.insertBefore(
+                        htmlTitleElement,
+                        this.chartTitleAnchor.nextSibling,
+                    );
+                }
+            }
         }
 
         const breakpoint = this.getBootstrapBreakpoint();
