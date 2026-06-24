@@ -23,6 +23,13 @@ interface Projection {
 
 const g = globalThis as unknown as {
   GRQProjection: {
+    deviceWindowDays: (isMobile: boolean, mobileWindowDays?: number) => number;
+    deviceWindowEnd: (
+      scoreDate: Date | string | null | undefined,
+      isMobile: boolean,
+      mobileWindowDays?: number,
+    ) => Date | null;
+    setDateToMidnight: (date: Date | string) => Date;
     formatCurrency: (value: number | null | undefined) => string;
     getSplitAdjustment: (
       marketData: MarketDataPoint[] | undefined,
@@ -87,6 +94,55 @@ function makePoint(
 ): MarketDataPoint {
   return { date, high, low, open: low, close: high, splitCoefficient: split };
 }
+
+// --- selectable mobile window (issue #448) ----------------------------------
+
+Deno.test("deviceWindowDays honours a permitted mobile window, desktop ignores the override", () => {
+  // Default mobile behaviour is unchanged (90 days).
+  assertEquals(GRQProjection.deviceWindowDays(true), 90);
+  // Mobile may opt into the full 180-day window.
+  assertEquals(GRQProjection.deviceWindowDays(true, 180), 180);
+  // Mobile explicit 90 stays 90.
+  assertEquals(GRQProjection.deviceWindowDays(true, 90), 90);
+  // A non-permitted value falls back to the 90-day default.
+  assertEquals(GRQProjection.deviceWindowDays(true, 999), 90);
+  // Desktop is always 180 — the override never affects it.
+  assertEquals(GRQProjection.deviceWindowDays(false), 180);
+  assertEquals(GRQProjection.deviceWindowDays(false, 90), 180);
+  assertEquals(GRQProjection.deviceWindowDays(false, 180), 180);
+});
+
+Deno.test("deviceWindowEnd threads the chosen mobile window through to the end date", () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const scoreDate = new Date("2026-01-01T13:45:00");
+  const base = GRQProjection.setDateToMidnight(new Date("2026-01-01"));
+
+  const expectEnd = (days: number) =>
+    GRQProjection.setDateToMidnight(new Date(base.getTime() + days * DAY_MS))
+      .getTime();
+
+  // Mobile default stays 90 days.
+  assertEquals(
+    GRQProjection.deviceWindowEnd(scoreDate, true)!.getTime(),
+    expectEnd(90),
+  );
+  // Mobile opting into 180 ends 180 days after the score date.
+  assertEquals(
+    GRQProjection.deviceWindowEnd(scoreDate, true, 180)!.getTime(),
+    expectEnd(180),
+  );
+  // Desktop ignores the override and always ends 180 days after.
+  assertEquals(
+    GRQProjection.deviceWindowEnd(scoreDate, false, 90)!.getTime(),
+    expectEnd(180),
+  );
+  // Null / unparseable score date still returns null (blank-on-missing).
+  assertEquals(GRQProjection.deviceWindowEnd(null, true, 180), null);
+  assertEquals(
+    GRQProjection.deviceWindowEnd(new Date("not-a-date"), true, 180),
+    null,
+  );
+});
 
 // --- formatCurrency ---------------------------------------------------------
 
