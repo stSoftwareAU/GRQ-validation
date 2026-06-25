@@ -422,7 +422,9 @@ GRQ-validation/
 ├── scripts/                # Utility scripts
 │   ├── bump_version.ts            # CI app-version incrementer (#323)
 │   ├── fetch_market_indices.ts    # Server-side benchmark-index fetcher
-│   └── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
+│   ├── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
+│   ├── price_basis_diagnostic.ts  # mid-vs-low basis bias computation (#552)
+│   └── diagnose_price_basis.ts    # CLI report for the basis diagnostic (#552)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
