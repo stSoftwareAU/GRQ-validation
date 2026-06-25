@@ -17,6 +17,7 @@ const g = globalThis as unknown as {
     selectDefaultScore: (
       scores: ScoreEntry[],
       today: Date,
+      windowDays?: number,
     ) => ScoreEntry | null;
   };
 };
@@ -112,4 +113,61 @@ Deno.test("selectDefaultScore: single date on/before target is chosen", () => {
   const chosen = selectDefaultScore(scores, TODAY);
   assert(chosen !== null);
   assertEquals(chosen?.file, "f200.tsv");
+});
+
+// Issue #534: the default prediction-date offset follows the active chart
+// window — a 180-day window defaults to the nearest score on/before 180 days
+// ago, a 90-day window keeps the ~90-days-ago default.
+
+Deno.test("selectDefaultScore: 90-day window keeps the ~90-days-ago default (issue #534)", () => {
+  const scores: ScoreEntry[] = [
+    { file: "f80.tsv", date: ymd(daysBefore(TODAY, 80)) },
+    { file: "f90.tsv", date: ymd(daysBefore(TODAY, 90)) },
+    { file: "f180.tsv", date: ymd(daysBefore(TODAY, 180)) },
+  ];
+  const chosen = selectDefaultScore(scores, TODAY, 90);
+  assertEquals(chosen?.file, "f90.tsv");
+});
+
+Deno.test("selectDefaultScore: 180-day window picks the nearest score on/before 180 days ago (issue #534)", () => {
+  const scores: ScoreEntry[] = [
+    { file: "f90.tsv", date: ymd(daysBefore(TODAY, 90)) },
+    { file: "f175.tsv", date: ymd(daysBefore(TODAY, 175)) },
+    { file: "f180.tsv", date: ymd(daysBefore(TODAY, 180)) },
+    { file: "f200.tsv", date: ymd(daysBefore(TODAY, 200)) },
+  ];
+  const chosen = selectDefaultScore(scores, TODAY, 180);
+  assertEquals(chosen?.file, "f180.tsv");
+});
+
+Deno.test("selectDefaultScore: 180-day window chooses the LATEST date on/before 180 days ago (issue #534)", () => {
+  const scores: ScoreEntry[] = [
+    { file: "f100.tsv", date: ymd(daysBefore(TODAY, 100)) },
+    { file: "f185.tsv", date: ymd(daysBefore(TODAY, 185)) },
+    { file: "f210.tsv", date: ymd(daysBefore(TODAY, 210)) },
+  ];
+  const chosen = selectDefaultScore(scores, TODAY, 180);
+  assertEquals(chosen?.file, "f185.tsv");
+});
+
+Deno.test("selectDefaultScore: 180-day window falls back to EARLIEST when none ≥ 180 days old (issue #534)", () => {
+  // Every score is more recent than 180 days ago — fall back to the earliest.
+  const scores: ScoreEntry[] = [
+    { file: "f90.tsv", date: ymd(daysBefore(TODAY, 90)) },
+    { file: "f150.tsv", date: ymd(daysBefore(TODAY, 150)) },
+    { file: "f120.tsv", date: ymd(daysBefore(TODAY, 120)) },
+  ];
+  const chosen = selectDefaultScore(scores, TODAY, 180);
+  assertEquals(chosen?.file, "f150.tsv");
+});
+
+Deno.test("selectDefaultScore: omitted window argument defaults to the 90-day offset (issue #534)", () => {
+  // Existing callers that pass no window must behave exactly as before.
+  const scores: ScoreEntry[] = [
+    { file: "f80.tsv", date: ymd(daysBefore(TODAY, 80)) },
+    { file: "f90.tsv", date: ymd(daysBefore(TODAY, 90)) },
+    { file: "f180.tsv", date: ymd(daysBefore(TODAY, 180)) },
+  ];
+  const chosen = selectDefaultScore(scores, TODAY);
+  assertEquals(chosen?.file, "f90.tsv");
 });

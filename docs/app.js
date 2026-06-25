@@ -377,14 +377,19 @@ class GRQValidator {
                 }
 
                 // Fallback: select the nearest available score date ON OR
-                // BEFORE 90 days ago (issue #275). Delegates to the shared,
-                // unit-tested helper so the browser and Deno tests agree.
+                // BEFORE the active chart window (issue #534, extends #275):
+                // a 180-day window defaults to ~180 days ago, a 90-day window
+                // to ~90 days ago. Delegates to the shared, unit-tested helper
+                // so the browser and Deno tests agree. Initial default only —
+                // toggling the 90/180 control does not re-pick the date.
+                const windowDays = this.currentWindowDays();
                 const closestScore = GRQProjection.selectDefaultScore(
                     indexData.scores,
                     new Date(),
+                    windowDays,
                 );
 
-                console.log(`Auto-selecting score file on or before 90 days ago: ${closestScore.date} (${closestScore.month} ${closestScore.day})`);
+                console.log(`Auto-selecting score file on or before ${windowDays} days ago: ${closestScore.date} (${closestScore.month} ${closestScore.day})`);
 
                 this.selectedFile = closestScore.file;
                 select.value = this.selectedFile;
