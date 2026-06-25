@@ -3027,7 +3027,7 @@ class GRQValidator {
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Fair Value Range:</strong></div>
-                    <div class="col-6">
+                    <div class="col-6 fair-value-cell">
                       ${
                     (() => {
                         const fairValueRange = this.getFairValueRange(stock.stock);
