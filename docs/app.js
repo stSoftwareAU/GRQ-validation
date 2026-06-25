@@ -2972,7 +2972,7 @@ class GRQValidator {
                             data-field="buy-price"
                             data-stock="${safeStock}"
                         >${this.formatCurrency(buyPrice)}</span>
-                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value star-rating" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
+                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value star-rating" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}${this.getFreshnessIndicator(stock.stock) ? ` ${this.getFreshnessIndicator(stock.stock)}` : ""}</span>` : ''}
                     </div>
                   </div>
                   <div class="row mb-2">
