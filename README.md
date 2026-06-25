@@ -424,7 +424,9 @@ GRQ-validation/
 │   ├── fetch_market_indices.ts    # Server-side benchmark-index fetcher
 │   ├── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
 │   ├── price_basis_diagnostic.ts  # mid-vs-low basis bias computation (#552)
-│   └── diagnose_price_basis.ts    # CLI report for the basis diagnostic (#552)
+│   ├── diagnose_price_basis.ts    # CLI report for the basis diagnostic (#552)
+│   ├── dividend_basis_diagnostic.ts # flat-1/4-vs-windowed dividend bias (#553)
+│   └── diagnose_dividend_basis.ts # CLI report for the dividend diagnostic (#553)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
