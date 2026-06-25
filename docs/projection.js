@@ -561,6 +561,27 @@ function currentPriceFromLatest(marketData) {
     return (lastData.high + lastData.low) / 2;
 }
 
+// Price at the 90-day validation horizon (issue #539): the midpoint of the last
+// market-data point on or before 90 days after the score date. This tool
+// validates how well a 90-day prediction performed — it must NEVER compare to
+// today's live price beyond the 90-day horizon. When the 90-day window is not
+// yet complete, the `point.date <= ninetyDayDate` filter naturally yields the
+// latest available point. Mirrors the price basis used by
+// calculateStockPerformance / the gain-loss working. Returns null when there is
+// no usable data on or before the horizon.
+function priceAtNinetyDayHorizon(marketData, scoreDate) {
+    if (!marketData || marketData.length === 0) return null;
+    const ninetyDayDate = new Date(
+        scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+    );
+    const within90Days = marketData.filter((point) =>
+        point.date <= ninetyDayDate
+    );
+    if (within90Days.length === 0) return null;
+    const lastData = within90Days[within90Days.length - 1];
+    return (lastData.high + lastData.low) / 2;
+}
+
 // Target return as a percentage of the buy price. Returns null when either input
 // is missing, matching the dashboard's guard before reporting a target figure.
 function calculateTargetPercentage(buyPrice, adjustedTarget) {
@@ -1031,6 +1052,7 @@ globalThis.GRQProjection = {
     adjustHistoricalPriceToCurrent,
     getBuyPrice,
     currentPriceFromLatest,
+    priceAtNinetyDayHorizon,
     calculateTargetPercentage,
     calculatePortfolioTargetPercentage,
     getFairValueRange,
