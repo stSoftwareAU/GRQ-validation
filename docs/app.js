@@ -723,7 +723,13 @@ class GRQValidator {
                         
                         // Check if analysis is within 30 days of score date
                         const daysDiff = Math.abs((analysisDate.getTime() - scoreDate.getTime()) / (1000 * 60 * 60 * 24));
-                        
+
+                        // Signed, whole-day analysis age (issue #547). Negative when the
+                        // analysis is dated *after* the score date — an invariant the
+                        // pipeline must never violate. Do NOT collapse with Math.abs.
+                        const oneDay = 1000 * 60 * 60 * 24;
+                        const signedDaysFromScore = Math.floor((analysisDate.getTime() - scoreDate.getTime()) / oneDay);
+
                         if (daysDiff <= 30) {
                             // Parse star ratings
                             const msStars = msIndex !== -1 && values[msIndex] ? parseFloat(values[msIndex]) : null;
@@ -760,6 +766,7 @@ class GRQValidator {
                         tipsStars: tipsStars,
                         avgStars: avgStars,
                         daysFromScore: daysDiff,
+                        signedDaysFromScore: signedDaysFromScore,
                         msFairValue: msFairValue,
                         tipsTarget: tipsTarget
                     };
@@ -905,6 +912,47 @@ class GRQValidator {
         }
         
         return display;
+    }
+
+    // Fair-value freshness indicator (issue #547). Maps the signed, whole-day
+    // analysis age onto the Google-Sheet emoji scale via a VLOOKUP-style
+    // approximate match (largest threshold ≤ age):
+    //   0–1 🌹 · 2–3 🌺 · 4–6 🥀 · 7–9 🍁 · 10–13 🍂 · 14+ 🕸
+    // Returns '' when there is no analysis row or stars show N/A, and '⚠️' when
+    // the age is negative (analysis dated after the score date — surface the bug).
+    getFreshnessIndicator(stockSymbol) {
+        if (!this.analysisData || !this.analysisData[stockSymbol]) {
+            return '';
+        }
+
+        const analysis = this.analysisData[stockSymbol];
+        if (analysis.avgStars === null) {
+            return '';
+        }
+
+        if (analysis.signedDaysFromScore < 0) {
+            return '⚠️';
+        }
+
+        // Ascending [threshold, emoji] pairs — pick the largest threshold ≤ age.
+        const scale = [
+            [0, '🌹'],
+            [2, '🌺'],
+            [4, '🥀'],
+            [7, '🍁'],
+            [10, '🍂'],
+            [14, '🕸'],
+        ];
+
+        let emoji = scale[0][1];
+        for (const [threshold, candidate] of scale) {
+            if (analysis.signedDaysFromScore >= threshold) {
+                emoji = candidate;
+            } else {
+                break;
+            }
+        }
+        return emoji;
     }
 
     getFairValueRange(stockSymbol) {
