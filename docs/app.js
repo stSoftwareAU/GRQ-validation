@@ -4400,9 +4400,21 @@ class GRQValidator {
                 if (remainderStars > 0) {
                     moonPhaseStep = `\n= Moon phase: ${moonPhase}`;
                 }
-                
+
+                // Freshness section (issue #550): the exact analysis date plus
+                // the whole-day age relative to the VIEWED score date — the
+                // precise number behind the inline freshness emoji (issue #547).
+                const starAnalysis = this.analysisData[stockSymbol];
+                let freshnessStep = '';
+                if (starAnalysis && globalThis.GRQFreshness) {
+                    freshnessStep = globalThis.GRQFreshness.freshnessSection(
+                        starAnalysis.date,
+                        starAnalysis.signedDaysFromScore,
+                    );
+                }
+
                 return header +
-                    `Stars working:\n${calculationSteps}${roundingSteps}${moonPhaseStep}\n= Display: ${display}`;
+                    `Stars working:\n${calculationSteps}${roundingSteps}${moonPhaseStep}\n= Display: ${display}${freshnessStep}`;
             case "fair-value-range":
                 const fairValueRange = this.getFairValueRange(stockSymbol);
                 if (!fairValueRange) {
