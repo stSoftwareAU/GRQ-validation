@@ -4,6 +4,17 @@ A Rust-based system for validating AI predictions against 90-day targets and a
 10% annual cost of capital, paired with a static dashboard published via GitHub
 Pages.
 
+> **This is a 90-day prediction-validation tool, not a live stock-price app.**
+> Every price the tool reports and compares against is the price at the **90-day
+> validation horizon** — the last market-data point on or before 90 days after
+> the prediction (score) date, or the latest available point when that 90-day
+> window is not yet complete. It deliberately **never** shows today's live price
+> beyond the 90-day horizon: a prediction is judged purely on how the stock moved
+> within its 90 days. The dashboard therefore labels this figure **"90-Day
+> Price"** (issue #539), not "Current Price", so it cannot be mistaken for a live
+> quote. A later rally or slump outside the window does not change a settled
+> 90-day result.
+
 ## Features
 
 - **Performance Tracking** — calculate 90-day and annualised performance for

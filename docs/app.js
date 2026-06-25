@@ -2873,9 +2873,12 @@ class GRQValidator {
                 const currentPriceResult={rawValue:null,formattedValue:null}
                 this.getWorking("current-price",stock.stock,this.scoreData,currentPriceResult);
                 
-                // Get current price as raw number for color logic
-                const marketData = this.marketData[stock.stock];
-                const currentPriceRaw = marketData && marketData.length > 0 ? (marketData[marketData.length - 1].high + marketData[marketData.length - 1].low) / 2 : null;
+                // 90-day validation price as a raw number for colour logic
+                // (issue #539) — same basis as the displayed field, never live.
+                const currentPriceRaw = GRQProjection.priceAtNinetyDayHorizon(
+                    this.marketData[stock.stock],
+                    scoreDate,
+                );
 
                 // Hide the table and show card
                 const tableContainer = document.querySelector(
@@ -2944,12 +2947,12 @@ class GRQValidator {
 }</span></div>
                   </div>
                   <div class="row mb-2">
-                    <div class="col-6"><strong>Current Price:</strong></div>
+                    <div class="col-6"><strong>90-Day Price:</strong></div>
                     <div class="col-6">
-                        <span class="clickable-value" 
-                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                            data-bs-title="Current Price - ${safeStock}" 
-                            data-field="current-price" 
+                        <span class="clickable-value"
+                            data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
+                            data-bs-title="90-Day Price - ${safeStock}"
+                            data-field="current-price"
                             data-stock="${safeStock}">${currentPriceResult.formattedValue}</span>
                     </div>
                   </div>
@@ -3089,7 +3092,7 @@ class GRQValidator {
           <th>Buy Price</th>
           <th>Stars</th>
           <th>90-Day Target</th>
-          <th>Current Price</th>
+          <th>90-Day Price</th>
           <th>Gain/Loss (%)</th>
           <th title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
           <th>Status/Projection</th>
@@ -3116,8 +3119,8 @@ class GRQValidator {
                     stock.stock,
                     scoreDate,
                 );
-                // Current price (already post-split, no adjustment needed)
-                let currentPrice = this.getCurrentPrice(stock.stock);
+                // 90-day validation price (already post-split, issue #539)
+                let currentPrice = this.getNinetyDayPrice(stock.stock);
                 // Gain/loss calculation (split-adjusted)
                 let performance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
                 const judgement = this.calculateJudgement(
@@ -3155,7 +3158,7 @@ class GRQValidator {
                 }</span></td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                   data-bs-title="Current Price - ${safeStock}" data-field="current-price" data-stock="${safeStock}">${currentPrice}
+                   data-bs-title="90-Day Price - ${safeStock}" data-field="current-price" data-stock="${safeStock}">${currentPrice}
                 </span>
             </td>
             <td><span class="clickable-value ${
@@ -3212,7 +3215,7 @@ class GRQValidator {
             totalsRow.classList.add("table-info", "fw-bold");
             // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
             // headers (issue #406). Column map: 1 Stock, 2 Buy Price, 3 Stars,
-            // 4 90-Day Target (Portfolio Target %), 5 Current Price,
+            // 4 90-Day Target (Portfolio Target %), 5 90-Day Price,
             // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
             // 8 Status/Projection, 9 Dividends.
             totalsRow.innerHTML = `
@@ -3366,15 +3369,18 @@ class GRQValidator {
         return GRQProjection.filterDividendsWithin90Days(dividends, scoreDate);
     }
 
-    getCurrentPrice(stockSymbol) {
-        // Latest-price maths lives in the shared projection module (issue #100).
-        const currentPrice = GRQProjection.currentPriceFromLatest(
+    getNinetyDayPrice(stockSymbol) {
+        // 90-day validation price, NOT today's live price (issue #539). Maths
+        // lives in the shared projection module so the displayed field matches
+        // the Performance / Gain-Loss basis.
+        const price = GRQProjection.priceAtNinetyDayHorizon(
             this.marketData[stockSymbol],
+            this.getScoreDate(this.selectedFile),
         );
-        if (currentPrice === null) return "N/A";
+        if (price === null) return "N/A";
         // Route through the shared currency formatter (issue #276) so large
         // stock prices carry thousands separators and consistent decimals.
-        return this.formatCurrency(currentPrice);
+        return this.formatCurrency(price);
     }
 
     calculateProgressVsCostOfCapital(stock, performance) {
@@ -3632,18 +3638,15 @@ class GRQValidator {
         if (!marketData || marketData.length === 0) return null;
 
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
 
-        // Find the last price within 90 days
-        const within90Days = marketData.filter((point) =>
-            point.date <= ninetyDayDate
-        );
-        if (within90Days.length === 0) return null;
-
-        const lastData = within90Days[within90Days.length - 1];
-        const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
+        // Price at the 90-day validation horizon (issue #539) — the basis the
+        // whole tool compares against, never today's live price. Shared kernel
+        // so the displayed "90-Day Price" field cannot drift from this maths.
+        const currentPrice = GRQProjection.priceAtNinetyDayHorizon(
+            marketData,
+            scoreDate,
+        ); // Already post-split
+        if (currentPrice === null) return null;
 
         // Get the price on the score date as the buy price (adjusted to current price level)
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
@@ -4033,15 +4036,32 @@ class GRQValidator {
                         `Target Percentage working:\n= ((Target Price - Buy Price) / Buy Price) × 100\n= Insufficient data to calculate`;
                 }
             case "current-price":
+                // 90-day validation price, NOT today's live price (issue #539):
+                // the last market point on or before the 90-day horizon (latest
+                // available when the window is incomplete).
                 const marketData = this.marketData[stockSymbol];
                 if (!marketData || marketData.length === 0) {
                     return header +
-                        "Current Price working:\nNo market data available";
+                        "90-Day Price working:\nNo market data available";
                 }
-                const lastData = marketData[marketData.length - 1];
+                const ninetyDayDate = new Date(
+                    scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+                );
+                const within90Days = marketData.filter((point) =>
+                    point.date <= ninetyDayDate
+                );
+                if (within90Days.length === 0) {
+                    return header +
+                        "90-Day Price working:\nNo market data within 90 days";
+                }
+                const lastData = within90Days[within90Days.length - 1];
                 const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
                 result.rawValue = currentPrice;
                 result.formattedValue = this.formatCurrency(currentPrice);
+                const windowComplete = within90Days.length < marketData.length;
+                const basisNote = windowComplete
+                    ? "price at the 90-day horizon"
+                    : "latest available price (90-day window not yet complete)";
                 const currentSplitAdjustment = this
                     .getHistoricalToCurrentSplitAdjustment(
                         stockSymbol,
@@ -4049,14 +4069,14 @@ class GRQValidator {
                     );
                 if (currentSplitAdjustment > 1.0) {
                     return header +
-                        `Current Price working:\n= (High + Low) / 2 from latest market data (post-split)\n= ($${
+                        `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote} (post-split)\n= ($${
                             lastData.high.toFixed(2)
                         } + $${lastData.low.toFixed(2)}) / 2\n= ${
                             result.formattedValue
                         } (already post-split, no adjustment needed)`;
                 } else {
                     return header +
-                        `Current Price working:\n= (High + Low) / 2 from latest market data\n= ($${
+                        `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote}\n= ($${
                             lastData.high.toFixed(2)
                         } + $${lastData.low.toFixed(2)}) / 2\n= ${
                             result.formattedValue
@@ -4094,7 +4114,7 @@ class GRQValidator {
                 if (gainLossBuyPriceSplitAdjustment > 1.0) {
                     const gainLossOriginalBuyPrice = gainLossBuyPrice.price * gainLossBuyPriceSplitAdjustment;
                     return header +
-                        `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
+                        `Gain/Loss (%) working:\n= ((90-Day Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
                         } + $${gainLossTotalDividends.toFixed(2)} - $${
                             gainLossBuyPrice.price.toFixed(2)
@@ -4110,12 +4130,12 @@ class GRQValidator {
                             gainLossOriginalBuyPrice.toFixed(2)
                         } ÷ ${gainLossBuyPriceSplitAdjustment} = $${
                             gainLossBuyPrice.price.toFixed(2)
-                        }\n- Current Price: $${
+                        }\n- 90-Day Price: $${
                             gainLossCurrentPrice.toFixed(2)
                         } (already post-split, no adjustment needed)`;
                 } else {
                     return header +
-                        `Gain/Loss (%) working:\n= ((Current Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
+                        `Gain/Loss (%) working:\n= ((90-Day Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
                         } + $${gainLossTotalDividends.toFixed(2)} - $${
                             gainLossBuyPrice.price.toFixed(2)
