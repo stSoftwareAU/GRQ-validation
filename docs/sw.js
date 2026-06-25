@@ -24,6 +24,8 @@ const STATIC_ASSETS = [
   "./chart_window_settings.js",
   "./color_key.js",
   "./series_label_colour.js",
+  // "Show working" popover field labels (issue #542).
+  "./field_label.js",
   "./chart_theme.js",
   "./chart_title.js",
   "./format.js",

@@ -508,6 +508,10 @@
          wires the footer button to the live selections via globalThis.GRQShare. -->
     <script src="share_link.js"></script>
 
+    <!-- "Show working" popover field labels (issue #542) — before app.js, which
+         reads globalThis.GRQFieldLabel to render the working header. -->
+    <script src="field_label.js"></script>
+
     <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
     <script src="dashboard_boot.js"></script>
 
