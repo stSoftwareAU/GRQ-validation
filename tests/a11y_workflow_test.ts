@@ -159,14 +159,46 @@ Deno.test("a11y workflow enforces the WCAG2AA standard", async () => {
   );
 });
 
-Deno.test("a11y workflow serves the docs/ directory before checking", async () => {
+Deno.test("a11y workflow serves docs/ via the in-repo Deno server", async () => {
   const doc = await loadWorkflow();
   // The dashboard is a static site; a local server must back the a11y check
-  // because pa11y loads pages over HTTP. Assert the http-server tool is
-  // invoked (Issue #202) rather than grepping the run-step source text.
+  // because pa11y loads pages over HTTP. This repo is a Deno repo and ships its
+  // own reviewed, tested, loopback-bound static server (helpers/server.ts), so
+  // serve via that rather than fetching an unpinned Node `http-server` from npm
+  // at run time (Issue #532). Assert the deno-run invocation structurally
+  // (Issue #202) rather than grepping the run-step source text.
   assert(
-    invokesTool(allSteps(doc), "http-server"),
-    "workflow must serve docs/ over a local HTTP server",
+    invokesTool(allSteps(doc), "deno", {
+      subcommand: "run",
+      args: ["helpers/server.ts"],
+    }),
+    "workflow must serve docs/ via `deno run ... helpers/server.ts`",
+  );
+});
+
+// Issue #532: a Deno repo serving docs/ with `npx http-server` is a regression
+// back onto ad-hoc Node tooling and pulls an unpinned npm package (and its
+// transitive tree) into CI on every run. Guard against the regression returning.
+Deno.test("a11y workflow does not shell out to npx http-server", async () => {
+  const doc = await loadWorkflow();
+  assert(
+    !invokesTool(allSteps(doc), "http-server"),
+    "workflow must not serve docs/ via the unpinned npm http-server",
+  );
+});
+
+// The Deno server needs the Deno runtime on the runner. Mirror markdown-lint.yml
+// by pinning denoland/setup-deno to a 40-character commit SHA (Issue #532).
+Deno.test("a11y workflow sets up Deno via a SHA-pinned action", async () => {
+  const doc = await loadWorkflow();
+  const setupDeno = allSteps(doc).find((s) =>
+    typeof s.uses === "string" && s.uses.startsWith("denoland/setup-deno@")
+  );
+  assert(setupDeno, "workflow must add a denoland/setup-deno step");
+  const ref = (setupDeno.uses as string).split("@")[1];
+  assert(
+    /^[0-9a-f]{40}$/.test(ref),
+    `denoland/setup-deno must be pinned to a 40-char commit SHA, got: ${ref}`,
   );
 });
 
