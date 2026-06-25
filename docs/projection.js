@@ -582,6 +582,46 @@ function priceAtNinetyDayHorizon(marketData, scoreDate) {
     return (lastData.high + lastData.low) / 2;
 }
 
+// Intraday LOW of the last market-data point on or before the 90-day horizon —
+// the price basis the GRQ model is TRAINED on (GRQ/src/LearnUtil.ts uses
+// `market.lowPrice(symbol, targetDate)` for the 90-day return label). The
+// dashboard measures Actual at the midpoint (priceAtNinetyDayHorizon); this
+// helper exposes the matching low so a like-for-like, same-basis comparison can
+// be made (issue #552). Mirrors priceAtNinetyDayHorizon's horizon selection
+// exactly so the two pick the SAME row. Returns null when there is no usable
+// data on or before the horizon.
+function lowPriceAtNinetyDayHorizon(marketData, scoreDate) {
+    if (!marketData || marketData.length === 0) return null;
+    const ninetyDayDate = new Date(
+        scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+    );
+    const within90Days = marketData.filter((point) =>
+        point.date <= ninetyDayDate
+    );
+    if (within90Days.length === 0) return null;
+    return within90Days[within90Days.length - 1].low;
+}
+
+// Price-basis offset between the dashboard's midpoint Actual and the model's
+// trained intraday-low basis, expressed as a percentage of the buy price
+// (issue #552): `(mid - low) / buyPrice * 100`. This is the amount the measured
+// Actual % is LIFTED by reading the horizon at the midpoint rather than the low
+// the model was trained to hit. Because `mid >= low` on every row the offset is
+// always >= 0, so it NARROWS (masks) any Target-over-Actual gap rather than
+// causing it. Returns null when any input is missing or the buy price is not a
+// positive number.
+function priceBasisOffsetPercent(buyPrice, midPrice, lowPrice) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        midPrice === null || midPrice === undefined || Number.isNaN(midPrice) ||
+        lowPrice === null || lowPrice === undefined || Number.isNaN(lowPrice)
+    ) {
+        return null;
+    }
+    return ((midPrice - lowPrice) / buyPrice) * 100;
+}
+
 // Target return as a percentage of the buy price. Returns null when either input
 // is missing, matching the dashboard's guard before reporting a target figure.
 function calculateTargetPercentage(buyPrice, adjustedTarget) {
@@ -1053,6 +1093,8 @@ globalThis.GRQProjection = {
     getBuyPrice,
     currentPriceFromLatest,
     priceAtNinetyDayHorizon,
+    lowPriceAtNinetyDayHorizon,
+    priceBasisOffsetPercent,
     calculateTargetPercentage,
     calculatePortfolioTargetPercentage,
     getFairValueRange,
