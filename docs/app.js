@@ -3941,9 +3941,13 @@ class GRQValidator {
         if (!stock) return "Stock not found";
 
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const header = `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${
-            scoreDate.toISOString().split("T")[0]
-        }\n\n`;
+        // Use the human-readable field label (issue #542) so the working header
+        // reads e.g. "Field: 90-Day Price" rather than the raw "current-price"
+        // id, which was misleading (it is never today's live price — issue #539).
+        const scoreDateISO = scoreDate.toISOString().split("T")[0];
+        const header = globalThis.GRQFieldLabel
+            ? globalThis.GRQFieldLabel.workingHeader(stockSymbol, field, scoreDateISO)
+            : `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${scoreDateISO}\n\n`;
 
         switch (field) {
             case "buy-price":

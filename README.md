@@ -9,11 +9,13 @@ Pages.
 > validation horizon** — the last market-data point on or before 90 days after
 > the prediction (score) date, or the latest available point when that 90-day
 > window is not yet complete. It deliberately **never** shows today's live price
-> beyond the 90-day horizon: a prediction is judged purely on how the stock moved
-> within its 90 days. The dashboard therefore labels this figure **"90-Day
-> Price"** (issue #539), not "Current Price", so it cannot be mistaken for a live
-> quote. A later rally or slump outside the window does not change a settled
-> 90-day result.
+> beyond the 90-day horizon: a prediction is judged purely on how the stock
+> moved within its 90 days. The dashboard therefore labels this figure **"90-Day
+> Price"** (issue #539), not "Current Price", so it cannot be mistaken for a
+> live quote. The "show the working" popovers use the same human-readable label
+> in their header — e.g. `Field: 90-Day Price`, never the raw `current-price` id
+> (issue #542). A later rally or slump outside the window does not change a
+> settled 90-day result.
 
 ## Features
 
@@ -194,8 +196,8 @@ deterministically — issue #281):
   override that is **not** persisted to `localStorage`).
 - `?window=90|180` — switch the chart (and aligned Market Performance summary)
   to a 90- or 180-day window for that page load, on **both** desktop and mobile
-  (issues #450, #467). Like `?theme=`, this is a **transient** override: it
-  wins over the saved per-device choice but is **never** persisted, so a reload
+  (issues #450, #467). Like `?theme=`, this is a **transient** override: it wins
+  over the saved per-device choice but is **never** persisted, so a reload
   without the param returns to the saved window (desktop 180 / mobile 90). Both
   windows end on the same date (#367); an absent or invalid value falls back to
   the saved choice, then the device default.
@@ -224,8 +226,8 @@ deterministically — issue #281):
 
 **Worked examples**
 
-- `index.html?date=2026-01-01&window=180&fullscreen=1` — 180 days from
-  1 January, landscape (maximised chart) on a phone.
+- `index.html?date=2026-01-01&window=180&fullscreen=1` — 180 days from 1
+  January, landscape (maximised chart) on a phone.
 - `trend.html?group=week&indices=sp500,nasdaq` — the Trend view grouped by week
   with the S&P 500 and NASDAQ overlays on (Russell 2000 off) for this visit.
 - `index.html?view=trend` — jump straight from the dashboard to the Prediction
