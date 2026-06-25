@@ -69,14 +69,24 @@ jobs:
         with:
           # Track the current LTS rather than a pinned major: Node 20 reaches
           # end-of-life on GitHub-hosted runners (2026-09-16), so pinning it
-          # runs the toolchain (http-server, pa11y-ci) on an unsupported
-          # interpreter. lts/* keeps the gate on a maintained runtime, matching
-          # markdown-lint.yml (Issue #171).
+          # runs pa11y-ci on an unsupported interpreter. lts/* keeps the gate on
+          # a maintained runtime, matching markdown-lint.yml (Issue #171).
           node-version: "lts/*"
+      # denoland/setup-deno@v2 — needed to run the in-repo Deno static server
+      # below. Pinned to a 40-character commit SHA per the supply-chain rule,
+      # matching markdown-lint.yml (Issue #532).
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+        with:
+          deno-version: v2.x
       - name: Serve docs/ dashboard and wait for it to come up
         run: |
           set -euo pipefail
-          npx --yes http-server docs -p 8080 --silent &
+          # Serve docs/ with the repo's own reviewed, tested, loopback-bound
+          # static server instead of fetching an unpinned npm `http-server` at
+          # run time (Issue #532). helpers/server.ts reads the port from
+          # Deno.args[0] (default 8000), so passing 8080 keeps the health check
+          # and pa11yci.json target URLs unchanged.
+          deno run --allow-net --allow-read helpers/server.ts 8080 &
           for i in $(seq 1 30); do
             if curl -sSf http://localhost:8080/index.html >/dev/null 2>&1; then
               echo "Static server is up"
