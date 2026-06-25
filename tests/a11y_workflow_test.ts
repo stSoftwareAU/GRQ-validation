@@ -138,14 +138,51 @@ Deno.test("a11y workflow defines a job with a sane timeout", async () => {
 
 Deno.test("a11y workflow runs pa11y-ci against the dashboard pages", async () => {
   const doc = await loadWorkflow();
-  // Structured invariant (Issue #202): a step invokes pa11y-ci (here via npx),
-  // matched on tokens rather than grepping the run-step source text.
-  assert(invokesTool(allSteps(doc), "pa11y-ci"), "a job must run pa11y-ci");
+  // Structured invariant (Issue #202): a step invokes the locally-installed
+  // pa11y-ci binary (Issue #533 runs ./node_modules/.bin/pa11y-ci rather than a
+  // second `npx` fetch), matched on tokens rather than grepping source text.
+  assert(
+    invokesTool(allSteps(doc), "./node_modules/.bin/pa11y-ci"),
+    "a job must run the locally-installed pa11y-ci binary",
+  );
   // The target URLs live in pa11yci.json (passed via --config), not in the
   // workflow run command. The published dashboard page must be exercised.
   const config = await loadPa11yConfig();
   const urls = (config.urls ?? []).join("\n");
   assert(/index\.html/.test(urls), "pa11y-ci must check index.html");
+});
+
+// Issue #533: harden the CI Node-tooling install. The pa11y-ci install must
+// pass --ignore-scripts so the npm lifecycle hooks of pa11y-ci and its entire
+// transitive tree never execute against the checked-out workspace, and must
+// pin an exact version so the spec cannot float to whatever the registry
+// currently serves. Running a second `npx pa11y-ci` would re-fetch an
+// unhardened copy, so the scan must run the locally-installed binary instead.
+Deno.test("a11y pa11y-ci install is hardened with --ignore-scripts and an exact version pin", async () => {
+  const doc = await loadWorkflow();
+  const installStep = allSteps(doc).find((s) =>
+    /\bnpm install\b/.test(s.run ?? "") && /pa11y-ci/.test(s.run ?? "")
+  );
+  assert(installStep, "workflow must install pa11y-ci via npm");
+  const run = installStep.run ?? "";
+  assert(
+    /--ignore-scripts\b/.test(run),
+    "pa11y-ci install must pass --ignore-scripts to disable npm lifecycle scripts",
+  );
+  assert(
+    /pa11y-ci@\d+\.\d+\.\d+\b/.test(run),
+    `pa11y-ci install must pin an exact version (got: ${run.trim()})`,
+  );
+});
+
+// Issue #533: do not re-fetch pa11y-ci with `npx` at scan time — that bypasses
+// the audited, --ignore-scripts copy installed above. Guard the regression.
+Deno.test("a11y workflow does not run pa11y-ci via npx", async () => {
+  const doc = await loadWorkflow();
+  assert(
+    !invokesTool(allSteps(doc), "npx", { subcommand: "pa11y-ci" }),
+    "workflow must run the locally-installed pa11y-ci, not a fresh npx fetch",
+  );
 });
 
 Deno.test("a11y workflow enforces the WCAG2AA standard", async () => {

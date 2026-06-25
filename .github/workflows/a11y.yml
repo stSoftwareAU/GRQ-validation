@@ -118,14 +118,25 @@ jobs:
           fi
           echo "Using browser at ${CHROME_BIN}"
           echo "PUPPETEER_EXECUTABLE_PATH=${CHROME_BIN}" >> "${GITHUB_ENV}"
-      # PUPPETEER_SKIP_DOWNLOAD stops puppeteer's install hook attempting a
-      # Chrome-for-Testing download we will not use; the scan launches the
-      # system Chrome resolved above via PUPPETEER_EXECUTABLE_PATH instead.
+      # Install pa11y-ci with a pinned exact version and install scripts
+      # disabled (Issue #533, supply-chain hardening per Issue #2184). Without
+      # --ignore-scripts the npm lifecycle hooks (preinstall/postinstall/
+      # prepare) of pa11y-ci AND its entire transitive tree run in CI against
+      # the checked-out workspace, and an unpinned spec floats to whatever the
+      # registry serves on each run — the exact install-time code-execution
+      # pivot exploited by the Shai-Hulud and Axios npm incidents. pa11y-ci's
+      # only build-time hook is puppeteer's postinstall Chrome download, which
+      # PUPPETEER_SKIP_DOWNLOAD already no-ops (the scan launches the runner's
+      # system Chrome via PUPPETEER_EXECUTABLE_PATH), so --ignore-scripts is
+      # safe and changes nothing functionally.
       - name: Install pa11y-ci
-        run: npm install --no-save pa11y-ci
+        run: npm install --no-save --ignore-scripts pa11y-ci@4.1.1
         env:
           PUPPETEER_SKIP_DOWNLOAD: "true"
       # pa11y-ci has no --standard CLI flag (that is a pa11y option); the
-      # standard and target URLs are configured in pa11yci.json instead.
+      # standard and target URLs are configured in pa11yci.json instead. Run the
+      # locally-installed, script-disabled binary directly rather than a second
+      # `npx pa11y-ci` fetch, so the audited copy is the one that executes
+      # (Issue #533).
       - name: Run pa11y-ci (WCAG 2.1 AA) over the dashboard pages
-        run: npx pa11y-ci --config pa11yci.json
+        run: ./node_modules/.bin/pa11y-ci --config pa11yci.json
