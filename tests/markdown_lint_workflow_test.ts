@@ -70,6 +70,31 @@ Deno.test("Markdown Lint workflow runs markdownlint-cli2 in its job", async () =
   );
 });
 
+// Issue #533: harden the CI Node-tooling install. The markdownlint-cli2 install
+// must pass --ignore-scripts so the npm lifecycle hooks of the tool and its
+// entire transitive tree never execute against the checked-out workspace, and
+// must pin an exact version so the spec cannot float to whatever the registry
+// currently serves. markdownlint-cli2 is pure JS with no build step, so
+// disabling install scripts is functionally a no-op.
+Deno.test("Markdown Lint install is hardened with --ignore-scripts and an exact version pin", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as { jobs: Record<string, { steps?: Step[] }> };
+  const steps = doc.jobs?.markdownlint?.steps ?? [];
+  const installStep = steps.find((s) =>
+    /\bnpm install\b/.test(s.run ?? "") && /markdownlint-cli2/.test(s.run ?? "")
+  );
+  assert(installStep, "workflow must install markdownlint-cli2 via npm");
+  const run = installStep.run ?? "";
+  assert(
+    /--ignore-scripts\b/.test(run),
+    "markdownlint-cli2 install must pass --ignore-scripts to disable npm lifecycle scripts",
+  );
+  assert(
+    /markdownlint-cli2@\d+\.\d+\.\d+\b/.test(run),
+    `markdownlint-cli2 install must pin an exact version (got: ${run.trim()})`,
+  );
+});
+
 Deno.test("Markdown Lint workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);

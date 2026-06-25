@@ -27,8 +27,16 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: "lts/*"
+      # Install markdownlint-cli2 with a pinned exact version and install
+      # scripts disabled (Issue #533, supply-chain hardening per Issue #2184).
+      # Without --ignore-scripts the npm lifecycle hooks of markdownlint-cli2
+      # and its entire transitive tree run in CI against the checked-out
+      # workspace, and an unpinned spec floats to whatever the registry serves
+      # each run — the install-time code-execution pivot of the Shai-Hulud and
+      # Axios npm incidents. markdownlint-cli2 is pure JS with no build step, so
+      # --ignore-scripts is safe and changes nothing functionally.
       - name: Install markdownlint-cli2
-        run: npm install -g markdownlint-cli2
+        run: npm install -g --ignore-scripts markdownlint-cli2@0.22.1
       - name: Run markdownlint-cli2
         run: markdownlint-cli2
       # Optional: mirror the local check-mermaid quality gate when Deno
