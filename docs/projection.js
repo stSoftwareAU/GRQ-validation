@@ -622,6 +622,51 @@ function priceBasisOffsetPercent(buyPrice, midPrice, lowPrice) {
     return ((midPrice - lowPrice) / buyPrice) * 100;
 }
 
+// Trailing-365-day dividend total as of the score date — the quantity the GRQ
+// model turns into a FLAT training credit of `yearOfDividends / 4`
+// (GRQ/src/CoreFeatures.ts builds `yearOfDividends`; GRQ/src/LearnUtil.ts bakes
+// `yearOfDividends / 4` into the total-return label for EVERY stock). Sums the
+// cash amount of every dividend whose ex-dividend date falls in the year ending
+// at the score date (`scoreDate - 365 days < exDivDate <= scoreDate`). Mirrors
+// the shape `filterDividendsWithin90Days`/`sumDividends` consume so the
+// diagnostic measures the same dividend records the dashboard does. Pure given
+// its inputs; returns 0 for a missing/empty list (issue #553).
+function trailingAnnualDividends(dividends, scoreDate) {
+    if (!Array.isArray(dividends) || !(scoreDate instanceof Date)) {
+        return 0;
+    }
+    const yearStart = new Date(
+        scoreDate.getTime() - (365 * 24 * 60 * 60 * 1000),
+    );
+    return dividends
+        .filter((d) => d && d.exDivDate > yearStart && d.exDivDate <= scoreDate)
+        .reduce((sum, d) => sum + (d.amount || 0), 0);
+}
+
+// Dividend-basis difference between the model's FLAT training credit
+// (`yearOfDividends / 4`) and the dashboard's realised in-window dividends,
+// expressed as a percentage of the buy price (issue #553):
+// `(flatCredit - windowedCredit) / buyPrice * 100`. A POSITIVE value means the
+// flat training credit EXCEEDS the realised in-window dividends, so the model's
+// dividend-inflated Target sits above an Actual that credits only the dividends
+// that actually fell inside the 90-day window — i.e. it CONTRIBUTES to (widens)
+// the Target-over-Actual gap. A negative value means the realised in-window
+// dividends exceed the flat quarter, which NARROWS (masks) the gap. Returns null
+// when any input is missing or the buy price is not a positive number.
+function dividendBasisDifferencePercent(flatCredit, windowedCredit, buyPrice) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        flatCredit === null || flatCredit === undefined ||
+        Number.isNaN(flatCredit) ||
+        windowedCredit === null || windowedCredit === undefined ||
+        Number.isNaN(windowedCredit)
+    ) {
+        return null;
+    }
+    return ((flatCredit - windowedCredit) / buyPrice) * 100;
+}
+
 // Target return as a percentage of the buy price. Returns null when either input
 // is missing, matching the dashboard's guard before reporting a target figure.
 function calculateTargetPercentage(buyPrice, adjustedTarget) {
@@ -1095,6 +1140,8 @@ globalThis.GRQProjection = {
     priceAtNinetyDayHorizon,
     lowPriceAtNinetyDayHorizon,
     priceBasisOffsetPercent,
+    trailingAnnualDividends,
+    dividendBasisDifferencePercent,
     calculateTargetPercentage,
     calculatePortfolioTargetPercentage,
     getFairValueRange,
