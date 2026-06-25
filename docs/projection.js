@@ -85,17 +85,22 @@ function windowShowsActualsAfter90(isMobile, windowDays) {
 
 // Choose the default score file for the dashboard (issue #275).
 //
-// By default we select the nearest available score date ON OR BEFORE 90 days
-// ago (the latest scoreDate <= today - 90 days). This deliberately avoids the
-// old absolute-nearest logic, where a score a few days MORE recent than the
-// 90-day target (e.g. 87 days ago) could wrongly win over the correct earlier
-// date (e.g. 90/93 days ago).
+// By default we select the nearest available score date ON OR BEFORE the
+// `windowDays`-day target (the latest scoreDate <= today - windowDays). This
+// deliberately avoids the old absolute-nearest logic, where a score a few days
+// MORE recent than the target (e.g. 87 days ago for a 90-day window) could
+// wrongly win over the correct earlier date (e.g. 90/93 days ago).
+//
+// `windowDays` ties the default prediction-date offset to the active chart
+// window (issue #534): a 180-day window defaults to the nearest score on/before
+// 180 days ago, a 90-day window keeps the ~90-days-ago default. It defaults to
+// 90 so existing callers (and a missing/invalid value) behave exactly as before.
 //
 // Only when no score date is on/before the target do we fall back to the
 // earliest available date. `today` is passed in explicitly so the function is
 // pure and deterministic (and unit-testable without a browser). Returns the
 // chosen score object, or null when the list is empty/invalid.
-function selectDefaultScore(scores, today) {
+function selectDefaultScore(scores, today, windowDays = 90) {
     if (!Array.isArray(scores) || scores.length === 0) {
         return null;
     }
@@ -116,10 +121,14 @@ function selectDefaultScore(scores, today) {
         return setDateToMidnight(new Date(value)).getTime();
     };
 
-    // Target = 90 days ago, normalised to local midnight for a date-only
-    // "on or before" comparison.
+    // Target = `windowDays` days ago, normalised to local midnight for a
+    // date-only "on or before" comparison. A non-finite or non-positive value
+    // falls back to 90 so a bad input can never widen the offset unexpectedly.
+    const offsetDays = Number.isFinite(windowDays) && windowDays > 0
+        ? windowDays
+        : 90;
     const target = setDateToMidnight(today);
-    target.setDate(target.getDate() - 90); // 90 days ago
+    target.setDate(target.getDate() - offsetDays);
     const targetTime = target.getTime();
 
     let selected = null;
