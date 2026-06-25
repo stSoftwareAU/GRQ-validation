@@ -445,6 +445,15 @@ body.chart-popout-open {
   letter-spacing: -0.08em;
 }
 
+/* Keep the Fair Value Range value on a single line in the detail panel, even
+ * on a ~375px phone where it shares its `col-6` half-row with the label
+ * opposite (issue #538). The range string `$179.77...$198.93` was breaking
+ * mid-number despite ample room in the cell; `nowrap` keeps the run intact.
+ * Harmless at larger sizes where there is plenty of width. */
+#stockDetailCard .fair-value-cell {
+  white-space: nowrap;
+}
+
 #stockDetailCard h6 {
   font-size: 0.75rem;
   font-weight: 600;
