@@ -622,6 +622,66 @@ function priceBasisOffsetPercent(buyPrice, midPrice, lowPrice) {
     return ((midPrice - lowPrice) / buyPrice) * 100;
 }
 
+// Buy-price denominator on the model's TRAINED basis: the split-adjusted
+// CLOSE of the first usable market-data point on or within five days after the
+// score date (issue #554). The GRQ training label divides the 90-day return by
+// `core.monthsAgoPrice`, which is `closePrices[0]` — the close on the score date
+// (GRQ/src/CoreFeatures.ts -> GRQ/src/LearnUtil.ts). The dashboard instead
+// divides by `getBuyPrice`, the split-adjusted MIDPOINT `(high + low) / 2` of
+// the same first point. This helper mirrors `getBuyPrice`'s point selection and
+// split adjustment EXACTLY — only the close replaces the midpoint — so a
+// like-for-like denominator comparison isolates the midpoint-vs-close basis (the
+// shared split factor cancels in the ratio). Returns `{ price, dateUsed,
+// reliable }`, or null when no market data falls in that window.
+function buyPriceCloseBasis(marketData, scoreDate) {
+    if (!marketData) return null;
+
+    const { reliable } = computeSplitAdjustment(marketData, scoreDate);
+
+    for (let offset = 0; offset <= 5; offset++) {
+        const candidateDate = new Date(scoreDate.getTime());
+        candidateDate.setDate(candidateDate.getDate() + offset);
+        const candidateData = marketData.find((point) => {
+            const pointDate = new Date(
+                point.date.getFullYear(),
+                point.date.getMonth(),
+                point.date.getDate(),
+            );
+            return pointDate.getTime() === candidateDate.getTime();
+        });
+        if (candidateData) {
+            const adjustedPrice = adjustHistoricalPriceToCurrent(
+                candidateData.close,
+                marketData,
+                scoreDate,
+            );
+            return { price: adjustedPrice, dateUsed: candidateDate, reliable };
+        }
+    }
+    return null;
+}
+
+// Denominator-basis offset between the dashboard's midpoint buy price and the
+// model's trained close basis, as a percentage of the dashboard buy price
+// (issue #554): `(buyPrice - buyPriceClose) / buyPrice * 100`. This is how much
+// LARGER (sign +) or smaller (sign -) the dashboard denominator is than the
+// close the model was trained to divide by. Because the dashboard applies the
+// SAME `buyPrice` to BOTH Target and Actual, this offset does not desynchronise
+// them — it rescales any existing Target-over-Actual gap by `buyPrice /
+// buyPriceClose`. Returns null when any input is missing or a price is not a
+// positive number.
+function denominatorBasisOffsetPercent(buyPrice, buyPriceClose) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        buyPriceClose === null || buyPriceClose === undefined ||
+        Number.isNaN(buyPriceClose) || buyPriceClose <= 0
+    ) {
+        return null;
+    }
+    return ((buyPrice - buyPriceClose) / buyPrice) * 100;
+}
+
 // Trailing-365-day dividend total as of the score date — the quantity the GRQ
 // model turns into a FLAT training credit of `yearOfDividends / 4`
 // (GRQ/src/CoreFeatures.ts builds `yearOfDividends`; GRQ/src/LearnUtil.ts bakes
@@ -1140,6 +1200,8 @@ globalThis.GRQProjection = {
     priceAtNinetyDayHorizon,
     lowPriceAtNinetyDayHorizon,
     priceBasisOffsetPercent,
+    buyPriceCloseBasis,
+    denominatorBasisOffsetPercent,
     trailingAnnualDividends,
     dividendBasisDifferencePercent,
     calculateTargetPercentage,

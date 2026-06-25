@@ -426,7 +426,9 @@ GRQ-validation/
 │   ├── price_basis_diagnostic.ts  # mid-vs-low basis bias computation (#552)
 │   ├── diagnose_price_basis.ts    # CLI report for the basis diagnostic (#552)
 │   ├── dividend_basis_diagnostic.ts # flat-1/4-vs-windowed dividend bias (#553)
-│   └── diagnose_dividend_basis.ts # CLI report for the dividend diagnostic (#553)
+│   ├── diagnose_dividend_basis.ts # CLI report for the dividend diagnostic (#553)
+│   ├── buy_price_denominator_diagnostic.ts # midpoint-vs-close denominator bias (#554)
+│   └── diagnose_buy_price_denominator.ts # CLI report for the denominator diagnostic (#554)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
