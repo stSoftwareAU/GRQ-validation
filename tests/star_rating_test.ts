@@ -415,6 +415,102 @@ Deno.test("Star Rating Calculation Details", () => {
   );
 });
 
+// --- Issue #548: freshness emoji beside the star rating in the table cell ---
+//
+// The aggregate-score table "Stars" cell appends the fair-value freshness
+// indicator (issue #547) after the moon glyphs, e.g. "🌕🌕🌕🌑 🌺". When the
+// stars are N/A both helpers return '' so the cell must be empty — no stray
+// space and no lone emoji. A negative-age row shows '⚠️' beside the stars.
+
+// Freshness indicator, mirrored from app.js getFreshnessIndicator (issue #547).
+const FRESHNESS_SCALE: ReadonlyArray<readonly [number, string]> = [
+  [0, "🌹"],
+  [2, "🌺"],
+  [4, "🥀"],
+  [7, "🍁"],
+  [10, "🍂"],
+  [14, "🕸"],
+];
+
+function getFreshnessIndicator(
+  avgStars: number | null,
+  signedDaysFromScore: number,
+): string {
+  if (avgStars === null) {
+    return "";
+  }
+  if (signedDaysFromScore < 0) {
+    return "⚠️";
+  }
+  let emoji = FRESHNESS_SCALE[0][1];
+  for (const [threshold, candidate] of FRESHNESS_SCALE) {
+    if (signedDaysFromScore >= threshold) {
+      emoji = candidate;
+    } else {
+      break;
+    }
+  }
+  return emoji;
+}
+
+// Build the "Stars" table cell exactly as app.js does: stars, then the
+// freshness emoji separated by a single space, with no marker when there is
+// no freshness emoji to show.
+function renderStarsCell(
+  avgStars: number | null,
+  signedDaysFromScore: number,
+): string {
+  const stars = getStarRatingDisplay(avgStars);
+  const freshness = getFreshnessIndicator(avgStars, signedDaysFromScore);
+  return `${stars}${freshness ? ` ${freshness}` : ""}`;
+}
+
+Deno.test("Table Stars cell - freshness emoji renders beside the rating", () => {
+  assertEquals(
+    renderStarsCell(3.1, 3),
+    "🌕🌕🌕🌑 🌺",
+    "fresh row shows moon glyphs then the freshness emoji",
+  );
+  assertEquals(
+    renderStarsCell(4.0, 0),
+    "🌕🌕🌕🌕 🌹",
+    "same-day analysis shows 🌹 beside four full moons",
+  );
+});
+
+Deno.test("Table Stars cell - N/A stars produce no emoji and no stray space", () => {
+  assertEquals(
+    renderStarsCell(null, 5),
+    "",
+    "no analysis stars → empty cell, no lone freshness emoji",
+  );
+  assertEquals(
+    renderStarsCell(null, -3),
+    "",
+    "null stars win even when the age is negative",
+  );
+});
+
+Deno.test("Table Stars cell - negative age shows ⚠️ beside the rating", () => {
+  assertEquals(
+    renderStarsCell(4.0, -1),
+    "🌕🌕🌕🌕 ⚠️",
+    "analysis dated after the score date surfaces ⚠️ beside the stars",
+  );
+});
+
+Deno.test("app.js: table Stars cell wires freshness beside the star rating", async () => {
+  const js = await Deno.readTextFile("docs/app.js");
+  // The Stars <td> must append getFreshnessIndicator after getStarRatingDisplay,
+  // guarded so an empty indicator adds no stray space (issue #548).
+  assertEquals(
+    /getStarRatingDisplay\(stock\.stock\)\}\$\{this\.getFreshnessIndicator\(stock\.stock\)\s*\?/
+      .test(js),
+    true,
+    "table cell must append a guarded getFreshnessIndicator(stock.stock) after the stars",
+  );
+});
+
 // Helper function for assertions (Deno doesn't have assertEquals by default)
 function assertEquals(actual: unknown, expected: unknown, message?: string) {
   if (actual !== expected) {
