@@ -1692,9 +1692,20 @@ class GRQValidator {
                         grid: {
                             color: chartGridColour,
                         },
-                        // Extend x-axis to show full 90-day period when trend line is present
+                        // Single-stock view: pin the axis to the score date and
+                        // extend the max across the FULL selected window (issue
+                        // #606). The max derives from the shared window resolver
+                        // (GRQProjection.singleStockAxisMax) so 180 spans the
+                        // full 180 days — not the old hard-coded ~95-day cap —
+                        // while the portfolio view keeps auto-fitting the data.
                         min: this.selectedStock ? this.getScoreDate(this.selectedFile) : undefined,
-                        max: this.selectedStock ? new Date(this.getScoreDate(this.selectedFile).getTime() + (95 * 24 * 60 * 60 * 1000)) : undefined,
+                        max: this.selectedStock
+                            ? GRQProjection.singleStockAxisMax(
+                                this.getScoreDate(this.selectedFile),
+                                isMobile,
+                                this.currentWindowDays(),
+                            )
+                            : undefined,
                     },
                     y: {
                         type: "linear",
