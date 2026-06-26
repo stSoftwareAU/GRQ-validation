@@ -327,12 +327,6 @@
                         </div>
                       </div>
                     </div>
-                    <div class="data-source-note text-muted text-end mt-2">
-                      <small>
-                        <i class="fas fa-info-circle me-1" aria-hidden="true"></i>
-                        Market data is fetched from Yahoo Finance and shows performance from the score date to current date.
-                      </small>
-                    </div>
                   </div>
                 </div>
 
@@ -454,6 +448,14 @@
         aria-label="Shareable link — copy this text"
         hidden
       >
+      <!-- Yahoo Finance data-source attribution (issue #566). Moved here from
+           the market-index card so it reads as page-footer chrome. -->
+      <div class="data-source-note text-muted mt-2">
+        <small>
+          <i class="fas fa-info-circle me-1" aria-hidden="true"></i>
+          Market data is fetched from Yahoo Finance and shows performance from the score date to current date.
+        </small>
+      </div>
     </footer>
 
     <!-- Version display -->
