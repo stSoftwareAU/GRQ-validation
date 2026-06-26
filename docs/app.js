@@ -1550,6 +1550,16 @@ class GRQValidator {
         const breakpoint = this.getBootstrapBreakpoint();
         const isMobile = this.isMobileDevice();
 
+        // Single-stock x-axis bounds spanning the FULL selected window (issue
+        // #606). Resolved through the same window helper the data series uses so
+        // the single-stock axis windows exactly like the portfolio view (90 or
+        // 180, either device) instead of the old fixed scoreDate + 95 days.
+        const stockAxisBounds = GRQProjection.singleStockAxisBounds(
+            this.getScoreDate(this.selectedFile),
+            isMobile,
+            this.currentWindowDays(),
+        );
+
         // Theme-aware colours for the CANVAS-drawn chart text (title, axis
         // titles, tick labels, legend) and grid lines. Pulled from the shared
         // GRQChartTheme single source of truth so the chart text clears WCAG 2.1
@@ -1692,9 +1702,17 @@ class GRQValidator {
                         grid: {
                             color: chartGridColour,
                         },
-                        // Extend x-axis to show full 90-day period when trend line is present
-                        min: this.selectedStock ? this.getScoreDate(this.selectedFile) : undefined,
-                        max: this.selectedStock ? new Date(this.getScoreDate(this.selectedFile).getTime() + (95 * 24 * 60 * 60 * 1000)) : undefined,
+                        // Pin the single-stock x-axis to the FULL selected
+                        // window (issue #606). The axis max used to be hard-coded
+                        // to scoreDate + 95 days, so the 180-day window still only
+                        // plotted ~90 days. Derive the bounds from the same
+                        // resolved window the data series uses so the single-stock
+                        // axis matches the portfolio view's windowing (90 or 180,
+                        // either device). The portfolio view leaves the axis
+                        // undefined (auto-scale), so these bounds apply only when
+                        // a single stock is selected.
+                        min: this.selectedStock ? stockAxisBounds.min : undefined,
+                        max: this.selectedStock ? stockAxisBounds.max : undefined,
                     },
                     y: {
                         type: "linear",

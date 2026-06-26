@@ -40,6 +40,12 @@ and this project adheres to
 
 ### Fixed
 
+- Single-stock **Stock Performance** chart now spans the full selected window.
+  Selecting the 180-day window previously still only plotted ~90 days because
+  the chart's x-axis maximum was hard-coded to `scoreDate + 95 days`. The axis
+  bounds are now derived from the same resolved window the data series uses
+  (`GRQProjection.singleStockAxisBounds`), so the single-stock chart windows
+  exactly like the portfolio view (90 or 180, desktop or mobile) (Issue #606).
 - Footer **🔗 Share** button now copies a deep-link to the clipboard. The
   link-builder and clipboard/fallback handling shipped in `docs/share_link.js`
   (Issue #495) but the dashboard never called `GRQShare.initShareButton(...)`,

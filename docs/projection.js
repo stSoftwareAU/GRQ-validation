@@ -70,6 +70,42 @@ function deviceWindowEnd(scoreDate, isMobile, windowDays) {
     );
 }
 
+// Small trailing margin (in days) past the window end so the day-90 Target dot
+// and the projection/trend line endpoint are never clipped flush against the
+// right edge. The single-stock chart historically added 5 days past the 90-day
+// mark (a fixed scoreDate + 95 days axis); keeping the same margin preserves the
+// 90-day view's appearance while letting wider windows extend correctly.
+const SINGLE_STOCK_AXIS_MARGIN_DAYS = 5;
+
+// The single-stock "Stock Performance" chart's explicit x-axis bounds
+// (issue #606). Unlike the portfolio view — which leaves the axis undefined and
+// lets Chart.js auto-scale to the data — the single-stock view pins the axis so
+// the Target dot and trend line stay visible even before actuals fill the
+// window. That axis max used to be hard-coded to scoreDate + 95 days, so the
+// 180-day window still only ever plotted ~90 days. Deriving max from the SAME
+// resolved window the data series uses (deviceWindowEnd) keeps the axis in
+// parity with the portfolio view's windowing: it spans the full selected window
+// (90 or 180) on either device, plus a small trailing margin.
+//
+// Returns { min, max } as Date objects, or { min: undefined, max: undefined }
+// when the score date is missing/unparseable so the caller falls back to
+// auto-scale rather than erroring (preserves blank-on-missing).
+function singleStockAxisBounds(scoreDate, isMobile, windowDays) {
+    if (scoreDate === null || scoreDate === undefined) {
+        return { min: undefined, max: undefined };
+    }
+    const start = setDateToMidnight(new Date(scoreDate));
+    if (Number.isNaN(start.getTime())) {
+        return { min: undefined, max: undefined };
+    }
+    const days = deviceWindowDays(isMobile, windowDays) +
+        SINGLE_STOCK_AXIS_MARGIN_DAYS;
+    const max = setDateToMidnight(
+        new Date(start.getTime() + days * 24 * 60 * 60 * 1000),
+    );
+    return { min: start, max };
+}
+
 // Whether the chart's "Actual (After 90 Days)" tail belongs in the visible
 // window (issue #496). The main chart splits the actuals into the first-90-day
 // "Actual" series and a day-90 -> window-end tail; the tail exists only when the
@@ -1322,6 +1358,7 @@ globalThis.GRQProjection = {
     setDateToMidnight,
     deviceWindowDays,
     deviceWindowEnd,
+    singleStockAxisBounds,
     windowShowsActualsAfter90,
     bridgeActualsAfter90,
     selectDefaultScore,
