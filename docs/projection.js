@@ -566,9 +566,10 @@ function currentPriceFromLatest(marketData) {
 // validates how well a 90-day prediction performed — it must NEVER compare to
 // today's live price beyond the 90-day horizon. When the 90-day window is not
 // yet complete, the `point.date <= ninetyDayDate` filter naturally yields the
-// latest available point. Mirrors the price basis used by
-// calculateStockPerformance / the gain-loss working. Returns null when there is
-// no usable data on or before the horizon.
+// latest available point. This is the RAW horizon midpoint shown by the
+// standalone "90-Day Price" field; the Actual-return readers restate it onto the
+// buy price's current split basis via horizonPriceCurrentBasis (issue #569).
+// Returns null when there is no usable data on or before the horizon.
 function priceAtNinetyDayHorizon(marketData, scoreDate) {
     if (!marketData || marketData.length === 0) return null;
     const ninetyDayDate = new Date(
@@ -704,8 +705,8 @@ function horizonPointDate(marketData, scoreDate) {
 // Cumulative RELIABLE split factor for splits strictly AFTER the 90-day horizon
 // up to the end of the series (issue #555): `getSplitAdjustment` evaluated at the
 // horizon point's own date. 1.0 means there is no reconcilable post-horizon
-// split, so the raw horizon price the shipped Actual reads already sits on the
-// current (end-of-series) basis its buy price uses. A FORWARD split gives a
+// split, so the raw horizon midpoint already sits on the current (end-of-series)
+// basis the buy price uses and needs no restatement. A FORWARD split gives a
 // factor > 1; a REVERSE split gives a factor < 1. Returns 1.0 when there is no
 // horizon point (no adjustment to make). Mirrors the `reliable`-gated factor, so
 // an unreconcilable series yields 1.0 rather than a silently wrong factor.
@@ -717,13 +718,12 @@ function postHorizonSplitFactor(marketData, scoreDate) {
 
 // Midpoint at the 90-day horizon restated onto the CURRENT (end-of-series) split
 // basis — the SAME as-of basis getBuyPrice uses for the buy price (issue #555).
-// The shipped Actual (getStockReturnBreakdown / currentPriceWithinWindow) reads
-// this row's midpoint RAW while dividing by a buy price that getBuyPrice has
-// already restated to current terms; when a split falls between the horizon and
-// the series end the two sit on different split bases. Dividing the raw midpoint
-// by `postHorizonSplitFactor` puts the horizon price on the buy price's basis so
-// a like-for-like, same-basis Actual can be measured. Returns null when no point
-// falls on or before the horizon.
+// The shipped Actual (getStockReturnBreakdown / calculateStockPerformance /
+// currentPriceWithinWindow) now reads the horizon price through THIS helper
+// (issue #569): dividing the raw midpoint by `postHorizonSplitFactor` puts it on
+// the buy price's basis, so a split falling between the horizon and the series
+// end no longer leaves the Actual and the buy price on different split bases.
+// Returns null when no point falls on or before the horizon.
 function horizonPriceCurrentBasis(marketData, scoreDate) {
     const rawMid = priceAtNinetyDayHorizon(marketData, scoreDate);
     if (rawMid === null) return null;
