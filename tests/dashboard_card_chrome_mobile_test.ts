@@ -164,9 +164,10 @@ Deno.test("index.html: card-header titles and section markup remain intact", asy
     html.includes("Market Performance Comparison"),
     "the market-comparison card-header title must remain",
   );
+  // Issue #605: the "Individual Stock Performance" heading was deleted.
   assert(
-    html.includes("Individual Stock Performance"),
-    "the stock-table card-header title must remain",
+    !html.includes("Individual Stock Performance"),
+    "the stock-table card-header title must be removed (issue #605)",
   );
   assert(
     html.includes('id="marketComparison"'),

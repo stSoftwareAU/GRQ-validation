@@ -99,10 +99,11 @@ Deno.test("index.html: section titles carry the card-title hook", async () => {
     html.includes("Market Performance Comparison"),
     "the Market Performance Comparison section must exist",
   );
-  // Both section headings the issue calls out use h5.card-title in a header.
+  // The Market Performance Comparison heading uses h5.card-title in a header.
+  // (Issue #605 removed the "Individual Stock Performance" heading.)
   const titles = html.match(/<h5 class="card-title[^"]*">/g) ?? [];
   assert(
-    titles.length >= 2,
+    titles.length >= 1,
     "section headings must use h5.card-title so the centring rule applies",
   );
 });
