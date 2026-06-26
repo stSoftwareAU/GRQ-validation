@@ -94,6 +94,35 @@ function isLowVolume(window) {
     return typeof recommend === "number" && recommend < 0;
 }
 
+// Fold low volume into a prediction's VALUATION (issue #578). Ported from GRQ
+// training's score cap `Math.min(core.volumeRecommend, priceRecommend, 1)`
+// (GRQ/src/LearnUtil.ts:155) so the dashboard's recommendation strength and the
+// trainer agree on ONE definition — an illiquid name can never score as a
+// strong recommendation. `baseScore` is the dashboard's price-based prediction
+// score; `window` is a trailing volume window (buildTrailingVolumeWindow).
+//
+// Returns:
+//   - baseScore UNCHANGED when it is not a finite number (nothing to cap), OR
+//     when volume is unknown across the whole window (volumeRecommend === null)
+//     — the "insufficient data ⇒ not flagged" rule shared with the exclusion
+//     path, so pre-volume-column history is never suppressed;
+//   - Math.min(volumeRecommend, baseScore, 1) otherwise, so:
+//       * volumeRecommend === -1 (low volume) forces a never-recommend value
+//         (<= -1) regardless of how strong the price-based score is;
+//       * a partial volumeRecommend in (0, 1] proportionally DOWN-weights a
+//         strong score while leaving an already-weak score alone.
+function volumeCappedScore(baseScore, window) {
+    const base = typeof baseScore === "number" ? baseScore : Number(baseScore);
+    if (!Number.isFinite(base)) {
+        return baseScore;
+    }
+    const recommend = volumeRecommend(window);
+    if (recommend === null) {
+        return base;
+    }
+    return Math.min(recommend, base, 1);
+}
+
 // Build a trailing WEEKDAY_WINDOW window of { volume, lowPrice } from a daily
 // market-data series, ready for volumeRecommend/isLowVolume. `series` is the
 // dashboard's per-ticker array of points; each point exposes a `date` (Date or
@@ -139,5 +168,6 @@ globalThis.GRQVolume = {
     averageDollarVolume,
     volumeRecommend,
     isLowVolume,
+    volumeCappedScore,
     buildTrailingVolumeWindow,
 };

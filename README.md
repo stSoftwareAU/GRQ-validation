@@ -52,6 +52,15 @@ Pages.
   volume is unknown — older pre-volume-column CSVs — the name is **not** flagged
   (insufficient data ⇒ not flagged), so historical dates are never
   mass-excluded.
+- **Low-Volume Valuation Cap** — beyond excluding illiquid names from aggregates,
+  low volume is folded into the **valuation** of each prediction so an illiquid
+  name can never surface as a strong recommendation (issue #578). The displayed
+  Score is capped via `min(volumeRecommend, score, 1)` — mirroring GRQ training's
+  `Math.min(core.volumeRecommend, priceRecommend, 1)` — using the same #576
+  helper (`docs/volume_recommend.js`, `volumeCappedScore`). A flagged name's
+  price-based score is suppressed to a never-recommend value (and the detail view
+  shows a **Low volume — not recommended** badge), partial illiquidity
+  proportionally down-weights, and unknown volume leaves the score unchanged.
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`. On mobile, a pop-out control expands the

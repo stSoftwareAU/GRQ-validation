@@ -2965,6 +2965,23 @@ class GRQValidator {
                 // Escape untrusted TSV-derived fields before interpolation (issue #63).
                 const safeStock = escapeHtml(stock.stock);
                 const safeNotes = escapeHtml(stock.notes);
+                // Fold low volume into the displayed valuation (issue #578): an
+                // illiquid name's price-based score is capped so it can never
+                // surface as a strong recommendation. A flagged name carries a
+                // visible "Low volume — not recommended" badge alongside the
+                // suppressed (negative) score.
+                const cappedScore = this.volumeCappedScore(
+                    stock.stock,
+                    stock.score,
+                    scoreDate,
+                );
+                const detailLowVolume = this.isStockLowVolume(
+                    stock.stock,
+                    scoreDate,
+                );
+                const scoreBadge = detailLowVolume
+                    ? ` <span class="badge bg-warning text-dark low-volume-badge" title="Low volume — never recommended; the price-based score is capped via the shared volumeRecommend helper (issue #578)">Low volume — not recommended</span>`
+                    : "";
                 stockCard.innerHTML = `
             <div class="card-header">
               <h5 class="card-title mb-0">${safeStock} - Detailed Information</h5>
@@ -2975,7 +2992,7 @@ class GRQValidator {
                   <h6 class="text-muted text-uppercase mb-3">Basic Information</h6>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Score:</strong></div>
-                    <div class="col-6">${stock.score.toFixed(3)}</div>
+                    <div class="col-6">${cappedScore.toFixed(3)}${scoreBadge}</div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
@@ -3824,6 +3841,21 @@ class GRQValidator {
         }
         const window = GRQVolume.buildTrailingVolumeWindow(series, scoreDate);
         return GRQVolume.isLowVolume(window);
+    }
+
+    // Volume-capped prediction score (issue #578): folds low volume into the
+    // valuation so an illiquid name can never surface as a strong recommendation,
+    // mirroring GRQ training's Math.min(volumeRecommend, priceRecommend, 1). Falls
+    // back to the raw score when volume is unknown (no market data loaded, or a
+    // pre-volume-column CSV), matching the exclusion path's "insufficient data ⇒
+    // not flagged" rule. The shared #576 helper is the single source of truth.
+    volumeCappedScore(stockSymbol, baseScore, scoreDate) {
+        const series = this.marketData ? this.marketData[stockSymbol] : null;
+        if (!series) {
+            return baseScore;
+        }
+        const window = GRQVolume.buildTrailingVolumeWindow(series, scoreDate);
+        return GRQVolume.volumeCappedScore(baseScore, window);
     }
 
     isStockPriceable(stockSymbol, scoreDate) {
