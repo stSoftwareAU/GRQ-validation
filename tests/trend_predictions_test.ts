@@ -46,6 +46,10 @@ const g = globalThis as unknown as {
       csvText: string,
       dividendCsvText: string,
     ) => { date: string; stocks: ResolvedStock[] };
+    currentPriceWithinWindow: (
+      points: unknown[],
+      scoreDate: Date,
+    ) => number | null;
   };
   GRQTrendSeries: {
     buildMaturedTrendSeries: (
@@ -156,6 +160,66 @@ Deno.test("resolvePredictionStocks - Actual/Target match the shared kernels", ()
   assertAlmostEquals(series[0].targetPct, 50, 1e-9);
   // Count = the two included stocks.
   assertEquals(series[0].count, 2);
+});
+
+// Issue #569: a reconcilable split that falls AFTER the 90-day horizon but
+// before the end of the data series must NOT distort the Actual. getBuyPrice
+// restates the buy price into current (end-of-series) split terms, so the
+// horizon Actual must read on that same current basis. The raw horizon midpoint
+// carries the spurious post-horizon split factor; currentPriceWithinWindow must
+// divide it out.
+const SPLIT_TSV = [
+  "Stock\tScore\tTarget\tExDividendDate\tDividendPerShare\tNotes",
+  "NYSE:SPL\t0.9\t120\t\t\t",
+].join("\n");
+
+// Score 2024-10-15 -> 90-day horizon ~2025-01-13. A clean 2:1 forward split on
+// 2025-03-01 (AFTER the horizon): mid halves 120 -> 60, so the price-ratio
+// cross-check reconciles (120 / 60 == 2).
+const SPLIT_CSV = [
+  "date,ticker,high,low,open,close,split_coefficient",
+  "2024-10-15,NYSE:SPL,102,98,100,100,1.0", // buy midpoint 100
+  "2025-01-10,NYSE:SPL,122,118,120,120,1.0", // horizon midpoint 120 (raw)
+  "2025-03-01,NYSE:SPL,61,59,60,60,2.0", // post-horizon 2:1 forward split
+].join("\n");
+
+Deno.test("currentPriceWithinWindow - restates the horizon midpoint onto the current split basis (issue #569)", () => {
+  const market = Predictions.parseMarketCsv(SPLIT_CSV);
+  const current = Predictions.currentPriceWithinWindow(
+    market["NYSE:SPL"],
+    SCORE_DATE,
+  );
+  // Raw horizon midpoint 120 / post-horizon split factor 2.0 = 60, matching the
+  // current (end-of-series) basis the buy price uses.
+  assertAlmostEquals(current as number, 60);
+});
+
+Deno.test("currentPriceWithinWindow - unchanged when no post-horizon split follows", () => {
+  // Drop the post-horizon split row: the horizon midpoint stays raw (110).
+  const current = Predictions.currentPriceWithinWindow(
+    Predictions.parseMarketCsv(CSV)["NYSE:AAA"],
+    SCORE_DATE,
+  );
+  assertAlmostEquals(current as number, 110);
+});
+
+Deno.test("currentPriceWithinWindow - returns null with no usable points", () => {
+  assertEquals(Predictions.currentPriceWithinWindow([], SCORE_DATE), null);
+});
+
+Deno.test("resolvePredictionStocks - Actual reads the post-horizon split on the buy price basis (issue #569)", () => {
+  const scoreRows = Predictions.parseScoreTsv(SPLIT_TSV);
+  const marketData = Predictions.parseMarketCsv(SPLIT_CSV);
+  const stocks = Predictions.resolvePredictionStocks(
+    scoreRows,
+    marketData,
+    {},
+    SCORE_DATE,
+  );
+  // Buy price restated to current terms: 100 / 2 = 50.
+  assertAlmostEquals(stocks[0].buyPrice as number, 50);
+  // Current price on the SAME current basis: 120 / 2 = 60 (NOT the raw 120).
+  assertAlmostEquals(stocks[0].currentPrice as number, 60);
 });
 
 Deno.test("buildPrediction - tolerates missing dividend data", () => {
