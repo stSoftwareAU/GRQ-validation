@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.9">
+    <meta name="app-version" content="1.1.10">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -512,11 +512,15 @@
          reads globalThis.GRQFieldLabel to render the working header. -->
     <script src="field_label.js"></script>
 
+    <!-- Stars popover freshness text (issue #550) — before app.js, which reads
+         globalThis.GRQFreshness to append the analysis date + age. -->
+    <script src="freshness_text.js"></script>
+
     <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
     <script src="dashboard_boot.js"></script>
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.1.9"></script>
+    <script src="sw-register.js?v=1.1.10"></script>
   </body>
 </html>
