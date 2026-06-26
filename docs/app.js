@@ -738,11 +738,14 @@ class GRQValidator {
                         // Check if analysis is within 30 days of score date
                         const daysDiff = Math.abs((analysisDate.getTime() - scoreDate.getTime()) / (1000 * 60 * 60 * 24));
 
-                        // Signed, whole-day analysis age (issue #547). Negative when the
-                        // analysis is dated *after* the score date — an invariant the
-                        // pipeline must never violate. Do NOT collapse with Math.abs.
+                        // Signed, whole-day analysis age (issue #547): how many whole
+                        // days old the fair-value analysis is at score time. ≥ 0 for
+                        // healthy data (the analysis is dated on/before the score that
+                        // consumes it); negative ONLY when an analysis is dated *after*
+                        // its score date — an invariant the pipeline must never violate.
+                        // Do NOT collapse with Math.abs.
                         const oneDay = 1000 * 60 * 60 * 24;
-                        const signedDaysFromScore = Math.floor((analysisDate.getTime() - scoreDate.getTime()) / oneDay);
+                        const signedDaysFromScore = Math.floor((scoreDate.getTime() - analysisDate.getTime()) / oneDay);
 
                         if (daysDiff <= 30) {
                             // Parse star ratings

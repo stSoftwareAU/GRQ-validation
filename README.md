@@ -477,8 +477,8 @@ GRQ-validation/
 │   ├── diagnose_score_target_decoding.ts # CLI report for the score→target decode audit (#556)
 │   ├── residual_gap_reconciliation.ts # whole-app sweep + residual-gap reconciliation (#557)
 │   ├── diagnose_residual_gap.ts      # CLI report for the catch-all sweep / reconciliation (#557)
-│   ├── freshness_indicator_diagnostic.ts # fair-value ⚠️ sign / blast-radius diagnosis (#587)
-│   └── diagnose_freshness_indicator.ts # CLI report for the freshness ⚠️ diagnosis (#587)
+│   ├── freshness_indicator_diagnostic.ts # fair-value freshness sign port + regression guard (#587, #600)
+│   └── diagnose_freshness_indicator.ts # CLI report for the corrected freshness indicator (#587, #600)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)

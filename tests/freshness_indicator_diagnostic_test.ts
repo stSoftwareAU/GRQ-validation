@@ -1,18 +1,20 @@
-// Tests for the issue #587 fair-value freshness ⚠️ diagnostic.
+// Regression tests for the fair-value freshness ⚠️ sign fix (issue #600,
+// diagnosed in #587).
 //
-// These exercise the REAL diagnostic functions (no source grepping): they feed
-// known analysis CSV text and assert on the classification and blast-radius
-// counts, pinning the root-cause finding that the shipped `signedDaysFromScore`
-// sign is inverted relative to the documented invariant.
+// These exercise the REAL freshness functions (no source grepping): they feed
+// known analysis CSV text and assert on the corrected analysis age, the emoji
+// each row renders, and the blast-radius counts. They pin the fix: healthy rows
+// (analysis dated on/before the score) show a freshness emoji, and only a
+// genuine after-score anomaly renders ⚠️.
 
 import { assert, assertEquals } from "@std/assert";
 import {
   analyseDataset,
+  analysisAgeDays,
   computeAvgStars,
-  intendedAnalysisAgeDays,
+  getFreshnessEmoji,
   parseAnalysisDate,
   parseCSVLine,
-  signedDaysFromScore,
 } from "../scripts/freshness_indicator_diagnostic.ts";
 
 const d = (iso: string) => {
@@ -20,20 +22,34 @@ const d = (iso: string) => {
   return new Date(y, m - 1, day);
 };
 
-Deno.test("signedDaysFromScore is negative when analysis predates the score", () => {
-  // DD worked example: analysis 23 Dec, score 28 Dec → 5 days BEFORE.
-  assertEquals(signedDaysFromScore(d("2025-12-23"), d("2025-12-28")), -5);
+Deno.test("analysisAgeDays is non-negative when analysis predates the score", () => {
+  // DD worked example: analysis 23 Dec, score 28 Dec → 5 whole days old.
+  assertEquals(analysisAgeDays(d("2025-12-23"), d("2025-12-28")), 5);
 });
 
-Deno.test("intendedAnalysisAgeDays is the opposite sign (age at score time)", () => {
-  // The intended freshness age the emoji scale assumes: +5 days old.
-  assertEquals(intendedAnalysisAgeDays(d("2025-12-23"), d("2025-12-28")), 5);
-});
-
-Deno.test("intended age is negative only when analysis is dated AFTER the score", () => {
+Deno.test("analysisAgeDays is negative only when analysis is dated AFTER the score", () => {
   // The genuine anomaly the ⚠️ was meant to surface.
-  assertEquals(intendedAnalysisAgeDays(d("2025-12-30"), d("2025-12-28")), -2);
-  assertEquals(signedDaysFromScore(d("2025-12-30"), d("2025-12-28")), 2);
+  assertEquals(analysisAgeDays(d("2025-12-30"), d("2025-12-28")), -2);
+});
+
+Deno.test("analysisAgeDays is zero for a same-day analysis", () => {
+  assertEquals(analysisAgeDays(d("2025-12-28"), d("2025-12-28")), 0);
+});
+
+Deno.test("getFreshnessEmoji maps the corrected age to the #547 scale", () => {
+  assertEquals(getFreshnessEmoji(0), "🌹");
+  assertEquals(getFreshnessEmoji(1), "🌹");
+  assertEquals(getFreshnessEmoji(2), "🌺");
+  assertEquals(getFreshnessEmoji(5), "🥀"); // DD/2025-12-28 age +5
+  assertEquals(getFreshnessEmoji(9), "🍁");
+  assertEquals(getFreshnessEmoji(13), "🍂");
+  assertEquals(getFreshnessEmoji(14), "🕸");
+  assertEquals(getFreshnessEmoji(30), "🕸");
+});
+
+Deno.test("getFreshnessEmoji renders ⚠️ for a negative (after-score) age", () => {
+  assertEquals(getFreshnessEmoji(-1), "⚠️");
+  assertEquals(getFreshnessEmoji(-2), "⚠️");
 });
 
 Deno.test("parseAnalysisDate parses the '23 Dec 2025' format", () => {
@@ -65,7 +81,7 @@ Deno.test("computeAvgStars returns null when neither column is valid", () => {
 const HEADER =
   "Stock,Date,MS Fair Value,MS,Tips Target,Tips Stars,Stars,Current Price";
 
-Deno.test("analyseDataset flags DD/2025-12-28 as a false positive", () => {
+Deno.test("analyseDataset: DD/2025-12-28 is healthy — age +5 → 🥀, no ⚠️", () => {
   const csv = [
     HEADER,
     "NYSE:DD,23 Dec 2025,$48.24,5,$47.45,7,4.5,$41.26",
@@ -73,19 +89,18 @@ Deno.test("analyseDataset flags DD/2025-12-28 as a false positive", () => {
   const report = analyseDataset([
     { scoreDateISO: "2025-12-28", analysisCsv: csv },
   ]);
-  assertEquals(report.warningRows.length, 1);
-  const row = report.warningRows[0];
+  assertEquals(report.warningRows.length, 0); // no false-positive ⚠️
+  assertEquals(report.healthyRows.length, 1);
+  const row = report.rows[0];
   assertEquals(row.stock, "NYSE:DD");
-  assertEquals(row.signedDaysFromScore, -5);
-  assertEquals(row.intendedAgeDays, 5);
-  assertEquals(row.classification, "false-positive");
-  assertEquals(report.falsePositives, 1);
-  assertEquals(report.realAnomalies, 0);
+  assertEquals(row.ageDays, 5);
+  assertEquals(row.emoji, "🥀");
+  assertEquals(row.isAnomaly, false);
 });
 
-Deno.test("analyseDataset: a genuine after-score anomaly is MISSED, not flagged", () => {
-  // Analysis dated AFTER the score date is the real invariant violation, yet
-  // the inverted-sign guard gives it a positive signed age → emoji, not ⚠️.
+Deno.test("analyseDataset: a genuine after-score anomaly renders ⚠️", () => {
+  // Analysis dated AFTER the score date is the real invariant violation — now
+  // correctly surfaced as ⚠️ rather than silently shown as a freshness emoji.
   const csv = [
     HEADER,
     "NYSE:XYZ,30 Dec 2025,$10.00,4,$11.00,8,4,$9.00",
@@ -93,13 +108,13 @@ Deno.test("analyseDataset: a genuine after-score anomaly is MISSED, not flagged"
   const report = analyseDataset([
     { scoreDateISO: "2025-12-28", analysisCsv: csv },
   ]);
-  assertEquals(report.warningRows.length, 0); // no ⚠️ rendered
-  assertEquals(report.missedAnomalyRows.length, 1);
-  assertEquals(report.missedAnomalyRows[0].intendedAgeDays, -2);
-  assertEquals(report.realAnomalies, 0);
+  assertEquals(report.warningRows.length, 1);
+  assertEquals(report.warningRows[0].ageDays, -2);
+  assertEquals(report.warningRows[0].emoji, "⚠️");
+  assertEquals(report.warningRows[0].isAnomaly, true);
 });
 
-Deno.test("analyseDataset: same-day analysis shows NO warning", () => {
+Deno.test("analyseDataset: same-day analysis shows 🌹, no ⚠️", () => {
   const csv = [
     HEADER,
     "NYSE:SAME,28 Dec 2025,$10.00,4,$11.00,8,4,$9.00",
@@ -109,6 +124,7 @@ Deno.test("analyseDataset: same-day analysis shows NO warning", () => {
   ]);
   assertEquals(report.warningRows.length, 0);
   assertEquals(report.ratedRowsInWindow, 1);
+  assertEquals(report.rows[0].emoji, "🌹");
 });
 
 Deno.test("analyseDataset: unrated row (no stars) is ignored entirely", () => {
@@ -119,7 +135,7 @@ Deno.test("analyseDataset: unrated row (no stars) is ignored entirely", () => {
   const report = analyseDataset([
     { scoreDateISO: "2025-12-28", analysisCsv: csv },
   ]);
-  assertEquals(report.warningRows.length, 0);
+  assertEquals(report.rows.length, 0);
   assertEquals(report.ratedRowsInWindow, 0);
 });
 
@@ -131,7 +147,7 @@ Deno.test("analyseDataset: rows beyond the 30-day window are excluded", () => {
   const report = analyseDataset([
     { scoreDateISO: "2025-12-28", analysisCsv: csv },
   ]);
-  assertEquals(report.warningRows.length, 0);
+  assertEquals(report.rows.length, 0);
   assertEquals(report.ratedRowsInWindow, 0);
 });
 
@@ -140,11 +156,12 @@ Deno.test("analyseDataset: missing analysis CSV is skipped without error", () =>
     { scoreDateISO: "2025-12-28", analysisCsv: null },
   ]);
   assertEquals(report.scoreDatesScanned, 0);
-  assertEquals(report.warningRows.length, 0);
+  assertEquals(report.rows.length, 0);
 });
 
-Deno.test("analyseDataset: the false-positive case dominates a realistic batch", () => {
-  // Three rated stocks all dated days BEFORE the score date (the normal case).
+Deno.test("analyseDataset: a realistic batch of pre-dated rows is all healthy", () => {
+  // Three rated stocks all dated days BEFORE the score date (the normal case)
+  // — none should render ⚠️ after the sign fix.
   const csv = [
     HEADER,
     "NYSE:DD,23 Dec 2025,$48.24,5,$47.45,7,4.5,$41.26",
@@ -155,7 +172,6 @@ Deno.test("analyseDataset: the false-positive case dominates a realistic batch",
     { scoreDateISO: "2025-12-28", analysisCsv: csv },
   ]);
   assertEquals(report.ratedRowsInWindow, 3);
-  assertEquals(report.warningRows.length, 3);
-  assertEquals(report.falsePositives, 3);
-  assertEquals(report.realAnomalies, 0);
+  assertEquals(report.warningRows.length, 0);
+  assertEquals(report.healthyRows.length, 3);
 });

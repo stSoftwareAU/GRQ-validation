@@ -1,35 +1,35 @@
-// Core computation for the issue #587 fair-value freshness-indicator diagnostic.
+// Regression port of the fair-value freshness indicator (issue #547),
+// pinning the sign fix from issue #600.
 //
-// DIAGNOSE-ONLY: this module reproduces the SHIPPED dashboard logic and
-// quantifies why the ⚠️ freshness indicator (issue #547,
-// `getFreshnessIndicator()` in docs/app.js) fires. It deliberately does NOT
-// change the dashboard's behaviour — the fix is a separate, later issue.
+// This module is a faithful, pure port of the CORRECTED `getFreshnessIndicator`
+// logic in docs/app.js: it mirrors the dashboard's analysis-age arithmetic and
+// emoji scale so the sign can be regression-tested without a browser.
 //
-// The question (worked example DD / 2025-12-28):
-//   - `getFreshnessIndicator()` returns '⚠️' when `signedDaysFromScore < 0`
-//     (docs/app.js ~line 933).
-//   - `signedDaysFromScore = floor(analysisDate − scoreDate)` in whole days
-//     (docs/app.js ~line 731) — so it is negative when the analysis row is
-//     dated *earlier* than the score date.
-//   - The inline comments (docs/app.js ~lines 727-729, 921-922) instead say
-//     negative means the analysis is dated *after* the score date, "an
-//     invariant the pipeline must never violate".
+// Background (diagnosed in #587, fixed in #600): the shipped dashboard computed
+// the analysis age as `floor(analysisDate − scoreDate)`, which is NEGATIVE for
+// healthy data — a fair-value analysis is normally dated *before* the score that
+// consumes it (e.g. DD analysis 23 Dec 2025 vs score 28 Dec 2025 → −5). That
+// tripped the `< 0 → ⚠️` guard for essentially every rated stock, and silently
+// MISSED the genuine anomaly (analysis dated *after* the score).
 //
-// The comment and the arithmetic disagree on the SIGN. This module settles the
-// direction and quantifies the blast radius across every score date.
-//
-// Root cause (see docs/fixes/freshness-indicator-sign-investigation.md): a
-// fair-value analysis is, in the normal case, dated *before* the score date —
-// the analyst's fair value pre-exists the score that consumes it. So
-// `analysisDate − scoreDate` is normally NEGATIVE for healthy data, which trips
-// the `< 0` ⚠️ guard for essentially every rated stock. The intended "analysis
-// age" the emoji scale (0-1 🌹 … 14+ 🕸) measures is the OPPOSITE sign,
-// `scoreDate − analysisDate` (how many whole days old the analysis is at score
-// time). The arithmetic has the sign inverted relative to the documented
-// invariant, so DD/2025-12-28's ⚠️ is a FALSE POSITIVE, not a mis-dated row.
+// The corrected age is the opposite sign, `floor(scoreDate − analysisDate)`:
+// how many whole days OLD the analysis is at score time. It is ≥ 0 for healthy
+// data and negative ONLY when an analysis is dated AFTER its score date — the
+// real pipeline anomaly the ⚠️ was built to surface. This module models that
+// corrected behaviour.
 
 const ONE_DAY_MS = 1000 * 60 * 60 * 24;
 const WINDOW_DAYS = 30; // app.js keeps analyses within 30 days of the score date
+
+/** Ascending [threshold, emoji] pairs — pick the largest threshold ≤ age. */
+const FRESHNESS_SCALE: ReadonlyArray<readonly [number, string]> = [
+  [0, "🌹"],
+  [2, "🌺"],
+  [4, "🥀"],
+  [7, "🍁"],
+  [10, "🍂"],
+  [14, "🕸"],
+];
 
 /** Faithful port of the CSV splitter in docs/app.js (`parseCSVLine`). */
 export function parseCSVLine(line: string): string[] {
@@ -83,28 +83,14 @@ export function parseAnalysisDate(dateStr: string): Date | null {
 }
 
 /**
- * The dashboard's signed analysis age, exactly as shipped (docs/app.js):
- *   floor((analysisDate − scoreDate) / oneDay).
- * Negative when the analysis is dated EARLIER than the score date.
- */
-export function signedDaysFromScore(
-  analysisDate: Date,
-  scoreDate: Date,
-): number {
-  return Math.floor(
-    (analysisDate.getTime() - scoreDate.getTime()) / ONE_DAY_MS,
-  );
-}
-
-/**
- * The INTENDED analysis age the emoji scale and the documented invariant
- * assume: how many whole days OLD the analysis is at score time:
+ * Corrected whole-day analysis age, matching docs/app.js `signedDaysFromScore`
+ * after the issue #600 fix:
  *   floor((scoreDate − analysisDate) / oneDay).
- * Non-negative for the normal case (analysis published on/before the score
- * date); negative only when an analysis is dated AFTER the score date — the
- * genuine "impossible" anomaly the ⚠️ was meant to surface.
+ * ≥ 0 for healthy data (analysis dated on/before the score date); negative ONLY
+ * when an analysis is dated AFTER its score date — the genuine anomaly the ⚠️
+ * indicator was built to surface.
  */
-export function intendedAnalysisAgeDays(
+export function analysisAgeDays(
   analysisDate: Date,
   scoreDate: Date,
 ): number {
@@ -113,9 +99,24 @@ export function intendedAnalysisAgeDays(
   );
 }
 
-/** Whether the shipped indicator would render ⚠️ for this signed age. */
-export function shippedShowsWarning(signed: number): boolean {
-  return signed < 0;
+/**
+ * Port of the dashboard's `getFreshnessIndicator` emoji selection: a negative
+ * age (analysis dated after the score) renders ⚠️; otherwise pick the freshness
+ * emoji for the largest threshold ≤ age.
+ */
+export function getFreshnessEmoji(ageDays: number): string {
+  if (ageDays < 0) {
+    return "⚠️";
+  }
+  let emoji = FRESHNESS_SCALE[0][1];
+  for (const [threshold, candidate] of FRESHNESS_SCALE) {
+    if (ageDays >= threshold) {
+      emoji = candidate;
+    } else {
+      break;
+    }
+  }
+  return emoji;
 }
 
 /**
@@ -143,32 +144,24 @@ export function computeAvgStars(
   return valid > 0 ? total / valid : null;
 }
 
-/** A single stock-date row that the shipped indicator flags with ⚠️. */
-export interface WarningRow {
+/** A single rated stock-date row and the freshness indicator it renders. */
+export interface FreshnessRow {
   scoreDate: string; // YYYY-MM-DD
   stock: string;
   analysisDate: string; // YYYY-MM-DD
-  signedDaysFromScore: number; // shipped (negative ⇒ ⚠️)
-  intendedAgeDays: number; // corrected sign (≥ 0 for healthy data)
-  /** False positive ⇒ analysis legitimately predates the score date. */
-  classification: "false-positive" | "real-anomaly";
+  ageDays: number; // corrected age: ≥ 0 healthy, < 0 only when after score
+  emoji: string; // freshness emoji, or ⚠️ for a genuine anomaly
+  /** True when the analysis is dated AFTER its score date (renders ⚠️). */
+  isAnomaly: boolean;
 }
 
-/** Aggregate blast-radius report. */
+/** Aggregate freshness report under the corrected sign. */
 export interface FreshnessReport {
   scoreDatesScanned: number;
   ratedRowsInWindow: number; // rows with avgStars≠null inside the 30-day window
-  warningRows: WarningRow[]; // every stock-date the shipped ⚠️ fires on
-  falsePositives: number; // analysis dated before the score date
-  realAnomalies: number; // ⚠️ rows that are genuine (always 0 — see below)
-  /**
-   * The DUAL failure mode: rated, in-window rows whose analysis is dated AFTER
-   * the score date — the genuine invariant violation the ⚠️ was meant to
-   * surface — which the inverted-sign guard renders as a freshness EMOJI
-   * instead of ⚠️. The shipped indicator is silent on exactly the case it was
-   * built to catch.
-   */
-  missedAnomalyRows: WarningRow[];
+  rows: FreshnessRow[]; // every rated, in-window row with its indicator
+  warningRows: FreshnessRow[]; // rows rendering ⚠️ — genuine after-score anomalies
+  healthyRows: FreshnessRow[]; // rows rendering a freshness emoji (no ⚠️)
 }
 
 interface ScoreIndexEntry {
@@ -184,16 +177,15 @@ function toISO(d: Date): string {
 }
 
 /**
- * Classify every analysis row across the dataset and collect the blast radius.
- * Pure: callers inject the per-score-date analysis CSV text so this is fully
- * unit-testable without disk access. `scoreDate` is parsed from the index entry
- * date string (local midnight) to mirror the dashboard's `getScoreDate`.
+ * Classify every rated analysis row across the dataset under the corrected
+ * sign. Pure: callers inject the per-score-date analysis CSV text so this is
+ * fully unit-testable without disk access. `scoreDate` is parsed from the index
+ * entry date string (local midnight) to mirror the dashboard's `getScoreDate`.
  */
 export function analyseDataset(
   entries: ReadonlyArray<{ scoreDateISO: string; analysisCsv: string | null }>,
 ): FreshnessReport {
-  const warningRows: WarningRow[] = [];
-  const missedAnomalyRows: WarningRow[] = [];
+  const rows: FreshnessRow[] = [];
   let ratedRowsInWindow = 0;
   let scoreDatesScanned = 0;
 
@@ -232,36 +224,24 @@ export function analyseDataset(
       if (avgStars === null) continue; // no stars ⇒ getFreshnessIndicator() = ''
       ratedRowsInWindow++;
 
-      const signed = signedDaysFromScore(analysisDate, scoreDate);
-      const intended = intendedAnalysisAgeDays(analysisDate, scoreDate);
-      const row: WarningRow = {
+      const ageDays = analysisAgeDays(analysisDate, scoreDate);
+      rows.push({
         scoreDate: entry.scoreDateISO,
         stock,
         analysisDate: toISO(analysisDate),
-        signedDaysFromScore: signed,
-        intendedAgeDays: intended,
-        // Intended age ≥ 0 ⇒ analysis predates the score ⇒ healthy ⇒ false ⚠️.
-        classification: intended >= 0 ? "false-positive" : "real-anomaly",
-      };
-
-      if (shippedShowsWarning(signed)) {
-        warningRows.push(row); // shipped renders ⚠️ here
-      } else if (intended < 0) {
-        // Genuine anomaly (analysis after the score) the indicator MISSES.
-        missedAnomalyRows.push(row);
-      }
+        ageDays,
+        emoji: getFreshnessEmoji(ageDays),
+        isAnomaly: ageDays < 0,
+      });
     }
   }
 
   return {
     scoreDatesScanned,
     ratedRowsInWindow,
-    warningRows,
-    missedAnomalyRows,
-    falsePositives:
-      warningRows.filter((r) => r.classification === "false-positive").length,
-    realAnomalies:
-      warningRows.filter((r) => r.classification === "real-anomaly").length,
+    rows,
+    warningRows: rows.filter((r) => r.isAnomaly),
+    healthyRows: rows.filter((r) => !r.isAnomaly),
   };
 }
 
@@ -269,7 +249,7 @@ export function analyseDataset(
  * Disk-backed sweep: read docs/scores/index.json and every per-date analysis
  * CSV, then delegate to `analyseDataset`. Read-only.
  */
-export async function computeFreshnessDiagnostic(
+export async function computeFreshnessReport(
   docsPath = "docs",
 ): Promise<FreshnessReport> {
   const indexText = await Deno.readTextFile(`${docsPath}/scores/index.json`);

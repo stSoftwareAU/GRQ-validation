@@ -1,66 +1,52 @@
-// Diagnostic CLI for issue #587: explain why the ⚠️ fair-value freshness
-// indicator (issue #547) fires, settle the comment-vs-arithmetic sign
-// discrepancy, and quantify the blast radius across every score date.
-//
-// DIAGNOSE-ONLY — read-only, prints a Markdown-friendly report. The fix is a
-// separate, later issue.
+// Reporting CLI for the fair-value freshness indicator (issue #547), updated
+// for the issue #600 sign fix. Read-only: it prints, for every rated stock-date
+// inside the 30-day window, the corrected analysis age and the freshness emoji
+// it renders, and flags any genuine after-score anomaly with ⚠️.
 //
 // Run: deno run --allow-read scripts/diagnose_freshness_indicator.ts [docsPath]
 //   docsPath default "docs".
 
 import {
-  computeFreshnessDiagnostic,
-  type WarningRow,
+  computeFreshnessReport,
+  type FreshnessRow,
 } from "./freshness_indicator_diagnostic.ts";
 
 const docsPath = Deno.args[0] ?? "docs";
-const report = await computeFreshnessDiagnostic(docsPath);
+const report = await computeFreshnessReport(docsPath);
 
-console.log(`# Fair-value freshness ⚠️ diagnostic — issue #587\n`);
-console.log(`Score dates scanned:        ${report.scoreDatesScanned}`);
+console.log(`# Fair-value freshness indicator report — issue #600\n`);
+console.log(`Score dates scanned:         ${report.scoreDatesScanned}`);
 console.log(`Rated rows in 30-day window: ${report.ratedRowsInWindow}`);
-console.log(`Rows showing ⚠️ (total):     ${report.warningRows.length}`);
-console.log(`  · false positives:         ${report.falsePositives}`);
-console.log(`  · real anomalies:          ${report.realAnomalies}`);
-console.log(
-  `Genuine anomalies MISSED:    ${report.missedAnomalyRows.length}\n`,
-);
+console.log(`  · healthy (freshness emoji): ${report.healthyRows.length}`);
+console.log(`  · after-score anomalies ⚠️:  ${report.warningRows.length}\n`);
 
-const pctWarned = report.ratedRowsInWindow > 0
-  ? (100 * report.warningRows.length / report.ratedRowsInWindow).toFixed(1)
-  : "0.0";
-console.log(
-  `So ${pctWarned}% of rated, in-window rows render ⚠️ — confirming the ` +
-    `indicator is systemically wrong, not a one-off mis-dated row.\n`,
-);
-
-const dd = report.warningRows.find(
+const dd = report.rows.find(
   (r) => r.stock === "NYSE:DD" && r.scoreDate === "2025-12-28",
 );
 console.log(`## Worked example — DD / 2025-12-28`);
 if (dd) {
   console.log(
-    `  analysis dated ${dd.analysisDate}; signedDaysFromScore=` +
-      `${dd.signedDaysFromScore} (shipped ⇒ ⚠️); intended age=` +
-      `${dd.intendedAgeDays} days ⇒ ${dd.classification}.\n`,
+    `  analysis dated ${dd.analysisDate}; age=${dd.ageDays} days ⇒ ` +
+      `${dd.emoji}${dd.isAnomaly ? " (after-score anomaly)" : " (healthy)"}.\n`,
   );
 } else {
-  console.log(`  (no ⚠️ row found for DD/2025-12-28 in this dataset)\n`);
+  console.log(`  (no rated DD/2025-12-28 row found in this dataset)\n`);
 }
 
-console.log(`## Blast radius — every stock-date showing ⚠️`);
-console.log(
-  `scoreDate   stock              analysisDate  signed  intended  class`,
-);
-for (const r of sortRows(report.warningRows)) {
-  console.log(
-    `${r.scoreDate}  ${r.stock.padEnd(18)} ${r.analysisDate}    ` +
-      `${pad(r.signedDaysFromScore, 6)}  ${pad(r.intendedAgeDays, 8)}  ` +
-      `${r.classification}`,
-  );
+console.log(`## After-score anomalies — every stock-date rendering ⚠️`);
+if (report.warningRows.length === 0) {
+  console.log(`  (none — every rated analysis is dated on/before its score)\n`);
+} else {
+  console.log(`scoreDate   stock              analysisDate  age`);
+  for (const r of sortRows(report.warningRows)) {
+    console.log(
+      `${r.scoreDate}  ${r.stock.padEnd(18)} ${r.analysisDate}    ` +
+        `${pad(r.ageDays, 4)}`,
+    );
+  }
 }
 
-function sortRows(rows: WarningRow[]): WarningRow[] {
+function sortRows(rows: FreshnessRow[]): FreshnessRow[] {
   return [...rows].sort((a, b) =>
     a.scoreDate === b.scoreDate
       ? a.stock.localeCompare(b.stock)
