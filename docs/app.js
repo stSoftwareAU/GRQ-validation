@@ -3116,6 +3116,7 @@ class GRQValidator {
               `
                         : ""
                 }
+              ${this.getYahooFinanceLinkHtml(stock.stock)}
             </div>
           `;
             }
@@ -3530,6 +3531,31 @@ class GRQValidator {
 
         // Show the back button
         document.getElementById("backToAggregate").style.display = "block";
+    }
+
+    // Lowest-priority "confirm our numbers" link at the very bottom of the
+    // single-stock detail view (issue #570): a small, understated Yahoo Finance
+    // link that opens the stock's quote page in a new standalone external tab.
+    // Symbols are stored EXCHANGE:TICKER, so the URL drops the exchange prefix
+    // via the shared, unit-tested helper. Returns "" when no usable ticker can
+    // be derived so we never render a broken link. rel="noopener noreferrer"
+    // keeps the new tab from gaining a reference back to this window.
+    getYahooFinanceLinkHtml(stockSymbol) {
+        const url = globalThis.GRQYahooFinance.yahooQuoteUrl(stockSymbol);
+        if (!url) {
+            return "";
+        }
+        const safeUrl = escapeHtml(url);
+        const safeStock = escapeHtml(stockSymbol);
+        return `
+              <div class="row mt-3">
+                <div class="col-12 text-center yahoo-finance-link">
+                  <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
+                     title="Confirm ${safeStock} on Yahoo Finance (opens in a new tab)">
+                    <i class="fas fa-external-link-alt"></i> Yahoo Finance
+                  </a>
+                </div>
+              </div>`;
     }
 
     // Deep-link straight into the single-stock detail view when the page is
