@@ -25,8 +25,8 @@ already written to the corrected invariant, so it is fixed by the same change.
 - **`docs/app.js`** — flip the sign at the `signedDaysFromScore` computation and
   tidy the inline comment to state the corrected invariant. `getFreshnessIndicator()`
   needs no logic change; the 30-day-window check uses `Math.abs` and is unaffected.
-- **Cache/version bump 1.1.19 → 1.1.20** in lockstep so the SW's versioned caches
-  + `skipWaiting()` ship the fix to clients: `APP_VERSION` in `docs/sw.js`, the
+- **Cache/version bump 1.1.19 → 1.1.20** in lockstep so the SW's versioned
+  caches and `skipWaiting()` ship the fix to clients: `APP_VERSION` in `docs/sw.js`, the
   `app-version` meta and `sw-register.js?v=` query in `docs/index.html` and
   `docs/trend.html`, and the `sw.js?v=` query in `docs/sw-register.js`.
   (Main already shipped 1.1.19 via #608, so the bump targets 1.1.20.)
