@@ -24,7 +24,7 @@ stock-rows, as-of 2026-06-26) the basis offset `(mid - low) / buyPrice` is:
 
 **Sign and netting.** The offset is **non-negative on every row** (sign **+**).
 Measuring Actual at the higher mid makes Actual larger, which **narrows / masks**
-the Target-over-Actual gap — the *opposite* direction to the observed gap. So
+the Target-over-Actual gap — the _opposite_ direction to the observed gap. So
 this candidate **offsets** the gap rather than causing it:
 
 | Quantity (mean over matured dates) | Value |
@@ -39,7 +39,7 @@ this candidate **offsets** the gap rather than causing it:
 Restating Actual onto the basis the model was trained on (intraday low) would
 **widen** the apparent gap by ~**2.24 pp**, from ~18.5 pp to ~20.7 pp. Genuine
 model optimism (and the remaining candidates in #544) must therefore explain a
-gap that is *larger* than the headline figure, not smaller.
+gap that is _larger_ than the headline figure, not smaller.
 
 > The per-row equal-weight mean (+2.235 pp) and the per-date portfolio-level
 > contribution (+2.242 pp) agree to within rounding, confirming the offset is a
@@ -57,11 +57,11 @@ gap that is *larger* than the headline figure, not smaller.
 for now (low-priority hygiene fix only)
 
 A real, structural asymmetry **is** confirmed (a consistent, same-direction
-~2.2 pp offset), so a fix is *justifiable* on like-for-like grounds. However:
+~2.2 pp offset), so a fix is _justifiable_ on like-for-like grounds. However:
 
 - Correcting it **does not close** the Target-over-Actual gap — it **widens**
   it. This candidate is therefore **exonerated as a cause** of the reported
-  symptom; it was partially *hiding* the gap.
+  symptom; it was partially _hiding_ the gap.
 - The mid basis is also the more defensible figure to **show a user** as the
   "Actual" return: the midpoint is an unbiased intraday estimate, whereas the
   intraday low systematically understates what a holder realised. Switching the

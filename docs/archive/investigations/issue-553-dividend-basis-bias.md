@@ -42,7 +42,7 @@ realised in-window dividends. Because the model's Target embeds the flat credit
 while the dashboard's Actual credits only realised in-window dividends, this
 dividend basis **contributes to (widens)** the Target-over-Actual gap — the
 **same** direction as the observed gap, unlike the price-basis candidate (#552),
-which *narrowed* it.
+which _narrowed_ it.
 
 The headline raw mean (+2.83 pp) is **lumpy and tail-driven**: 86.4 % of rows
 sit within ±1 pp and the median is exactly 0 (non-payers and quarterly payers
@@ -76,7 +76,7 @@ estimate is therefore the **1%-trimmed mean ≈ +1.36 pp** (and the median 0).
 
 ## Recommendation: real, same-direction contributor — **fix the basis upstream in `GRQ`** (align training onto realised forward-window dividends)
 
-Unlike the price-basis candidate (#552, exonerated because it *hid* the gap),
+Unlike the price-basis candidate (#552, exonerated because it _hid_ the gap),
 the dividend basis is a **genuine, same-direction contributor** of roughly
 **+1.4 pp (robust) to +2.8 pp (raw)**. It is worth correcting, and the correct
 direction is to **align both sides on realised dividends**:

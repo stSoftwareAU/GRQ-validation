@@ -10,7 +10,7 @@ The GRQ model is trained on a 90-day return whose **denominator** is
 `monthsAgoPrice` — the **close** on the score date. The validation dashboard
 divides **both** Target and Actual by `buyPrice` — the **split-adjusted
 midpoint** `(high + low) / 2` of the first usable point. Because the dashboard
-applies the *same* `buyPrice` to Target and Actual, the denominator choice
+applies the _same_ `buyPrice` to Target and Actual, the denominator choice
 **cannot desynchronise** them: it only rescales the (Target − Actual) gap by
 `buyPrice / close`.
 
@@ -87,10 +87,10 @@ flowchart TD
   first usable point; **both** `calculateTargetPercentage` /
   `calculatePortfolioTargetPercentage` and `calculatePerformanceReturn` /
   `calculateIncludedPortfolioPerformance` divide by that **one** `buyPrice`.
-- **Mixed basis?** Only at the level of the model's *emitted absolute target
-  price*: the network learned that price relative to the close, but the
+- **Mixed basis?** Only at the level of the model's _emitted absolute target
+  price_: the network learned that price relative to the close, but the
   dashboard expresses the (target − buyPrice) spread over `buyPrice`. Since
-  Actual is expressed over the *same* `buyPrice`, the choice rescales both
+  Actual is expressed over the _same_ `buyPrice`, the choice rescales both
   identically — it never measures Target and Actual on different denominators.
 
 ## Aggregate contribution to the gap (part 3)
@@ -113,7 +113,7 @@ Target-over-Actual gap. The milestone (#544) should keep chasing genuine model
 optimism and the remaining candidates (price basis #552 — the dominant
 ~2.2 pp masking term; dividend basis #553; score decoding). If a fully
 like-for-like trend comparison is ever wanted, the cleaner fix is to align the
-*price basis* (#552) upstream in `GRQ`, not to swap the dashboard's shared
+_price basis_ (#552) upstream in `GRQ`, not to swap the dashboard's shared
 denominator for the training close.
 
 ## How this was measured (reproducible)

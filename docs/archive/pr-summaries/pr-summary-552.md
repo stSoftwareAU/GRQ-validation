@@ -1,8 +1,9 @@
 ## Summary
 
 Quantifies the Target/Actual measurement bias that comes purely from the **price
-basis** mismatch between training and the dashboard (one candidate source in the
-#544 milestone breakdown). The GRQ model is trained on the **intraday low** of
+basis** mismatch between training and the dashboard (one candidate source in
+the #544 milestone breakdown). The GRQ model is trained on the **intraday low**
+of
 the trading day 90 days ahead, while the dashboard measures **Actual** at the
 **midpoint** `(high + low) / 2`. Because `mid >= low` on every row this is a
 structural, same-direction offset.
