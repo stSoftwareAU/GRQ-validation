@@ -17,10 +17,11 @@
  * The dashboard uses Bootstrap's full-bleed `.container-fluid`. On genuinely
  * wide monitors that stretches text and tables edge-to-edge, hurting
  * readability. Cap the content at a comfortable max-width and centre it so the
- * reclaimed space is balanced on both sides. The cap only binds above ~1600px,
- * so 1440px-class desktops, tablets and phones are left fluid and unchanged. */
+ * reclaimed space is balanced on both sides. The cap only binds above ~1800px
+ * (widened from 1600px in issue #559 to give the data more room), so
+ * 1440px-class desktops, tablets and phones are left fluid and unchanged. */
 .container-fluid {
-  max-width: 1600px;
+  max-width: 1800px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -706,6 +707,48 @@ body.chart-popout-open {
      the dashboard body padding is reduced on phones. */
   .card-body.p-4 {
     padding: 1rem !important;
+  }
+}
+
+/* Reduce the desktop left/right margins so the data — score tables and the
+   performance chart — gets more horizontal room (issue #559, milestone #545).
+   Mobile is already tightened above (#316/#382); these rules mirror that
+   tightening at tablet/desktop widths, where Bootstrap's full 0.75rem
+   container/column padding stacked with the 1.5rem card body padding into a
+   wide inset that wasted screen width. */
+@media (min-width: 769px) {
+  /* Trim the outer container-fluid side padding below Bootstrap's 0.75rem. */
+  .container-fluid {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  /* Shrink the row gutter to match the trimmed container padding so the row
+     never overflows the container, then cancel it with the column padding so
+     content stays aligned to the container edge (same pattern as mobile). */
+  .row {
+    margin-left: -0.375rem;
+    margin-right: -0.375rem;
+  }
+
+  .col,
+  .col-12,
+  .col-md-4,
+  .col-md-6,
+  .col-md-8,
+  .col-lg-3,
+  .col-lg-4,
+  .col-lg-8,
+  .col-lg-9 {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+  }
+
+  /* Reduce the dashboard body's HORIZONTAL padding (Bootstrap p-4 = 1.5rem)
+     while keeping comfortable vertical padding for top/bottom spacing. */
+  .card-body.p-4 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
   }
 }
 

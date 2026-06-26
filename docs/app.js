@@ -723,7 +723,13 @@ class GRQValidator {
                         
                         // Check if analysis is within 30 days of score date
                         const daysDiff = Math.abs((analysisDate.getTime() - scoreDate.getTime()) / (1000 * 60 * 60 * 24));
-                        
+
+                        // Signed, whole-day analysis age (issue #547). Negative when the
+                        // analysis is dated *after* the score date — an invariant the
+                        // pipeline must never violate. Do NOT collapse with Math.abs.
+                        const oneDay = 1000 * 60 * 60 * 24;
+                        const signedDaysFromScore = Math.floor((analysisDate.getTime() - scoreDate.getTime()) / oneDay);
+
                         if (daysDiff <= 30) {
                             // Parse star ratings
                             const msStars = msIndex !== -1 && values[msIndex] ? parseFloat(values[msIndex]) : null;
@@ -760,6 +766,7 @@ class GRQValidator {
                         tipsStars: tipsStars,
                         avgStars: avgStars,
                         daysFromScore: daysDiff,
+                        signedDaysFromScore: signedDaysFromScore,
                         msFairValue: msFairValue,
                         tipsTarget: tipsTarget
                     };
@@ -905,6 +912,47 @@ class GRQValidator {
         }
         
         return display;
+    }
+
+    // Fair-value freshness indicator (issue #547). Maps the signed, whole-day
+    // analysis age onto the Google-Sheet emoji scale via a VLOOKUP-style
+    // approximate match (largest threshold ≤ age):
+    //   0–1 🌹 · 2–3 🌺 · 4–6 🥀 · 7–9 🍁 · 10–13 🍂 · 14+ 🕸
+    // Returns '' when there is no analysis row or stars show N/A, and '⚠️' when
+    // the age is negative (analysis dated after the score date — surface the bug).
+    getFreshnessIndicator(stockSymbol) {
+        if (!this.analysisData || !this.analysisData[stockSymbol]) {
+            return '';
+        }
+
+        const analysis = this.analysisData[stockSymbol];
+        if (analysis.avgStars === null) {
+            return '';
+        }
+
+        if (analysis.signedDaysFromScore < 0) {
+            return '⚠️';
+        }
+
+        // Ascending [threshold, emoji] pairs — pick the largest threshold ≤ age.
+        const scale = [
+            [0, '🌹'],
+            [2, '🌺'],
+            [4, '🥀'],
+            [7, '🍁'],
+            [10, '🍂'],
+            [14, '🕸'],
+        ];
+
+        let emoji = scale[0][1];
+        for (const [threshold, candidate] of scale) {
+            if (analysis.signedDaysFromScore >= threshold) {
+                emoji = candidate;
+            } else {
+                break;
+            }
+        }
+        return emoji;
     }
 
     getFairValueRange(stockSymbol) {
@@ -2875,7 +2923,10 @@ class GRQValidator {
                 
                 // 90-day validation price as a raw number for colour logic
                 // (issue #539) — same basis as the displayed field, never live.
-                const currentPriceRaw = GRQProjection.priceAtNinetyDayHorizon(
+                // On the buy price's current split basis (issue #569) so the
+                // colour thresholds match the displayed Performance / 90-Day
+                // Price.
+                const currentPriceRaw = GRQProjection.horizonPriceCurrentBasis(
                     this.marketData[stock.stock],
                     scoreDate,
                 );
@@ -2924,7 +2975,7 @@ class GRQValidator {
                             data-field="buy-price"
                             data-stock="${safeStock}"
                         >${this.formatCurrency(buyPrice)}</span>
-                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value star-rating" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>` : ''}
+                        ${this.getStarRatingDisplay(stock.stock) ? ` <span class="clickable-value star-rating" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}${this.getFreshnessIndicator(stock.stock) ? ` ${this.getFreshnessIndicator(stock.stock)}` : ""}</span>` : ''}
                     </div>
                   </div>
                   <div class="row mb-2">
@@ -3151,7 +3202,7 @@ class GRQValidator {
                 >${this.formatCurrency(buyPrice)}</span>
             </td>
             <td>
-                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}</span>
+                <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getStarRatingDisplay(stock.stock)}${this.getFreshnessIndicator(stock.stock) ? ` ${this.getFreshnessIndicator(stock.stock)}` : ""}</span>
             </td>
             <td>
             <span class="clickable-value ${this.getTargetPriceColor(target, currentPrice, buyPrice)}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="90-Day Target - ${safeStock}" data-field="target" data-stock="${safeStock}">${this.formatCurrency(target)
@@ -3370,10 +3421,11 @@ class GRQValidator {
     }
 
     getNinetyDayPrice(stockSymbol) {
-        // 90-day validation price, NOT today's live price (issue #539). Maths
-        // lives in the shared projection module so the displayed field matches
-        // the Performance / Gain-Loss basis.
-        const price = GRQProjection.priceAtNinetyDayHorizon(
+        // 90-day validation price, NOT today's live price (issue #539). Read on
+        // the buy price's current split basis (issue #569) so the displayed
+        // field matches the Performance / Gain-Loss basis even when a split
+        // falls between the horizon and the end of the data series.
+        const price = GRQProjection.horizonPriceCurrentBasis(
             this.marketData[stockSymbol],
             this.getScoreDate(this.selectedFile),
         );
@@ -3640,12 +3692,16 @@ class GRQValidator {
         const scoreDate = this.getScoreDate(this.selectedFile);
 
         // Price at the 90-day validation horizon (issue #539) — the basis the
-        // whole tool compares against, never today's live price. Shared kernel
-        // so the displayed "90-Day Price" field cannot drift from this maths.
-        const currentPrice = GRQProjection.priceAtNinetyDayHorizon(
+        // whole tool compares against, never today's live price. Read on the
+        // buy price's CURRENT split basis (issue #569): when a reconcilable
+        // split falls between the horizon and the series end, the raw horizon
+        // midpoint sits on a different split basis than the restated buy price,
+        // inflating/deflating the return. horizonPriceCurrentBasis divides that
+        // post-horizon factor out so both prices share one basis.
+        const currentPrice = GRQProjection.horizonPriceCurrentBasis(
             marketData,
             scoreDate,
-        ); // Already post-split
+        );
         if (currentPrice === null) return null;
 
         // Get the price on the score date as the buy price (adjusted to current price level)
@@ -4059,25 +4115,29 @@ class GRQValidator {
                         "90-Day Price working:\nNo market data within 90 days";
                 }
                 const lastData = within90Days[within90Days.length - 1];
-                const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
+                const rawMid = (lastData.high + lastData.low) / 2;
+                // Restate onto the buy price's current split basis (issue #569):
+                // divide out any reconcilable split that falls between the
+                // horizon and the end of the data series, so the displayed
+                // 90-Day Price shares the buy price's basis.
+                const postHorizonFactor = GRQProjection.postHorizonSplitFactor(
+                    marketData,
+                    scoreDate,
+                );
+                const currentPrice = rawMid / postHorizonFactor;
                 result.rawValue = currentPrice;
                 result.formattedValue = this.formatCurrency(currentPrice);
                 const windowComplete = within90Days.length < marketData.length;
                 const basisNote = windowComplete
                     ? "price at the 90-day horizon"
                     : "latest available price (90-day window not yet complete)";
-                const currentSplitAdjustment = this
-                    .getHistoricalToCurrentSplitAdjustment(
-                        stockSymbol,
-                        lastData.date,
-                    );
-                if (currentSplitAdjustment > 1.0) {
+                if (Math.abs(postHorizonFactor - 1) > 1e-9) {
                     return header +
-                        `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote} (post-split)\n= ($${
+                        `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote}, restated to the buy price's current split basis (issue #569)\n= ($${
                             lastData.high.toFixed(2)
-                        } + $${lastData.low.toFixed(2)}) / 2\n= ${
-                            result.formattedValue
-                        } (already post-split, no adjustment needed)`;
+                        } + $${lastData.low.toFixed(2)}) / 2 ÷ ${postHorizonFactor}\n= $${
+                            rawMid.toFixed(2)
+                        } ÷ ${postHorizonFactor}\n= ${result.formattedValue}`;
                 } else {
                     return header +
                         `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote}\n= ($${
@@ -4102,12 +4162,15 @@ class GRQValidator {
                 const gainLossDividends = this.getDividendsWithin90Days(stockSymbol);
                 const gainLossTotalDividends = GRQProjection.sumDividends(gainLossDividends);
                 
-                // Get current price for display
+                // Get 90-Day Price for display, on the buy price's current split
+                // basis (issue #569) so the working reconciles with the
+                // displayed Gain/Loss even when a split falls between the horizon
+                // and the series end.
                 const gainLossMarketData = this.marketData[stockSymbol];
-                const gainLossNinetyDayDate = new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000));
-                const gainLossWithin90Days = gainLossMarketData.filter((point) => point.date <= gainLossNinetyDayDate);
-                const gainLossLastData = gainLossWithin90Days[gainLossWithin90Days.length - 1];
-                const gainLossCurrentPrice = (gainLossLastData.high + gainLossLastData.low) / 2;
+                const gainLossCurrentPrice = GRQProjection.horizonPriceCurrentBasis(
+                    gainLossMarketData,
+                    scoreDate,
+                );
 
                 // Get split adjustments for display
                 const gainLossBuyPriceSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(
@@ -4136,7 +4199,7 @@ class GRQValidator {
                             gainLossBuyPrice.price.toFixed(2)
                         }\n- 90-Day Price: $${
                             gainLossCurrentPrice.toFixed(2)
-                        } (already post-split, no adjustment needed)`;
+                        } (on the buy price's current split basis, issue #569)`;
                 } else {
                     return header +
                         `Gain/Loss (%) working:\n= ((90-Day Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
@@ -4352,9 +4415,21 @@ class GRQValidator {
                 if (remainderStars > 0) {
                     moonPhaseStep = `\n= Moon phase: ${moonPhase}`;
                 }
-                
+
+                // Freshness section (issue #550): the exact analysis date plus
+                // the whole-day age relative to the VIEWED score date — the
+                // precise number behind the inline freshness emoji (issue #547).
+                const starAnalysis = this.analysisData[stockSymbol];
+                let freshnessStep = '';
+                if (starAnalysis && globalThis.GRQFreshness) {
+                    freshnessStep = globalThis.GRQFreshness.freshnessSection(
+                        starAnalysis.date,
+                        starAnalysis.signedDaysFromScore,
+                    );
+                }
+
                 return header +
-                    `Stars working:\n${calculationSteps}${roundingSteps}${moonPhaseStep}\n= Display: ${display}`;
+                    `Stars working:\n${calculationSteps}${roundingSteps}${moonPhaseStep}\n= Display: ${display}${freshnessStep}`;
             case "fair-value-range":
                 const fairValueRange = this.getFairValueRange(stockSymbol);
                 if (!fairValueRange) {
@@ -4454,8 +4529,16 @@ class GRQValidator {
         );
         if (within90Days.length === 0) return null;
 
-        const lastData = within90Days[within90Days.length - 1];
-        const currentPrice = (lastData.high + lastData.low) / 2; // Already post-split
+        // Read the horizon midpoint on the CURRENT (end-of-series) split basis
+        // that getBuyPrice uses for the buy price (issue #569). Reading it RAW
+        // while dividing by a current-basis buy price leaves a spurious split
+        // factor in the Actual whenever a reconcilable split falls between the
+        // 90-day horizon and the end of the data series; horizonPriceCurrentBasis
+        // divides that factor out so both prices share one basis.
+        const currentPrice = GRQProjection.horizonPriceCurrentBasis(
+            marketData,
+            scoreDate,
+        );
 
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
         if (buyPriceObj === null || !buyPriceObj.price || buyPriceObj.price <= 0) {

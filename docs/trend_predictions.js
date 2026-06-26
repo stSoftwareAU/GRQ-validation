@@ -143,6 +143,13 @@ function parseDividendCsv(text) {
 // the "current" price the dashboard's Actual figure uses
 // (GRQValidator.getStockReturnBreakdown). Returns null when the stock has no
 // usable point within the window, so the inclusion gate drops it.
+//
+// The midpoint is restated onto the CURRENT (end-of-series) split basis that
+// getBuyPrice uses for the buy price (issue #569): when a reconcilable split
+// falls between the horizon and the end of the data series, reading the horizon
+// midpoint RAW while dividing by a current-basis buy price leaves a spurious
+// post-horizon split factor in the Actual. Dividing by postHorizonSplitFactor
+// puts both prices on the same basis.
 function currentPriceWithinWindow(points, scoreDate) {
     if (!Array.isArray(points) || points.length === 0) {
         return null;
@@ -159,7 +166,8 @@ function currentPriceWithinWindow(points, scoreDate) {
     if (!last) {
         return null;
     }
-    return (last.high + last.low) / 2;
+    const rawMid = (last.high + last.low) / 2;
+    return rawMid / GRQProjection.postHorizonSplitFactor(points, scoreDate);
 }
 
 // Resolve the per-stock { buyPrice, currentPrice, totalDividends, adjustedTarget }

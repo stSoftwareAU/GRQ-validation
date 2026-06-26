@@ -96,3 +96,45 @@ Deno.test("app.js: detail panel and table render the rating via the same getStar
     "both the detail panel and the table must source the rating from getStarRatingDisplay(stock.stock)",
   );
 });
+
+// --- Issue #549: freshness emoji beside the star rating in the mobile detail card ---
+//
+// The detail card's compact `.star-rating` span must append the fair-value
+// freshness indicator (issue #547) after the moon glyphs, e.g. "🌕🌕🌕🌕🌕 🌺",
+// mirroring the aggregate table cell (issue #548). The append is guarded so an
+// empty indicator (N/A stars) adds no stray space, and the whole star block is
+// already hidden when there is no analysis data — so no emoji renders for N/A.
+
+/** Return the `.star-rating` <span>…</span> markup from the detail card. */
+function detailStarRatingSpan(js: string): string | null {
+  const m = js.match(
+    /<span class="clickable-value star-rating"[\s\S]*?<\/span>/,
+  );
+  return m ? m[0] : null;
+}
+
+Deno.test("app.js: detail-panel star-rating span appends a guarded freshness indicator", async () => {
+  const js = await Deno.readTextFile(APP);
+  const span = detailStarRatingSpan(js);
+  assert(span, "the detail-panel star-rating span must exist");
+  // The freshness emoji is appended inside the star-rating span, right after the
+  // moons, guarded so an empty indicator adds no stray space (issue #549).
+  assert(
+    /getStarRatingDisplay\(stock\.stock\)\}\$\{this\.getFreshnessIndicator\(stock\.stock\)\s*\?/
+      .test(span as string),
+    "detail card must append a guarded getFreshnessIndicator(stock.stock) after the stars",
+  );
+});
+
+Deno.test("app.js: detail-panel freshness emoji stays inside the star block guard", async () => {
+  const js = await Deno.readTextFile(APP);
+  // The whole star block (span + emoji) sits behind the `getStarRatingDisplay
+  // ? … : ''` guard, so nothing — neither moons nor emoji — renders for N/A.
+  const guarded = js.match(
+    /\$\{this\.getStarRatingDisplay\(stock\.stock\)\s*\?\s*`[\s\S]*?star-rating[\s\S]*?getFreshnessIndicator\(stock\.stock\)[\s\S]*?`\s*:\s*''\}/,
+  );
+  assert(
+    guarded,
+    "the freshness emoji must live inside the star block's truthiness guard so N/A renders nothing",
+  );
+});
