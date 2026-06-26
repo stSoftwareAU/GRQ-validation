@@ -5,7 +5,8 @@
     "diagnose-price-basis": "deno run --allow-read scripts/diagnose_price_basis.ts",
     "diagnose-dividend-basis": "deno run --allow-read scripts/diagnose_dividend_basis.ts",
     "diagnose-buy-price-denominator": "deno run --allow-read scripts/diagnose_buy_price_denominator.ts",
-    "diagnose-horizon-split-parity": "deno run --allow-read scripts/diagnose_horizon_split_parity.ts"
+    "diagnose-horizon-split-parity": "deno run --allow-read scripts/diagnose_horizon_split_parity.ts",
+    "diagnose-score-target-decoding": "deno run --allow-read scripts/diagnose_score_target_decoding.ts"
   },
   "minimumDependencyAge": {
     "age": "P1D",
