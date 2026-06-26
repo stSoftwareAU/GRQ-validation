@@ -2,8 +2,8 @@
 
 ## Summary
 
-Adds the shared foundation for the fair-value freshness indicator (sub-issue of
-#545). Closes #547.
+Adds the shared foundation for the fair-value freshness indicator
+(sub-issue of #545). Closes #547.
 
 Two changes in `docs/app.js`:
 
