@@ -169,6 +169,10 @@
     <!-- Shared projection/scoring maths — must load before the engines below -->
     <script src="projection.js"></script>
 
+    <!-- Shared low-volume/liquidity helper (issue #576) — before
+         trend_predictions.js, which flags low-volume names (issue #577) -->
+    <script src="volume_recommend.js"></script>
+
     <!-- Shared number-formatting helpers (issue #276) -->
     <script src="format.js"></script>
 

@@ -190,6 +190,8 @@ pub struct DailyMarketPoint {
     pub low: f64,
     /// Split coefficient applied on this date (`1.0` means no split).
     pub split_coefficient: f64,
+    /// Traded volume for the day (`None` when absent from older 7-column CSVs).
+    pub volume: Option<f64>,
 }
 
 /// Result of parsing a derived market-data CSV.

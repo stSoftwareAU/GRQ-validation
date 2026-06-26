@@ -41,6 +41,26 @@ Pages.
   excludes the stock through the single `is_priceable` gate, dropping it from
   the average, the included count and into `excluded_tickers`. The thresholds
   mirror the frontend so backend and dashboard agree.
+- **Low-Volume Exclusion** — illiquid names are flagged and dropped from the
+  dashboard portfolio and from every aggregate (equal-weight) figure, so a name
+  too thin to trade neither helps nor hurts the "Actual"/Target lines. The
+  decision reuses GRQ training's `volumeRecommend` definition as a single source
+  of truth (`docs/volume_recommend.js`, issue #576): over a trailing 10-weekday
+  window, average daily **dollar** volume (`volume × low price`) below the
+  `BUDGET_DOLLARS = 10000` trade budget flags the stock. Flagged rows carry a
+  visible **Low volume** badge (issue #577) rather than vanishing silently. When
+  volume is unknown — older pre-volume-column CSVs — the name is **not** flagged
+  (insufficient data ⇒ not flagged), so historical dates are never
+  mass-excluded.
+- **Low-Volume Valuation Cap** — beyond excluding illiquid names from aggregates,
+  low volume is folded into the **valuation** of each prediction so an illiquid
+  name can never surface as a strong recommendation (issue #578). The displayed
+  Score is capped via `min(volumeRecommend, score, 1)` — mirroring GRQ training's
+  `Math.min(core.volumeRecommend, priceRecommend, 1)` — using the same #576
+  helper (`docs/volume_recommend.js`, `volumeCappedScore`). A flagged name's
+  price-based score is suppressed to a never-recommend value (and the detail view
+  shows a **Low volume — not recommended** badge), partial illiquidity
+  proportionally down-weights, and unknown volume leaves the score unchanged.
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`. On mobile, a pop-out control expands the

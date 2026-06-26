@@ -21,6 +21,8 @@ const STATIC_ASSETS = [
   "./index.html",
   "./app.js",
   "./projection.js",
+  // Shared low-volume/liquidity helper (issue #576/#577).
+  "./volume_recommend.js",
   "./chart_window_settings.js",
   "./color_key.js",
   "./series_label_colour.js",

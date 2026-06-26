@@ -13,6 +13,7 @@
 // with small, hand-computable fixtures.
 import { assertAlmostEquals, assertEquals } from "@std/assert";
 import "../docs/projection.js";
+import "../docs/volume_recommend.js";
 import "../docs/trend_series.js";
 import "../docs/trend_predictions.js";
 

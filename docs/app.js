@@ -610,9 +610,19 @@ class GRQValidator {
                 const open = parseFloat(values[4]);
                 const close = parseFloat(values[5]);
                 const splitCoefficient = parseFloat(values[6]);
+                // Trailing volume column (issue #575): present only in
+                // 8-column CSVs. Blank / non-numeric / absent -> null so the
+                // low-volume helper (#576) treats it as "unknown" rather than
+                // zero and never mass-excludes pre-volume-column history.
+                const volumeRaw = values[7];
+                const volumeNum =
+                    volumeRaw !== undefined && volumeRaw.trim() !== ""
+                        ? parseFloat(volumeRaw)
+                        : NaN;
+                const volume = Number.isFinite(volumeNum) ? volumeNum : null;
 
                 if (index < 3) { // Debug first 3 lines
-                    console.log(`Parsed values: date=${date}, ticker=${ticker}, high=${high}, low=${low}, open=${open}, close=${close}, split=${splitCoefficient}`);
+                    console.log(`Parsed values: date=${date}, ticker=${ticker}, high=${high}, low=${low}, open=${open}, close=${close}, split=${splitCoefficient}, volume=${volume}`);
                 }
 
                 if (!this.marketData[ticker]) {
@@ -629,6 +639,7 @@ class GRQValidator {
                     open,
                     close,
                     splitCoefficient,
+                    volume,
                 });
             });
             
@@ -2954,6 +2965,23 @@ class GRQValidator {
                 // Escape untrusted TSV-derived fields before interpolation (issue #63).
                 const safeStock = escapeHtml(stock.stock);
                 const safeNotes = escapeHtml(stock.notes);
+                // Fold low volume into the displayed valuation (issue #578): an
+                // illiquid name's price-based score is capped so it can never
+                // surface as a strong recommendation. A flagged name carries a
+                // visible "Low volume — not recommended" badge alongside the
+                // suppressed (negative) score.
+                const cappedScore = this.volumeCappedScore(
+                    stock.stock,
+                    stock.score,
+                    scoreDate,
+                );
+                const detailLowVolume = this.isStockLowVolume(
+                    stock.stock,
+                    scoreDate,
+                );
+                const scoreBadge = detailLowVolume
+                    ? ` <span class="badge bg-warning text-dark low-volume-badge" title="Low volume — never recommended; the price-based score is capped via the shared volumeRecommend helper (issue #578)">Low volume — not recommended</span>`
+                    : "";
                 stockCard.innerHTML = `
             <div class="card-header">
               <h5 class="card-title mb-0">${safeStock} - Detailed Information</h5>
@@ -2964,7 +2992,7 @@ class GRQValidator {
                   <h6 class="text-muted text-uppercase mb-3">Basic Information</h6>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Score:</strong></div>
-                    <div class="col-6">${stock.score.toFixed(3)}</div>
+                    <div class="col-6">${cappedScore.toFixed(3)}${scoreBadge}</div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Buy Price:</strong></div>
@@ -3195,8 +3223,15 @@ class GRQValidator {
                 // Aggregate view
                 // Escape untrusted TSV-derived ticker before interpolation (issue #63).
                 const safeStock = escapeHtml(stock.stock);
+                // Visible low-volume badge (issue #577): flagged names are
+                // excluded from the portfolio and every aggregate, so surface
+                // the reason rather than dropping them silently.
+                const lowVolume = this.isStockLowVolume(stock.stock, scoreDate);
+                const lowVolumeBadge = lowVolume
+                    ? ` <span class="badge bg-warning text-dark low-volume-badge" title="Low volume — excluded from the portfolio and all aggregate figures (issue #577)">Low volume</span>`
+                    : "";
                 row.innerHTML = `
-            <td class="clickable-stock" data-stock="${safeStock}">${safeStock}</td>
+            <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}</td>
             <td>
                 <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
                     data-field="buy-price" data-stock="${safeStock}"
@@ -3238,6 +3273,11 @@ class GRQValidator {
                 // calculations.
                 if (!this.isStockPriceable(stock.stock, scoreDate)) {
                     row.classList.add("excluded-stock");
+                }
+                // Tag low-volume exclusions (issue #577) distinctly so the
+                // badge and any low-volume styling can target them.
+                if (lowVolume) {
+                    row.classList.add("low-volume-stock");
                 }
                 // Add highlighting for selected stock in aggregate view
                 if (this.selectedStock === stock.stock) {
@@ -3789,16 +3829,50 @@ class GRQValidator {
     // helpers all agree on the rule. Excluded stocks (delisted, merged for
     // cash, renamed) are dropped entirely, re-weighting the portfolio equally
     // over the remaining included stocks.
+    // Whether a stock is flagged low-volume as of the score date (issue #577),
+    // using the shared single-source-of-truth helper (#576) over a trailing
+    // 10-weekday { volume, lowPrice } window drawn from the already-loaded
+    // historical series. Unknown volume (e.g. pre-volume-column CSVs) ⇒ NOT
+    // flagged, so historical dates are never mass-excluded.
+    isStockLowVolume(stockSymbol, scoreDate) {
+        const series = this.marketData ? this.marketData[stockSymbol] : null;
+        if (!series) {
+            return false;
+        }
+        const window = GRQVolume.buildTrailingVolumeWindow(series, scoreDate);
+        return GRQVolume.isLowVolume(window);
+    }
+
+    // Volume-capped prediction score (issue #578): folds low volume into the
+    // valuation so an illiquid name can never surface as a strong recommendation,
+    // mirroring GRQ training's Math.min(volumeRecommend, priceRecommend, 1). Falls
+    // back to the raw score when volume is unknown (no market data loaded, or a
+    // pre-volume-column CSV), matching the exclusion path's "insufficient data ⇒
+    // not flagged" rule. The shared #576 helper is the single source of truth.
+    volumeCappedScore(stockSymbol, baseScore, scoreDate) {
+        const series = this.marketData ? this.marketData[stockSymbol] : null;
+        if (!series) {
+            return baseScore;
+        }
+        const window = GRQVolume.buildTrailingVolumeWindow(series, scoreDate);
+        return GRQVolume.volumeCappedScore(baseScore, window);
+    }
+
     isStockPriceable(stockSymbol, scoreDate) {
         const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
         const buyPrice = buyPriceObj ? buyPriceObj.price : null;
         const currentPrice = GRQProjection.currentPriceFromLatest(
             this.marketData[stockSymbol],
         );
+        // Low-volume names are excluded from the portfolio and from EVERY
+        // aggregate (issue #577): this single gate feeds the chart Actual /
+        // "Actual (After 90 Days)" line, the totals row and the dividend
+        // figures, so an illiquid name neither helps nor hurts any of them.
         return GRQProjection.isStockIncluded(
             buyPrice,
             currentPrice,
             buyPriceObj ? buyPriceObj.reliable !== false : true,
+            this.isStockLowVolume(stockSymbol, scoreDate),
         );
     }
 
