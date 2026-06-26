@@ -3650,8 +3650,9 @@ class GRQValidator {
         const safeUrl = escapeHtml(url);
         const safeStock = escapeHtml(stockSymbol);
         // A Unicode ↗ cue (not Font Awesome, which index.html does not load —
-        // issue #590) marks this as an external pop-out link, and an on-screen
-        // "opens in a new tab" hint replaces the phone-invisible hover title.
+        // issue #590) marks this as an external pop-out link. The redundant
+        // on-screen "opens in a new tab" note was removed (issue #618); the
+        // aria-label still announces the new-tab behaviour to screen readers.
         return `
               <div class="row mt-3">
                 <div class="col-12 text-center yahoo-finance-link">
@@ -3659,7 +3660,6 @@ class GRQValidator {
                      aria-label="Confirm ${safeStock} on Yahoo Finance (opens in a new tab)">
                     Confirm on Yahoo Finance<span class="yahoo-finance-external" aria-hidden="true">↗</span>
                   </a>
-                  <span class="yahoo-finance-hint">opens in a new tab</span>
                 </div>
               </div>`;
     }
