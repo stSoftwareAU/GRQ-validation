@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.17">
+    <meta name="app-version" content="1.1.18">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -375,11 +375,18 @@
                     </div>
                     <!-- Low-volume legend (issue #577): explain the badge so
                          excluded illiquid names are visible, not silently
-                         dropped from the portfolio and aggregate figures. -->
-                    <div class="data-source-note text-muted mt-2 px-3 pb-2">
+                         dropped from the portfolio and aggregate figures.
+                         Hidden by default and shown only when at least one
+                         stock in the loaded report is flagged low-volume
+                         (issue #599) — a flagged name should never occur. -->
+                    <div
+                      id="lowVolumeLegend"
+                      class="data-source-note text-muted mt-2 px-3 pb-2"
+                      style="display: none"
+                    >
                       <small>
                         <span
-                          class="badge bg-warning text-dark low-volume-badge"
+                          class="badge bg-danger low-volume-badge"
                         >Low volume</span>
                         &mdash; average daily dollar volume is below the
                         $10,000 trade budget, so the stock is excluded from the
@@ -541,6 +548,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.1.17"></script>
+    <script src="sw-register.js?v=1.1.18"></script>
   </body>
 </html>
