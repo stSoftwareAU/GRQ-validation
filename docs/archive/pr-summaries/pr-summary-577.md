@@ -58,16 +58,30 @@ flowchart LR
 
 ## Evidence
 
-This is a dashboard (UI + data-pipeline) change. **Playwright MCP was not
-available in this environment**, so no live screenshot was captured. The
-behaviour is instead pinned by behavioural Deno tests against the real shipped
-kernels, and the UI surfaces are verified to be present in the committed markup:
+This is a dashboard (UI + data-pipeline) change. Screenshot captured with
+Playwright (headless Chromium) driving the real shipped dashboard at
+`index.html?file=2026/June/24.tsv`:
+
+![Low-volume stock flagged and excluded on the dashboard](docs/evidence/low-volume-exclusion-577.png)
+
+`NASDAQ:VISN` carries a **Low volume** badge, its buy / target / 90-day prices
+and dividend are struck through to show it is **excluded**, and the legend
+spells out why ("average daily dollar volume is below the $10,000 trade budget,
+so the stock is excluded from the portfolio and from every aggregate
+(equal-weight) figure"). The `Days Elapsed` totals row reflects the aggregate
+computed **without** the flagged name. The liquid names around it are
+unaffected.
+
+Because no committed CSV yet carries the #575 volume column, no badge renders on
+live data today (the documented "insufficient data ⇒ not flagged" rule). To
+exercise the real render path for this screenshot, a trailing volume column was
+injected **locally only** into `2026/June/24.csv` (`NASDAQ:VISN` set below the
+trade budget, every other name liquid); that throwaway data was reverted and is
+**not** part of this change. The synthetic-fixture Deno tests below pin the same
+flagged path end-to-end.
 
 - Badge rendered in `docs/app.js` (`low-volume-badge`), styled in
   `docs/styles.css`, legend in `docs/index.html`.
-- Because no committed CSV yet carries volume, no badge renders on live data
-  today (the documented "insufficient data ⇒ not flagged" rule); the
-  synthetic-fixture tests below exercise the flagged path end-to-end.
 
 ### Test results
 
