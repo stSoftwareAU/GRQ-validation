@@ -1,8 +1,9 @@
 # Fair-value freshness ⚠️ — root-cause investigation (issue #587)
 
-**Status:** diagnose-only. This document is the written root-cause analysis the
-issue asked for. **No dashboard behaviour is changed here** — the fix is a
-separate, later issue.
+**Status:** RESOLVED in issue #600. This document is the written root-cause
+analysis from the diagnose-only round (#587); the suggested fix below — flipping
+the sign to `scoreDate − analysisDate` — was applied in `docs/app.js` and
+shipped via the cache/app-version bump to **1.1.20**.
 
 ## Question
 

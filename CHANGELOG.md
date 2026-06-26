@@ -40,6 +40,15 @@ and this project adheres to
 
 ### Fixed
 
+- Fair-value freshness ⚠️ no longer fires on healthy rows. `docs/app.js`
+  computed the signed analysis age with the sign inverted
+  (`analysisDate − scoreDate`), so a normal analysis dated *before* its score
+  came out negative and tripped the `< 0 → ⚠️` guard for essentially every
+  rated stock — while a genuine after-score anomaly came out positive and was
+  silently missed. The arithmetic is now `scoreDate − analysisDate`, matching
+  the documented invariant and the emoji scale (🌹 0–1 → 🕸 14+). Cache/app
+  version bumped to **1.1.20** so the corrected `app.js` reaches clients
+  (Issue #600).
 - Footer **🔗 Share** button now copies a deep-link to the clipboard. The
   link-builder and clipboard/fallback handling shipped in `docs/share_link.js`
   (Issue #495) but the dashboard never called `GRQShare.initShareButton(...)`,
