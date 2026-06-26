@@ -70,6 +70,34 @@ function deviceWindowEnd(scoreDate, isMobile, windowDays) {
     );
 }
 
+// The single-stock "Stock Performance" chart x-axis max (issue #606).
+//
+// The single-stock chart pins its x-axis min to the score date and needs an
+// explicit max so the day-90 target dot and the projection/trend line stay
+// visible even when the actuals stop earlier. That max used to be a hard-coded
+// scoreDate + 95 days, which capped the chart at ~90 days of dates and ignored
+// the selected window — so the 180-day view still only plotted ~90 days. The
+// portfolio view (the reference) auto-fits the data across the full window;
+// deriving the single-stock max from the same window resolver keeps it in step.
+//
+// Returns the resolved window end (deviceWindowEnd) plus a small padding so the
+// final point is not clipped at the very edge — preserving the historical
+// 90-day -> 95-day end while extending the 180-day window to its full span.
+// Returns null when the score date is missing/unparseable so the caller renders
+// blank rather than erroring (mirrors deviceWindowEnd).
+const SINGLE_STOCK_AXIS_PADDING_DAYS = 5;
+
+function singleStockAxisMax(scoreDate, isMobile, windowDays) {
+    const end = deviceWindowEnd(scoreDate, isMobile, windowDays);
+    if (end === null) return null;
+    // Add the padding in CALENDAR days (setDate), not raw milliseconds, so a
+    // daylight-saving transition inside the window cannot shift the result by a
+    // day. `end` is already local midnight.
+    const padded = new Date(end);
+    padded.setDate(padded.getDate() + SINGLE_STOCK_AXIS_PADDING_DAYS);
+    return setDateToMidnight(padded);
+}
+
 // Whether the chart's "Actual (After 90 Days)" tail belongs in the visible
 // window (issue #496). The main chart splits the actuals into the first-90-day
 // "Actual" series and a day-90 -> window-end tail; the tail exists only when the
@@ -1322,6 +1350,7 @@ globalThis.GRQProjection = {
     setDateToMidnight,
     deviceWindowDays,
     deviceWindowEnd,
+    singleStockAxisMax,
     windowShowsActualsAfter90,
     bridgeActualsAfter90,
     selectDefaultScore,
