@@ -241,6 +241,17 @@ mutates your saved settings — and degrades to a select-the-text fallback where
 the async Clipboard API is unavailable. Pasting the link into a fresh tab
 reproduces the same view.
 
+The single-stock detail view ends with a small, understated **Yahoo Finance**
+link as its lowest-priority item (issue #570) — a "here are our numbers; if a
+figure looks off, confirm it at the source" aid. It opens the stock's Yahoo
+quote page in a new standalone external tab (`target="_blank"` +
+`rel="noopener noreferrer"`, so it works from the installed PWA). Symbols are
+stored `EXCHANGE:TICKER`, so the URL drops the exchange prefix and uses the bare
+ticker, e.g. `NASDAQ:UCTT` → `https://au.finance.yahoo.com/quote/UCTT/`. The
+prefix-stripping and URL building live in `docs/yahoo_finance.js`
+(`GRQYahooFinance.yahooQuoteUrl`), unit-tested in
+`tests/yahoo_finance_link_test.ts`.
+
 All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
 on every pull request that touches `docs/`.
