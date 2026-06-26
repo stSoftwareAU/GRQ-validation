@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.23">
+    <meta name="app-version" content="1.1.24">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -327,12 +327,6 @@
                         </div>
                       </div>
                     </div>
-                    <div class="data-source-note text-muted text-end mt-2">
-                      <small>
-                        <i class="fas fa-info-circle me-1" aria-hidden="true"></i>
-                        Market data is fetched from Yahoo Finance and shows performance from the score date to current date.
-                      </small>
-                    </div>
                   </div>
                 </div>
 
@@ -454,6 +448,14 @@
         aria-label="Shareable link — copy this text"
         hidden
       >
+      <!-- Yahoo Finance data-source attribution (issue #566). Moved here from
+           the market-index card so it reads as page-footer chrome. -->
+      <div class="data-source-note text-muted mt-2">
+        <small>
+          <i class="fas fa-info-circle me-1" aria-hidden="true"></i>
+          Market data is fetched from Yahoo Finance and shows performance from the score date to current date.
+        </small>
+      </div>
     </footer>
 
     <!-- Version display -->
@@ -543,6 +545,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.1.23"></script>
+    <script src="sw-register.js?v=1.1.24"></script>
   </body>
 </html>
