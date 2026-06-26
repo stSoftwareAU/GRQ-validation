@@ -174,22 +174,29 @@ function withoutMobileBlocks(css: string): string {
   return out;
 }
 
-Deno.test("styles.css: section spacing overrides are confined to the mobile block", async () => {
+Deno.test("styles.css: vertical section spacing overrides are confined to the mobile block", async () => {
   const css = await Deno.readTextFile(STYLES);
-  // Outside the mobile media blocks the .card-body.p-4 override must not exist,
-  // so desktop/tablet (>=768px) rendering is unchanged.
+  // The MOBILE override reduces the full `padding` shorthand (both axes). Issue
+  // #559 later trims only the desktop HORIZONTAL card-body padding to give the
+  // data more room, so the `padding` shorthand — which would also shrink the
+  // comfortable top/bottom spacing — must stay mobile-only outside the mobile
+  // blocks.
   const nonMobile = withoutMobileBlocks(css);
   assert(
-    !/\.card-body\.p-4\s*\{/.test(nonMobile),
-    "there must be no non-mobile .card-body.p-4 rule (mobile-only override)",
+    !/\.card-body\.p-4\s*\{[^}]*\bpadding\s*:/.test(nonMobile),
+    "there must be no non-mobile .card-body.p-4 `padding` shorthand override (vertical spacing stays mobile-only)",
   );
-  const desktop = mediaBlock(css, "(min-width: 768px)");
-  if (desktop) {
-    assert(
-      ruleBody(desktop, ".mb-4") === null &&
-        ruleBody(desktop, ".card-body.p-4") === null,
-      "the desktop block must not retune section spacing",
-    );
+  // Neither desktop media block may retune the between-section .mb-4 gap — that
+  // tightening is mobile-only. (The #559 desktop block may trim horizontal
+  // card-body padding, which is verified by dashboard_desktop_margins_test.ts.)
+  for (const query of ["(min-width: 768px)", "(min-width: 769px)"]) {
+    const desktop = mediaBlock(css, query);
+    if (desktop) {
+      assert(
+        ruleBody(desktop, ".mb-4") === null,
+        `the ${query} block must not retune section spacing (.mb-4)`,
+      );
+    }
   }
 });
 
