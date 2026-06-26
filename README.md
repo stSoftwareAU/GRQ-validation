@@ -432,7 +432,9 @@ GRQ-validation/
 │   ├── horizon_split_parity_diagnostic.ts # horizon as-of split-basis parity (#555)
 │   ├── diagnose_horizon_split_parity.ts # CLI report for the timing/split parity audit (#555)
 │   ├── score_target_decoding_diagnostic.ts # reverseProfitRecommend round-trip bias (#556)
-│   └── diagnose_score_target_decoding.ts # CLI report for the score→target decode audit (#556)
+│   ├── diagnose_score_target_decoding.ts # CLI report for the score→target decode audit (#556)
+│   ├── residual_gap_reconciliation.ts # whole-app sweep + residual-gap reconciliation (#557)
+│   └── diagnose_residual_gap.ts      # CLI report for the catch-all sweep / reconciliation (#557)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
