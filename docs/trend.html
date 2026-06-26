@@ -24,7 +24,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.12">
+    <meta name="app-version" content="1.1.13">
     <meta name="app-title" content="GRQ Validation Trend">
 
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
@@ -169,6 +169,10 @@
     <!-- Shared projection/scoring maths — must load before the engines below -->
     <script src="projection.js"></script>
 
+    <!-- Shared low-volume/liquidity helper (issue #576) — before
+         trend_predictions.js, which flags low-volume names (issue #577) -->
+    <script src="volume_recommend.js"></script>
+
     <!-- Shared number-formatting helpers (issue #276) -->
     <script src="format.js"></script>
 
@@ -207,6 +211,6 @@
     <script src="trend.js"></script>
 
     <!-- Service Worker Registration (issue #224) -->
-    <script src="sw-register.js?v=1.1.12"></script>
+    <script src="sw-register.js?v=1.1.13"></script>
   </body>
 </html>

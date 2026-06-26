@@ -6,7 +6,7 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.1.12";
+const APP_VERSION = "1.1.13";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
@@ -21,6 +21,8 @@ const STATIC_ASSETS = [
   "./index.html",
   "./app.js",
   "./projection.js",
+  // Shared low-volume/liquidity helper (issue #576/#577).
+  "./volume_recommend.js",
   "./chart_window_settings.js",
   "./color_key.js",
   "./series_label_colour.js",

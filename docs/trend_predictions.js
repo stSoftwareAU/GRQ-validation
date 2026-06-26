@@ -99,6 +99,13 @@ function parseMarketCsv(text) {
         if (!marketData[ticker]) {
             marketData[ticker] = [];
         }
+        // Trailing volume column (issue #575): present only in 8-column CSVs.
+        // Blank / non-numeric / absent -> null so the low-volume helper (#576)
+        // treats it as "unknown" rather than zero.
+        const volumeRaw = values[7];
+        const volume = volumeRaw !== undefined && volumeRaw.trim() !== ""
+            ? parseFloat(volumeRaw)
+            : NaN;
         marketData[ticker].push({
             date: GRQProjection.setDateToMidnight(new Date(values[0])),
             high: parseFloat(values[2]),
@@ -106,6 +113,7 @@ function parseMarketCsv(text) {
             open: parseFloat(values[4]),
             close: parseFloat(values[5]),
             splitCoefficient: parseFloat(values[6]),
+            volume: Number.isFinite(volume) ? volume : null,
         });
     }
     for (const ticker of Object.keys(marketData)) {
@@ -207,7 +215,21 @@ function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate)
                 scoreDate,
             )
             : null;
-        return { buyPrice, currentPrice, totalDividends, adjustedTarget, splitReliable };
+        // Low-volume flag (issue #577) over a trailing 10-weekday window ending
+        // at the score date, via the shared single-source-of-truth helper
+        // (#576). Unknown volume ⇒ not flagged, so pre-volume-column history is
+        // never mass-excluded from the trend aggregates.
+        const lowVolume = GRQVolume.isLowVolume(
+            GRQVolume.buildTrailingVolumeWindow(points, scoreDate),
+        );
+        return {
+            buyPrice,
+            currentPrice,
+            totalDividends,
+            adjustedTarget,
+            splitReliable,
+            lowVolume,
+        };
     });
 }
 

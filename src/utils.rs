@@ -473,12 +473,15 @@ fn parse_financial_value(field: &str, context: &str, raw: &str) -> Option<f64> {
 /// Reads a derived market-data CSV into a [`MarketDataCsv`].
 ///
 /// The long-format columns are `date,ticker,high,low,open,close,
-/// split_coefficient`. `closes` keeps the original `ticker → (date → close)`
-/// shape; `points` additionally carries the `high`/`low`/`split_coefficient`
-/// figures the backend needs to correct-or-exclude split-distorted stocks
-/// (issue #294). Rows with a non-numeric or non-positive close price are
-/// skipped (and a warning is written to stderr). A missing or unparseable
-/// `split_coefficient` is treated as `1.0` (no split).
+/// split_coefficient,volume`. `closes` keeps the original `ticker → (date →
+/// close)` shape; `points` additionally carries the
+/// `high`/`low`/`split_coefficient` figures the backend needs to
+/// correct-or-exclude split-distorted stocks (issue #294) plus the daily
+/// `volume` used by the low-volume guard (issue #575). Rows with a non-numeric
+/// or non-positive close price are skipped (and a warning is written to
+/// stderr). A missing or unparseable `split_coefficient` is treated as `1.0`
+/// (no split). The trailing `volume` column is optional: older 7-column CSVs,
+/// or a blank/non-numeric value, yield `None`.
 ///
 /// # Errors
 ///
@@ -529,6 +532,13 @@ pub fn read_market_data_from_csv(csv_file_path: &str) -> Result<MarketDataCsv> {
                 .and_then(|v| v.parse::<f64>().ok())
                 .filter(|c| c.is_finite() && *c > 0.0)
                 .unwrap_or(1.0);
+            // volume (column 7) is optional; absent (older 7-column CSVs), blank
+            // or non-numeric all mean "unknown" (None), mirroring how the
+            // split_coefficient column is treated above.
+            let volume = record
+                .get(7)
+                .and_then(|v| v.parse::<f64>().ok())
+                .filter(|v| v.is_finite());
 
             // Store data using the full ticker (e.g., "NYSE:MBC").
             market_data
@@ -542,6 +552,7 @@ pub fn read_market_data_from_csv(csv_file_path: &str) -> Result<MarketDataCsv> {
                     high,
                     low,
                     split_coefficient,
+                    volume,
                 },
             );
         }
@@ -705,7 +716,7 @@ pub fn create_market_data_csv(
 }
 
 /// Creates a CSV file with market data for the given tickers and date range, in long format.
-/// Each row: date, ticker, high, low, open, close
+/// Each row: date, ticker, high, low, open, close, split_coefficient, volume
 /// The ticker is the full code from the scores file (e.g., NYSE:SEM)
 ///
 /// # Errors
@@ -737,6 +748,7 @@ pub fn create_market_data_long_csv(
         "open",
         "close",
         "split_coefficient",
+        "volume",
     ])?;
 
     let mut rows_written = 0u64;
@@ -774,6 +786,7 @@ pub fn create_market_data_long_csv(
                     &day.open.to_string(),
                     &day.close.to_string(),
                     &day.split_coefficient.to_string(),
+                    &day.volume.to_string(),
                 ])?;
                 rows_written += 1;
             }
@@ -2487,6 +2500,54 @@ mod tests {
         assert!(ticker.get("2025-06-17").is_none());
     }
 
+    #[test]
+    fn test_read_market_data_from_csv_reads_trailing_volume_column() {
+        use std::io::Write;
+
+        // 8-column shape (issue #575): the trailing `volume` column is populated.
+        let csv = "date,ticker,high,low,open,close,split_coefficient,volume\n\
+                   2025-06-16,NYSE:VOL,11,9,10,10.50,1.0,123456\n\
+                   2025-06-17,NYSE:VOL,12,10,11,11.50,1.0,\n\
+                   2025-06-18,NYSE:VOL,13,11,12,12.50,1.0,not-a-number\n";
+
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(csv.as_bytes()).unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let points = read_market_data_from_csv(&path).unwrap().points;
+        let ticker = points.get("NYSE:VOL").unwrap();
+
+        // A numeric value is parsed; blank and non-numeric both fall back to None.
+        assert_eq!(ticker.get("2025-06-16").unwrap().volume, Some(123456.0));
+        assert_eq!(ticker.get("2025-06-17").unwrap().volume, None);
+        assert_eq!(ticker.get("2025-06-18").unwrap().volume, None);
+    }
+
+    #[test]
+    fn test_read_market_data_from_csv_legacy_7_column_has_no_volume() {
+        use std::io::Write;
+
+        // Older 7-column CSVs (no volume column) must still parse, with volume
+        // reported as None for every row (backward compatibility, issue #575).
+        let csv = "date,ticker,high,low,open,close,split_coefficient\n\
+                   2025-06-16,NYSE:OLD,11,9,10,10.50,1.0\n\
+                   2025-06-17,NYSE:OLD,12,10,11,11.50,1.0\n";
+
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        tmp.write_all(csv.as_bytes()).unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let parsed = read_market_data_from_csv(&path).unwrap();
+        let ticker = parsed.points.get("NYSE:OLD").unwrap();
+
+        assert_eq!(ticker.len(), 2);
+        assert_eq!(ticker.get("2025-06-16").unwrap().volume, None);
+        assert_eq!(ticker.get("2025-06-17").unwrap().volume, None);
+        // Existing positional fields remain intact.
+        assert_eq!(ticker.get("2025-06-16").unwrap().split_coefficient, 1.0);
+        assert_eq!(parsed.closes.get("NYSE:OLD").unwrap().len(), 2);
+    }
+
     // --- WHAT-tests for calculate_hybrid_projection (issue #200) ---
     //
     // These exercise the public projection behaviour against controlled,
@@ -2970,6 +3031,8 @@ mod tests {
                     high: *high,
                     low: *low,
                     split_coefficient: *split_coefficient,
+                    // Volume is irrelevant to the split-reconciliation tests.
+                    volume: None,
                 },
             );
         }

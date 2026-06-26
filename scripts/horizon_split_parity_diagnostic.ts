@@ -22,6 +22,7 @@
 // offset is DORMANT; were the raw read reintroduced, the offset would reappear.
 
 import "../docs/projection.js";
+import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
 // deno-lint-ignore no-explicit-any
