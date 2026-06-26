@@ -2989,7 +2989,7 @@ class GRQValidator {
                     scoreDate,
                 );
                 const scoreBadge = detailLowVolume
-                    ? ` <span class="badge bg-warning text-dark low-volume-badge" title="Low volume — never recommended; the price-based score is capped via the shared volumeRecommend helper (issue #578)">Low volume — not recommended</span>`
+                    ? ` ${GRQProjection.lowVolumeBadge("Low volume — not recommended", "Low volume — never recommended; the price-based score is capped via the shared volumeRecommend helper (issue #578)")}`
                     : "";
                 stockCard.innerHTML = `
             <div class="card-header">
@@ -3237,7 +3237,7 @@ class GRQValidator {
                 // the reason rather than dropping them silently.
                 const lowVolume = this.isStockLowVolume(stock.stock, scoreDate);
                 const lowVolumeBadge = lowVolume
-                    ? ` <span class="badge bg-warning text-dark low-volume-badge" title="Low volume — excluded from the portfolio and all aggregate figures (issue #577)">Low volume</span>`
+                    ? ` ${GRQProjection.lowVolumeBadge("Low volume", "Low volume — excluded from the portfolio and all aggregate figures (issue #577)")}`
                     : "";
                 row.innerHTML = `
             <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}</td>
@@ -3385,6 +3385,8 @@ class GRQValidator {
             });
         });
 
+        // Call out any low-volume name with the conditional legend (issue #599).
+        this.updateLowVolumeLegend();
     }
 
     updateBasicStockTable() {
@@ -3460,6 +3462,10 @@ class GRQValidator {
             <td>-</td>
         `;
         tbody.appendChild(summaryRow);
+
+        // The basic (no-market-data) view cannot flag low volume, so this hides
+        // the legend if a prior market-data render had shown it (issue #599).
+        this.updateLowVolumeLegend();
     }
 
     getDividendsWithin90Days(stockSymbol) {
@@ -3880,6 +3886,24 @@ class GRQValidator {
     // 10-weekday { volume, lowPrice } window drawn from the already-loaded
     // historical series. Unknown volume (e.g. pre-volume-column CSVs) ⇒ NOT
     // flagged, so historical dates are never mass-excluded.
+    // Show the static low-volume legend only when at least one stock in the
+    // loaded report is flagged low-volume (issue #599). A flagged name should
+    // never occur, so the explanation appears only when one actually does;
+    // otherwise the legend stays hidden. Driven by the same isStockLowVolume()
+    // predicate that gates the per-row badges, so legend and badges agree.
+    updateLowVolumeLegend() {
+        const legend = document.getElementById("lowVolumeLegend");
+        if (!legend) {
+            return;
+        }
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        const flags = (this.scoreData || []).map((stock) =>
+            this.isStockLowVolume(stock.stock, scoreDate)
+        );
+        legend.style.display =
+            GRQProjection.shouldShowLowVolumeLegend(flags) ? "" : "none";
+    }
+
     isStockLowVolume(stockSymbol, scoreDate) {
         const series = this.marketData ? this.marketData[stockSymbol] : null;
         if (!series) {

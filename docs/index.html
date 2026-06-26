@@ -375,11 +375,18 @@
                     </div>
                     <!-- Low-volume legend (issue #577): explain the badge so
                          excluded illiquid names are visible, not silently
-                         dropped from the portfolio and aggregate figures. -->
-                    <div class="data-source-note text-muted mt-2 px-3 pb-2">
+                         dropped from the portfolio and aggregate figures.
+                         Hidden by default and shown only when at least one
+                         stock in the loaded report is flagged low-volume
+                         (issue #599) — a flagged name should never occur. -->
+                    <div
+                      id="lowVolumeLegend"
+                      class="data-source-note text-muted mt-2 px-3 pb-2"
+                      style="display: none"
+                    >
                       <small>
                         <span
-                          class="badge bg-warning text-dark low-volume-badge"
+                          class="badge bg-danger low-volume-badge"
                         >Low volume</span>
                         &mdash; average daily dollar volume is below the
                         $10,000 trade budget, so the stock is excluded from the

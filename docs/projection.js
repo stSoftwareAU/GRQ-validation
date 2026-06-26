@@ -1296,9 +1296,29 @@ function buildIndexSeriesFromMap(priceMap, indexName, startDate, endDate) {
     };
 }
 
+// Low-volume callout markup (issue #599): a flagged name should never occur, so
+// when one does it must be called out in red. Single source of truth for the
+// badge shared by the static legend and both per-row badges — Bootstrap
+// bg-danger (with its default light text), replacing the old amber
+// bg-warning/text-dark. The `.low-volume-badge` class carries layout only (font
+// size, no-wrap), not colour. `label` and `title` are trusted static literals.
+function lowVolumeBadge(label, title) {
+    const titleAttr = title ? ` title="${title}"` : "";
+    return `<span class="badge bg-danger low-volume-badge"${titleAttr}>${label}</span>`;
+}
+
+// The static low-volume legend is shown only when at least one stock in the
+// loaded report is flagged low-volume (issue #599): a flagged name should not
+// occur, so the explanation appears only when one actually does.
+function shouldShowLowVolumeLegend(lowVolumeFlags) {
+    return Array.isArray(lowVolumeFlags) && lowVolumeFlags.some(Boolean);
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
+    lowVolumeBadge,
+    shouldShowLowVolumeLegend,
     setDateToMidnight,
     deviceWindowDays,
     deviceWindowEnd,
