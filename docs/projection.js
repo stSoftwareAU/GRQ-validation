@@ -83,6 +83,36 @@ function windowShowsActualsAfter90(isMobile, windowDays) {
     return deviceWindowDays(isMobile, windowDays) > MOBILE_WINDOW_DAYS;
 }
 
+// Bridge the day-90 split so the actuals line stays continuous across the
+// 90-Day Target while keeping the intended blue -> grey colour change
+// (issue #592).
+//
+// The chart splits the actuals into two Chart.js datasets: a solid-blue
+// "Actual" series for points on/before the 90-day target and a faded-grey
+// "Actual (After 90 Days)" tail for points strictly after it. The day-90
+// boundary point lives only in the blue series and the grey series starts at
+// the NEXT point, so the two datasets share no point and Chart.js draws no
+// segment between them — the visible one-segment gap reported in the issue.
+//
+// Prepending a copy of the day-90 boundary point (the last before-90 point) to
+// the after-90 series gives the two datasets a shared point, so the grey series
+// draws a connecting segment from day 90 onward and the line stays continuous.
+// The prepended point is flagged `bridge: true` (and has any dividend marker
+// stripped) so callers render it with no marker — it is only there to connect
+// the line, not to add a duplicate dot over the blue boundary point.
+//
+// Pure and order-preserving: returns the after-90 array unchanged when there is
+// nothing to bridge (either series empty), so the #496 gating (only draw the
+// tail when the window runs past day 90) is unaffected.
+function bridgeActualsAfter90(before90, after90) {
+    if (!Array.isArray(after90) || after90.length === 0) return after90;
+    if (!Array.isArray(before90) || before90.length === 0) return after90;
+    const boundary = before90[before90.length - 1];
+    const bridgePoint = { ...boundary, bridge: true };
+    delete bridgePoint.dividend;
+    return [bridgePoint, ...after90];
+}
+
 // Choose the default score file for the dashboard (issue #275).
 //
 // By default we select the nearest available score date ON OR BEFORE the
@@ -1273,6 +1303,7 @@ globalThis.GRQProjection = {
     deviceWindowDays,
     deviceWindowEnd,
     windowShowsActualsAfter90,
+    bridgeActualsAfter90,
     selectDefaultScore,
     getDaysElapsed,
     calculatePerformanceReturn,
