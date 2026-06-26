@@ -154,6 +154,144 @@ When the guard trips it names both newest dates and the gap, e.g.
 `benchmark indices are stale: newest index date 2026-06-08 lags the newest
 actuals date 2026-06-18 by 7 trading days (tolerance is 3 trading days)`.
 
+## How the GRQ model is trained
+
+> **High-level overview for general readers.** This section explains, at a
+> conceptual level, how the predictions this repository validates are produced.
+> It deliberately contains **no** proprietary code, hyper-parameters or private
+> endpoints — only the publicly describable shape of the process. The model is
+> trained **outside** this repository; `GRQ-validation` only checks the
+> resulting predictions against a 90-day horizon.
+
+The GRQ prediction model is an evolved neural network produced by the public
+**NEAT-AI** project — a Deno/TypeScript implementation of NeuroEvolution of
+Augmenting Topologies (NEAT). Rather than training a fixed-shape network by
+gradient descent alone, NEAT-AI **evolves** both the structure and the weights
+of many candidate networks ("creatures"), keeping those that predict best and
+breeding the next generation from them. The score files this repository ingests
+are the matured predictions of the current champion network.
+
+```mermaid
+flowchart LR
+    subgraph Feeds[Market data feeds]
+        AV[Alpha Vantage]
+        FRED[FRED macro data]
+        WUI[World Uncertainty Index]
+    end
+    Feeds --> TD[Training-data production<br/>OHLCV, fundamentals, FX,<br/>news sentiment, insider data]
+    TD --> EV[Multi-node continuous learning<br/>evolve + train creatures]
+    EV --> SC[NEAT-AI-scorer<br/>fitness score]
+    SC --> PRED[Champion network<br/>emits predictions]
+    PRED --> VAL[GRQ-validation<br/>90-day validation]
+```
+
+### Training data production — the major market feeds
+
+The training data is assembled from several public and commercial feeds, then
+normalised into the time series the network learns from. The full pipeline spans
+more than headline prices:
+
+- **Prices / OHLCV** — daily open/high/low/close/volume for each listed
+  security, sourced chiefly from **Alpha Vantage**, covering the US exchanges
+  (**NYSE**, **NASDAQ**), the Australian exchange (**ASX**), OTC names and a
+  range of international markets.
+- **Company fundamentals** — company overviews and quarterly **earnings** (also
+  via Alpha Vantage), so the model sees each business, not just its chart.
+- **Macro indicators** — **Federal Reserve Economic Data (FRED)** series such as
+  the VIX volatility index and CPI, giving the model the broader economic
+  backdrop.
+- **Global risk** — the **World Uncertainty Index**, a published measure of
+  worldwide economic and political uncertainty.
+- **Foreign exchange** — rates across 50+ currency pairs, so internationally
+  listed names and non-USD cash flows are compared on a like-for-like basis.
+- **News sentiment** — published sentiment signals (via Alpha Vantage) attached
+  to each security.
+- **Insider data** — disclosed insider-transaction activity for each company.
+
+Each feed is fetched on a schedule, validated, and folded into a per-security
+training set. No raw API keys, private endpoints or proprietary collection code
+are described here — only the publicly nameable providers above.
+
+### Key observations
+
+A few observations shape how the data is used:
+
+- **Predict the move, not the price.** The model is trained to anticipate how a
+  stock moves over a forward window, which is exactly what this repository then
+  validates against the **90-day** horizon.
+- **Liquidity matters.** Names too thin to trade are screened out during
+  training via the same `volumeRecommend` definition the dashboard reuses (see
+  _Low-Volume Exclusion_ above) — a stock whose average daily **dollar** volume
+  falls below the trade budget should never surface as a recommendation.
+- **Fundamentals and macro context add signal.** Combining per-company
+  fundamentals with macro and global-risk indicators lets the network weigh a
+  name against its economic backdrop rather than its price history alone.
+- **Survivorship and splits are handled at validation time.** Stock splits are
+  reconciled inside the 90-day window so a corporate action never masquerades as
+  a return (see _Split-Aware Returns_ above).
+
+### Multi-node continuous learning
+
+Training is **continuous**, not a one-off batch. A fleet of machines runs around
+the clock, each node evolving and training candidate networks against the latest
+market data. Nodes coordinate through distributed locks so they collaborate on a
+shared population without standing on each other's work, and the best-performing
+creatures propagate across the fleet. As new market data arrives daily, the
+population keeps adapting — yesterday's champion is continually challenged by
+freshly evolved rivals. The private coordination, health-monitoring and logging
+services that run this fleet are intentionally left unnamed.
+
+```mermaid
+flowchart TD
+    subgraph Fleet[Continuous-learning fleet]
+        N1[Node 1<br/>evolve + train]
+        N2[Node 2<br/>evolve + train]
+        N3[Node N<br/>evolve + train]
+    end
+    DL[(Distributed locks<br/>coordination)] --- N1
+    DL --- N2
+    DL --- N3
+    N1 --> POP[Shared population<br/>of creatures]
+    N2 --> POP
+    N3 --> POP
+    POP --> CH[Champion selected<br/>by fitness]
+    CH -->|emits predictions| GRQ[GRQ-validation score files]
+```
+
+### How a score is generated
+
+Candidate networks are ranked by the public **NEAT-AI-scorer** CLI (the "scorer
+script"). It runs a forward pass over the training data and emits a **fitness**
+score in the range 0–1 (higher is better):
+
+```text
+fitness = 1 − error − complexityPenalty − versionPenalty
+```
+
+The `error` term rewards accurate predictions, the **complexity** penalty
+discourages needlessly large networks (favouring simpler, more general models),
+and the **version** penalty keeps the champion current. The scorer emits the
+result as JSON, which this repository captures for 90-day validation.
+
+### The public NEAT-AI repositories
+
+The training machinery is open source and can be explored directly. The data
+that feeds it and the live coordination infrastructure remain private, but the
+engine itself is public:
+
+- [`NEAT-AI`](https://github.com/stSoftwareAU/NEAT-AI) — the Deno/TypeScript
+  orchestrator: evolution, training and inference.
+- [`NEAT-AI-core`](https://github.com/stSoftwareAU/NEAT-AI-core) — Rust/WASM
+  numerics and cost functions.
+- [`NEAT-AI-Discovery`](https://github.com/stSoftwareAU/NEAT-AI-Discovery) — the
+  Rust structural-mutation engine that grows network topologies.
+- [`NEAT-AI-scorer`](https://github.com/stSoftwareAU/NEAT-AI-scorer) — the Rust
+  scoring CLI that computes the fitness score above.
+- [`NEAT-AI-Examples`](https://github.com/stSoftwareAU/NEAT-AI-Examples) —
+  worked examples.
+- [`NEAT-AI-Explore`](https://github.com/stSoftwareAU/NEAT-AI-Explore) —
+  visualisation tools.
+
 ## Quick Start
 
 ### Prerequisites
