@@ -487,23 +487,41 @@ body.chart-popout-open {
 /* Lowest-priority Yahoo Finance "confirm our numbers" link at the very bottom
  * of the detail card (issue #570). Kept small and understated — a footnote-sized
  * confirmation aid, not a headline action — so it never competes with the
- * figures above it. */
+ * figures above it. Issue #590 makes it read unmistakably as a tappable pop-out
+ * link: theme-aware link colour at rest, a persistent underline, a ↗ external
+ * cue and an on-screen "opens in a new tab" hint (the old hover-only title is
+ * invisible on phones). */
 #stockDetailCard .yahoo-finance-link {
   font-size: 0.75rem;
 }
 
 #stockDetailCard .yahoo-finance-link a {
-  /* Theme-aware muted colour (light: Bootstrap #6c757d ≥ 4.5:1 on the white
-   * card; dark: --grq-text-muted) so the footnote stays low-prominence while
-   * meeting WCAG 2 AA contrast in both themes. */
-  color: var(--grq-text-muted, #6c757d);
-  text-decoration: none;
+  /* Theme-aware link colour (light: --grq-link ≥ 4.5:1 on the white card; dark:
+   * remapped brighter blue) so it reads as a link while staying low-key, and
+   * meets WCAG 2 AA contrast in both themes. The persistent underline is the
+   * primary "this is tappable" cue on touch devices with no hover state. */
+  color: var(--grq-link, #0067d6);
+  text-decoration: underline;
 }
 
 #stockDetailCard .yahoo-finance-link a:hover,
 #stockDetailCard .yahoo-finance-link a:focus {
   color: var(--grq-link-hover, #0056b3);
   text-decoration: underline;
+}
+
+/* The ↗ external-link cue sits snug after the label so the pair reads as one
+ * pop-out affordance. */
+#stockDetailCard .yahoo-finance-link .yahoo-finance-external {
+  margin-left: 0.15rem;
+}
+
+/* On-screen replacement for the phone-invisible hover title: a muted "opens in
+ * a new tab" note on its own line beneath the link. */
+#stockDetailCard .yahoo-finance-link .yahoo-finance-hint {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--grq-text-muted, #6c757d);
 }
 
 /* ---------------------------------------------------------------------------

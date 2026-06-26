@@ -212,6 +212,12 @@ deterministically — issue #281):
   page's **← Dashboard** button returns you to the same date.
 - `?stock=<symbol>` — open straight into the single-stock detail view, e.g.
   `?stock=NASDAQ%3AMGRC`. An unknown symbol falls back to the aggregate view.
+  Drilling into a stock now also writes `?stock=` back into the dashboard URL
+  (issue #590, mirroring `?date=`), and the in-app **← Back to Portfolio View**
+  button strips it again. The date rides along via `?date=` (#517), so a
+  refresh, a copied/shared link, or returning from the bottom-of-card **Confirm
+  on Yahoo Finance ↗** pop-out reopens the **same stock on the same day**
+  instead of the aggregate dashboard.
 - `?theme=auto|light|dark` — force a theme for that page load (a transient
   override that is **not** persisted to `localStorage`).
 - `?window=90|180` — switch the chart (and aligned Market Performance summary)

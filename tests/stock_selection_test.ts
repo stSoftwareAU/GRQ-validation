@@ -14,6 +14,7 @@ const g = globalThis as unknown as {
       stocks: unknown,
       requested: unknown,
     ) => string | null;
+    searchWithStock: (search: unknown, stock: unknown) => string;
   };
 };
 const GRQStockSelection = g.GRQStockSelection;
@@ -83,5 +84,49 @@ Deno.test("resolveStockSelection returns null for an unknown or invalid request"
   assertEquals(
     GRQStockSelection.resolveStockSelection([{ stock: "AAA" }], null),
     null,
+  );
+});
+
+Deno.test("searchWithStock writes ?stock= and preserves other params", () => {
+  // Drill-down: write the selected stock, keeping the existing ?date= (#517).
+  assertEquals(
+    GRQStockSelection.searchWithStock("?date=2026-03-23", "NASDAQ:MGRC"),
+    "date=2026-03-23&stock=NASDAQ%3AMGRC",
+  );
+  // No prior params -> just the stock param.
+  assertEquals(
+    GRQStockSelection.searchWithStock("", "NYSE:DD"),
+    "stock=NYSE%3ADD",
+  );
+  // An existing stock value is replaced, not duplicated.
+  assertEquals(
+    GRQStockSelection.searchWithStock("?stock=OLD&date=2026-03-23", "NEW"),
+    "stock=NEW&date=2026-03-23",
+  );
+  // Surrounding whitespace is trimmed before writing.
+  assertEquals(
+    GRQStockSelection.searchWithStock("", "  AAA  "),
+    "stock=AAA",
+  );
+});
+
+Deno.test("searchWithStock strips ?stock= when the stock is blank or missing", () => {
+  // Back to aggregate: drop the stock but keep the day's ?date= (#517).
+  assertEquals(
+    GRQStockSelection.searchWithStock("?date=2026-03-23&stock=NYSE:DD", null),
+    "date=2026-03-23",
+  );
+  assertEquals(
+    GRQStockSelection.searchWithStock("?stock=NYSE:DD", ""),
+    "",
+  );
+  assertEquals(
+    GRQStockSelection.searchWithStock("?stock=NYSE:DD", "   "),
+    "",
+  );
+  // Non-string stock values strip rather than throw.
+  assertEquals(
+    GRQStockSelection.searchWithStock("?stock=NYSE:DD&date=2026-03-23", 123),
+    "date=2026-03-23",
   );
 });
