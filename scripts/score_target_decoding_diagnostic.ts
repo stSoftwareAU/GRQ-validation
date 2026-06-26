@@ -30,6 +30,7 @@
 // (docs/trend_predictions.js → GRQTrendPredictions.parseScoreTsv), so the
 // diagnostic reads exactly the score column the dashboard reads.
 
+import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
 // deno-lint-ignore no-explicit-any
