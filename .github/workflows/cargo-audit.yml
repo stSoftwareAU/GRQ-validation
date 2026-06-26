@@ -20,6 +20,12 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Disable cargo's HTTP/2 multiplexing. Crate downloads on GitHub runners
+    # intermittently die with "Error in the HTTP2 framing layer" (curl 8.x),
+    # which fails `cargo install cargo-audit` before the audit even runs.
+    # Falling back to HTTP/1.1 sidesteps the flaky framing layer.
+    env:
+      CARGO_HTTP_MULTIPLEXING: "false"
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
