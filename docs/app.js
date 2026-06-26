@@ -246,6 +246,9 @@ class GRQValidator {
             () => {
                 this.selectedStock = null;
                 this.updateDisplay();
+                // Strip ?stock= so a refresh/back returns to this day's
+                // aggregate dashboard, not the stock we just left (issue #590).
+                this.updateStockDeepLink(null);
             },
         );
 
@@ -3571,6 +3574,39 @@ class GRQValidator {
 
         // Show the back button
         document.getElementById("backToAggregate").style.display = "block";
+
+        // Mirror the drilled-into stock into the URL so a refresh, a copied
+        // link or a mobile tab-discard reopens this stock (issue #590). The
+        // day already rides along via ?date= (#517).
+        this.updateStockDeepLink(stockSymbol);
+    }
+
+    // Mirror the single-stock selection into the dashboard URL as ?stock= so a
+    // refresh, a shared/copied link or a mobile tab discard reopens the same
+    // stock's detail view (issue #590). A blank/missing stock strips the param,
+    // which the in-app "back to aggregate" button uses to return to that day's
+    // dashboard. The date already rides along via ?date= (#517). Uses
+    // replaceState (not push) to mirror the existing ?date= plumbing, so the
+    // browser back button still leaves the page rather than walking drill-downs.
+    // Pure URL plumbing — no data is refetched.
+    updateStockDeepLink(stock) {
+        if (typeof GRQStockSelection === "undefined") {
+            return;
+        }
+        if (
+            typeof window === "undefined" || !window.history ||
+            typeof window.history.replaceState !== "function" ||
+            !window.location
+        ) {
+            return;
+        }
+        const query = GRQStockSelection.searchWithStock(
+            window.location.search,
+            stock,
+        );
+        const newUrl = window.location.pathname +
+            (query ? "?" + query : "") + window.location.hash;
+        window.history.replaceState(null, "", newUrl);
     }
 
     // Lowest-priority "confirm our numbers" link at the very bottom of the
@@ -3587,13 +3623,17 @@ class GRQValidator {
         }
         const safeUrl = escapeHtml(url);
         const safeStock = escapeHtml(stockSymbol);
+        // A Unicode ↗ cue (not Font Awesome, which index.html does not load —
+        // issue #590) marks this as an external pop-out link, and an on-screen
+        // "opens in a new tab" hint replaces the phone-invisible hover title.
         return `
               <div class="row mt-3">
                 <div class="col-12 text-center yahoo-finance-link">
                   <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
-                     title="Confirm ${safeStock} on Yahoo Finance (opens in a new tab)">
-                    <i class="fas fa-external-link-alt"></i> Yahoo Finance
+                     aria-label="Confirm ${safeStock} on Yahoo Finance (opens in a new tab)">
+                    Confirm on Yahoo Finance<span class="yahoo-finance-external" aria-hidden="true">↗</span>
                   </a>
+                  <span class="yahoo-finance-hint">opens in a new tab</span>
                 </div>
               </div>`;
     }

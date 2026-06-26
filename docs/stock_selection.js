@@ -49,8 +49,27 @@
     return match ? match.stock : null;
   }
 
+  // Build a query string (no leading "?") that carries the selected stock in
+  // the dashboard's OWN URL (issue #590), mirroring searchWithDate (#517). On
+  // drill-down the `stock` param is set to the trimmed symbol; on "back to
+  // aggregate" a blank/missing/non-string stock deletes it so the URL falls
+  // back to that day's dashboard. Every other param — including `date` (#517) —
+  // is preserved, so a refresh or copied link reopens the same stock on the
+  // same day.
+  function searchWithStock(search, stock) {
+    const params = new URLSearchParams(search || "");
+    const trimmed = typeof stock === "string" ? stock.trim() : "";
+    if (trimmed === "") {
+      params.delete("stock");
+    } else {
+      params.set("stock", trimmed);
+    }
+    return params.toString();
+  }
+
   globalThis.GRQStockSelection = {
     stockFromSearch,
     resolveStockSelection,
+    searchWithStock,
   };
 })();
