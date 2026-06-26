@@ -885,6 +885,20 @@ body.chart-popout-open {
     padding: 0.25rem 0.5rem;
   }
 
+  /* Issue #611: each fact row split 50/50, so the left label column pushed the
+     value column to start at the half-way mark and clipped the Buy Price + star
+     rating (and freshness emoji) off the right edge. Narrow the left label
+     column and widen the value column so the price and stars get more room. */
+  #stockDetailCard .row .row > .col-6:first-child {
+    flex: 0 0 auto;
+    width: 40%;
+  }
+
+  #stockDetailCard .row .row > .col-6:last-child {
+    flex: 0 0 auto;
+    width: 60%;
+  }
+
   #stockDetailCard h6 {
     font-size: 0.7rem;
     margin-bottom: 0.75rem;
