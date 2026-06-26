@@ -473,6 +473,28 @@ body.chart-popout-open {
   line-height: 1.5;
 }
 
+/* Lowest-priority Yahoo Finance "confirm our numbers" link at the very bottom
+ * of the detail card (issue #570). Kept small and understated — a footnote-sized
+ * confirmation aid, not a headline action — so it never competes with the
+ * figures above it. */
+#stockDetailCard .yahoo-finance-link {
+  font-size: 0.75rem;
+}
+
+#stockDetailCard .yahoo-finance-link a {
+  /* Theme-aware muted colour (light: Bootstrap #6c757d ≥ 4.5:1 on the white
+   * card; dark: --grq-text-muted) so the footnote stays low-prominence while
+   * meeting WCAG 2 AA contrast in both themes. */
+  color: var(--grq-text-muted, #6c757d);
+  text-decoration: none;
+}
+
+#stockDetailCard .yahoo-finance-link a:hover,
+#stockDetailCard .yahoo-finance-link a:focus {
+  color: var(--grq-link-hover, #0056b3);
+  text-decoration: underline;
+}
+
 /* ---------------------------------------------------------------------------
  * Section / card titles (issue #277)
  *
