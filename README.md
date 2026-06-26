@@ -422,7 +422,19 @@ GRQ-validation/
 ├── scripts/                # Utility scripts
 │   ├── bump_version.ts            # CI app-version incrementer (#323)
 │   ├── fetch_market_indices.ts    # Server-side benchmark-index fetcher
-│   └── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
+│   ├── refresh_market_indices.ts  # Non-blocking daily-scorer wrapper (#238)
+│   ├── price_basis_diagnostic.ts  # mid-vs-low basis bias computation (#552)
+│   ├── diagnose_price_basis.ts    # CLI report for the basis diagnostic (#552)
+│   ├── dividend_basis_diagnostic.ts # flat-1/4-vs-windowed dividend bias (#553)
+│   ├── diagnose_dividend_basis.ts # CLI report for the dividend diagnostic (#553)
+│   ├── buy_price_denominator_diagnostic.ts # midpoint-vs-close denominator bias (#554)
+│   ├── diagnose_buy_price_denominator.ts # CLI report for the denominator diagnostic (#554)
+│   ├── horizon_split_parity_diagnostic.ts # horizon as-of split-basis parity (#555)
+│   ├── diagnose_horizon_split_parity.ts # CLI report for the timing/split parity audit (#555)
+│   ├── score_target_decoding_diagnostic.ts # reverseProfitRecommend round-trip bias (#556)
+│   ├── diagnose_score_target_decoding.ts # CLI report for the score→target decode audit (#556)
+│   ├── residual_gap_reconciliation.ts # whole-app sweep + residual-gap reconciliation (#557)
+│   └── diagnose_residual_gap.ts      # CLI report for the catch-all sweep / reconciliation (#557)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)

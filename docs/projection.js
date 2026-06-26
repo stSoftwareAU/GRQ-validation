@@ -582,6 +582,224 @@ function priceAtNinetyDayHorizon(marketData, scoreDate) {
     return (lastData.high + lastData.low) / 2;
 }
 
+// Intraday LOW of the last market-data point on or before the 90-day horizon —
+// the price basis the GRQ model is TRAINED on (GRQ/src/LearnUtil.ts uses
+// `market.lowPrice(symbol, targetDate)` for the 90-day return label). The
+// dashboard measures Actual at the midpoint (priceAtNinetyDayHorizon); this
+// helper exposes the matching low so a like-for-like, same-basis comparison can
+// be made (issue #552). Mirrors priceAtNinetyDayHorizon's horizon selection
+// exactly so the two pick the SAME row. Returns null when there is no usable
+// data on or before the horizon.
+function lowPriceAtNinetyDayHorizon(marketData, scoreDate) {
+    if (!marketData || marketData.length === 0) return null;
+    const ninetyDayDate = new Date(
+        scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+    );
+    const within90Days = marketData.filter((point) =>
+        point.date <= ninetyDayDate
+    );
+    if (within90Days.length === 0) return null;
+    return within90Days[within90Days.length - 1].low;
+}
+
+// Price-basis offset between the dashboard's midpoint Actual and the model's
+// trained intraday-low basis, expressed as a percentage of the buy price
+// (issue #552): `(mid - low) / buyPrice * 100`. This is the amount the measured
+// Actual % is LIFTED by reading the horizon at the midpoint rather than the low
+// the model was trained to hit. Because `mid >= low` on every row the offset is
+// always >= 0, so it NARROWS (masks) any Target-over-Actual gap rather than
+// causing it. Returns null when any input is missing or the buy price is not a
+// positive number.
+function priceBasisOffsetPercent(buyPrice, midPrice, lowPrice) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        midPrice === null || midPrice === undefined || Number.isNaN(midPrice) ||
+        lowPrice === null || lowPrice === undefined || Number.isNaN(lowPrice)
+    ) {
+        return null;
+    }
+    return ((midPrice - lowPrice) / buyPrice) * 100;
+}
+
+// Buy-price denominator on the model's TRAINED basis: the split-adjusted
+// CLOSE of the first usable market-data point on or within five days after the
+// score date (issue #554). The GRQ training label divides the 90-day return by
+// `core.monthsAgoPrice`, which is `closePrices[0]` — the close on the score date
+// (GRQ/src/CoreFeatures.ts -> GRQ/src/LearnUtil.ts). The dashboard instead
+// divides by `getBuyPrice`, the split-adjusted MIDPOINT `(high + low) / 2` of
+// the same first point. This helper mirrors `getBuyPrice`'s point selection and
+// split adjustment EXACTLY — only the close replaces the midpoint — so a
+// like-for-like denominator comparison isolates the midpoint-vs-close basis (the
+// shared split factor cancels in the ratio). Returns `{ price, dateUsed,
+// reliable }`, or null when no market data falls in that window.
+function buyPriceCloseBasis(marketData, scoreDate) {
+    if (!marketData) return null;
+
+    const { reliable } = computeSplitAdjustment(marketData, scoreDate);
+
+    for (let offset = 0; offset <= 5; offset++) {
+        const candidateDate = new Date(scoreDate.getTime());
+        candidateDate.setDate(candidateDate.getDate() + offset);
+        const candidateData = marketData.find((point) => {
+            const pointDate = new Date(
+                point.date.getFullYear(),
+                point.date.getMonth(),
+                point.date.getDate(),
+            );
+            return pointDate.getTime() === candidateDate.getTime();
+        });
+        if (candidateData) {
+            const adjustedPrice = adjustHistoricalPriceToCurrent(
+                candidateData.close,
+                marketData,
+                scoreDate,
+            );
+            return { price: adjustedPrice, dateUsed: candidateDate, reliable };
+        }
+    }
+    return null;
+}
+
+// Denominator-basis offset between the dashboard's midpoint buy price and the
+// model's trained close basis, as a percentage of the dashboard buy price
+// (issue #554): `(buyPrice - buyPriceClose) / buyPrice * 100`. This is how much
+// LARGER (sign +) or smaller (sign -) the dashboard denominator is than the
+// close the model was trained to divide by. Because the dashboard applies the
+// SAME `buyPrice` to BOTH Target and Actual, this offset does not desynchronise
+// them — it rescales any existing Target-over-Actual gap by `buyPrice /
+// buyPriceClose`. Returns null when any input is missing or a price is not a
+// positive number.
+function denominatorBasisOffsetPercent(buyPrice, buyPriceClose) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        buyPriceClose === null || buyPriceClose === undefined ||
+        Number.isNaN(buyPriceClose) || buyPriceClose <= 0
+    ) {
+        return null;
+    }
+    return ((buyPrice - buyPriceClose) / buyPrice) * 100;
+}
+
+// The DATE of the last market-data point on or before the 90-day horizon — the
+// row priceAtNinetyDayHorizon / currentPriceWithinWindow read the Actual price
+// from (issue #555). Exposed so the as-of split basis of that row can be judged
+// against the buy price (which getBuyPrice has already restated to current
+// terms). Returns null when no point falls on or before the horizon.
+function horizonPointDate(marketData, scoreDate) {
+    if (!marketData || marketData.length === 0) return null;
+    const ninetyDayDate = new Date(
+        scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+    );
+    let last = null;
+    for (const point of marketData) {
+        if (point && point.date instanceof Date && point.date <= ninetyDayDate) {
+            last = point;
+        }
+    }
+    return last ? last.date : null;
+}
+
+// Cumulative RELIABLE split factor for splits strictly AFTER the 90-day horizon
+// up to the end of the series (issue #555): `getSplitAdjustment` evaluated at the
+// horizon point's own date. 1.0 means there is no reconcilable post-horizon
+// split, so the raw horizon price the shipped Actual reads already sits on the
+// current (end-of-series) basis its buy price uses. A FORWARD split gives a
+// factor > 1; a REVERSE split gives a factor < 1. Returns 1.0 when there is no
+// horizon point (no adjustment to make). Mirrors the `reliable`-gated factor, so
+// an unreconcilable series yields 1.0 rather than a silently wrong factor.
+function postHorizonSplitFactor(marketData, scoreDate) {
+    const date = horizonPointDate(marketData, scoreDate);
+    if (date === null) return 1.0;
+    return getSplitAdjustment(marketData, date);
+}
+
+// Midpoint at the 90-day horizon restated onto the CURRENT (end-of-series) split
+// basis — the SAME as-of basis getBuyPrice uses for the buy price (issue #555).
+// The shipped Actual (getStockReturnBreakdown / currentPriceWithinWindow) reads
+// this row's midpoint RAW while dividing by a buy price that getBuyPrice has
+// already restated to current terms; when a split falls between the horizon and
+// the series end the two sit on different split bases. Dividing the raw midpoint
+// by `postHorizonSplitFactor` puts the horizon price on the buy price's basis so
+// a like-for-like, same-basis Actual can be measured. Returns null when no point
+// falls on or before the horizon.
+function horizonPriceCurrentBasis(marketData, scoreDate) {
+    const rawMid = priceAtNinetyDayHorizon(marketData, scoreDate);
+    if (rawMid === null) return null;
+    return rawMid / postHorizonSplitFactor(marketData, scoreDate);
+}
+
+// As-of-basis offset the shipped Actual carries by reading the horizon midpoint
+// RAW instead of on the current basis its buy price uses (issue #555), as a
+// percentage of the buy price: `(rawHorizonMid - currentBasisHorizonMid) /
+// buyPrice * 100`. Sign: a FORWARD post-horizon split makes the raw price LARGER
+// than the current-basis price, INFLATING the measured Actual -> NARROWS (masks)
+// the Target-over-Actual gap; a REVERSE split deflates Actual -> WIDENS it. 0
+// when there is no post-horizon split (the two prices coincide). Because Target%
+// divides both adjustedTarget and buyPrice by the same factor, the post-horizon
+// split cancels there — so this offset shifts ONLY the Actual side. Returns null
+// when any input is missing or the buy price is not positive.
+function horizonAsOfBasisOffsetPercent(buyPrice, rawHorizonMid, currentBasisHorizonMid) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        rawHorizonMid === null || rawHorizonMid === undefined ||
+        Number.isNaN(rawHorizonMid) ||
+        currentBasisHorizonMid === null ||
+        currentBasisHorizonMid === undefined ||
+        Number.isNaN(currentBasisHorizonMid)
+    ) {
+        return null;
+    }
+    return ((rawHorizonMid - currentBasisHorizonMid) / buyPrice) * 100;
+}
+
+// Trailing-365-day dividend total as of the score date — the quantity the GRQ
+// model turns into a FLAT training credit of `yearOfDividends / 4`
+// (GRQ/src/CoreFeatures.ts builds `yearOfDividends`; GRQ/src/LearnUtil.ts bakes
+// `yearOfDividends / 4` into the total-return label for EVERY stock). Sums the
+// cash amount of every dividend whose ex-dividend date falls in the year ending
+// at the score date (`scoreDate - 365 days < exDivDate <= scoreDate`). Mirrors
+// the shape `filterDividendsWithin90Days`/`sumDividends` consume so the
+// diagnostic measures the same dividend records the dashboard does. Pure given
+// its inputs; returns 0 for a missing/empty list (issue #553).
+function trailingAnnualDividends(dividends, scoreDate) {
+    if (!Array.isArray(dividends) || !(scoreDate instanceof Date)) {
+        return 0;
+    }
+    const yearStart = new Date(
+        scoreDate.getTime() - (365 * 24 * 60 * 60 * 1000),
+    );
+    return dividends
+        .filter((d) => d && d.exDivDate > yearStart && d.exDivDate <= scoreDate)
+        .reduce((sum, d) => sum + (d.amount || 0), 0);
+}
+
+// Dividend-basis difference between the model's FLAT training credit
+// (`yearOfDividends / 4`) and the dashboard's realised in-window dividends,
+// expressed as a percentage of the buy price (issue #553):
+// `(flatCredit - windowedCredit) / buyPrice * 100`. A POSITIVE value means the
+// flat training credit EXCEEDS the realised in-window dividends, so the model's
+// dividend-inflated Target sits above an Actual that credits only the dividends
+// that actually fell inside the 90-day window — i.e. it CONTRIBUTES to (widens)
+// the Target-over-Actual gap. A negative value means the realised in-window
+// dividends exceed the flat quarter, which NARROWS (masks) the gap. Returns null
+// when any input is missing or the buy price is not a positive number.
+function dividendBasisDifferencePercent(flatCredit, windowedCredit, buyPrice) {
+    if (
+        buyPrice === null || buyPrice === undefined || Number.isNaN(buyPrice) ||
+        buyPrice <= 0 ||
+        flatCredit === null || flatCredit === undefined ||
+        Number.isNaN(flatCredit) ||
+        windowedCredit === null || windowedCredit === undefined ||
+        Number.isNaN(windowedCredit)
+    ) {
+        return null;
+    }
+    return ((flatCredit - windowedCredit) / buyPrice) * 100;
+}
+
 // Target return as a percentage of the buy price. Returns null when either input
 // is missing, matching the dashboard's guard before reporting a target figure.
 function calculateTargetPercentage(buyPrice, adjustedTarget) {
@@ -1053,6 +1271,16 @@ globalThis.GRQProjection = {
     getBuyPrice,
     currentPriceFromLatest,
     priceAtNinetyDayHorizon,
+    lowPriceAtNinetyDayHorizon,
+    priceBasisOffsetPercent,
+    buyPriceCloseBasis,
+    denominatorBasisOffsetPercent,
+    horizonPointDate,
+    postHorizonSplitFactor,
+    horizonPriceCurrentBasis,
+    horizonAsOfBasisOffsetPercent,
+    trailingAnnualDividends,
+    dividendBasisDifferencePercent,
     calculateTargetPercentage,
     calculatePortfolioTargetPercentage,
     getFairValueRange,
