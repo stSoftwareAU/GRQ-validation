@@ -428,7 +428,9 @@ GRQ-validation/
 │   ├── dividend_basis_diagnostic.ts # flat-1/4-vs-windowed dividend bias (#553)
 │   ├── diagnose_dividend_basis.ts # CLI report for the dividend diagnostic (#553)
 │   ├── buy_price_denominator_diagnostic.ts # midpoint-vs-close denominator bias (#554)
-│   └── diagnose_buy_price_denominator.ts # CLI report for the denominator diagnostic (#554)
+│   ├── diagnose_buy_price_denominator.ts # CLI report for the denominator diagnostic (#554)
+│   ├── horizon_split_parity_diagnostic.ts # horizon as-of split-basis parity (#555)
+│   └── diagnose_horizon_split_parity.ts # CLI report for the timing/split parity audit (#555)
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
