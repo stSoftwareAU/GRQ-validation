@@ -3,17 +3,23 @@
 //
 // The training label and the dashboard agree on the 90-day horizon ROW (both
 // take the last point on or before scoreDate + 90 days) and on a split-adjusted
-// series. They diverge on ONE as-of basis: the dashboard restates the buy price
-// and the model's target into CURRENT (end-of-series) split terms, but reads the
-// Actual horizon price RAW. When a reconcilable split falls between the horizon
-// and the series end, the Actual sits on a different split basis than the buy
-// price it is divided by — a forward split inflates Actual (masking the
-// Target-over-Actual gap), a reverse split deflates it (widening the gap).
+// series. Issue #555 surfaced one historical divergence on the as-of basis: the
+// dashboard restated the buy price and the model's target into CURRENT
+// (end-of-series) split terms, but read the Actual horizon price RAW. When a
+// reconcilable split fell between the horizon and the series end, the Actual sat
+// on a different split basis than the buy price it was divided by — a forward
+// split inflated Actual (masking the Target-over-Actual gap), a reverse split
+// deflated it (widening the gap).
 //
-// This module quantifies that as-of-basis offset over the matured historical
-// score set. Every per-stock figure is delegated to the SHIPPED kernels
-// published on globalThis by docs/projection.js and docs/trend_predictions.js,
-// so the diagnostic measures the dashboard's own basis, not a re-implementation.
+// Issue #569 FIXED that divergence: the shipped Actual now reads the horizon
+// midpoint through horizonPriceCurrentBasis (getStockReturnBreakdown and
+// currentPriceWithinWindow), so it shares the buy price's current basis. This
+// module therefore now CONFIRMS the fix and guards against regressions: every
+// per-stock figure is delegated to the SHIPPED kernels published on globalThis
+// by docs/projection.js and docs/trend_predictions.js, so the diagnostic
+// measures the dashboard's own basis, not a re-implementation. With the fix in
+// place the shipped (raw-named) and current-basis Actuals coincide and the
+// offset is DORMANT; were the raw read reintroduced, the offset would reappear.
 
 import "../docs/projection.js";
 import "../docs/trend_predictions.js";
@@ -203,8 +209,9 @@ export function buildReport(
     `split basis of the Actual horizon price (read RAW) versus the buy price ` +
     `(restated to current terms). ${direction}. A forward post-horizon split ` +
     `inflates Actual (MASKING the gap); a reverse split deflates it (WIDENING ` +
-    `the gap). The fix is to read the horizon price through ` +
-    `horizonPriceCurrentBasis so Actual shares the buy price's basis.`;
+    `the gap). Issue #569 landed the fix: the shipped Actual now reads the ` +
+    `horizon price through horizonPriceCurrentBasis so it shares the buy ` +
+    `price's basis, and this diagnostic now serves as a regression guard.`;
 
   return {
     maturedDates: aggregates.length,
