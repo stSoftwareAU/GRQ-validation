@@ -2103,15 +2103,18 @@ class GRQValidator {
                     // #496): the old `!isMobile` guard dropped it on the mobile
                     // 180-day view, breaking parity with desktop.
                     if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
+                        // Share the day-90 boundary point so the grey tail
+                        // connects to the blue line — no gap (issue #592).
+                        const bridgedAfter90 = GRQProjection.bridgeActualsAfter90(cleanBefore90, cleanAfter90);
                         datasets.push({
                             label: "Actual (After 90 Days)",
-                            data: cleanAfter90,
+                            data: bridgedAfter90,
                             borderColor: "rgba(108, 117, 125, 0.5)",
                             backgroundColor: "rgba(108, 117, 125, 0.1)",
                             borderWidth: 1,
                             fill: false,
-                            pointRadius: cleanAfter90.map((point) => point.dividend ? 8 : 3),
-                            pointBackgroundColor: cleanAfter90.map((point) =>
+                            pointRadius: bridgedAfter90.map((point) => point.bridge ? 0 : (point.dividend ? 8 : 3)),
+                            pointBackgroundColor: bridgedAfter90.map((point) =>
                                 point.dividend ? "rgba(108, 117, 125, 0.8)" : "rgba(108, 117, 125, 0.5)"
                             ),
                         });
@@ -2200,14 +2203,17 @@ class GRQValidator {
             // `!isMobile` guard dropped it on the mobile 180-day view, breaking
             // parity with desktop.
             if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
+                // Share the day-90 boundary point so the grey tail connects to
+                // the blue line — no gap (issue #592).
+                const bridgedAfter90 = GRQProjection.bridgeActualsAfter90(cleanBefore90, cleanAfter90);
                 datasets.push({
                     label: "Actual (After 90 Days)",
-                    data: cleanAfter90,
+                    data: bridgedAfter90,
                     borderColor: "rgba(108, 117, 125, 0.5)",
                     backgroundColor: "rgba(108, 117, 125, 0.1)",
                     borderWidth: 1,
                     fill: false,
-                    pointRadius: 3,
+                    pointRadius: bridgedAfter90.map((point) => point.bridge ? 0 : 3),
                 });
             }
             // Add target dot for portfolio view
