@@ -333,6 +333,17 @@ body.chart-popout-open {
   text-decoration: underline line-through;
 }
 
+/* Low-volume badge (issue #577): a flagged name is excluded from the portfolio
+ * and every aggregate, so it carries a visible "Low volume" badge. Keep the
+ * badge legible (no inherited row strikethrough) so the reason for exclusion
+ * stays readable even on a struck-through excluded row. */
+.low-volume-badge {
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.7em;
+  vertical-align: middle;
+}
+
 /* Clickable stock names */
 .clickable-stock {
   cursor: pointer;

@@ -41,6 +41,17 @@ Pages.
   excludes the stock through the single `is_priceable` gate, dropping it from
   the average, the included count and into `excluded_tickers`. The thresholds
   mirror the frontend so backend and dashboard agree.
+- **Low-Volume Exclusion** — illiquid names are flagged and dropped from the
+  dashboard portfolio and from every aggregate (equal-weight) figure, so a name
+  too thin to trade neither helps nor hurts the "Actual"/Target lines. The
+  decision reuses GRQ training's `volumeRecommend` definition as a single source
+  of truth (`docs/volume_recommend.js`, issue #576): over a trailing 10-weekday
+  window, average daily **dollar** volume (`volume × low price`) below the
+  `BUDGET_DOLLARS = 10000` trade budget flags the stock. Flagged rows carry a
+  visible **Low volume** badge (issue #577) rather than vanishing silently. When
+  volume is unknown — older pre-volume-column CSVs — the name is **not** flagged
+  (insufficient data ⇒ not flagged), so historical dates are never
+  mass-excluded.
 - **Dividend Tracking** — calculate dividend income and total returns.
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`. On mobile, a pop-out control expands the

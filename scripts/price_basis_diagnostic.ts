@@ -6,6 +6,7 @@
 // diagnostic measures the dashboard's own basis rather than a re-implementation.
 
 import "../docs/projection.js";
+import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
 // deno-lint-ignore no-explicit-any

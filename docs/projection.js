@@ -194,14 +194,26 @@ function returnAboveCostOfCapital(performance, costOfCapital, daysElapsed) {
 }
 
 // Single source of truth for the "is this stock included?" rule (issue #288,
-// extended #293). Mirrors the Rust backend's `is_priceable` predicate
+// extended #293, #577). Mirrors the Rust backend's `is_priceable` predicate
 // (src/utils.rs). A stock counts towards portfolio performance ONLY when it has
 // BOTH a usable buy price AND a usable current price, AND its split series is
 // reliable. If either price is missing/non-positive, or `splitReliable` is
 // explicitly false, the stock is excluded entirely.
-function isStockIncluded(buyPrice, currentPrice, splitReliable = true) {
+//
+// Low-volume exclusion (issue #577): a name flagged low-volume (`lowVolume`
+// true, computed via the shared GRQVolume.volumeRecommend helper #576) is
+// dropped from portfolio membership and from EVERY aggregate average, so it
+// neither helps nor hurts the Actual/Target lines. `lowVolume` defaults to
+// false so an unknown/insufficient-volume name is never accidentally excluded.
+function isStockIncluded(
+    buyPrice,
+    currentPrice,
+    splitReliable = true,
+    lowVolume = false,
+) {
     const usable = (price) => typeof price === "number" && price > 0;
-    return usable(buyPrice) && usable(currentPrice) && splitReliable !== false;
+    return usable(buyPrice) && usable(currentPrice) &&
+        splitReliable !== false && lowVolume !== true;
 }
 
 // Equal-weight portfolio performance over ONLY the included stocks (issue #288).
@@ -221,7 +233,10 @@ function calculateIncludedPortfolioPerformance(stocks) {
         const buyPrice = stock && stock.buyPrice;
         const currentPrice = stock && stock.currentPrice;
         const splitReliable = stock && stock.splitReliable;
-        if (!isStockIncluded(buyPrice, currentPrice, splitReliable)) {
+        const lowVolume = stock && stock.lowVolume;
+        if (
+            !isStockIncluded(buyPrice, currentPrice, splitReliable, lowVolume)
+        ) {
             continue;
         }
         const totalReturn = calculatePerformanceReturn(
@@ -267,7 +282,10 @@ function calculateIncludedPortfolioDividendYield(stocks) {
         const buyPrice = stock && stock.buyPrice;
         const currentPrice = stock && stock.currentPrice;
         const splitReliable = stock && stock.splitReliable;
-        if (!isStockIncluded(buyPrice, currentPrice, splitReliable)) {
+        const lowVolume = stock && stock.lowVolume;
+        if (
+            !isStockIncluded(buyPrice, currentPrice, splitReliable, lowVolume)
+        ) {
             continue;
         }
         const yieldPercent = dividendReturnPercent(
@@ -828,7 +846,10 @@ function calculatePortfolioTargetPercentage(stocks) {
         const buyPrice = stock && stock.buyPrice;
         const currentPrice = stock && stock.currentPrice;
         const splitReliable = stock && stock.splitReliable;
-        if (!isStockIncluded(buyPrice, currentPrice, splitReliable)) {
+        const lowVolume = stock && stock.lowVolume;
+        if (
+            !isStockIncluded(buyPrice, currentPrice, splitReliable, lowVolume)
+        ) {
             continue;
         }
         const adjustedTarget = stock.adjustedTarget;
