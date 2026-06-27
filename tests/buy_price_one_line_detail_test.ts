@@ -99,9 +99,10 @@ Deno.test("app.js: detail panel and table render the rating via the same getStar
 
 // --- Issue #549: freshness emoji beside the star rating in the mobile detail card ---
 //
-// The detail card's compact `.star-rating` span must append the fair-value
-// freshness indicator (issue #547) after the moon glyphs, e.g. "🌕🌕🌕🌕🌕 🌺",
-// mirroring the aggregate table cell (issue #548). The append is guarded so an
+// The detail card's compact `.star-rating` span must render the fair-value
+// freshness indicator (issue #547) before the moon glyphs, e.g. "🌺 🌕🌕🌕🌕🌕"
+// (order flipped to freshness-then-stars for issue #623), mirroring the
+// aggregate table cell (issue #548). The freshness prefix is guarded so an
 // empty indicator (N/A stars) adds no stray space, and the whole star block is
 // already hidden when there is no analysis data — so no emoji renders for N/A.
 
@@ -113,16 +114,16 @@ function detailStarRatingSpan(js: string): string | null {
   return m ? m[0] : null;
 }
 
-Deno.test("app.js: detail-panel star-rating span appends a guarded freshness indicator", async () => {
+Deno.test("app.js: detail-panel star-rating span prepends a guarded freshness indicator", async () => {
   const js = await Deno.readTextFile(APP);
   const span = detailStarRatingSpan(js);
   assert(span, "the detail-panel star-rating span must exist");
-  // The freshness emoji is appended inside the star-rating span, right after the
-  // moons, guarded so an empty indicator adds no stray space (issue #549).
+  // The freshness emoji is rendered inside the star-rating span, right before
+  // the moons, guarded so an empty indicator adds no stray space (issue #623).
   assert(
-    /getStarRatingDisplay\(stock\.stock\)\}\$\{this\.getFreshnessIndicator\(stock\.stock\)\s*\?/
+    /getFreshnessIndicator\(stock\.stock\)\s*\?[\s\S]*?""\}\$\{this\.getStarRatingDisplay\(stock\.stock\)\}/
       .test(span as string),
-    "detail card must append a guarded getFreshnessIndicator(stock.stock) after the stars",
+    "detail card must prepend a guarded getFreshnessIndicator(stock.stock) before the stars",
   );
 });
 

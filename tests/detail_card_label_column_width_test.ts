@@ -4,7 +4,7 @@
 // On a ~375px phone the stock detail card lays each fact out as a `.row.mb-2`
 // with two equal `.col-6` cells: the label on the left, the value on the right.
 // The 50/50 split pushes the value cell to start at the half-way mark, so
-// `$XX.XX 🌕🌕🌕🌕🌕 🌺` (Buy Price + stars + freshness) clips off the right
+// `$XX.XX 🌺 🌕🌕🌕🌕🌕` (Buy Price + freshness + stars) clips off the right
 // edge. The fix narrows the left label column below 50% and widens the value
 // column above 50% on mobile, reclaiming the wasted left space for the value.
 //
