@@ -948,26 +948,6 @@ body.chart-popout-open {
   color: inherit;
 }
 
-/* Ensure debug info is always visible */
-#debug-info {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  font-size: 0.7rem !important;
-  color: var(--grq-neutral, #565e64) !important;
-  word-break: break-word;
-  max-width: 100%;
-  overflow-wrap: break-word;
-}
-
-/* Mobile adjustments for debug info */
-@media (max-width: 768px) {
-  #debug-info {
-    font-size: 0.6rem !important;
-    padding: 0 0.5rem;
-  }
-}
-
 /* Mobile-specific styles */
 @media (max-width: 768px) {
     .chart-container {
@@ -988,15 +968,6 @@ body.chart-popout-open {
     .chart-container canvas + div {
         display: none !important;
     }
-}
-
-/* Ensure debug info is always visible */
-.debug-info {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    position: static !important;
-    z-index: 9999 !important;
 }
 
 /* ===========================================================================
