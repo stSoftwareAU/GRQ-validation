@@ -488,9 +488,9 @@ body.chart-popout-open {
  * of the detail card (issue #570). Kept small and understated — a footnote-sized
  * confirmation aid, not a headline action — so it never competes with the
  * figures above it. Issue #590 makes it read unmistakably as a tappable pop-out
- * link: theme-aware link colour at rest, a persistent underline, a ↗ external
- * cue and an on-screen "opens in a new tab" hint (the old hover-only title is
- * invisible on phones). */
+ * link: theme-aware link colour at rest, a persistent underline and a ↗
+ * external cue. The redundant on-screen "opens in a new tab" note was removed
+ * (issue #618); the link's aria-label still announces the behaviour. */
 #stockDetailCard .yahoo-finance-link {
   font-size: 0.75rem;
 }
@@ -514,14 +514,6 @@ body.chart-popout-open {
  * pop-out affordance. */
 #stockDetailCard .yahoo-finance-link .yahoo-finance-external {
   margin-left: 0.15rem;
-}
-
-/* On-screen replacement for the phone-invisible hover title: a muted "opens in
- * a new tab" note on its own line beneath the link. */
-#stockDetailCard .yahoo-finance-link .yahoo-finance-hint {
-  display: block;
-  margin-top: 0.15rem;
-  color: var(--grq-text-muted, #6c757d);
 }
 
 /* ---------------------------------------------------------------------------
