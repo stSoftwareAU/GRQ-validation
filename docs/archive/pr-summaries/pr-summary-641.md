@@ -1,82 +1,98 @@
-# Fix dashboard load regression: stale precached projection.js (Issue #641)
+# Fix dashboard load regression: consistent, fresh service-worker app shell
 
 ## Summary
 
-The dashboard failed to load on devices with the PWA installed, showing:
+The dashboard could fail to load on PWA-installed devices with a red banner:
 
-> Failed to load data: GRQProjection.calculatePortfolioTargetWorking is not a
-> function. (In 'GRQProjection.calculatePortfolioTargetWorking(this.buildPortfolioTargetStocks(), )',
-> 'GRQProjection.calculatePortfolioTargetWorking' is undefined)
+> Failed to load data: `GRQProjection.calculatePortfolioTargetWorking` is not a
+> function …
 
-`calculatePortfolioTargetWorking` was added to `docs/projection.js` (and called
-from `docs/app.js`) in #640/#629, and the source is correct — loading
-`projection.js` in Node confirms `GRQProjection.calculatePortfolioTargetWorking`
-is a function. The failure was a **service-worker caching regression**, not a
-code defect in the helper.
+`calculatePortfolioTargetWorking` is defined and exported in `docs/projection.js`
+(added in #629/#640) and the deployed source is correct — the failure is a
+**service-worker caching regression**, not a defect in the maths. The service
+worker could end up caching or serving an **internally-inconsistent app shell**:
+a fresh `app.js` (which calls the new helper) next to a stale or missing
+`projection.js` (which lacks it). The page's cache-first fetch then served that
+mismatched pair for the whole version's lifetime.
 
-`precacheStaticAssets()` populated the new versioned cache with a plain
-`cache.add(asset)`. `cache.add()` issues an ordinary `fetch`, which honours the
-browser HTTP cache. On a version bump, GitHub Pages revalidated
-`index.html`/`app.js` (short-lived HTML caching) but let the `.js` shell files
-be reused from the HTTP cache, so the new `grq-validation-static-v1.1.30` cache
-was filled with a **stale `projection.js`** that pre-dated the new helper. The
-fresh `app.js` then called a function the cached `projection.js` did not define,
-and the dashboard's cache-first fetch served that stale file for the whole
-version's lifetime.
+Three weaknesses in `docs/sw.js` allowed this, and all three are fixed:
 
-**Fix:** `precacheStaticAssets()` now fetches each shell asset with
-`new Request(asset, { cache: "reload" })`, bypassing the HTTP cache so a version
-bump always caches fresh bytes. This mirrors the existing `cache: "no-store"`
-pattern already used for the score index and per-day data in the same file.
-Only `response.ok` responses are stored, so a transient 404/offline asset is
-skipped (warned) rather than poisoning the cache. `APP_VERSION` is bumped
-1.1.30 → 1.1.31 so clients reinstall the corrected worker and re-precache.
+1. **HTTP-cache staleness.** `precacheStaticAssets()` used `cache.add()`, which
+   honours the browser HTTP cache. On a version bump GitHub Pages revalidated
+   `index.html`/`app.js` but reused a stale `projection.js` from the HTTP cache.
+   → Shell assets are now fetched with `new Request(asset, { cache: "reload" })`,
+   bypassing the HTTP cache so a version bump always stores fresh bytes.
+2. **Non-atomic precache.** Each asset was added individually with failures
+   swallowed, and `install` called `skipWaiting()` even when the precache failed
+   — so a half-updated shell could activate.
+   → The **core** shell (`CORE_ASSETS`) is precached atomically: every core asset
+   is fetched first and stored only if all succeed; a failed precache now
+   **re-throws** so the install rejects and the browser keeps the previous
+   consistent worker, retrying once the deploy propagates. Optional extras
+   (`OPTIONAL_ASSETS`: icons, manifest, CDN) stay best-effort.
+3. **Unscoped runtime lookups.** The fetch handler used `caches.match(request)`,
+   which searches **every** cache, so a leftover old-version cache could serve a
+   stale `projection.js` next to a fresh `app.js`.
+   → A new `cacheFirst(request, cacheName)` helper reads only from the **current**
+   version's cache.
 
-Closes #641.
+`APP_VERSION` is bumped 1.1.30 → 1.1.31 (across `sw.js`, `sw-register.js`,
+`index.html`, `trend.html`) so clients stuck on a bad cache reinstall the
+corrected worker and re-precache a fresh, consistent shell.
+
+`Closes #641.`
 
 ```mermaid
 flowchart TD
-    A[Version bump deployed] --> B[SW install: precacheStaticAssets]
-    B --> C{fetch mode}
-    C -->|"old: cache.add() honours HTTP cache"| D[Stale projection.js cached]
-    D --> E[app.js calls undefined helper -> dashboard fails]
-    C -->|"new: cache: reload bypasses HTTP cache"| F[Fresh projection.js cached]
-    F --> G[app.js + projection.js agree -> dashboard loads]
+    D[New deploy: app.js + projection.js] --> I{install: precache CORE shell}
+    I -->|fetchFresh all core, cache: reload| Aok{all core ok?}
+    Aok -->|yes| A[store all → skipWaiting → activate]
+    Aok -->|no| R[reject install → keep previous worker → retry later]
+    A --> F{fetch shell asset}
+    F --> C[cacheFirst: CURRENT version cache only]
+    C -->|hit| S[serve consistent asset]
+    C -->|miss| N[network → populate current cache]
 ```
 
 ## Evidence
 
-No web UI screenshot: the regression only manifests with a stale HTTP-cached
-shell asset, which cannot be reproduced in a headless screenshot (source always
-loads cleanly), and Playwright MCP was unavailable this run. Evidence is the new
-behavioural tests, which execute the **real** `precacheStaticAssets()` body
-extracted from `docs/sw.js` against mocked `caches`/`fetch`/`Request`:
+Service-worker behaviour is headless; the user-visible result is that the
+dashboard loads (chart + data render, **no error banner**). Captured with
+headless Chrome against the local `docs/` build:
 
-- Asserts every shell asset is fetched with `cache: "reload"` (the assertion
-  that fails against the old `cache.add()` path, which never reaches `fetch`).
-- Asserts the freshly fetched response is what gets stored.
-- Asserts a non-ok (404) response is skipped, not cached.
-- Asserts a fetch rejection is tolerated and the remaining assets still cache.
+![Dashboard loads with no error banner](docs/evidence/issue-641-dashboard-loads.png)
 
-Full suite: `deno test --allow-read tests/*.ts` → **1227 passed, 0 failed**.
-`deno fmt`, `deno lint`, `deno check` all clean. The existing
-`sw_precache_list_test.ts` version-alignment guard confirms 1.1.31 is consistent
-across `sw.js`, `sw-register.js` and `index.html`.
+Behaviour is locked in by tests that execute the **real** `docs/sw.js` code
+against mocked Cache Storage / fetch / Request:
+
+- `tests/sw_precache_reload_test.ts` — every shell asset is fetched with
+  `cache: "reload"`; optional failures are tolerated; a non-ok **core** asset
+  rejects the precache and caches nothing.
+- `tests/sw_shell_consistency_test.ts` — a failed core asset rejects the install
+  and never `skipWaiting`s; the fetch handler serves shell assets only from the
+  current version's cache (never a leftover stale cache). Both reproduce #641 and
+  fail against the pre-fix code.
 
 ## Test Plan
 
-- Added `tests/sw_precache_reload_test.ts` (4 tests) reproducing #641 — the
-  reload-mode assertion fails against the pre-fix `cache.add()` code and passes
-  after the fix.
-- `tests/sw_precache_list_test.ts` — version alignment across SW/register/index
-  (now 1.1.31).
-- Full `deno test --allow-read tests/*.ts` suite green.
+- Updated `tests/sw_precache_reload_test.ts` for the new **tiered** precache
+  (core atomic / optional best-effort) — documented in-file as a deliberate
+  business-logic change; 5 tests including the new core-rejection case.
+- Added `tests/sw_shell_consistency_test.ts` (4 tests) covering atomic-core
+  install, optional tolerance, no-skipWaiting-on-failure, and scoped fetch.
+- Existing `tests/sw_precache_list_test.ts` (version alignment, now 1.1.31) and
+  `tests/sw_pathname_guards_test.ts` still pass.
+- Full Deno suite: `1232 passed | 0 failed`. `deno fmt --check`, `deno lint`,
+  `deno check`, `markdownlint-cli2` and `cargo check` all clean.
 
 ## Files changed
 
-- `docs/sw.js` — `precacheStaticAssets()` fetches with `cache: "reload"`;
-  `APP_VERSION` 1.1.30 → 1.1.31.
-- `docs/sw-register.js`, `docs/index.html`, `docs/trend.html` — version refs
-  bumped to 1.1.31.
-- `tests/sw_precache_reload_test.ts` — new behavioural tests.
+- `docs/sw.js` — split `STATIC_ASSETS` into atomic `CORE_ASSETS` +
+  best-effort `OPTIONAL_ASSETS`; `fetchFresh()` (cache: "reload"); atomic core
+  precache; install re-throws on failure; scoped `cacheFirst()` helper.
+- `docs/sw-register.js`, `docs/index.html`, `docs/trend.html` — `APP_VERSION`
+  1.1.30 → 1.1.31.
+- `tests/sw_precache_reload_test.ts`, `tests/sw_shell_consistency_test.ts` —
+  behavioural tests.
 - `CHANGELOG.md` — Fixed entry.
+- `docs/evidence/issue-641-dashboard-loads.png` — screenshot evidence.

@@ -8,27 +8,37 @@
 // so the new versioned cache was populated with a STALE projection.js (missing
 // the new helper) while the fresh app.js called it.
 //
-// These tests execute the REAL precacheStaticAssets() body from docs/sw.js with
-// mocked globals and assert that every shell asset is fetched with
-// `cache: "reload"` (bypassing the HTTP cache) and that only good responses are
-// stored.
+// These tests execute the REAL fetchFresh() + precacheStaticAssets() bodies from
+// docs/sw.js with mocked globals and assert that every shell asset is fetched
+// with `cache: "reload"` (bypassing the HTTP cache).
+//
+// NOTE — business-logic change (issue #641): the precache is now TIERED. CORE
+// assets (the interdependent HTML/JS/CSS shell) are all-or-nothing — a non-ok or
+// rejected CORE fetch rejects the whole install so a half-updated shell never
+// activates. OPTIONAL assets (icons, manifest, CDN) stay best-effort. Earlier
+// revisions of this test treated every asset as best-effort; those cases now
+// assert the OPTIONAL-tier semantics, and a new case covers the CORE-tier
+// rejection.
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 
 const swSource = await Deno.readTextFile(
   new URL("../docs/sw.js", import.meta.url),
 );
 
-// Extract the real precacheStaticAssets() body so the test exercises shipped
-// code, not a re-implementation.
+// Extract the real fetchFresh() + precacheStaticAssets() bodies so the test
+// exercises shipped code, not a re-implementation.
 function precacheSource(): string {
-  const match = swSource.match(
+  const fresh = swSource.match(/async function fetchFresh\([\s\S]*?\n\}/);
+  const precache = swSource.match(
     /async function precacheStaticAssets\(\)\s*\{[\s\S]*?\n\}/,
   );
-  if (!match) {
-    throw new Error("Could not locate precacheStaticAssets() in docs/sw.js");
+  if (!fresh || !precache) {
+    throw new Error(
+      "Could not locate fetchFresh()/precacheStaticAssets() in docs/sw.js",
+    );
   }
-  return match[0];
+  return `${fresh[0]}\n${precache[0]}`;
 }
 
 // A minimal Request stand-in capturing the cache mode, so the test runs without
@@ -50,7 +60,8 @@ interface Harness {
 }
 
 function makeHarness(
-  assets: string[],
+  coreAssets: string[],
+  optionalAssets: string[],
   fetchImpl: (req: MockRequest) => Promise<unknown>,
 ): Harness {
   const fetched: MockRequest[] = [];
@@ -75,7 +86,8 @@ function makeHarness(
     "fetch",
     "Request",
     "STATIC_CACHE_NAME",
-    "STATIC_ASSETS",
+    "CORE_ASSETS",
+    "OPTIONAL_ASSETS",
     "console",
     `${precacheSource()}\nreturn precacheStaticAssets;`,
   );
@@ -84,7 +96,8 @@ function makeHarness(
     fetch,
     MockRequest,
     "static-cache",
-    assets,
+    coreAssets,
+    optionalAssets,
     console,
   ) as () => Promise<void>;
 
@@ -94,11 +107,12 @@ function makeHarness(
 const okResponse = { ok: true, status: 200 };
 
 Deno.test("precache fetches every asset with cache:reload (bypasses HTTP cache)", async () => {
-  const assets = ["./index.html", "./app.js", "./projection.js"];
-  const h = makeHarness(assets, () => Promise.resolve(okResponse));
+  const core = ["./index.html", "./app.js", "./projection.js"];
+  const optional = ["./logo.png"];
+  const h = makeHarness(core, optional, () => Promise.resolve(okResponse));
   await h.run();
 
-  assertEquals(h.fetched.length, assets.length);
+  assertEquals(h.fetched.length, core.length + optional.length);
   for (const req of h.fetched) {
     assertEquals(
       req.cache,
@@ -106,25 +120,31 @@ Deno.test("precache fetches every asset with cache:reload (bypasses HTTP cache)"
       `Expected ${req.url} to be fetched with cache:"reload", got ${req.cache}`,
     );
   }
-  // Each good response is stored in the versioned cache.
-  assertEquals(h.put.length, assets.length);
+  // Every good response is stored in the versioned cache.
+  assertEquals(h.put.length, core.length + optional.length);
   assertEquals(
     h.put.map((p) => p.key).sort(),
-    [...assets].sort(),
+    [...core, ...optional].sort(),
   );
 });
 
 Deno.test("precache stores the freshly fetched response, not a cache.add() handle", async () => {
-  const h = makeHarness(["./projection.js"], () => Promise.resolve(okResponse));
+  const h = makeHarness(
+    ["./projection.js"],
+    [],
+    () => Promise.resolve(okResponse),
+  );
   await h.run();
   assertEquals(h.put.length, 1);
   assertEquals(h.put[0].response, okResponse);
 });
 
-Deno.test("precache skips a non-ok response without throwing (no stale bytes cached)", async () => {
-  const assets = ["./app.js", "./missing.js"];
+Deno.test("a non-ok OPTIONAL asset is skipped (warned), core shell still caches", async () => {
+  const core = ["./app.js", "./projection.js"];
+  const optional = ["./missing.png"];
   const h = makeHarness(
-    assets,
+    core,
+    optional,
     (req) =>
       req.url.includes("missing")
         ? Promise.resolve({ ok: false, status: 404 })
@@ -132,16 +152,17 @@ Deno.test("precache skips a non-ok response without throwing (no stale bytes cac
   );
   await h.run();
 
-  // Only the good asset is cached; the 404 is skipped, not stored.
-  assertEquals(h.put.length, 1);
-  assertEquals(h.put[0].key, "./app.js");
+  // Only the core assets are cached; the 404 optional is skipped, not stored.
+  assertEquals(h.put.map((p) => p.key).sort(), ["./app.js", "./projection.js"]);
   assertEquals(h.warnings.length, 1);
 });
 
-Deno.test("precache tolerates a fetch rejection and still caches the rest", async () => {
-  const assets = ["./app.js", "./offline.js", "./projection.js"];
+Deno.test("an OPTIONAL fetch rejection is tolerated and the core shell still caches", async () => {
+  const core = ["./app.js", "./projection.js"];
+  const optional = ["./offline.png"];
   const h = makeHarness(
-    assets,
+    core,
+    optional,
     (req) =>
       req.url.includes("offline")
         ? Promise.reject(new Error("network down"))
@@ -149,7 +170,27 @@ Deno.test("precache tolerates a fetch rejection and still caches the rest", asyn
   );
   await h.run();
 
-  assertEquals(h.put.length, 2);
   assertEquals(h.put.map((p) => p.key).sort(), ["./app.js", "./projection.js"]);
   assertEquals(h.warnings.length, 1);
+});
+
+Deno.test("a non-ok CORE asset rejects the whole precache and caches NOTHING (issue #641)", async () => {
+  // The atomic-core guarantee: a stale/missing projection.js mid-deploy must
+  // never be cached alongside a fresh app.js.
+  const core = ["./app.js", "./projection.js"];
+  const h = makeHarness(
+    core,
+    [],
+    (req) =>
+      req.url.includes("projection")
+        ? Promise.resolve({ ok: false, status: 404 })
+        : Promise.resolve(okResponse),
+  );
+
+  await assertRejects(() => h.run());
+  assertEquals(
+    h.put.length,
+    0,
+    "no core asset may be cached on an atomic fail",
+  );
 });
