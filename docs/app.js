@@ -3879,14 +3879,28 @@ class GRQValidator {
         // Portfolio target = equal-weight mean of the included stocks' target
         // percentages. The maths lives in the shared projection module
         // (issue #429) so the dashboard chart and the trend view call ONE
-        // function. Build the per-stock {buyPrice, currentPrice, adjustedTarget}
-        // inputs here, then delegate; the shared helper applies the same
-        // inclusion gate (issue #289) and 20.0% fallback.
+        // function. Build the per-stock inputs via the shared
+        // buildPortfolioTargetStocks() helper, then delegate; the shared helper
+        // applies the same inclusion gate (issue #289) and 20.0% fallback.
+        return GRQProjection.calculatePortfolioTargetPercentage(
+            this.buildPortfolioTargetStocks(),
+        );
+    }
+
+    // Build the per-stock {buyPrice, currentPrice, score, adjustedTarget, stock}
+    // inputs for the shared portfolio-target helpers (issue #429, #629). Single
+    // source of truth so the headline (calculatePortfolioTargetPercentage) and
+    // the "show the working" popover (calculatePortfolioTargetWorking) consume
+    // IDENTICAL inputs — the popover per-stock %, its Total and the headline
+    // reconcile by construction. The target is the split/dilution-adjusted value
+    // (current basis), never the raw `stock.target`.
+    buildPortfolioTargetStocks() {
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const stocks = this.scoreData.map((stock) => {
+        return this.scoreData.map((stock) => {
             const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
             const hasTarget = stock.target !== null && !isNaN(stock.target);
             return {
+                stock: stock.stock,
                 buyPrice: buyPriceObj ? buyPriceObj.price : null,
                 currentPrice: GRQProjection.currentPriceFromLatest(
                     this.marketData[stock.stock],
@@ -3903,8 +3917,6 @@ class GRQValidator {
                     : null,
             };
         });
-
-        return GRQProjection.calculatePortfolioTargetPercentage(stocks);
     }
 
     // Whether a stock counts towards portfolio aggregates (issue #289): it must
@@ -4073,42 +4085,25 @@ class GRQValidator {
         if (field === "portfolio-target") {
             const portfolioTargetValue = this
                 .calculatePortfolioTargetPercentage();
-            const scoreDate = this.getScoreDate(this.selectedFile);
 
-            // Calculate individual stock targets for display
-            let targetDetails = [];
-            let totalTarget = 0;
-            let validStocks = 0;
-
-            this.scoreData.forEach((stock) => {
-                // Mirror the exclusion applied in calculatePortfolioTargetPercentage
-                // so the popover's per-stock list and count reflect only the
-                // included (priceable) stocks (issue #289).
-                if (!this.isStockPriceable(stock.stock, scoreDate)) {
-                    return;
-                }
-                if (stock.target !== null && !isNaN(stock.target)) {
-                    const buyPrice = this.getBuyPrice(
-                        stock.stock,
-                        scoreDate,
-                    );
-                    if (buyPrice !== null) {
-                        const targetPercentage =
-                            ((stock.target - buyPrice.price) / buyPrice.price) * 100;
-                        targetDetails.push(
-                            `${stock.stock}: ${targetPercentage.toFixed(1)}%`,
-                        );
-                        totalTarget += targetPercentage;
-                        validStocks++;
-                    }
-                }
-            });
+            // Reuse the shared per-stock working helper (issue #629). It consumes
+            // the SAME split/dilution-adjusted inputs as the headline
+            // (calculatePortfolioTargetPercentage), so each stock's % uses the
+            // adjusted target basis — never the raw `stock.target` divided by a
+            // split-adjusted buy price — and the per-stock list, Total and the
+            // headline reconcile by construction.
+            const working = GRQProjection.calculatePortfolioTargetWorking(
+                this.buildPortfolioTargetStocks(),
+            );
+            const targetDetails = working.details.map(
+                (d) => `${d.stock}: ${d.targetPercentage.toFixed(1)}%`,
+            );
 
             return `Portfolio Target working:\n= Average target of all stocks in portfolio\n= Individual targets:\n  ${
                 targetDetails.join("\n  ")
             }\n= Total: ${
-                totalTarget.toFixed(1)
-            }% / ${validStocks} stocks\n= Portfolio target: ${
+                working.total.toFixed(1)
+            }% / ${working.validStocks} stocks\n= Portfolio target: ${
                 portfolioTargetValue.toFixed(1)
             }%`;
         }
