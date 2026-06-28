@@ -920,11 +920,26 @@ function calculateTargetPercentage(buyPrice, adjustedTarget) {
 // same fallback the dashboard's totals row applies). Returns 20.0 for a missing
 // or empty list so callers always have a usable figure.
 function calculatePortfolioTargetPercentage(stocks) {
-    if (!Array.isArray(stocks)) {
-        return 20.0;
-    }
-    let totalTarget = 0;
+    const { total, validStocks } = calculatePortfolioTargetWorking(stocks);
+    return validStocks > 0 ? total / validStocks : 20.0;
+}
+
+// Per-stock breakdown behind the Portfolio Target "show the working" popover
+// (issue #629). Single source of truth shared with
+// calculatePortfolioTargetPercentage, so the popover's per-stock % list, its
+// `Total ÷ N stocks` line and the `Portfolio target` headline all reconcile by
+// construction. Each input stock carries the SAME gate fields used by the
+// headline (`buyPrice`, `currentPrice`, `splitReliable`, `lowVolume`, `score`)
+// plus the split/dilution-adjusted `adjustedTarget` — never the raw target —
+// and an optional `stock` ticker for labelling. Returns
+// `{ details: [{ stock, targetPercentage }], total, validStocks }`.
+function calculatePortfolioTargetWorking(stocks) {
+    const details = [];
+    let total = 0;
     let validStocks = 0;
+    if (!Array.isArray(stocks)) {
+        return { details, total, validStocks };
+    }
     for (const stock of stocks) {
         const buyPrice = stock && stock.buyPrice;
         const currentPrice = stock && stock.currentPrice;
@@ -954,11 +969,15 @@ function calculatePortfolioTargetPercentage(stocks) {
             adjustedTarget,
         );
         if (targetPercentage !== null) {
-            totalTarget += targetPercentage;
+            details.push({
+                stock: stock && stock.stock,
+                targetPercentage,
+            });
+            total += targetPercentage;
             validStocks++;
         }
     }
-    return validStocks > 0 ? totalTarget / validStocks : 20.0;
+    return { details, total, validStocks };
 }
 
 // Fair-value display band for a stock's analysis. Pure given the analysis
@@ -1416,6 +1435,7 @@ globalThis.GRQProjection = {
     dividendBasisDifferencePercent,
     calculateTargetPercentage,
     calculatePortfolioTargetPercentage,
+    calculatePortfolioTargetWorking,
     getFairValueRange,
     getTargetPriceColor,
     calculateRSquared,
