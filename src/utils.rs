@@ -73,7 +73,8 @@ pub fn validate_stock_symbol(symbol: &str) -> bool {
         .all(|c| c.is_alphanumeric() || c == '.' || c == ':')
 }
 
-/// Returns `true` if both `buy_price` and `current_price` are positive and usable.
+/// Returns `true` if both `buy_price` and `current_price` are positive and
+/// usable, the split series is reliable, and the AI model `score` is positive.
 ///
 /// A stock is priceable when both prices are greater than 0.0. Stocks without
 /// usable prices are excluded from portfolio performance calculations entirely.
@@ -83,18 +84,24 @@ pub fn validate_stock_symbol(symbol: &str) -> bool {
 /// ```
 /// use grq_validation::utils::is_priceable;
 ///
-/// assert!(is_priceable(10.5, 12.0, true));
-/// assert!(!is_priceable(0.0, 12.0, true));  // missing buy price
-/// assert!(!is_priceable(10.5, 0.0, true));  // missing current price
-/// assert!(!is_priceable(0.0, 0.0, true));   // both missing
-/// assert!(!is_priceable(10.5, 12.0, false)); // split series unreliable
+/// assert!(is_priceable(10.5, 12.0, true, 0.5));
+/// assert!(!is_priceable(0.0, 12.0, true, 0.5));  // missing buy price
+/// assert!(!is_priceable(10.5, 0.0, true, 0.5));  // missing current price
+/// assert!(!is_priceable(0.0, 0.0, true, 0.5));   // both missing
+/// assert!(!is_priceable(10.5, 12.0, false, 0.5)); // split series unreliable
+/// assert!(!is_priceable(10.5, 12.0, true, 0.0));  // zero score -> hold cash
+/// assert!(!is_priceable(10.5, 12.0, true, -0.5)); // negative score -> hold cash
 /// ```
 ///
 /// `split_reliable` mirrors the frontend `isStockIncluded` predicate (issue
 /// #293): a stock whose split series cannot be trustworthily reconciled is
 /// excluded through this single gate rather than via a parallel path.
-pub fn is_priceable(buy_price: f64, current_price: f64, split_reliable: bool) -> bool {
-    buy_price > 0.0 && current_price > 0.0 && split_reliable
+///
+/// `score` is the raw AI model score (issue #627): a value <= 0 means the model
+/// predicts the stock will fall, so we would hold cash rather than buy it. Such
+/// a name is excluded through this same single gate, mirroring the frontend.
+pub fn is_priceable(buy_price: f64, current_price: f64, split_reliable: bool, score: f64) -> bool {
+    buy_price > 0.0 && current_price > 0.0 && split_reliable && score > 0.0
 }
 
 /// Trustworthy split-adjustment thresholds, mirroring `docs/projection.js`
@@ -1160,8 +1167,9 @@ pub fn calculate_portfolio_performance(
             .map(|series| compute_split_adjustment(series, buy_date))
             .unwrap_or(SplitAdjustment::NONE);
 
-        // Use the priceable predicate (now split-aware) to determine inclusion.
-        if is_priceable(buy_price, current_price, split.reliable) {
+        // Use the priceable predicate (now split- and score-aware) to determine
+        // inclusion. A negative/zero score drops the stock (issue #627).
+        if is_priceable(buy_price, current_price, split.reliable, record.score) {
             // Restate the buy price into current (post-split) terms so the
             // return is not distorted by a split inside the window. With no
             // split the factor is 1.0 and the cost basis is unchanged.
@@ -1304,8 +1312,9 @@ pub fn calculate_hybrid_projection(
             // Use the priceable predicate to determine inclusion. The hybrid
             // projection does not yet apply split correction (out of scope for
             // issue #294), so split reliability is left at `true` to preserve
-            // its existing behaviour.
-            if is_priceable(buy_price, latest_price, true) {
+            // its existing behaviour. A negative/zero score drops the stock
+            // (issue #627).
+            if is_priceable(buy_price, latest_price, true, record.score) {
                 let gain_loss_percent = ((latest_price - buy_price) / buy_price) * 100.0;
                 // Use market data days elapsed instead of calendar days
                 let market_days_elapsed = (latest_date - score_date).num_days();
@@ -2893,39 +2902,60 @@ mod tests {
     // original price-only intent; a dedicated case below covers `false`.
     #[test]
     fn test_is_priceable_both_prices_present() {
-        assert!(is_priceable(10.5, 12.0, true));
-        assert!(is_priceable(0.01, 0.01, true));
-        assert!(is_priceable(100.0, 1.0, true));
+        assert!(is_priceable(10.5, 12.0, true, 1.0));
+        assert!(is_priceable(0.01, 0.01, true, 1.0));
+        assert!(is_priceable(100.0, 1.0, true, 1.0));
     }
 
     #[test]
     fn test_is_priceable_buy_price_missing() {
-        assert!(!is_priceable(0.0, 12.0, true));
+        assert!(!is_priceable(0.0, 12.0, true, 1.0));
     }
 
     #[test]
     fn test_is_priceable_current_price_missing() {
-        assert!(!is_priceable(10.5, 0.0, true));
+        assert!(!is_priceable(10.5, 0.0, true, 1.0));
     }
 
     #[test]
     fn test_is_priceable_both_prices_missing() {
-        assert!(!is_priceable(0.0, 0.0, true));
+        assert!(!is_priceable(0.0, 0.0, true, 1.0));
     }
 
     #[test]
     fn test_is_priceable_negative_prices() {
-        assert!(!is_priceable(-10.5, 12.0, true));
-        assert!(!is_priceable(10.5, -12.0, true));
-        assert!(!is_priceable(-10.5, -12.0, true));
+        assert!(!is_priceable(-10.5, 12.0, true, 1.0));
+        assert!(!is_priceable(10.5, -12.0, true, 1.0));
+        assert!(!is_priceable(-10.5, -12.0, true, 1.0));
     }
 
     #[test]
     fn test_is_priceable_split_unreliable_excludes_otherwise_priceable_stock() {
         // Both prices usable, but an unreliable split series drops the stock
         // through the single gate (issue #294).
-        assert!(!is_priceable(10.5, 12.0, false));
-        assert!(!is_priceable(100.0, 1.0, false));
+        assert!(!is_priceable(10.5, 12.0, false, 1.0));
+        assert!(!is_priceable(100.0, 1.0, false, 1.0));
+    }
+
+    #[test]
+    fn test_is_priceable_positive_score_included() {
+        // A fully priceable stock with a positive score is included (issue #627).
+        assert!(is_priceable(10.5, 12.0, true, 0.174));
+        assert!(is_priceable(10.5, 12.0, true, 5.0));
+    }
+
+    #[test]
+    fn test_is_priceable_zero_score_excludes_otherwise_priceable_stock() {
+        // Both prices usable and split reliable, but a zero score means the
+        // model would not buy, so we hold cash and exclude the stock (issue #627).
+        assert!(!is_priceable(10.5, 12.0, true, 0.0));
+    }
+
+    #[test]
+    fn test_is_priceable_negative_score_excludes_otherwise_priceable_stock() {
+        // A negative score predicts a fall: exclude the stock (issue #627).
+        assert!(!is_priceable(10.5, 12.0, true, -0.5));
+        assert!(!is_priceable(100.0, 1.0, true, -10.0));
     }
 
     #[test]
@@ -2957,18 +2987,18 @@ mod tests {
 
         // Simulate that GOOD1 and GOOD2 are priceable but MISSING_BUY is not
         // This is tested implicitly via the count and excluded list
-        assert!(is_priceable(20.0, 25.0, true)); // GOOD1 is priceable
-        assert!(is_priceable(20.0, 22.0, true)); // GOOD2 is priceable
-        assert!(!is_priceable(0.0, 0.0, true)); // MISSING_BUY is not priceable
+        assert!(is_priceable(20.0, 25.0, true, 1.0)); // GOOD1 is priceable
+        assert!(is_priceable(20.0, 22.0, true, 1.0)); // GOOD2 is priceable
+        assert!(!is_priceable(0.0, 0.0, true, 1.0)); // MISSING_BUY is not priceable
     }
 
     #[test]
     fn test_portfolio_performance_excludes_missing_current_price() {
         // When a stock has a missing current price within the 90-day window,
         // it should be excluded from both the average and the count.
-        assert!(is_priceable(20.0, 25.0, true)); // priceable
-        assert!(!is_priceable(20.0, 0.0, true)); // missing current price is not priceable
-        assert!(!is_priceable(0.0, 25.0, true)); // missing buy price is not priceable
+        assert!(is_priceable(20.0, 25.0, true, 1.0)); // priceable
+        assert!(!is_priceable(20.0, 0.0, true, 1.0)); // missing current price is not priceable
+        assert!(!is_priceable(0.0, 25.0, true, 1.0)); // missing buy price is not priceable
     }
 
     #[test]
@@ -3242,6 +3272,44 @@ mod tests {
             "the unreconcilable split stock must be excluded"
         );
         // Average is over the single included stock only.
+        assert!((result.performance_90_day - 10.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_portfolio_performance_excludes_negative_score_stock() {
+        // Two stocks, both fully priceable (+10% each). One carries a negative
+        // model score, so it predicts a fall and we hold cash: it must drop from
+        // the average and the count, and appear in excluded_tickers (issue #627).
+        let tsv = format!(
+            "{PERF_TSV_HEADER}\
+             NYSE:BUYME\t1.0\t$120.00\t\t\t\t\t\n\
+             NYSE:HOLDCASH\t-0.5\t$120.00\t\t\t\t\t\n"
+        );
+        let csv = format!(
+            "{PERF_CSV_HEADER}\
+             2024-11-15,NYSE:BUYME,100,100,100,100,1.0\n\
+             2025-02-13,NYSE:BUYME,110,110,110,110,1.0\n\
+             2024-11-15,NYSE:HOLDCASH,100,100,100,100,1.0\n\
+             2025-02-13,NYSE:HOLDCASH,200,200,200,200,1.0\n"
+        );
+        let (_dir, score_path) = write_portfolio_fixture(&tsv, &csv);
+
+        let result = calculate_portfolio_performance(&score_path, "2024-11-15").unwrap();
+
+        assert_eq!(
+            result.total_stocks, 1,
+            "only the positive-score stock is counted"
+        );
+        assert_eq!(result.individual_performances.len(), 1);
+        assert_eq!(result.individual_performances[0].ticker, "NYSE:BUYME");
+        assert!(
+            result
+                .excluded_tickers
+                .contains(&"NYSE:HOLDCASH".to_string()),
+            "the negative-score stock must be excluded"
+        );
+        // Average is over the single included stock only; the excluded +100%
+        // name does not lift the figure.
         assert!((result.performance_90_day - 10.0).abs() < 1e-6);
     }
 

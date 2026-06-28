@@ -263,15 +263,26 @@ function returnAboveCostOfCapital(performance, costOfCapital, daysElapsed) {
 // dropped from portfolio membership and from EVERY aggregate average, so it
 // neither helps nor hurts the Actual/Target lines. `lowVolume` defaults to
 // false so an unknown/insufficient-volume name is never accidentally excluded.
+//
+// Negative-score exclusion (issue #627): a stock whose raw AI model `score` is
+// <= 0 is predicted to fall, so we would hold cash rather than buy it. Such a
+// name is dropped from portfolio membership and every aggregate, identical to
+// the low-volume treatment. The gate keys on the RAW model score, not the
+// volume-capped display score (#578). An unknown/missing score (null, undefined
+// or NaN) never excludes, so historical data without a usable score is never
+// mass-dropped — `score` defaults to null.
 function isStockIncluded(
     buyPrice,
     currentPrice,
     splitReliable = true,
     lowVolume = false,
+    score = null,
 ) {
     const usable = (price) => typeof price === "number" && price > 0;
+    const positiveScore = typeof score !== "number" ||
+        Number.isNaN(score) || score > 0;
     return usable(buyPrice) && usable(currentPrice) &&
-        splitReliable !== false && lowVolume !== true;
+        splitReliable !== false && lowVolume !== true && positiveScore;
 }
 
 // Equal-weight portfolio performance over ONLY the included stocks (issue #288).
@@ -292,8 +303,15 @@ function calculateIncludedPortfolioPerformance(stocks) {
         const currentPrice = stock && stock.currentPrice;
         const splitReliable = stock && stock.splitReliable;
         const lowVolume = stock && stock.lowVolume;
+        const score = stock && stock.score;
         if (
-            !isStockIncluded(buyPrice, currentPrice, splitReliable, lowVolume)
+            !isStockIncluded(
+                buyPrice,
+                currentPrice,
+                splitReliable,
+                lowVolume,
+                score,
+            )
         ) {
             continue;
         }
@@ -341,8 +359,15 @@ function calculateIncludedPortfolioDividendYield(stocks) {
         const currentPrice = stock && stock.currentPrice;
         const splitReliable = stock && stock.splitReliable;
         const lowVolume = stock && stock.lowVolume;
+        const score = stock && stock.score;
         if (
-            !isStockIncluded(buyPrice, currentPrice, splitReliable, lowVolume)
+            !isStockIncluded(
+                buyPrice,
+                currentPrice,
+                splitReliable,
+                lowVolume,
+                score,
+            )
         ) {
             continue;
         }
@@ -905,8 +930,15 @@ function calculatePortfolioTargetPercentage(stocks) {
         const currentPrice = stock && stock.currentPrice;
         const splitReliable = stock && stock.splitReliable;
         const lowVolume = stock && stock.lowVolume;
+        const score = stock && stock.score;
         if (
-            !isStockIncluded(buyPrice, currentPrice, splitReliable, lowVolume)
+            !isStockIncluded(
+                buyPrice,
+                currentPrice,
+                splitReliable,
+                lowVolume,
+                score,
+            )
         ) {
             continue;
         }
