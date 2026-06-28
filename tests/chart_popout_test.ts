@@ -326,8 +326,10 @@ Deno.test("index.html loads chart_popout.js before the app bootstrap", async () 
   const html = await Deno.readTextFile(
     new URL("../docs/index.html", import.meta.url),
   );
-  const popoutIndex = html.indexOf('src="chart_popout.js"');
-  const bootIndex = html.indexOf('src="dashboard_boot.js"');
+  // Match the `src="<name>` prefix (no closing quote) so the `?v=<VERSION>`
+  // cache-buster added in issue #641 does not break the load-order assertion.
+  const popoutIndex = html.indexOf('src="chart_popout.js');
+  const bootIndex = html.indexOf('src="dashboard_boot.js');
   assert(popoutIndex !== -1, "index.html must load chart_popout.js");
   assert(bootIndex !== -1, "index.html must load dashboard_boot.js");
   assert(

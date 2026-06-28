@@ -27,13 +27,16 @@ for (const { global, src } of MODULES) {
     // Only require the script tag when app.js actually uses the global.
     if (!appJs.includes(global)) return;
 
-    const scriptIndex = html.indexOf(`src="${src}"`);
+    // Match the `src="<name>` prefix (no closing quote) so the assertion
+    // tolerates the `?v=<VERSION>` cache-buster added in issue #641 — the
+    // scripts are still loaded, now in lockstep with app.js.
+    const scriptIndex = html.indexOf(`src="${src}`);
     assert(
       scriptIndex !== -1,
       `docs/index.html must load ${src}; app.js uses globalThis.${global}`,
     );
 
-    const bootIndex = html.indexOf('src="dashboard_boot.js"');
+    const bootIndex = html.indexOf('src="dashboard_boot.js');
     assert(bootIndex !== -1, "dashboard_boot.js script tag must be present");
     assert(
       scriptIndex < bootIndex,

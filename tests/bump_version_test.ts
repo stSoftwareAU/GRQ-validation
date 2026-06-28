@@ -70,6 +70,30 @@ Deno.test("per-file updaters rewrite only the version token", () => {
   );
 });
 
+Deno.test("updateIndex rewrites every local script cache-buster (issue #641)", () => {
+  // app.js dependencies (projection.js and the helper scripts) carry the same
+  // ?v= query as app.js so they can never be served stale against a freshly
+  // fetched app.js. The bump must move them ALL in lockstep, not just
+  // sw-register.js.
+  const before = [
+    '<meta name="app-version" content="1.0.193">',
+    '<script src="projection.js?v=1.0.193"></script>',
+    '<script src="format.js?v=1.0.193"></script>',
+    '<script src="dashboard_boot.js?v=1.0.193"></script>',
+    '<script src="sw-register.js?v=1.0.193"></script>',
+  ].join("\n");
+
+  const after = updateIndex(before, "1.0.194");
+
+  assertEquals(after.includes('content="1.0.194"'), true);
+  assertEquals(after.includes("projection.js?v=1.0.194"), true);
+  assertEquals(after.includes("format.js?v=1.0.194"), true);
+  assertEquals(after.includes("dashboard_boot.js?v=1.0.194"), true);
+  assertEquals(after.includes("sw-register.js?v=1.0.194"), true);
+  // No stale version remains anywhere in the rewritten markup.
+  assertEquals(after.includes("1.0.193"), false);
+});
+
 Deno.test("bumpVersionContents increments and keeps all files aligned", () => {
   const { result, files } = bumpVersionContents(fixture("1.0.193"));
   assertEquals(result, { bumped: true, from: "1.0.193", to: "1.0.194" });
