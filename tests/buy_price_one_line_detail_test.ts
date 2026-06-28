@@ -7,34 +7,22 @@
 // class pinned to `white-space: nowrap`, and the rating span gets a
 // `star-rating` class rendered compactly so 5 moons + the price fit one line.
 //
-// Pure-CSS/markup layout is verified by reading docs/app.js and docs/styles.css
-// and asserting on the relevant markup hooks and rule bodies — the same approach
-// used by header_banner_mobile_test.ts and dashboard_section_spacing_mobile_test.ts.
+// The markup hooks the layout depends on are verified by reading docs/app.js
+// and asserting on the rendered template — the same approach used by
+// header_banner_mobile_test.ts.
+//
+// Issue #632: the former "buy-price-cell is pinned to white-space: nowrap" and
+// "the moon run is rendered compactly" assertions were source-text greps over
+// docs/styles.css (pinning the `white-space`, `font-size` and `letter-spacing`
+// declarations). A behaviour-preserving restyle that kept the price + moons on
+// one line by other means — a wider column, a smaller glyph via `transform`,
+// etc. — would trip them without changing what the user sees. The one-line
+// rendering is exercised by the pa11y visual gate at mobile viewports; the
+// markup-hook contracts below are what these unit tests verify.
 
 import { assert } from "@std/assert";
 
 const APP = "docs/app.js";
-const STYLES = "docs/styles.css";
-
-/**
- * Return the body of the FIRST top-level CSS rule for `selector` found within
- * `css`, or null when absent. Brace-aware. `selector` is matched literally at a
- * rule head (i.e. immediately followed by " {").
- */
-function ruleBody(css: string, selector: string): string | null {
-  const head = css.indexOf(selector + " {");
-  if (head === -1) return null;
-  const open = css.indexOf("{", head);
-  const close = css.indexOf("}", open);
-  if (open === -1 || close === -1) return null;
-  return css.slice(open + 1, close);
-}
-
-/** Parse a unit-less or em multiplier for `prop` from a declaration body. */
-function emOf(body: string, prop: string): number | null {
-  const m = body.match(new RegExp(`${prop}\\s*:\\s*(-?[0-9.]+)\\s*em`, "i"));
-  return m ? parseFloat(m[1]) : null;
-}
 
 Deno.test("app.js: detail-panel Buy Price value cell carries the buy-price-cell hook", async () => {
   const js = await Deno.readTextFile(APP);
@@ -55,35 +43,6 @@ Deno.test("app.js: detail-panel rating span carries the star-rating hook", async
   assert(
     starsSpans.some((s) => /class="[^"]*\bstar-rating\b[^"]*"/.test(s)),
     "the detail-panel stars span must include the star-rating class",
-  );
-});
-
-Deno.test("styles.css: buy-price-cell is pinned to white-space: nowrap", async () => {
-  const css = await Deno.readTextFile(STYLES);
-  const body = ruleBody(css, "#stockDetailCard .buy-price-cell");
-  assert(body, "#stockDetailCard .buy-price-cell rule must exist");
-  assert(
-    /white-space\s*:\s*nowrap/i.test(body as string),
-    "buy-price-cell must set white-space: nowrap so price + moons never wrap",
-  );
-});
-
-Deno.test("styles.css: the moon run is rendered compactly so 5 moons + price fit", async () => {
-  const css = await Deno.readTextFile(STYLES);
-  const body = ruleBody(css, "#stockDetailCard .buy-price-cell .star-rating");
-  assert(
-    body,
-    "#stockDetailCard .buy-price-cell .star-rating rule must exist",
-  );
-  const fontEm = emOf(body as string, "font-size");
-  const spacingEm = emOf(body as string, "letter-spacing");
-  assert(
-    fontEm !== null && (fontEm as number) < 1,
-    `star-rating font-size (${fontEm}em) must be smaller than 1em to compact the glyphs`,
-  );
-  assert(
-    spacingEm !== null && (spacingEm as number) < 0,
-    `star-rating letter-spacing (${spacingEm}em) must be negative to tighten the run`,
   );
 });
 
