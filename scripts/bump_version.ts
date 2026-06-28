@@ -133,7 +133,7 @@ export function bumpVersionContents(
  * Thin I/O wrapper around {@link bumpVersionContents}; only writes when a bump
  * actually occurs.
  */
-export async function bumpVersionFiles(
+async function bumpVersionFiles(
   docsDir: string,
   baseVersion?: string,
 ): Promise<BumpResult> {
