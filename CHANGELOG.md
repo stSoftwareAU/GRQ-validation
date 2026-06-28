@@ -48,6 +48,14 @@ and this project adheres to
 
 ### Fixed
 
+- Portfolio Target "show working" popover now lists each stock's
+  split/dilution-adjusted target %. The per-stock loop in `docs/app.js`
+  (`getWorking`, `portfolio-target`) divided the **raw** `stock.target` by the
+  already split-adjusted buy price — mixed bases — so a reverse-split stock such
+  as NYSE:DD (1:3 split) showed **-64.4%** instead of its true **+6.8%**. It now
+  reuses the shared `calculateTargetPercentage`, so the per-stock list, the Total
+  line and the Portfolio target headline reconcile with the table and chart
+  (Issue #629).
 - Footer **🔗 Share** button now copies a deep-link to the clipboard. The
   link-builder and clipboard/fallback handling shipped in `docs/share_link.js`
   (Issue #495) but the dashboard never called `GRQShare.initShareButton(...)`,

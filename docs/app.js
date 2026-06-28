@@ -4088,13 +4088,19 @@ class GRQValidator {
                     return;
                 }
                 if (stock.target !== null && !isNaN(stock.target)) {
-                    const buyPrice = this.getBuyPrice(
-                        stock.stock,
+                    // Reuse the shared split/dilution-adjusted target path
+                    // (issue #629). The old loop divided the RAW stock.target by
+                    // the already split-adjusted buy price — mixed bases — which
+                    // showed e.g. NYSE:DD as -64.4% (a 1:3 reverse split) instead
+                    // of its true +6.8%. calculateTargetPercentage adjusts the
+                    // target too, so the per-stock %, the Total line and the
+                    // Portfolio target headline all share one source of truth
+                    // with the table and chart.
+                    const targetPercentage = this.calculateTargetPercentage(
+                        stock,
                         scoreDate,
                     );
-                    if (buyPrice !== null) {
-                        const targetPercentage =
-                            ((stock.target - buyPrice.price) / buyPrice.price) * 100;
+                    if (targetPercentage !== null) {
                         targetDetails.push(
                             `${stock.stock}: ${targetPercentage.toFixed(1)}%`,
                         );
