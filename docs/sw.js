@@ -6,17 +6,19 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.1.30";
+const APP_VERSION = "1.1.31";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
 
-// App shell — static dashboard assets precached on install. Enumerated from
-// the <head> of docs/index.html so the list stays in sync; bump APP_VERSION
-// when the SRI pins below change. Entries that do not yet exist (e.g.
-// manifest.json added by a sibling sub-issue) are simply skipped during
-// precache rather than failing the whole install.
-const STATIC_ASSETS = [
+// Core app shell — the executable HTML/JS/CSS that MUST be cached as ONE atomic
+// unit. The dashboard's scripts are interdependent at runtime: app.js calls
+// helpers published by projection.js (and the other shared modules), so a
+// half-updated shell — a fresh app.js cached next to a stale projection.js —
+// throws "GRQProjection.<helper> is not a function" and the page fails to load
+// (issue #641). These are precached all-or-nothing. Enumerated from the <head>
+// of docs/index.html and docs/trend.html so the list stays in sync.
+const CORE_ASSETS = [
   "./",
   "./index.html",
   "./app.js",
@@ -44,8 +46,6 @@ const STATIC_ASSETS = [
   "./theme.js",
   "./dashboard_boot.js",
   "./styles.css",
-  "./manifest.json",
-  "./logo.png",
   "./sw-register.js",
   // Trend view (issue #430) and the headless engines it reuses (#429/#431/#432).
   "./trend.html",
@@ -58,9 +58,17 @@ const STATIC_ASSETS = [
   "./trend_grouping_link.js",
   // Transient ?indices= benchmark-index deep-link for the Trend view (issue #480).
   "./trend_indices_deeplink.js",
-  // SRI-pinned CDN assets from docs/index.html (issue #79).
-  // Bump APP_VERSION whenever these pins change so the integrity hashes are
-  // re-validated.
+];
+
+// Optional extras — precached best-effort. A missing icon/manifest, or a
+// momentarily unreachable CDN, must NOT block the core shell from installing
+// (all-or-nothing only applies to CORE_ASSETS, which is what keeps app.js and
+// projection.js in lock-step). Entries that do not yet exist (e.g. a
+// manifest.json a sibling sub-issue has not landed) are simply skipped.
+// SRI-pinned CDN assets are re-validated whenever APP_VERSION changes (issue #79).
+const OPTIONAL_ASSETS = [
+  "./manifest.json",
+  "./logo.png",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js",
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.1",
@@ -102,16 +110,46 @@ function withHeaders(response, extraHeaders) {
 }
 
 /**
- * Precache the app shell resiliently: cache each asset individually so a
- * single missing entry (e.g. a manifest.json a sibling sub-issue has not
- * landed yet) does not reject the whole install.
+ * Fetch a shell asset with the browser HTTP cache bypassed (cache: "reload") so
+ * a version bump always pulls FRESH bytes. Issue #641: a plain cache.add()
+ * reused a stale projection.js from the HTTP cache while GitHub Pages
+ * revalidated index.html/app.js, so the new app.js called
+ * GRQProjection.calculatePortfolioTargetWorking — a helper the stale
+ * projection.js did not yet define — and the dashboard failed to load. Throws on
+ * any non-ok response so callers can decide whether the asset is mandatory.
+ */
+async function fetchFresh(asset) {
+  const response = await fetch(new Request(asset, { cache: "reload" }));
+  if (!response || !response.ok) {
+    throw new Error(
+      `Unexpected response ${response && response.status} for ${asset}`,
+    );
+  }
+  return response;
+}
+
+/**
+ * Precache the app shell. The CORE shell is all-or-nothing: every core asset is
+ * fetched fresh first and stored only if EVERY one succeeded, so the worker
+ * never activates a half-updated, internally-inconsistent shell where a fresh
+ * app.js sits beside a stale/missing projection.js (issue #641). OPTIONAL extras
+ * stay best-effort — a single missing icon/manifest or a momentarily-down CDN
+ * must not fail the install or evict the core shell.
  */
 async function precacheStaticAssets() {
   const cache = await caches.open(STATIC_CACHE_NAME);
+
+  // Fetch all core assets before storing any: a single failure rejects here and
+  // nothing is cached, keeping the precache atomic.
+  const coreResponses = await Promise.all(CORE_ASSETS.map(fetchFresh));
   await Promise.all(
-    STATIC_ASSETS.map(async (asset) => {
+    CORE_ASSETS.map((asset, index) => cache.put(asset, coreResponses[index])),
+  );
+
+  await Promise.all(
+    OPTIONAL_ASSETS.map(async (asset) => {
       try {
-        await cache.add(asset);
+        await cache.put(asset, await fetchFresh(asset));
       } catch (error) {
         console.warn("Service Worker: Skipping uncacheable asset", asset, error);
       }
@@ -124,6 +162,39 @@ async function precacheStaticAssets() {
  *
  * If the network fails, fall back to the cached index with a warning header.
  */
+/**
+ * Cache-first against ONE specific versioned cache. Scoping the lookup to the
+ * current cache (rather than caches.match across EVERY cache) means a leftover
+ * old-version cache can never serve a stale asset that mismatches the rest of
+ * the freshly-activated shell — the mechanism behind the "is not a function"
+ * regression where a fresh app.js met an old projection.js (issue #641). On a
+ * miss we fetch from the network and populate the current cache; document
+ * requests fall back to the cached shell when offline.
+ */
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(request);
+    if (response && response.status === 200 && response.type === "basic") {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    if (request.destination === "document") {
+      const shell = await cache.match("./index.html");
+      if (shell) {
+        return shell;
+      }
+    }
+    throw error;
+  }
+}
+
 async function networkFirstScoreIndex(originalRequest) {
   const request = new Request(originalRequest, { cache: "no-store" });
   const cache = await caches.open(DYNAMIC_CACHE_NAME);
@@ -164,9 +235,14 @@ self.addEventListener("install", (event) => {
         return self.skipWaiting();
       })
       .catch((error) => {
+        // Core precache failed (e.g. an asset 404'd mid-deploy). Do NOT
+        // skipWaiting: re-throw so the install REJECTS, the browser discards
+        // this worker and keeps the previous internally-consistent one, then
+        // retries on the next update poll once the deploy has propagated
+        // (issue #641). Activating a partial shell is what produced the
+        // "GRQProjection.<helper> is not a function" regression.
         console.error("Service Worker: Failed to cache static assets", error);
-        // Still skip waiting even if caching fails.
-        return self.skipWaiting();
+        throw error;
       }),
   );
 });
@@ -252,38 +328,10 @@ self.addEventListener("fetch", (event) => {
     (url.pathname.endsWith(".json") && !isNetworkFirst && !isDataFile);
 
   if (isStaticAsset) {
-    // App shell: cache first with version-based invalidation. Aggressive
-    // caching is safe because a version change invalidates every cache.
-    event.respondWith(
-      caches.match(request)
-        .then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-
-          return fetch(request)
-            .then((response) => {
-              if (
-                response && response.status === 200 && response.type === "basic"
-              ) {
-                const responseToCache = response.clone();
-                caches.open(STATIC_CACHE_NAME)
-                  .then((cache) => {
-                    cache.put(request, responseToCache);
-                  });
-              }
-              return response;
-            })
-            .catch((error) => {
-              // No cache and offline: fall back to the dashboard for
-              // navigation requests.
-              if (request.destination === "document") {
-                return caches.match("./index.html");
-              }
-              throw error;
-            });
-        }),
-    );
+    // App shell: cache first, scoped to the CURRENT version's cache only so a
+    // leftover old-version cache can never serve a stale, mismatched asset
+    // (issue #641). A version change still invalidates every cache.
+    event.respondWith(cacheFirst(request, STATIC_CACHE_NAME));
   } else if (isNetworkFirst) {
     // Score index: network first so the date/score list stays current online.
     event.respondWith(
@@ -327,29 +375,9 @@ self.addEventListener("fetch", (event) => {
         }),
     );
   } else {
-    // Everything else: cache first with version-based invalidation.
-    event.respondWith(
-      caches.match(request)
-        .then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-
-          return fetch(request)
-            .then((response) => {
-              if (
-                response && response.status === 200 && response.type === "basic"
-              ) {
-                const responseToCache = response.clone();
-                caches.open(STATIC_CACHE_NAME)
-                  .then((cache) => {
-                    cache.put(request, responseToCache);
-                  });
-              }
-              return response;
-            });
-        }),
-    );
+    // Everything else: cache first, scoped to the current version's cache so a
+    // stale leftover cache can never win over the freshly-activated shell.
+    event.respondWith(cacheFirst(request, STATIC_CACHE_NAME));
   }
 });
 
