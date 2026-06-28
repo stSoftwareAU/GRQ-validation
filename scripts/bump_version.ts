@@ -76,8 +76,16 @@ export function updateSwRegister(text: string, newVersion: string): string {
 }
 
 /**
- * Rewrite the app-version meta and the sw-register.js cache-buster in an HTML
- * page. Used for both index.html and trend.html, which share these patterns.
+ * Rewrite the app-version meta and every local `<script src="…js?v=…">`
+ * cache-buster in an HTML page. Used for both index.html and trend.html, which
+ * share these patterns.
+ *
+ * The script-tag rewrite is global (issue #641): app.js is loaded with a
+ * `?v=<VERSION>` cache-buster, so its dependencies (projection.js and the
+ * other helper scripts) must carry the SAME version query or a returning user
+ * can run a freshly-fetched app.js against a stale, cache-first dependency.
+ * Bumping the version here keeps every such script — including sw-register.js —
+ * in lockstep.
  */
 export function updateIndex(text: string, newVersion: string): string {
   return text
@@ -85,7 +93,7 @@ export function updateIndex(text: string, newVersion: string): string {
       /(<meta name="app-version" content=")[^"]+(">)/,
       `$1${newVersion}$2`,
     )
-    .replace(/(sw-register\.js\?v=)[0-9.]+/, `$1${newVersion}`);
+    .replace(/(src="[^"]+\.js\?v=)[0-9.]+/g, `$1${newVersion}`);
 }
 
 /**
