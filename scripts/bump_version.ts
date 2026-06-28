@@ -132,8 +132,11 @@ export function bumpVersionContents(
  *
  * Thin I/O wrapper around {@link bumpVersionContents}; only writes when a bump
  * actually occurs.
+ *
+ * File-local: only the CLI `main` flow below calls it. The pure, unit-tested
+ * helper is {@link bumpVersionContents}.
  */
-export async function bumpVersionFiles(
+async function bumpVersionFiles(
   docsDir: string,
   baseVersion?: string,
 ): Promise<BumpResult> {
