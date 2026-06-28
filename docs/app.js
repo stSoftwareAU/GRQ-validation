@@ -3879,9 +3879,9 @@ class GRQValidator {
         // Portfolio target = equal-weight mean of the included stocks' target
         // percentages. The maths lives in the shared projection module
         // (issue #429) so the dashboard chart and the trend view call ONE
-        // function. Build the per-stock {buyPrice, currentPrice, adjustedTarget}
-        // inputs here, then delegate; the shared helper applies the same
-        // inclusion gate (issue #289) and 20.0% fallback.
+        // function. Build the per-stock inputs via the shared
+        // buildPortfolioTargetStocks() helper, then delegate; the shared helper
+        // applies the same inclusion gate (issue #289) and 20.0% fallback.
         return GRQProjection.calculatePortfolioTargetPercentage(
             this.buildPortfolioTargetStocks(),
         );
