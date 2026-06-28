@@ -13,12 +13,15 @@ const g = globalThis as unknown as {
       buyPrice: number | null | undefined,
       currentPrice: number | null | undefined,
       splitReliable?: boolean,
+      lowVolume?: boolean,
+      score?: number | null,
     ) => boolean;
     calculateIncludedPortfolioPerformance: (
       stocks: Array<{
         buyPrice?: number | null;
         currentPrice?: number | null;
         totalDividends?: number;
+        score?: number | null;
       }>,
     ) => number | null;
   };
@@ -79,6 +82,36 @@ Deno.test("isStockIncluded - non-numeric prices -> excluded", () => {
   assertEquals(GRQProjection.isStockIncluded(NaN, 12.0), false);
 });
 
+// --- isStockIncluded: negative-score exclusion (issue #627) ----------------
+
+Deno.test("isStockIncluded - positive score -> included", () => {
+  assert(GRQProjection.isStockIncluded(10.5, 12.0, true, false, 0.174));
+  assert(GRQProjection.isStockIncluded(10.5, 12.0, true, false, 5));
+});
+
+Deno.test("isStockIncluded - zero score -> excluded", () => {
+  assertEquals(
+    GRQProjection.isStockIncluded(10.5, 12.0, true, false, 0),
+    false,
+  );
+});
+
+Deno.test("isStockIncluded - negative score -> excluded", () => {
+  assertEquals(
+    GRQProjection.isStockIncluded(10.5, 12.0, true, false, -0.5),
+    false,
+  );
+});
+
+Deno.test("isStockIncluded - missing/unknown score -> not excluded on score", () => {
+  // null, undefined and NaN are "unknown" and must never mass-exclude.
+  assert(GRQProjection.isStockIncluded(10.5, 12.0, true, false, null));
+  assert(GRQProjection.isStockIncluded(10.5, 12.0, true, false, undefined));
+  assert(GRQProjection.isStockIncluded(10.5, 12.0, true, false, NaN));
+  // Omitting the argument entirely keeps the prior behaviour.
+  assert(GRQProjection.isStockIncluded(10.5, 12.0));
+});
+
 // --- calculateIncludedPortfolioPerformance: equal-weight re-weighting ------
 
 Deno.test("re-weighting - averages returns over included stocks only", () => {
@@ -115,6 +148,32 @@ Deno.test("re-weighting - includes dividend return for included stocks", () => {
   const perf = GRQProjection.calculateIncludedPortfolioPerformance(stocks);
   assert(perf !== null);
   assertAlmostEquals(perf as number, 15);
+});
+
+Deno.test("re-weighting - negative-score stock dropped and weight redistributed", () => {
+  // Three stocks but the middle one has a negative score (model predicts a
+  // fall, so we hold cash). It must be dropped entirely: the result is the
+  // equal-weight average of the two remaining stocks (1/2 each), not 1/3.
+  const stocks = [
+    { buyPrice: 100, currentPrice: 110, score: 1.2 }, // +10% included
+    { buyPrice: 100, currentPrice: 200, score: -0.5 }, // excluded (negative score)
+    { buyPrice: 100, currentPrice: 130, score: 0.8 }, // +30% included
+  ];
+  const perf = GRQProjection.calculateIncludedPortfolioPerformance(stocks);
+  assert(perf !== null);
+  // Average of the two included stocks = (10 + 30) / 2 = 20; the excluded
+  // +100% name does not lift the figure.
+  assertAlmostEquals(perf as number, 20);
+});
+
+Deno.test("re-weighting - zero-score stock excluded", () => {
+  const stocks = [
+    { buyPrice: 100, currentPrice: 110, score: 1.0 }, // +10% included
+    { buyPrice: 100, currentPrice: 300, score: 0 }, // excluded (score === 0)
+  ];
+  const perf = GRQProjection.calculateIncludedPortfolioPerformance(stocks);
+  assert(perf !== null);
+  assertAlmostEquals(perf as number, 10);
 });
 
 Deno.test("re-weighting - all stocks excluded -> null", () => {

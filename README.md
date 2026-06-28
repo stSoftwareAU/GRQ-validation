@@ -56,6 +56,20 @@ Pages.
   unknown — older pre-volume-column CSVs — the name is **not** flagged
   (insufficient data ⇒ not flagged), so historical dates are never
   mass-excluded.
+- **Negative-Score Exclusion** — a stock whose raw AI model score is **≤ 0**
+  (zero or below) is predicted to fall, so we would hold cash rather than buy it.
+  Such a name is dropped from the dashboard portfolio and from every aggregate
+  (equal-weight) figure, re-weighting the remaining stocks, identical to the
+  low-volume treatment (issue #627). The gate keys on the **raw** model score,
+  not the volume-capped display score (#578), and is applied through the single
+  inclusion predicate shared by the dashboard (`isStockIncluded` in
+  `docs/projection.js`) and the Rust backend (`is_priceable` in `src/utils.rs`),
+  so backend aggregates and the dashboard agree. The stock stays visible with a
+  red **Negative score** badge (its explanatory legend below the table shown only
+  when at least one stock is affected) rather than vanishing silently. An
+  unknown/missing score never excludes, so historical data without a usable score
+  is never mass-dropped. Today the top-20 selection means no negative scores
+  occur, so this is a defensive, forward-looking rule.
 - **Low-Volume Valuation Cap** — beyond excluding illiquid names from
   aggregates, low volume is folded into the **valuation** of each prediction so
   an illiquid name can never surface as a strong recommendation (issue #578).

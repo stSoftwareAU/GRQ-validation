@@ -3253,8 +3253,17 @@ class GRQValidator {
                 const lowVolumeBadge = lowVolume
                     ? ` ${GRQProjection.lowVolumeBadge("Low volume", "Low volume — excluded from the portfolio and all aggregate figures (issue #577)")}`
                     : "";
+                // Visible negative-score badge (issue #627): a raw AI model
+                // score <= 0 predicts a fall, so we would hold cash. Surface the
+                // reason rather than dropping the name silently, mirroring the
+                // low-volume badge.
+                const negativeScore = typeof stock.score === "number" &&
+                    !Number.isNaN(stock.score) && stock.score <= 0;
+                const negativeScoreBadge = negativeScore
+                    ? ` ${GRQProjection.lowVolumeBadge("Negative score", "Negative score — the model predicts a fall, so we hold cash; excluded from the portfolio and all aggregate figures (issue #627)")}`
+                    : "";
                 row.innerHTML = `
-            <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}</td>
+            <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}${negativeScoreBadge}</td>
             <td>
                 <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
                     data-field="buy-price" data-stock="${safeStock}"
@@ -3301,6 +3310,11 @@ class GRQValidator {
                 // badge and any low-volume styling can target them.
                 if (lowVolume) {
                     row.classList.add("low-volume-stock");
+                }
+                // Tag negative-score exclusions (issue #627) distinctly so the
+                // badge and any styling can target them.
+                if (negativeScore) {
+                    row.classList.add("negative-score-stock");
                 }
                 // Add highlighting for selected stock in aggregate view
                 if (this.selectedStock === stock.stock) {
@@ -3401,6 +3415,7 @@ class GRQValidator {
 
         // Call out any low-volume name with the conditional legend (issue #599).
         this.updateLowVolumeLegend();
+        this.updateNegativeScoreLegend();
     }
 
     updateBasicStockTable() {
@@ -3480,6 +3495,7 @@ class GRQValidator {
         // The basic (no-market-data) view cannot flag low volume, so this hides
         // the legend if a prior market-data render had shown it (issue #599).
         this.updateLowVolumeLegend();
+        this.updateNegativeScoreLegend();
     }
 
     getDividendsWithin90Days(stockSymbol) {
@@ -3875,6 +3891,9 @@ class GRQValidator {
                 currentPrice: GRQProjection.currentPriceFromLatest(
                     this.marketData[stock.stock],
                 ),
+                // Raw AI model score so the shared gate can drop negative-score
+                // names from the equal-weight target average (issue #627).
+                score: stock.score,
                 adjustedTarget: hasTarget
                     ? this.adjustHistoricalPriceToCurrent(
                         stock.target,
@@ -3918,6 +3937,24 @@ class GRQValidator {
             GRQProjection.shouldShowLowVolumeLegend(flags) ? "" : "none";
     }
 
+    // Show the static negative-score legend only when at least one stock in the
+    // loaded report has a raw model score of zero or below (issue #627), so the
+    // explanation appears only when a name is actually excluded for this reason.
+    // Reuses shouldShowLowVolumeLegend, the same "show only when any flag is
+    // set" rule that drives the low-volume legend.
+    updateNegativeScoreLegend() {
+        const legend = document.getElementById("negativeScoreLegend");
+        if (!legend) {
+            return;
+        }
+        const flags = (this.scoreData || []).map((stock) =>
+            typeof stock.score === "number" && !Number.isNaN(stock.score) &&
+            stock.score <= 0
+        );
+        legend.style.display =
+            GRQProjection.shouldShowLowVolumeLegend(flags) ? "" : "none";
+    }
+
     isStockLowVolume(stockSymbol, scoreDate) {
         const series = this.marketData ? this.marketData[stockSymbol] : null;
         if (!series) {
@@ -3948,6 +3985,14 @@ class GRQValidator {
         const currentPrice = GRQProjection.currentPriceFromLatest(
             this.marketData[stockSymbol],
         );
+        // Negative-score names are excluded too (issue #627): a raw AI model
+        // score <= 0 predicts a fall, so we would hold cash. Look the raw score
+        // up from the loaded score data and feed it through the same single
+        // inclusion gate; an unknown score never excludes.
+        const scoreRecord = (this.scoreData || []).find(
+            (s) => s.stock === stockSymbol,
+        );
+        const score = scoreRecord ? scoreRecord.score : null;
         // Low-volume names are excluded from the portfolio and from EVERY
         // aggregate (issue #577): this single gate feeds the chart Actual /
         // "Actual (After 90 Days)" line, the totals row and the dividend
@@ -3957,6 +4002,7 @@ class GRQValidator {
             currentPrice,
             buyPriceObj ? buyPriceObj.reliable !== false : true,
             this.isStockLowVolume(stockSymbol, scoreDate),
+            score,
         );
     }
 

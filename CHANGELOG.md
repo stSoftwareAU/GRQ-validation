@@ -10,6 +10,14 @@ and this project adheres to
 
 ### Added
 
+- Negative-score exclusion: a stock whose raw AI model score is ≤ 0 (predicted
+  to fall) is dropped from the dashboard portfolio and every aggregate
+  (equal-weight) figure, re-weighting the remaining stocks, and kept visible with
+  a red **Negative score** badge and a conditional legend. The rule is applied
+  through the single inclusion predicate shared by the dashboard
+  (`isStockIncluded`, `docs/projection.js`) and the Rust backend (`is_priceable`,
+  `src/utils.rs`), so backend aggregates and the dashboard agree. An
+  unknown/missing score never excludes (Issue #627).
 - Theme selector in the dashboard header: an Auto/Light/Dark toggle
   (`docs/theme.js`) that persists the choice in `localStorage` and, in Auto
   mode, follows the operating system via `prefers-color-scheme`. Present on both

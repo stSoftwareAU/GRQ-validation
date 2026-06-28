@@ -36,7 +36,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.28">
+    <meta name="app-version" content="1.1.29">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -382,6 +382,26 @@
                         portfolio and from every aggregate (equal-weight) figure.
                       </small>
                     </div>
+                    <!-- Negative-score legend (issue #627): explain the badge so
+                         excluded names predicted to fall are visible, not
+                         silently dropped. Hidden by default and shown only when
+                         at least one stock in the loaded report has a raw model
+                         score of zero or below. -->
+                    <div
+                      id="negativeScoreLegend"
+                      class="data-source-note text-muted mt-2 px-3 pb-2"
+                      style="display: none"
+                    >
+                      <small>
+                        <span
+                          class="badge bg-danger low-volume-badge"
+                        >Negative score</span>
+                        &mdash; the AI model predicts the stock will fall, so we
+                        would hold cash rather than buy it; the stock is excluded
+                        from the portfolio and from every aggregate (equal-weight)
+                        figure.
+                      </small>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -543,6 +563,6 @@
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.1.28"></script>
+    <script src="sw-register.js?v=1.1.29"></script>
   </body>
 </html>
