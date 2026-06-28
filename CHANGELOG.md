@@ -48,6 +48,14 @@ and this project adheres to
 
 ### Fixed
 
+- Dashboard no longer fails to load with
+  `GRQProjection.calculatePortfolioTargetWorking is not a function` after a
+  version bump. The service-worker precache fetched shell assets with a plain
+  `cache.add()`, which honours the browser HTTP cache, so on a bump GitHub Pages
+  revalidated `index.html`/`app.js` but reused a stale `projection.js` from the
+  HTTP cache — the fresh `app.js` then called a helper the stale `projection.js`
+  did not define. `precacheStaticAssets()` now fetches every shell asset with
+  `cache: "reload"`, so a version bump always caches fresh bytes (Issue #641).
 - Footer **🔗 Share** button now copies a deep-link to the clipboard. The
   link-builder and clipboard/fallback handling shipped in `docs/share_link.js`
   (Issue #495) but the dashboard never called `GRQShare.initShareButton(...)`,

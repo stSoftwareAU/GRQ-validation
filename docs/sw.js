@@ -6,7 +6,7 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.1.30";
+const APP_VERSION = "1.1.31";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
@@ -111,7 +111,19 @@ async function precacheStaticAssets() {
   await Promise.all(
     STATIC_ASSETS.map(async (asset) => {
       try {
-        await cache.add(asset);
+        // Bypass the browser HTTP cache (cache: "reload") so a version bump
+        // always pulls FRESH bytes of every shell asset. Issue #641: a plain
+        // cache.add() reused a stale projection.js from the HTTP cache while
+        // GitHub Pages revalidated index.html/app.js, so the new app.js called
+        // GRQProjection.calculatePortfolioTargetWorking — a helper the stale
+        // projection.js did not yet define — and the dashboard failed to load.
+        const response = await fetch(new Request(asset, { cache: "reload" }));
+        if (!response || !response.ok) {
+          throw new Error(
+            `Unexpected response ${response && response.status}`,
+          );
+        }
+        await cache.put(asset, response);
       } catch (error) {
         console.warn("Service Worker: Skipping uncacheable asset", asset, error);
       }
