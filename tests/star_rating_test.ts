@@ -8,6 +8,10 @@ const starFilterG = globalThis as unknown as {
       avgStars: number | null | undefined,
       minStars: number,
     ) => boolean;
+    combineStarRating: (
+      msStars: number | string | null | undefined,
+      tipsStars: number | string | null | undefined,
+    ) => number | null;
   };
 };
 
@@ -566,6 +570,44 @@ Deno.test("meetsStarThreshold - no rating is excluded while the filter is active
     "undefined avgStars excluded",
   );
   assertEquals(meetsStarThreshold(NaN, 2), false, "NaN avgStars excluded");
+});
+
+// --- Combined star rating kernel (issue #656) ------------------------------
+//
+// combineStarRating is the single source of truth that turns the raw MS (1–5)
+// and Tips Stars (1–10) columns into the 1–5 avgStars both views filter on. The
+// portfolio view (docs/app.js) and the Trend pipeline (docs/trend_predictions.js)
+// both delegate here, so a stock's effective rating cannot drift between them.
+
+Deno.test("combineStarRating - averages MS and normalised Tips Stars", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  // 3 MS + 7 Tips → (3 + 3.5) / 2 = 3.25 (matches the portfolio view maths).
+  assertEquals(combineStarRating(3, 7), 3.25, "MS 3 + Tips 7 → 3.25");
+  // 5 MS + 10 Tips → (5 + 5) / 2 = 5.
+  assertEquals(combineStarRating(5, 10), 5, "MS 5 + Tips 10 → 5");
+});
+
+Deno.test("combineStarRating - falls back to whichever rating is present", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  assertEquals(combineStarRating(4, null), 4, "only MS present → MS");
+  assertEquals(combineStarRating(null, 8), 4, "only Tips present → Tips/2");
+});
+
+Deno.test("combineStarRating - accepts string inputs (CSV cells)", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  // localStorage / CSV cells arrive as strings; the kernel must coerce them.
+  assertEquals(combineStarRating("3", "7"), 3.25, "string MS + Tips → 3.25");
+});
+
+Deno.test("combineStarRating - out-of-range and missing ratings are ignored", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  assertEquals(combineStarRating(null, null), null, "neither rating → null");
+  assertEquals(combineStarRating(0, null), null, "MS below 1 ignored → null");
+  assertEquals(combineStarRating(6, null), null, "MS above 5 ignored → null");
+  assertEquals(combineStarRating(null, 11), null, "Tips above 10 ignored");
+  assertEquals(combineStarRating(NaN, NaN), null, "NaN ratings → null");
+  // A valid MS with an out-of-range Tips falls back to the MS alone.
+  assertEquals(combineStarRating(4, 99), 4, "invalid Tips → MS only");
 });
 
 // Helper function for assertions (Deno doesn't have assertEquals by default)

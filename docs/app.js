@@ -790,25 +790,15 @@ class GRQValidator {
                             const msStars = msIndex !== -1 && values[msIndex] ? parseFloat(values[msIndex]) : null;
                             const tipsStars = tipsStarsIndex !== -1 && values[tipsStarsIndex] ? parseFloat(values[tipsStarsIndex]) : null;
                             
-                            // Calculate average star rating (Tips Stars divided by 2 to normalize to 1-5 scale)
-                            let avgStars = null;
-                            let validRatings = 0;
-                            let totalRating = 0;
-                            
-                            if (msStars !== null && !isNaN(msStars) && msStars >= 1 && msStars <= 5) {
-                                totalRating += msStars;
-                                validRatings++;
-                            }
-                            
-                            if (tipsStars !== null && !isNaN(tipsStars) && tipsStars >= 1 && tipsStars <= 10) {
-                                totalRating += tipsStars / 2; // Normalize to 1-5 scale
-                                validRatings++;
-                            }
-                            
-                            if (validRatings > 0) {
-                                avgStars = totalRating / validRatings;
-                            }
-                            
+                            // Combine the MS (1-5) and Tips Stars (1-10) ratings into
+                            // the single 1-5 avgStars figure via the shared kernel
+                            // (issue #656) so the portfolio view and the Trend chart
+                            // derive a stock's rating with identical maths.
+                            const avgStars = GRQProjection.combineStarRating(
+                                msStars,
+                                tipsStars,
+                            );
+
                             // Parse fair value data
                             const msFairValue = msFairValueIndex !== -1 && values[msFairValueIndex] ? 
                                 this.parseCurrencyValue(values[msFairValueIndex]) : null;

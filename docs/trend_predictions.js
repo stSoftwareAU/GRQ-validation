@@ -147,6 +147,96 @@ function parseDividendCsv(text) {
     return dividendData;
 }
 
+// Tokenise CSV text into records (arrays of field strings), honouring
+// double-quoted fields that may contain commas, embedded newlines and ""
+// escapes (issue #656). A full record-level parse is required because the
+// analysis CSV quotes currency columns that sit BEFORE the rating columns — a
+// naive line/comma split would misalign `MS` / `Tips Stars` — and its header row
+// spans several physical lines via multi-line quoted headings. Returns [] for
+// empty / non-string input.
+function parseCsvRecords(text) {
+    const records = [];
+    if (typeof text !== "string" || text === "") {
+        return records;
+    }
+    let field = "";
+    let record = [];
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (inQuotes) {
+            if (char === '"') {
+                if (text[i + 1] === '"') {
+                    field += '"';
+                    i++; // consume the escaped quote
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                field += char;
+            }
+        } else if (char === '"') {
+            inQuotes = true;
+        } else if (char === ",") {
+            record.push(field);
+            field = "";
+        } else if (char === "\n" || char === "\r") {
+            if (char === "\r" && text[i + 1] === "\n") {
+                i++; // treat CRLF as a single record terminator
+            }
+            record.push(field);
+            field = "";
+            records.push(record);
+            record = [];
+        } else {
+            field += char;
+        }
+    }
+    // Flush a trailing record that was not terminated by a newline.
+    if (field !== "" || record.length > 0) {
+        record.push(field);
+        records.push(record);
+    }
+    return records;
+}
+
+// Parse a per-date analysis CSV (`scores/<YYYY>/<Month>/<DD>-analysis.csv`) into
+// a { ticker: avgStars } map (issue #656). The combined 1–5 rating is produced by
+// the shared GRQProjection.combineStarRating kernel — the SAME combination the
+// portfolio view uses — so a stock's effective rating matches between the two
+// views. Tolerates an empty / missing file (older dates may lack it, fetched as
+// "" on a 404) and a CSV without the rating columns by returning {} / null, so
+// the Trend filter simply treats those stocks as unrated.
+function parseAnalysisCsv(text) {
+    const ratings = {};
+    const records = parseCsvRecords(text);
+    if (records.length < 2) {
+        return ratings;
+    }
+    const headers = records[0].map((h) => h.trim());
+    const stockIndex = headers.indexOf("Stock");
+    const msIndex = headers.indexOf("MS");
+    const tipsStarsIndex = headers.indexOf("Tips Stars");
+    if (stockIndex === -1) {
+        return ratings;
+    }
+    for (let r = 1; r < records.length; r++) {
+        const values = records[r];
+        const ticker = values[stockIndex] ? values[stockIndex].trim() : "";
+        if (!ticker) {
+            continue;
+        }
+        const msRaw = msIndex !== -1 ? values[msIndex] : null;
+        const tipsRaw = tipsStarsIndex !== -1 ? values[tipsStarsIndex] : null;
+        const msStars = msRaw && msRaw.trim() !== "" ? parseFloat(msRaw) : null;
+        const tipsStars = tipsRaw && tipsRaw.trim() !== ""
+            ? parseFloat(tipsRaw)
+            : null;
+        ratings[ticker] = GRQProjection.combineStarRating(msStars, tipsStars);
+    }
+    return ratings;
+}
+
 // The midpoint of the last market point on or before the 90-day window end —
 // the "current" price the dashboard's Actual figure uses
 // (GRQValidator.getStockReturnBreakdown). Returns null when the stock has no
@@ -185,7 +275,13 @@ function currentPriceWithinWindow(points, scoreDate) {
 // usable price resolve to null buy/current prices, which the engine's inclusion
 // gate (GRQProjection.isStockIncluded) drops — matching the dashboard's
 // exclusion of unpriceable stocks.
-function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate) {
+function resolvePredictionStocks(
+    scoreRows,
+    marketData,
+    dividendData,
+    scoreDate,
+    starRatings,
+) {
     if (!Array.isArray(scoreRows)) {
         return [];
     }
@@ -194,6 +290,9 @@ function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate)
         : {};
     const dividends = dividendData && typeof dividendData === "object"
         ? dividendData
+        : {};
+    const ratings = starRatings && typeof starRatings === "object"
+        ? starRatings
         : {};
     return scoreRows.map((row) => {
         const points = market[row.stock];
@@ -222,13 +321,24 @@ function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate)
         const lowVolume = GRQVolume.isLowVolume(
             GRQVolume.buildTrailingVolumeWindow(points, scoreDate),
         );
+        // Combined 1–5 star rating for this date (issue #656): null when the
+        // analysis CSV is absent or the ticker is unrated, so the optional
+        // min-star filter excludes it when active.
+        const avgStars = Object.prototype.hasOwnProperty.call(
+                ratings,
+                row.stock,
+            )
+            ? ratings[row.stock]
+            : null;
         return {
+            stock: row.stock,
             buyPrice,
             currentPrice,
             totalDividends,
             adjustedTarget,
             splitReliable,
             lowVolume,
+            avgStars,
         };
     });
 }
@@ -237,13 +347,20 @@ function resolvePredictionStocks(scoreRows, marketData, dividendData, scoreDate)
 // raw text of its three files, return the { date, stocks } prediction the data
 // engine consumes. `date` is preserved verbatim so the engine re-parses it for
 // maturity and bucketing exactly as it does for every other prediction.
-function buildPrediction(date, tsvText, csvText, dividendCsvText) {
+function buildPrediction(
+    date,
+    tsvText,
+    csvText,
+    dividendCsvText,
+    analysisCsvText,
+) {
     const scoreDate = parseScoreDateString(date);
     const stocks = resolvePredictionStocks(
         parseScoreTsv(tsvText),
         parseMarketCsv(csvText),
         parseDividendCsv(dividendCsvText),
         scoreDate,
+        parseAnalysisCsv(analysisCsvText),
     );
     return { date, stocks };
 }
@@ -256,6 +373,8 @@ globalThis.GRQTrendPredictions = {
     parseScoreTsv,
     parseMarketCsv,
     parseDividendCsv,
+    parseCsvRecords,
+    parseAnalysisCsv,
     currentPriceWithinWindow,
     resolvePredictionStocks,
     buildPrediction,
