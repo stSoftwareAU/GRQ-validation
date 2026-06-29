@@ -133,21 +133,12 @@ Deno.test("initShareButton is inert when the footer button is absent", () => {
   S.initShareButton({ document: bare, getState: () => ({}) });
 });
 
-// --- wiring: docs/app.js must call the builder with shareState ---------------
-
-const appJs = await Deno.readTextFile("docs/app.js");
-
-Deno.test("app.js wires the footer Share button to shareState (issue #515)", () => {
-  assert(
-    appJs.includes("GRQShare.initShareButton"),
-    "app.js must call GRQShare.initShareButton to wire the footer button",
-  );
-  assert(
-    /getState[\s\S]{0,80}this\.shareState\(\)/.test(appJs),
-    "app.js must feed the live selections via shareState() as getState",
-  );
-  assert(
-    appJs.includes("this.initShareButton()"),
-    "initializeEventListeners must invoke the Share-button wiring on init",
-  );
-});
+// Issue #633: the former "app.js wires the footer Share button" test grepped
+// docs/app.js SOURCE TEXT for `GRQShare.initShareButton` and regex-matched
+// `getState … this.shareState()`. That asserted an identifier appears in the
+// shipped JS — not that the wiring works — and broke on any rename. The real
+// DOM-wiring contract (a tap reads getState, builds the deep link and surfaces
+// it) is fully exercised behaviourally by the tests above, which drive the
+// shipped GRQShare.initShareButton against a fake document. app.js itself
+// bootstraps a live GRQValidator at import time and cannot be imported headless,
+// so the grep tail has been removed rather than replaced with another grep.

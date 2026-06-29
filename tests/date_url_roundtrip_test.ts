@@ -86,47 +86,21 @@ Deno.test("the Trend page stays independent when no date is supplied", () => {
   assertEquals(D.linkWithDate("index.html", carriedDate), "index.html");
 });
 
-// --- thin DOM wiring (asserted against source, per repo precedent) -----------
+// --- markup contracts the wiring depends on ---------------------------------
+//
+// Issue #633: the former "app.js syncs the date deep links" and "trend.js
+// forwards ?date=" tests grepped docs/app.js and docs/trend.js SOURCE TEXT for
+// internal identifiers (`updateDateDeepLinks`, `history.replaceState`,
+// `updateDashboardBackLink`) and regex-matched call-site spelling. Those passed
+// for the wrong reason and broke on any rename. The whole date round trip —
+// dropdown → ?date= → reload, and the Trend ← Dashboard hop — is exercised
+// behaviourally above against the REAL docs/date_selection.js helpers, so the
+// grep tail has been removed. app.js and trend.js bootstrap live controllers at
+// import time and cannot be imported headless. What survives below is the static
+// markup contract those helpers target: the anchor ids and the script include.
 
-const appJs = await Deno.readTextFile("docs/app.js");
-const trendJs = await Deno.readTextFile("docs/trend.js");
 const indexHtml = await Deno.readTextFile("docs/index.html");
 const trendHtml = await Deno.readTextFile("docs/trend.html");
-
-Deno.test("app.js syncs the date deep links on score-file load (issue #517)", () => {
-  assert(
-    appJs.includes("updateDateDeepLinks"),
-    "app.js must define updateDateDeepLinks",
-  );
-  assert(
-    appJs.includes("this.updateDateDeepLinks()"),
-    "loadScoreFile must call this.updateDateDeepLinks()",
-  );
-  assert(
-    appJs.includes("GRQDateSelection.searchWithDate") &&
-      appJs.includes("GRQDateSelection.linkWithDate"),
-    "app.js must use searchWithDate (URL) and linkWithDate (Trend link)",
-  );
-  assert(
-    appJs.includes("history.replaceState"),
-    "the dashboard URL must be updated with replaceState (not push)",
-  );
-});
-
-Deno.test("trend.js forwards ?date= onto the ← Dashboard link (issue #517)", () => {
-  assert(
-    trendJs.includes("updateDashboardBackLink"),
-    "trend.js must define updateDashboardBackLink",
-  );
-  assert(
-    trendJs.includes("backToDashboardLink"),
-    "trend.js must target the #backToDashboardLink anchor",
-  );
-  assert(
-    /GRQDateSelection\.linkWithDate\(\s*["']index\.html["']/.test(trendJs),
-    "the back link must be rebuilt as index.html?date=… via linkWithDate",
-  );
-});
 
 Deno.test("the pages expose the link ids and load date_selection.js", () => {
   assert(

@@ -21,7 +21,6 @@ import { assert } from "@std/assert";
 
 const html = await Deno.readTextFile("docs/index.html");
 const css = await Deno.readTextFile("docs/styles.css");
-const appJs = await Deno.readTextFile("docs/app.js");
 
 /**
  * Return the body of the FIRST top-level CSS rule for `selector` within `css`,
@@ -209,108 +208,25 @@ Deno.test("styles.css: the phone reveal block is kept (issue #466)", () => {
   );
 });
 
-// --- wiring ----------------------------------------------------------------
-
-Deno.test("app.js: init reads each device's stored window and wires the toggle", () => {
-  assert(
-    appJs.includes("initChartWindowToggle"),
-    "app.js must define/call initChartWindowToggle",
-  );
-  // Mobile path (unchanged).
-  assert(
-    appJs.includes("GRQChartWindow.readMobileWindowDays"),
-    "init must read the mobile choice via GRQChartWindow.readMobileWindowDays",
-  );
-  assert(
-    appJs.includes("GRQChartWindow.writeMobileWindowDays"),
-    "change must persist mobile via GRQChartWindow.writeMobileWindowDays",
-  );
-  // Desktop path (issue #466) — now reads and persists the desktop key too.
-  assert(
-    appJs.includes("GRQChartWindow.readDesktopWindowDays"),
-    "init must read the desktop choice via GRQChartWindow.readDesktopWindowDays",
-  );
-  assert(
-    appJs.includes("GRQChartWindow.writeDesktopWindowDays"),
-    "change must persist desktop via GRQChartWindow.writeDesktopWindowDays",
-  );
-});
-
-Deno.test("app.js: a per-device effective-window accessor resolves the choice (issue #466)", () => {
-  // currentWindowDays() picks the mobile or desktop store based on the device,
-  // so every window-sizing call site shares ONE source of truth.
-  assert(
-    appJs.includes("currentWindowDays()"),
-    "app.js must define currentWindowDays() as the effective-window accessor",
-  );
-  assert(
-    appJs.includes("desktopWindowDays()"),
-    "app.js must define desktopWindowDays() parallel to mobileWindowDays()",
-  );
-  // The accessor must branch on the device between the two stores.
-  const start = appJs.indexOf("currentWindowDays()");
-  const body = appJs.slice(start, start + 300);
-  assert(
-    body.includes("isMobileDevice()") &&
-      body.includes("mobileWindowDays()") &&
-      body.includes("desktopWindowDays()"),
-    "currentWindowDays() must choose mobile vs desktop window by device",
-  );
-});
-
-Deno.test("app.js: the toggle change handler persists to the CURRENT device's store (issue #466)", () => {
-  const start = appJs.indexOf("initChartWindowToggle()");
-  assert(start !== -1, "initChartWindowToggle must exist");
-  const body = appJs.slice(start, start + 1600);
-  // The change handler branches on the device so a desktop flip writes the
-  // desktop key and a mobile flip writes the mobile key (mobile unaffected).
-  assert(
-    body.includes("writeMobileWindowDays") &&
-      body.includes("writeDesktopWindowDays"),
-    "the change handler must persist to both stores depending on the device",
-  );
-  assert(
-    body.includes("isMobileDevice()"),
-    "the change handler must branch on isMobileDevice() to pick the store",
-  );
-});
-
-Deno.test("app.js: changing the toggle re-renders BOTH chart and summary (#367)", () => {
-  // Extract the toggle wiring method body and assert it drives both views, so
-  // the chart and the Market Performance summary always agree on the window.
-  const start = appJs.indexOf("initChartWindowToggle()");
-  assert(start !== -1, "initChartWindowToggle must exist");
-  const body = appJs.slice(start, start + 1400);
-  assert(
-    body.includes("this.updateChart()"),
-    "the change handler must re-render the chart",
-  );
-  assert(
-    body.includes("this.updateMarketComparison()"),
-    "the change handler must refresh the Market Performance summary",
-  );
-});
-
-Deno.test("app.js: chart and summary call sites pass the per-device window (issue #466)", () => {
-  // Every window-sizing call site now resolves through currentWindowDays() so
-  // the chart and the summary share ONE per-device window (a desktop 90 choice
-  // narrows both together).
-  assert(
-    appJs.includes("this.currentWindowDays()"),
-    "call sites must pass this.currentWindowDays() into the window helpers",
-  );
-  // The call sites must NOT hard-wire the mobile-only accessor any more.
-  assert(
-    !/deviceWindowEnd\([\s\S]*?this\.mobileWindowDays\(\)/.test(appJs),
-    "deviceWindowEnd must no longer be fed the mobile-only window",
-  );
-  // The summary window end must receive the per-device window argument.
-  assert(
-    /deviceWindowEnd\([\s\S]*?(currentWindowDays\(\)|windowDays)/.test(appJs),
-    "deviceWindowEnd call(s) must pass the per-device window",
-  );
-  assert(
-    /deviceWindowDays\([^)]*(currentWindowDays\(\)|windowDays)/.test(appJs),
-    "deviceWindowDays call(s) must pass the per-device window",
-  );
-});
+// --- wiring (covered behaviourally elsewhere) ------------------------------
+//
+// Issue #633: this file used to pin the toggle wiring by greping docs/app.js
+// SOURCE TEXT for a whole module's worth of internal helper names
+// (`initChartWindowToggle`, `currentWindowDays`, `desktopWindowDays`,
+// `GRQChartWindow.read/writeMobile/DesktopWindowDays`, `isMobileDevice`,
+// `deviceWindowEnd`, `deviceWindowDays`) and regex-matched call-site spelling.
+// Those assertions passed for the wrong reason — they never run the code — and
+// broke on any rename or inline even when behaviour was unchanged. They have
+// been removed.
+//
+// The behaviour they purported to cover is already exercised against the REAL
+// shipped, importable helpers:
+//   - per-device store read/write (the 90/180 choice persisted per device) →
+//     tests/chart_window_settings_test.ts drives GRQChartWindow.read/write
+//     Mobile/DesktopWindowDays with injected storage.
+//   - the window maths the chart and summary share (deviceWindowDays /
+//     deviceWindowEnd) → tests/chart_summary_window_test.ts drives the real
+//     GRQProjection helpers, so chart and summary cannot drift apart.
+// app.js bootstraps a live GRQValidator at import time and touches dozens of DOM
+// nodes, so it cannot be imported headless; the markup + CSS contracts above are
+// what this file verifies.
