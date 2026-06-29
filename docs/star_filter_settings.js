@@ -112,6 +112,34 @@
     return safeSet(storage, STORAGE_KEY, String(normaliseMinStars(value)));
   }
 
+  // --- deep-link parameter (shared "Share" URL, issue #666) ------------------
+
+  // Read a min-star threshold override from a URL query string, e.g.
+  // `?stars=3`. Returns 0..5 when the value is a permitted whole-star threshold,
+  // else null (absent / blank / disallowed) so callers fall back to the
+  // persisted choice. Mirrors chart_window_settings.js's windowDaysFromSearch
+  // and theme.js's preferenceFromSearch — guarded so malformed input never
+  // throws. The footer "Share" deep-link (issue #666) emits this param so a
+  // recipient reproduces the sharer's star-filtered view.
+  function minStarsFromSearch(search) {
+    try {
+      const value = new URLSearchParams(search || "").get("stars");
+      if (value === null) {
+        return null;
+      }
+      // A blank value (`?stars=`) is treated as absent — Number("") is 0, which
+      // would otherwise be mistaken for an explicit "All" override.
+      const trimmed = String(value).trim();
+      if (trimmed === "") {
+        return null;
+      }
+      const num = Number(trimmed);
+      return ALLOWED_MIN_STARS.includes(num) ? num : null;
+    } catch (_err) {
+      return null;
+    }
+  }
+
   // --- accessor contract (ambient storage + change event) --------------------
 
   // Public getter: the current threshold from the ambient localStorage (0 for
@@ -157,6 +185,7 @@
     DEFAULT_MIN_STARS,
     ALLOWED_MIN_STARS,
     normaliseMinStars,
+    minStarsFromSearch,
     readMinStars,
     writeMinStars,
     getMinStars,

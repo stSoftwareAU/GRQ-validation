@@ -22,6 +22,7 @@ const g = globalThis as unknown as {
     DEFAULT_MIN_STARS: number;
     ALLOWED_MIN_STARS: number[];
     normaliseMinStars: (value: unknown) => number;
+    minStarsFromSearch: (search: unknown) => number | null;
     readMinStars: (storage?: unknown) => number;
     writeMinStars: (value: unknown, storage?: unknown) => boolean;
     getMinStars: () => number;
@@ -107,6 +108,42 @@ Deno.test("normaliseMinStars falls back to 0 for out-of-range / junk", () => {
   assertEquals(S.normaliseMinStars(null), 0);
   assertEquals(S.normaliseMinStars(undefined), 0);
   assertEquals(S.normaliseMinStars({}), 0);
+});
+
+// --- minStarsFromSearch (deep-link param, issue #666) ----------------------
+
+Deno.test("minStarsFromSearch reads a forced 0..5 ?stars value", () => {
+  for (const n of [0, 1, 2, 3, 4, 5]) {
+    assertEquals(S.minStarsFromSearch(`?stars=${n}`), n);
+    // Leading "?" is optional; URLSearchParams tolerates either form.
+    assertEquals(S.minStarsFromSearch(`stars=${n}`), n);
+  }
+});
+
+Deno.test("minStarsFromSearch trims surrounding whitespace", () => {
+  assertEquals(S.minStarsFromSearch("?stars=%203%20"), 3);
+});
+
+Deno.test("minStarsFromSearch returns null when the param is absent", () => {
+  assertEquals(S.minStarsFromSearch("?window=180"), null);
+  assertEquals(S.minStarsFromSearch(""), null);
+  assertEquals(S.minStarsFromSearch(null), null);
+  assertEquals(S.minStarsFromSearch(undefined), null);
+});
+
+Deno.test("minStarsFromSearch returns null for out-of-range / junk values", () => {
+  assertEquals(S.minStarsFromSearch("?stars=6"), null);
+  assertEquals(S.minStarsFromSearch("?stars=-1"), null);
+  assertEquals(S.minStarsFromSearch("?stars=2.5"), null);
+  assertEquals(S.minStarsFromSearch("?stars=abc"), null);
+  assertEquals(S.minStarsFromSearch("?stars="), null);
+});
+
+Deno.test("minStarsFromSearch distinguishes a forced All (0) from absence", () => {
+  // ?stars=0 is an explicit, valid "All" override (returns 0); a missing param
+  // returns null so callers keep the persisted choice.
+  assertEquals(S.minStarsFromSearch("?stars=0"), 0);
+  assertEquals(S.minStarsFromSearch("?other=1"), null);
 });
 
 // --- round-trip ------------------------------------------------------------

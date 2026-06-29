@@ -352,7 +352,7 @@ Visit `http://localhost:8000` to access the dashboard.
 
 #### Deep-link URL parameters
 
-The dashboard reads nine optional query parameters so a specific view can be
+The dashboard reads ten optional query parameters so a specific view can be
 linked directly (and so the automated accessibility check can audit each view
 deterministically — issue #281):
 
@@ -384,6 +384,15 @@ deterministically — issue #281):
   without the param returns to the saved window (desktop 180 / mobile 90). Both
   windows end on the same date (#367); an absent or invalid value falls back to
   the saved choice, then the device default.
+- `?stars=0|1|2|3|4|5` — pre-select the shared minimum-star filter for that page
+  load on **both** the portfolio and Trend views (issue #666). `0` means **All**
+  (filter off); `1`–`5` keep only holdings whose average rating meets that whole
+  star threshold. Unlike `?theme=`/`?window=`, the star filter is the **shared,
+  persisted** setting (`grq.filter.minStars`), so a supplied value is applied
+  **and** persisted via the normal `setMinStars` path — keeping every view in
+  sync. An absent, blank or out-of-range value (e.g. `?stars=6`) leaves the
+  saved choice untouched. This is the param the footer **🔗 Share** button emits
+  so a shared link reproduces the sharer's filtered view.
 - `?view=portfolio|trend` — deep-link straight to a top-level view (issue #479).
   `?view=trend` routes to the Prediction Trend page (`trend.html`);
   `?view=portfolio` routes back to the aggregate dashboard (`index.html`). Like
@@ -418,7 +427,8 @@ deterministically — issue #281):
 
 A low-prominence **🔗 Share** button in the page footer does the inverse: it
 builds an absolute URL encoding the current selections (score file, stock,
-theme, 90/180 window, and the transient mobile pop-out flag) and copies it to
+theme, 90/180 window, the shared min-star filter, and the transient mobile
+pop-out flag) and copies it to
 the clipboard (issue #495). It is **read-only** — generating a link never
 mutates your saved settings — and degrades to a select-the-text fallback where
 the async Clipboard API is unavailable. Pasting the link into a fresh tab
