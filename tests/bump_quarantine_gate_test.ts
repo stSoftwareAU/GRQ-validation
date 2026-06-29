@@ -18,6 +18,7 @@ import {
   ageInHours,
   type Bump,
   diffCargoLock,
+  diffUses,
   evaluateBump,
   evaluateBumps,
   isInternal,
@@ -233,4 +234,65 @@ Deno.test("parseUses ignores lines without a uses directive", () => {
     parseUses("jobs:\n  x:\n    steps:\n      - run: echo hi\n").size,
     0,
   );
+});
+
+// --- diffUses -------------------------------------------------------------
+
+// Old snapshot: checkout pinned to one SHA, setup-deno present.
+const USES_OLD = `name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+      - run: echo hello
+`;
+
+// New snapshot: checkout re-pinned to a different SHA, upload-artifact newly
+// added, setup-deno unchanged.
+const USES_NEW = `name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282
+      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+      - run: echo hello
+`;
+
+Deno.test("diffUses reports re-pinned and newly-added actions", () => {
+  const bumps = diffUses(USES_OLD, USES_NEW);
+  const byName = new Map(bumps.map((b) => [b.name, b.version]));
+  // checkout re-pinned, upload-artifact added; setup-deno unchanged.
+  assertEquals(
+    byName.get("actions/checkout"),
+    "11bd71901bbe5b1630ceea73d27597364c9af683",
+  );
+  assertEquals(
+    byName.get("actions/upload-artifact"),
+    "65462800fd760344b1a7b4382951275a0abb4808",
+  );
+  assert(
+    !byName.has("denoland/setup-deno"),
+    "unchanged actions must not be reported",
+  );
+  assertEquals(bumps.length, 2);
+  for (const b of bumps) assertEquals(b.ecosystem, "github-actions");
+});
+
+Deno.test("diffUses reports nothing when the workflows are unchanged", () => {
+  assertEquals(diffUses(USES_OLD, USES_OLD).length, 0);
+});
+
+Deno.test("diffUses reports every action as new against an empty old snapshot", () => {
+  const bumps = diffUses("", USES_NEW);
+  assertEquals(bumps.length, 3);
+  for (const b of bumps) {
+    assertEquals(b.ecosystem, "github-actions");
+    assertEquals(b.publishedAt, null);
+  }
 });
