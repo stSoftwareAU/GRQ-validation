@@ -97,6 +97,28 @@ Deno.test("buildShareQuery emits ?fullscreen=1 only when in the pop-out", () => 
   assertEquals(S.buildShareQuery({ fullscreen: false }), "");
 });
 
+Deno.test("buildShareQuery emits ?stars for a forced 1..5 filter (issue #666)", () => {
+  // A min-star filter the sharer set must travel in the link so the recipient
+  // sees the same filtered subset, not their own default.
+  for (const n of [1, 2, 3, 4, 5]) {
+    assertEquals(S.buildShareQuery({ stars: n }), `stars=${n}`);
+    assertEquals(S.buildShareQuery({ stars: String(n) }), `stars=${n}`);
+  }
+});
+
+Deno.test("buildShareQuery omits ?stars for the 0 (All) default", () => {
+  // 0 ("All") is the off/default state — emitted by absence to keep links clean.
+  assertEquals(S.buildShareQuery({ stars: 0 }), "");
+  assertEquals(S.buildShareQuery({ stars: "0" }), "");
+});
+
+Deno.test("buildShareQuery drops an out-of-range ?stars value", () => {
+  assertEquals(S.buildShareQuery({ stars: 6 }), "");
+  assertEquals(S.buildShareQuery({ stars: -1 }), "");
+  assertEquals(S.buildShareQuery({ stars: 2.5 }), "");
+  assertEquals(S.buildShareQuery({ stars: "abc" }), "");
+});
+
 Deno.test("buildShareQuery composes all selections in a stable order", () => {
   const query = S.buildShareQuery({
     file: "2026/March/23.tsv",
@@ -108,6 +130,21 @@ Deno.test("buildShareQuery composes all selections in a stable order", () => {
   assertEquals(
     query,
     "file=2026%2FMarch%2F23.tsv&stock=NASDAQ%3AMGRC&theme=dark&window=180&fullscreen=1",
+  );
+});
+
+Deno.test("buildShareQuery places ?stars after ?window and before ?fullscreen", () => {
+  const query = S.buildShareQuery({
+    file: "2026/March/23.tsv",
+    stock: "NASDAQ:MGRC",
+    theme: "dark",
+    window: 180,
+    stars: 3,
+    fullscreen: true,
+  });
+  assertEquals(
+    query,
+    "file=2026%2FMarch%2F23.tsv&stock=NASDAQ%3AMGRC&theme=dark&window=180&stars=3&fullscreen=1",
   );
 });
 

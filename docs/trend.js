@@ -147,6 +147,19 @@
             if (!select || typeof globalThis.GRQStarFilter === "undefined") {
                 return;
             }
+            // Honour a `?stars=` deep-link override (issue #666) so a shared URL
+            // reproduces the sharer's filtered view here too; the threshold is
+            // persisted/shared, so an absent or invalid param leaves it untouched.
+            if (typeof GRQStarFilter.minStarsFromSearch === "function") {
+                const search =
+                    (typeof globalThis !== "undefined" && globalThis.location)
+                        ? globalThis.location.search
+                        : "";
+                const fromUrl = GRQStarFilter.minStarsFromSearch(search);
+                if (fromUrl !== null) {
+                    GRQStarFilter.setMinStars(fromUrl);
+                }
+            }
             select.value = String(GRQStarFilter.getMinStars());
             select.addEventListener("change", () => {
                 GRQStarFilter.setMinStars(Number(select.value));

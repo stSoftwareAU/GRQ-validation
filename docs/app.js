@@ -141,7 +141,8 @@ class GRQValidator {
     // helpers, never writing storage. The theme is read from the applied <body>
     // class (what the user actually sees) so a forced light/dark mode is
     // reproduced; "auto" is left implicit. fullscreen is set only while the
-    // mobile chart pop-out owns the canvas (issue #482/#451).
+    // mobile chart pop-out owns the canvas (issue #482/#451). stars carries the
+    // shared min-star filter threshold so a share reproduces it (issue #666).
     shareState() {
         let theme = "auto";
         if (typeof document !== "undefined" && document.body) {
@@ -158,11 +159,17 @@ class GRQValidator {
             GRQChartPopout.isPopoutOpen(
                 typeof document !== "undefined" ? document : undefined,
             );
+        const stars =
+            (typeof GRQStarFilter !== "undefined" &&
+                    typeof GRQStarFilter.getMinStars === "function")
+                ? GRQStarFilter.getMinStars()
+                : 0;
         return {
             file: this.selectedFile || null,
             stock: this.selectedStock || null,
             theme,
             window: this.currentWindowDays(),
+            stars,
             fullscreen,
         };
     }
@@ -214,6 +221,19 @@ class GRQValidator {
         const select = document.getElementById("starFilterSelect");
         if (!select || typeof GRQStarFilter === "undefined") {
             return;
+        }
+        // Apply a `?stars=` deep-link override (issue #666) so a shared URL
+        // reproduces the sharer's filtered view. Persisting via setMinStars keeps
+        // every view (chart, table, Trend) honouring the same threshold; an
+        // absent / invalid param leaves the persisted choice untouched.
+        if (typeof GRQStarFilter.minStarsFromSearch === "function") {
+            const search = (typeof window !== "undefined" && window.location)
+                ? window.location.search
+                : "";
+            const fromUrl = GRQStarFilter.minStarsFromSearch(search);
+            if (fromUrl !== null) {
+                GRQStarFilter.setMinStars(fromUrl);
+            }
         }
         select.value = String(GRQStarFilter.getMinStars());
         select.addEventListener("change", (event) => {

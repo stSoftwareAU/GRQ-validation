@@ -30,6 +30,11 @@
   // The only two windows the app understands (mirrors GRQChartWindow).
   const ALLOWED_WINDOW_DAYS = [90, 180];
 
+  // The min-star filter thresholds worth sharing: 1..5 (issue #666). 0 ("All")
+  // is the default off-state, emitted by absence to keep links clean — mirroring
+  // GRQStarFilter.ALLOWED_MIN_STARS minus the 0 default.
+  const SHAREABLE_MIN_STARS = [1, 2, 3, 4, 5];
+
   // Append a param only when `value` is a non-empty string, coercing to string.
   function setIfPresent(params, key, value) {
     if (value === undefined || value === null) {
@@ -49,6 +54,8 @@
   //   - theme is emitted only for a forced light/dark mode (auto = absence);
   //   - window is always emitted when valid so the recipient's device default
   //     cannot silently change the window the sharer saw;
+  //   - stars is emitted only for a forced 1..5 min-star filter (0 = All =
+  //     absence) so a shared link reproduces the sharer's filtered view (#666);
   //   - view / indices / group are emitted only when the caller supplies a
   //     non-empty value (forward-compatible with the #483 view-state params);
   //   - fullscreen emits "1" only when the user is in the mobile pop-out (#482).
@@ -73,6 +80,13 @@
     const windowNum = typeof s.window === "string" ? Number(s.window) : s.window;
     if (ALLOWED_WINDOW_DAYS.includes(windowNum)) {
       params.set("window", String(windowNum));
+    }
+
+    // Min-star filter (issue #666): emit only a forced 1..5 threshold; 0 ("All")
+    // is the default and emitted by absence so an unfiltered share stays clean.
+    const starsNum = typeof s.stars === "string" ? Number(s.stars) : s.stars;
+    if (SHAREABLE_MIN_STARS.includes(starsNum)) {
+      params.set("stars", String(starsNum));
     }
 
     // Optional view-state params (sibling docs issue #483). Emitted verbatim
@@ -101,6 +115,7 @@
   globalThis.GRQShare = {
     SHAREABLE_THEMES,
     ALLOWED_WINDOW_DAYS,
+    SHAREABLE_MIN_STARS,
     buildShareQuery,
     buildShareUrl,
   };
