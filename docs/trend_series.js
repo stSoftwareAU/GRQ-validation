@@ -88,13 +88,37 @@ function includedStockCount(stocks) {
     return count;
 }
 
+// Keep only the stocks that clear the active min-star threshold (issue #656).
+// `minStars` of 0 (the "All"/off default) keeps every stock — including unrated
+// ones — so the series is byte-for-byte identical to before the filter existed.
+// A threshold of 1..5 drops stocks whose combined `avgStars` is below it AND
+// stocks with no rating (null/missing avgStars), via the shared
+// GRQProjection.meetsStarThreshold gate so the Trend chart and the portfolio
+// view qualify a stock identically. Returns the same array reference when the
+// filter is off so the no-op path allocates nothing.
+function filterStocksByStars(stocks, minStars) {
+    const threshold = Number(minStars);
+    if (!Array.isArray(stocks) || !Number.isFinite(threshold) || threshold <= 0) {
+        return Array.isArray(stocks) ? stocks : [];
+    }
+    return stocks.filter((stock) =>
+        GRQProjection.meetsStarThreshold(stock && stock.avgStars, threshold)
+    );
+}
+
 // Build the ordered, matured-only Actual-vs-Target time series.
 //
 // `predictions` is an array of { date, stocks } where `date` is the score date
 // and `stocks` is an array of resolved per-stock figures
-// { buyPrice, currentPrice, totalDividends, adjustedTarget }. The Trend view UI
-// sub-issue is responsible for loading each score date's market data and
-// resolving those figures; this engine stays DOM-free and deterministic.
+// { buyPrice, currentPrice, totalDividends, adjustedTarget, avgStars }. The
+// Trend view UI sub-issue is responsible for loading each score date's market
+// data and resolving those figures; this engine stays DOM-free and
+// deterministic.
+//
+// `minStars` (issue #656) is the optional min-star floor: 0 (default) keeps the
+// series identical to before the filter, while 1..5 excludes stocks below the
+// threshold (and unrated stocks) BEFORE the Actual/Target means are computed, so
+// each date's figures reflect only the qualifying stocks.
 //
 // For each MATURED prediction it produces one point:
 //   - actualPct: GRQProjection.calculateIncludedPortfolioPerformance(stocks)
@@ -103,7 +127,7 @@ function includedStockCount(stocks) {
 // Predictions that are not yet matured, or whose Actual % is null (no included
 // stocks), are excluded. Points are returned ordered chronologically by date.
 // `date` on each point is a Date at local midnight.
-function buildMaturedTrendSeries(predictions, today) {
+function buildMaturedTrendSeries(predictions, today, minStars = 0) {
     if (!Array.isArray(predictions)) {
         return [];
     }
@@ -115,7 +139,7 @@ function buildMaturedTrendSeries(predictions, today) {
         if (!isMaturedScoreDate(prediction.date, today)) {
             continue;
         }
-        const stocks = prediction.stocks;
+        const stocks = filterStocksByStars(prediction.stocks, minStars);
         const actualPct = GRQProjection.calculateIncludedPortfolioPerformance(
             stocks,
         );
@@ -213,8 +237,8 @@ function aggregateTrendSeries(series, granularity = "month") {
 
 // Convenience composition for the Trend view: build the matured series and its
 // bucketed aggregation in one call. Returns { granularity, series, buckets }.
-function buildTrendData(predictions, today, granularity = "month") {
-    const series = buildMaturedTrendSeries(predictions, today);
+function buildTrendData(predictions, today, granularity = "month", minStars = 0) {
+    const series = buildMaturedTrendSeries(predictions, today, minStars);
     return {
         granularity,
         series,
@@ -227,6 +251,7 @@ function buildTrendData(predictions, today, granularity = "month") {
 globalThis.GRQTrendSeries = {
     GRANULARITIES,
     isMaturedScoreDate,
+    filterStocksByStars,
     buildMaturedTrendSeries,
     bucketStartDate,
     aggregateTrendSeries,

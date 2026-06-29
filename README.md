@@ -471,15 +471,29 @@ table and the numbers are computed from the **same** filtered set and can never
 diverge. The pure decision lives in `GRQProjection.meetsStarThreshold(avgStars,
 minStars)`. The view subscribes to `grq:star-filter-change` and re-renders the
 chart and table without a page reload; at **All** the gate is a no-op and the
-view is unchanged. (The Trend chart is filtered by a separate sibling sub-issue.)
+view is unchanged.
+
+**Trend filtering (#656).** The Trend pipeline now also loads each matured
+date's analysis CSV (`scores/<YYYY>/<Month>/<DD>-analysis.csv`, tolerating a
+404 on older dates) and attaches the combined 1–5 `avgStars` to every stock,
+derived by the **shared** `GRQProjection.combineStarRating(msStars, tipsStars)`
+kernel — the same combination the portfolio view uses, so a stock's effective
+rating is identical between the two views. When a threshold is active,
+`GRQTrendSeries.buildMaturedTrendSeries` excludes stocks below it (and unrated
+stocks) **before** each date's Actual/Target means are computed, so the trend
+lines recompute over the qualifying subset. The control change re-filters the
+already-loaded predictions in memory and re-renders without a re-fetch; at
+**All** the series is byte-for-byte identical to before, and dates lacking an
+analysis CSV behave exactly as now.
 
 ```mermaid
 flowchart LR
     A[Min stars control<br/>index.html + trend.html] -->|setMinStars n| B[star_filter_settings.js<br/>grq.filter.minStars]
     B -->|persist| C[(localStorage)]
     B -->|grq:star-filter-change| D[Portfolio view #655<br/>filter table + aggregates]
-    B -->|grq:star-filter-change| E[Trend view<br/>sibling sub-issue]
+    B -->|grq:star-filter-change| E[Trend view #656<br/>filter before aggregation]
     D -->|meetsStarThreshold| F[projection.js kernel]
+    E -->|combineStarRating + meetsStarThreshold| F
 ```
 
 #### Prediction Trend view (`docs/trend.html`)
@@ -501,12 +515,13 @@ dashboard does, so the two always agree.
 ```mermaid
 flowchart LR
     A[scores/index.json] -->|matured dates only| B[trend.js loader]
-    B -->|fetch tsv/csv/dividends| C[trend_predictions.js<br/>resolve per-stock figures]
-    C -->|reuse projection.js kernels| D[trend_series.js<br/>Actual/Target series + buckets]
+    B -->|fetch tsv/csv/dividends/analysis| C[trend_predictions.js<br/>resolve per-stock figures + avgStars]
+    C -->|reuse projection.js kernels| D[trend_series.js<br/>filter by min stars then<br/>Actual/Target series + buckets]
     D --> E[Chart.js line chart]
     F[market-indices.json] --> G[index_overlay.js<br/>benchmark datasets]
     G --> E
     H[trend_settings.js<br/>grouping + toggles] --> B
+    I[star_filter_settings.js<br/>grq.filter.minStars] -->|grq:star-filter-change| B
 ```
 
 ## CI/CD Pipeline

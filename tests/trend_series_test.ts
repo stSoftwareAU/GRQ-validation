@@ -19,6 +19,7 @@ interface TrendStock {
   currentPrice: number | null;
   totalDividends?: number;
   adjustedTarget: number | null;
+  avgStars?: number | null;
 }
 
 interface Prediction {
@@ -37,9 +38,14 @@ const g = globalThis as unknown as {
   GRQTrendSeries: {
     GRANULARITIES: string[];
     isMaturedScoreDate: (scoreDate: string | Date, today: Date) => boolean;
+    filterStocksByStars: (
+      stocks: TrendStock[],
+      minStars: number,
+    ) => TrendStock[];
     buildMaturedTrendSeries: (
       predictions: Prediction[],
       today: Date,
+      minStars?: number,
     ) => TrendPoint[];
     bucketStartDate: (date: Date, granularity: string) => Date;
     aggregateTrendSeries: (
@@ -256,4 +262,76 @@ Deno.test("buildTrendData - composes series and buckets in one call", () => {
   const monthly = Trend.buildTrendData(PREDICTIONS, TODAY);
   assertEquals(monthly.granularity, "month");
   assertEquals(monthly.buckets.length, 3);
+});
+
+// --- Min-star filter before aggregation (issue #656) -----------------------
+//
+// With a threshold active, each date's stocks are filtered by their combined
+// avgStars BEFORE the Actual/Target means are computed, so the trend recomputes
+// over the qualifying subset. With the filter off (0), the series is identical
+// to today regardless of any avgStars the stocks happen to carry.
+
+// One matured date whose two stocks have different ratings and very different
+// returns, so a threshold visibly changes the per-date Actual/Target.
+const RATED: Prediction[] = [
+  {
+    date: "2024-10-15",
+    stocks: [
+      // 4★ stock: actual +10%, target +20%.
+      { buyPrice: 100, currentPrice: 110, adjustedTarget: 120, avgStars: 4 },
+      // 1★ stock: actual -10%, target +80%.
+      { buyPrice: 100, currentPrice: 90, adjustedTarget: 180, avgStars: 1 },
+      // Unrated stock: actual +30%, target +50%.
+      {
+        buyPrice: 100,
+        currentPrice: 130,
+        adjustedTarget: 150,
+        avgStars: null,
+      },
+    ],
+  },
+];
+
+Deno.test("filterStocksByStars - off (0) returns every stock unchanged", () => {
+  const stocks = RATED[0].stocks;
+  const kept = Trend.filterStocksByStars(stocks, 0);
+  assertEquals(kept.length, 3);
+  assertEquals(kept, stocks); // same reference: the no-op path allocates nothing
+});
+
+Deno.test("filterStocksByStars - active threshold drops low-rated and unrated stocks", () => {
+  const kept = Trend.filterStocksByStars(RATED[0].stocks, 3);
+  // Only the 4★ stock clears a 3★ floor; the 1★ and the unrated are dropped.
+  assertEquals(kept.length, 1);
+  assertEquals(kept[0].avgStars, 4);
+});
+
+Deno.test("buildMaturedTrendSeries - off (0) is identical to no minStars arg", () => {
+  const withArg = Trend.buildMaturedTrendSeries(RATED, TODAY, 0);
+  const withoutArg = Trend.buildMaturedTrendSeries(RATED, TODAY);
+  // Filter off: all three stocks count → actual mean(10,-10,30)=10,
+  // target mean(20,80,50)=50, count 3.
+  assertEquals(withArg.length, 1);
+  assertAlmostEquals(withArg[0].actualPct, 10);
+  assertAlmostEquals(withArg[0].targetPct, 50);
+  assertEquals(withArg[0].count, 3);
+  // The default (no arg) must match the explicit-0 behaviour exactly.
+  assertAlmostEquals(withoutArg[0].actualPct, withArg[0].actualPct);
+  assertAlmostEquals(withoutArg[0].targetPct, withArg[0].targetPct);
+  assertEquals(withoutArg[0].count, withArg[0].count);
+});
+
+Deno.test("buildMaturedTrendSeries - active threshold recomputes over the qualifying subset", () => {
+  const series = Trend.buildMaturedTrendSeries(RATED, TODAY, 3);
+  // 3★ floor keeps only the 4★ stock: actual 10, target 20, count 1.
+  assertEquals(series.length, 1);
+  assertAlmostEquals(series[0].actualPct, 10);
+  assertAlmostEquals(series[0].targetPct, 20);
+  assertEquals(series[0].count, 1);
+});
+
+Deno.test("buildMaturedTrendSeries - a threshold can empty a date out of the series", () => {
+  // A 5★ floor leaves no qualifying stock → null Actual → the date is dropped.
+  const series = Trend.buildMaturedTrendSeries(RATED, TODAY, 5);
+  assertEquals(series.length, 0);
 });
