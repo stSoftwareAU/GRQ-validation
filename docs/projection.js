@@ -1393,10 +1393,32 @@ function shouldShowLowVolumeLegend(lowVolumeFlags) {
     return Array.isArray(lowVolumeFlags) && lowVolumeFlags.some(Boolean);
 }
 
+// Whether a stock's combined star rating clears the active minimum-star filter
+// (issue #655). `minStars` is the shared GRQStarFilter threshold: 0 (or any
+// non-positive / non-finite value) means the filter is off ("All"), so every
+// stock passes and the portfolio view is byte-for-byte unchanged; 1..5 is an
+// active whole-star floor. `avgStars` is the stock's combined Morningstar /
+// TipRanks rating (1..5) or null/undefined when the stock has no rating. With
+// the filter active an unrated stock (null/undefined/NaN avgStars) is excluded,
+// and a rated stock passes only when its rating is at least the threshold. This
+// is the single source of truth for the extra portfolio gate, so the holdings
+// table and every aggregate figure stay consistent.
+function meetsStarThreshold(avgStars, minStars) {
+    const threshold = Number(minStars);
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+        return true;
+    }
+    if (typeof avgStars !== "number" || Number.isNaN(avgStars)) {
+        return false;
+    }
+    return avgStars >= threshold;
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
     lowVolumeBadge,
+    meetsStarThreshold,
     shouldShowLowVolumeLegend,
     setDateToMidnight,
     deviceWindowDays,

@@ -454,20 +454,32 @@ module publishes the accessor contract on `globalThis.GRQStarFilter`:
   `grq:star-filter-change` `CustomEvent` on `window`, with
   `event.detail.minStars` carrying the new threshold.
 
-This issue (#654) delivers only the control, the persistence, and the
+The foundation issue (#654) delivered the control, the persistence, and the
 change-event contract — with the control left at **All**, dashboard and Trend
-behaviour is byte-for-byte identical to before. The portfolio and Trend views
-subscribe to `grq:star-filter-change` to actually filter their data in the two
-sibling #653 sub-issues. As part of the same change the verbose **📈 Prediction
-Trend** button was renamed to **Trend** so the portfolio controls row still fits
-on one line on a 375px-wide (iPhone) viewport.
+behaviour is byte-for-byte identical to before. As part of that change the
+verbose **📈 Prediction Trend** button was renamed to **Trend** so the portfolio
+controls row still fits on one line on a 375px-wide (iPhone) viewport.
+
+**Portfolio filtering (#655).** When a threshold is active, the dashboard
+restricts both the holdings table and **every** portfolio aggregate (chart
+performance line, target dot, trend line, and the totals-row metrics) to stocks
+whose combined star rating `avgStars` meets the threshold, then recomputes the
+aggregate over that filtered subset. A no-rating stock (`avgStars === null`) is
+excluded while the filter is on. The extra gate is folded into the shared
+`isStockPriceable()` inclusion check (and the target-dot input builder), so the
+table and the numbers are computed from the **same** filtered set and can never
+diverge. The pure decision lives in `GRQProjection.meetsStarThreshold(avgStars,
+minStars)`. The view subscribes to `grq:star-filter-change` and re-renders the
+chart and table without a page reload; at **All** the gate is a no-op and the
+view is unchanged. (The Trend chart is filtered by a separate sibling sub-issue.)
 
 ```mermaid
 flowchart LR
     A[Min stars control<br/>index.html + trend.html] -->|setMinStars n| B[star_filter_settings.js<br/>grq.filter.minStars]
     B -->|persist| C[(localStorage)]
-    B -->|grq:star-filter-change| D[Portfolio view<br/>#653 sub-issue]
-    B -->|grq:star-filter-change| E[Trend view<br/>#653 sub-issue]
+    B -->|grq:star-filter-change| D[Portfolio view #655<br/>filter table + aggregates]
+    B -->|grq:star-filter-change| E[Trend view<br/>sibling sub-issue]
+    D -->|meetsStarThreshold| F[projection.js kernel]
 ```
 
 #### Prediction Trend view (`docs/trend.html`)
