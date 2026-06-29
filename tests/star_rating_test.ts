@@ -1,3 +1,16 @@
+// Load the shared projection helpers so the minimum-star filter predicate
+// (issue #655) is exercised against the REAL shipped kernel rather than a copy.
+import "../docs/projection.js";
+
+const starFilterG = globalThis as unknown as {
+  GRQProjection: {
+    meetsStarThreshold: (
+      avgStars: number | null | undefined,
+      minStars: number,
+    ) => boolean;
+  };
+};
+
 // Star rating display function (copied from app.js)
 function getStarRatingDisplay(avgStars: number | null | undefined): string {
   if (avgStars === null || avgStars === undefined) {
@@ -508,6 +521,52 @@ Deno.test("Table Stars cell - negative age shows ⚠️ beside the rating", () =
 // cell could pass. The freshness-then-stars rendering is covered behaviourally by
 // the renderStarsCell tests above, which mirror the cell and assert the actual
 // output string. The grep tail has therefore been removed.
+
+// --- Minimum-star filter predicate (issue #655) ----------------------------
+//
+// meetsStarThreshold is the single source of truth for the optional portfolio
+// star filter: given a stock's combined avgStars and the active whole-star
+// threshold (0 = All/off, 1..5 = floor), decide whether the stock is included.
+
+Deno.test("meetsStarThreshold - filter off (0) includes every stock", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  // With the filter off the view is unchanged: even unrated stocks pass.
+  assertEquals(meetsStarThreshold(5, 0), true, "5★ passes when off");
+  assertEquals(meetsStarThreshold(1, 0), true, "1★ passes when off");
+  assertEquals(meetsStarThreshold(null, 0), true, "no rating passes when off");
+  assertEquals(
+    meetsStarThreshold(undefined, 0),
+    true,
+    "undefined rating passes when off",
+  );
+});
+
+Deno.test("meetsStarThreshold - rating at or above threshold is included", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  assertEquals(meetsStarThreshold(3, 3), true, "exactly at threshold");
+  assertEquals(meetsStarThreshold(3.5, 3), true, "above threshold");
+  assertEquals(meetsStarThreshold(5, 1), true, "1★+ includes a top rating");
+  assertEquals(meetsStarThreshold(1, 1), true, "1★+ includes any rating");
+});
+
+Deno.test("meetsStarThreshold - rating below threshold is excluded", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  assertEquals(meetsStarThreshold(2.9, 3), false, "just below threshold");
+  assertEquals(meetsStarThreshold(1, 4), false, "well below threshold");
+});
+
+Deno.test("meetsStarThreshold - no rating is excluded while the filter is active", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  // "1★+ includes every stock that has any rating; stocks with no rating are
+  // excluded while the filter is on" (issue #655).
+  assertEquals(meetsStarThreshold(null, 1), false, "null avgStars excluded");
+  assertEquals(
+    meetsStarThreshold(undefined, 1),
+    false,
+    "undefined avgStars excluded",
+  );
+  assertEquals(meetsStarThreshold(NaN, 2), false, "NaN avgStars excluded");
+});
 
 // Helper function for assertions (Deno doesn't have assertEquals by default)
 function assertEquals(actual: unknown, expected: unknown, message?: string) {
