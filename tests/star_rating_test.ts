@@ -500,18 +500,14 @@ Deno.test("Table Stars cell - negative age shows ⚠️ beside the rating", () =
   );
 });
 
-Deno.test("app.js: table Stars cell wires freshness beside the star rating", async () => {
-  const js = await Deno.readTextFile("docs/app.js");
-  // The Stars <td> must prepend a guarded getFreshnessIndicator before
-  // getStarRatingDisplay, so freshness leads the stars (issue #623) and an
-  // empty indicator adds no stray space (issue #548).
-  assertEquals(
-    /getFreshnessIndicator\(stock\.stock\)\s*\?[\s\S]*?""\}\$\{this\.getStarRatingDisplay\(stock\.stock\)\}/
-      .test(js),
-    true,
-    "table cell must prepend a guarded getFreshnessIndicator(stock.stock) before the stars",
-  );
-});
+// Issue #633: the former "app.js: table Stars cell wires freshness" test
+// regex-matched docs/app.js SOURCE TEXT for the exact `<td>` template-literal
+// spelling (`getFreshnessIndicator(stock.stock) ? … ${this.getStarRatingDisplay
+// (stock.stock)}`). That pinned the byte-sequence of a template literal, not the
+// rendered cell, so a behaviour-preserving reformat would fail it while a broken
+// cell could pass. The freshness-then-stars rendering is covered behaviourally by
+// the renderStarsCell tests above, which mirror the cell and assert the actual
+// output string. The grep tail has therefore been removed.
 
 // Helper function for assertions (Deno doesn't have assertEquals by default)
 function assertEquals(actual: unknown, expected: unknown, message?: string) {
