@@ -7,13 +7,19 @@
 // aria-label, and the shared "days" unit is decorative (aria-hidden) so screen
 // readers are not told "days" twice.
 //
-// These assertions read the shipped docs/index.html and docs/styles.css, the
-// same structural approach used by chart_window_toggle_test.ts.
+// These assertions read the shipped docs/index.html, the same structural
+// approach used by chart_window_toggle_test.ts.
+//
+// Issue #632: the former "the 'days' unit is styled to sit inline" assertion
+// was a source-text grep over docs/styles.css (it only checked that the string
+// `.chart-window-unit` appeared in the stylesheet), so any behaviour-preserving
+// restyle that renamed or reorganised the rule tripped it without changing the
+// rendered layout. The visible/decorative-unit behaviour below is the enduring
+// contract; the inline rendering is exercised by the pa11y visual gate.
 
 import { assert } from "@std/assert";
 
 const html = await Deno.readTextFile("docs/index.html");
-const css = await Deno.readTextFile("docs/styles.css");
 
 /** Return the text content of the FIRST `<label ... for="id">TEXT</label>`. */
 function labelText(source: string, id: string): string | null {
@@ -96,12 +102,5 @@ Deno.test("index.html: the shared 'days' unit is decorative for screen readers (
   assert(
     /aria-hidden="true"/.test(unit![0]),
     "the shared 'days' unit must be aria-hidden so it is not announced twice",
-  );
-});
-
-Deno.test("styles.css: the 'days' unit is styled to sit inline with the group (issue #527)", () => {
-  assert(
-    css.includes(".chart-window-unit"),
-    "styles.css must style the .chart-window-unit element",
   );
 });

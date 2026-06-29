@@ -7,24 +7,20 @@
 // line itself — to the right of #trendViewLink, in the top controls row, above
 // the loading/chart area.
 //
-// These assertions pin the new markup order in docs/index.html and the
-// single-line flex layout in docs/styles.css, matching the file-reading
-// approach used by chart_window_toggle_test.ts and chart_controls_heading_row_test.ts.
+// These assertions pin the new markup order in docs/index.html, matching the
+// file-reading approach used by chart_window_toggle_test.ts and
+// chart_controls_heading_row_test.ts.
+//
+// Issue #632: the former "heading-controls wrapper lays controls on one row"
+// assertion was a source-text grep over docs/styles.css (it pinned
+// `display: flex`), which a behaviour-preserving restyle would break without
+// changing the rendered layout. The single-line layout is exercised by the
+// pa11y visual gate at mobile viewports; the markup-order contract below is
+// what this unit test verifies.
 
 import { assert } from "@std/assert";
 
 const html = await Deno.readTextFile("docs/index.html");
-const css = await Deno.readTextFile("docs/styles.css");
-
-/** Return the body of the FIRST top-level CSS rule for `selector`, or null. */
-function ruleBody(source: string, selector: string): string | null {
-  const head = source.indexOf(selector + " {");
-  if (head === -1) return null;
-  const open = source.indexOf("{", head);
-  const close = source.indexOf("}", open);
-  if (open === -1 || close === -1) return null;
-  return source.slice(open + 1, close);
-}
 
 Deno.test("index.html: chart controls follow the Prediction Trend button (#524)", () => {
   const trendIdx = html.indexOf('id="trendViewLink"');
@@ -74,14 +70,5 @@ Deno.test("index.html: the trend button and chart controls share one flex line (
   assert(
     wrapIdx < windowIdx && windowIdx < expandIdx,
     "the wrapper must contain the 90/180 toggle then the expand button",
-  );
-});
-
-Deno.test("styles.css: heading-controls wrapper still lays controls on one row (#524)", () => {
-  const body = ruleBody(css, ".chart-heading-controls");
-  assert(body, ".chart-heading-controls must be styled");
-  assert(
-    /display\s*:\s*(flex|inline-flex)/i.test(body),
-    "the wrapper must be a flex row so the controls sit on one line",
   );
 });

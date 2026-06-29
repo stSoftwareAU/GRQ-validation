@@ -10,8 +10,6 @@
 // guarantees that survive that move:
 //   - both controls are grouped in ONE .chart-heading-controls wrapper, with
 //     the 90/180 toggle to the left of the expand button;
-//   - the wrapper is a flex row in docs/styles.css so the controls sit on one
-//     line;
 //   - the controls still precede the chart card/canvas (they are above it, not
 //     inside it);
 //   - the old stacking bottom-margin utility is gone.
@@ -19,21 +17,17 @@
 // The control markup is verified by reading the shipped files and asserting on
 // their structure — the same approach used by chart_window_toggle_test.ts and
 // dashboard_controls_test.ts.
+//
+// Issue #632: the former "wrapper is a flex row in styles.css" assertion was a
+// source-text grep over docs/styles.css (it pinned `display: flex`), so a
+// behaviour-preserving restyle — e.g. a single-row CSS grid — tripped it
+// without changing what the user sees. The one-row layout is exercised by the
+// pa11y visual gate at mobile viewports; the enduring markup-grouping contract
+// below is what these unit tests verify.
 
 import { assert } from "@std/assert";
 
 const html = await Deno.readTextFile("docs/index.html");
-const css = await Deno.readTextFile("docs/styles.css");
-
-/** Return the body of the FIRST top-level CSS rule for `selector`, or null. */
-function ruleBody(source: string, selector: string): string | null {
-  const head = source.indexOf(selector + " {");
-  if (head === -1) return null;
-  const open = source.indexOf("{", head);
-  const close = source.indexOf("}", open);
-  if (open === -1 || close === -1) return null;
-  return source.slice(open + 1, close);
-}
 
 // --- markup order ----------------------------------------------------------
 
@@ -76,17 +70,6 @@ Deno.test("index.html: both controls share one heading-controls wrapper (#518)",
   assert(
     wrapIdx < windowIdx && windowIdx < expandIdx,
     "the wrapper must contain the 90/180 toggle then the expand button",
-  );
-});
-
-// --- one-row layout --------------------------------------------------------
-
-Deno.test("styles.css: heading-controls wrapper lays controls on one row (#518)", () => {
-  const body = ruleBody(css, ".chart-heading-controls");
-  assert(body, ".chart-heading-controls must be styled");
-  assert(
-    /display\s*:\s*(flex|inline-flex)/i.test(body),
-    "the wrapper must be a flex row so the controls sit on one line",
   );
 });
 
