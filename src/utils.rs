@@ -10,9 +10,35 @@ use std::path::Path;
 /// Base path of the external share-price data repository.
 pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2026Q2";
 
+/// Returns `true` when a share-price data repository exists at `base` (i.e. it
+/// contains a `data/` subdirectory). Path-injectable core of
+/// [`market_data_repository_available`] so the guard is deterministically
+/// testable against a temporary directory.
+fn market_data_repository_available_at(base: &Path) -> bool {
+    base.join("data").is_dir()
+}
+
 /// Returns `true` when the share-price data repository is present on disk.
 pub fn market_data_repository_available() -> bool {
-    Path::new(MARKET_DATA_BASE_PATH).join("data").is_dir()
+    market_data_repository_available_at(Path::new(MARKET_DATA_BASE_PATH))
+}
+
+/// Ensures a share-price data repository is present at `base` before batch
+/// processing. Path-injectable core of [`ensure_market_data_repository`].
+///
+/// # Errors
+///
+/// Returns an error when `base`/`data` is missing.
+fn ensure_market_data_repository_at(base: &Path) -> Result<()> {
+    if market_data_repository_available_at(base) {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Market data repository not found at {}/data — \
+             clone GRQ-shareprices2026Q2 as a sibling directory",
+            base.display()
+        ))
+    }
 }
 
 /// Ensures the share-price data repository is present before batch processing.
@@ -21,14 +47,7 @@ pub fn market_data_repository_available() -> bool {
 ///
 /// Returns an error when [`MARKET_DATA_BASE_PATH`]/`data` is missing.
 pub fn ensure_market_data_repository() -> Result<()> {
-    if market_data_repository_available() {
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "Market data repository not found at {MARKET_DATA_BASE_PATH}/data — \
-             clone GRQ-shareprices2026Q2 as a sibling directory"
-        ))
-    }
+    ensure_market_data_repository_at(Path::new(MARKET_DATA_BASE_PATH))
 }
 
 /// Returns `true` when a market-data CSV is missing or contains only the header row.
@@ -1552,6 +1571,64 @@ mod tests {
         assert!(!validate_stock_symbol(
             "THISISAREALLYLONGSTOCKSYMBOLTHATEXCEEDSTHELIMIT"
         ));
+    }
+
+    #[test]
+    fn test_is_market_data_csv_empty_missing_file() {
+        // A path that does not exist is treated as empty.
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("nope.csv");
+        assert!(is_market_data_csv_empty(missing.to_str().unwrap()));
+    }
+
+    #[test]
+    fn test_is_market_data_csv_empty_header_only() {
+        // A file with only a header row (plus blank lines) counts as empty.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("header.csv");
+        std::fs::write(&path, "date,ticker,high,low,open,close\n\n").unwrap();
+        assert!(is_market_data_csv_empty(path.to_str().unwrap()));
+    }
+
+    #[test]
+    fn test_is_market_data_csv_empty_with_data_row() {
+        // A header plus at least one data row is not empty.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.csv");
+        std::fs::write(
+            &path,
+            "date,ticker,high,low,open,close\n2025-06-20,NYSE:AAPL,1,1,1,1\n",
+        )
+        .unwrap();
+        assert!(!is_market_data_csv_empty(path.to_str().unwrap()));
+    }
+
+    #[test]
+    fn test_ensure_market_data_repository_ok_when_present() {
+        // A base directory containing a `data/` subdir resolves to Ok, covering
+        // `market_data_repository_available`'s `true` branch transitively.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("data")).unwrap();
+        assert!(market_data_repository_available_at(dir.path()));
+        assert!(ensure_market_data_repository_at(dir.path()).is_ok());
+    }
+
+    #[test]
+    fn test_ensure_market_data_repository_err_when_absent() {
+        // A base directory without a `data/` subdir resolves to a descriptive
+        // Err naming the missing repository, covering the `false` branch.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!market_data_repository_available_at(dir.path()));
+        let err = ensure_market_data_repository_at(dir.path()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("GRQ-shareprices2026Q2"),
+            "message names the repository: {msg}"
+        );
+        assert!(
+            msg.contains("/data"),
+            "message names the missing data directory: {msg}"
+        );
     }
 
     #[test]
