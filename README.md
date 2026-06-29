@@ -57,19 +57,19 @@ Pages.
   (insufficient data ⇒ not flagged), so historical dates are never
   mass-excluded.
 - **Negative-Score Exclusion** — a stock whose raw AI model score is **≤ 0**
-  (zero or below) is predicted to fall, so we would hold cash rather than buy it.
-  Such a name is dropped from the dashboard portfolio and from every aggregate
-  (equal-weight) figure, re-weighting the remaining stocks, identical to the
-  low-volume treatment (issue #627). The gate keys on the **raw** model score,
-  not the volume-capped display score (#578), and is applied through the single
-  inclusion predicate shared by the dashboard (`isStockIncluded` in
+  (zero or below) is predicted to fall, so we would hold cash rather than buy
+  it. Such a name is dropped from the dashboard portfolio and from every
+  aggregate (equal-weight) figure, re-weighting the remaining stocks, identical
+  to the low-volume treatment (issue #627). The gate keys on the **raw** model
+  score, not the volume-capped display score (#578), and is applied through the
+  single inclusion predicate shared by the dashboard (`isStockIncluded` in
   `docs/projection.js`) and the Rust backend (`is_priceable` in `src/utils.rs`),
   so backend aggregates and the dashboard agree. The stock stays visible with a
-  red **Negative score** badge (its explanatory legend below the table shown only
-  when at least one stock is affected) rather than vanishing silently. An
-  unknown/missing score never excludes, so historical data without a usable score
-  is never mass-dropped. Today the top-20 selection means no negative scores
-  occur, so this is a defensive, forward-looking rule.
+  red **Negative score** badge (its explanatory legend below the table shown
+  only when at least one stock is affected) rather than vanishing silently. An
+  unknown/missing score never excludes, so historical data without a usable
+  score is never mass-dropped. Today the top-20 selection means no negative
+  scores occur, so this is a defensive, forward-looking rule.
 - **Low-Volume Valuation Cap** — beyond excluding illiquid names from
   aggregates, low volume is folded into the **valuation** of each prediction so
   an illiquid name can never surface as a strong recommendation (issue #578).
@@ -439,6 +439,37 @@ All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
 on every pull request that touches `docs/`.
 
+#### Optional minimum-star filter (shared foundation)
+
+A compact **Min stars** control rides on both the portfolio (`index.html`) and
+Trend (`trend.html`) controls rows, reading `All / 1★+ … / 5★+`. It reflects and
+writes a **single, persisted** whole-star threshold shared by both pages —
+backed by `docs/star_filter_settings.js` under the namespaced `localStorage` key
+`grq.filter.minStars` (default `0` = **All**, i.e. the filter is off). The
+module publishes the accessor contract on `globalThis.GRQStarFilter`:
+
+- `GRQStarFilter.getMinStars()` → the current threshold (`0` for All, else
+  `1`–`5`).
+- `GRQStarFilter.setMinStars(n)` persists the normalised value and dispatches a
+  `grq:star-filter-change` `CustomEvent` on `window`, with
+  `event.detail.minStars` carrying the new threshold.
+
+This issue (#654) delivers only the control, the persistence, and the
+change-event contract — with the control left at **All**, dashboard and Trend
+behaviour is byte-for-byte identical to before. The portfolio and Trend views
+subscribe to `grq:star-filter-change` to actually filter their data in the two
+sibling #653 sub-issues. As part of the same change the verbose **📈 Prediction
+Trend** button was renamed to **Trend** so the portfolio controls row still fits
+on one line on a 375px-wide (iPhone) viewport.
+
+```mermaid
+flowchart LR
+    A[Min stars control<br/>index.html + trend.html] -->|setMinStars n| B[star_filter_settings.js<br/>grq.filter.minStars]
+    B -->|persist| C[(localStorage)]
+    B -->|grq:star-filter-change| D[Portfolio view<br/>#653 sub-issue]
+    B -->|grq:star-filter-change| E[Trend view<br/>#653 sub-issue]
+```
+
 #### Prediction Trend view (`docs/trend.html`)
 
 A separate, purely additive page (reached via the **Prediction Trend** link on
@@ -608,6 +639,7 @@ GRQ-validation/
 │   ├── trend_series.js     # Trend data engine (matured series + bucketing)
 │   ├── index_overlay.js    # Benchmark-index overlay engine for the Trend view
 │   ├── trend_settings.js   # Remembers Trend grouping + index toggles
+│   ├── star_filter_settings.js # Shared, persisted min-star filter threshold
 │   ├── styles.css          # Main dashboard styling
 │   ├── market-indices.json # First-party benchmark index data (same-origin)
 │   └── scores/             # Score files and generated market data

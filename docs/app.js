@@ -203,6 +203,24 @@ class GRQValidator {
         });
     }
 
+    // Restore the min-star filter control to the shared persisted threshold and,
+    // on change, persist it via GRQStarFilter — which also dispatches the
+    // documented `grq:star-filter-change` event (issue #654). This foundation
+    // sub-issue only reflects/writes the setting; the portfolio re-render wiring
+    // that subscribes to the event lands in a sibling #653 sub-issue. With the
+    // control at its "All" (0) default, nothing changes. Guarded so a missing
+    // control or helper degrades cleanly.
+    initStarFilterControl() {
+        const select = document.getElementById("starFilterSelect");
+        if (!select || typeof GRQStarFilter === "undefined") {
+            return;
+        }
+        select.value = String(GRQStarFilter.getMinStars());
+        select.addEventListener("change", (event) => {
+            GRQStarFilter.setMinStars(Number(event.target.value));
+        });
+    }
+
     // Wire the footer "Share" button (issue #515). The deep-link builder and
     // clipboard/select-the-text fallback live in docs/share_link.js (issue
     // #495); the dashboard only has to supply the live selections via
@@ -224,6 +242,9 @@ class GRQValidator {
     initializeEventListeners() {
         // 90/180-day chart window toggle, now on every device (issue #449, #466).
         this.initChartWindowToggle();
+
+        // Shared min-star filter control (issue #654 foundation).
+        this.initStarFilterControl();
 
         // Footer "Share" deep-link button (issue #515 wires #495's builder).
         this.initShareButton();

@@ -154,12 +154,38 @@
                       href="trend.html"
                       id="trendViewLink"
                       class="btn btn-outline-primary"
-                    >📈 Prediction Trend</a>
+                    >Trend</a>
                     <!-- Issue #524: chart controls grouped on one horizontal row
-                         next to the Prediction Trend button. -->
+                         next to the Trend button. Issue #654 adds the shared
+                         min-star filter control as the first item in this row. -->
                     <div
                       class="chart-heading-controls d-flex align-items-center gap-2"
                     >
+                      <!-- Minimum star-rating filter (issue #654, milestone
+                           #653). A compact select reading All / 1★+ … / 5★+ that
+                           reflects and writes the SHARED, persisted threshold via
+                           GRQStarFilter (localStorage key grq.filter.minStars).
+                           Default is "All" (0 = off) so behaviour is unchanged
+                           until the user opts in; the portfolio and Trend wiring
+                           land in the two sibling #653 sub-issues. -->
+                      <div class="star-filter-control" id="starFilterControl">
+                        <label
+                          for="starFilterSelect"
+                          class="visually-hidden"
+                        >Minimum star rating</label>
+                        <select
+                          id="starFilterSelect"
+                          class="form-select form-select-sm star-filter-select"
+                          aria-label="Minimum star rating"
+                        >
+                          <option value="0">All</option>
+                          <option value="1">1★+</option>
+                          <option value="2">2★+</option>
+                          <option value="3">3★+</option>
+                          <option value="4">4★+</option>
+                          <option value="5">5★+</option>
+                        </select>
+                      </div>
                       <!-- 90/180-day chart window toggle (issue #449; extended
                            to desktop in issue #466). Shown on every device: it
                            switches the visible window between 90 and 180 days,
@@ -502,6 +528,10 @@
 
     <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->
     <script src="chart_window_settings.js?v=1.1.39"></script>
+
+    <!-- Shared min-star filter persistence + change event (issue #654) — before
+         app.js, which wires the #starFilterSelect control via GRQStarFilter. -->
+    <script src="star_filter_settings.js?v=1.1.39"></script>
 
     <!-- Mobile colour-key entry builder (issue #244) — must load before app.js -->
     <script src="color_key.js?v=1.1.39"></script>
