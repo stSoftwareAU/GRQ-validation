@@ -96,11 +96,13 @@
                 canvas: document.getElementById("trendChart"),
                 groupingSelect: document.getElementById("groupingSelect"),
                 overlayControls: document.getElementById("overlayControls"),
+                starFilterSelect: document.getElementById("starFilterSelect"),
             };
         }
 
         async init() {
             this.buildGroupingControl();
+            this.buildStarFilterControl();
             this.buildOverlayControls();
             try {
                 await this.loadData();
@@ -128,6 +130,23 @@
                     GRQTrendSettings.writeGrouping(this.granularity);
                 }
                 this.render();
+            });
+        }
+
+        // Wire the shared min-star filter control to the persisted threshold and,
+        // on change, persist it via GRQStarFilter — which dispatches the
+        // documented `grq:star-filter-change` event (issue #654). This foundation
+        // sub-issue only reflects/writes the shared setting; the Trend pipeline
+        // wiring that subscribes to the event lands in a sibling #653 sub-issue.
+        // With the control at its "All" (0) default, the chart is unchanged.
+        buildStarFilterControl() {
+            const select = this.elements.starFilterSelect;
+            if (!select || typeof globalThis.GRQStarFilter === "undefined") {
+                return;
+            }
+            select.value = String(GRQStarFilter.getMinStars());
+            select.addEventListener("change", () => {
+                GRQStarFilter.setMinStars(Number(select.value));
             });
         }
 

@@ -143,6 +143,25 @@
   gap: 0.5rem;
 }
 
+/* Shared min-star filter control (issue #654, milestone #653). A compact select
+ * (All / 1★+ … / 5★+) that reflects the persisted threshold. On the portfolio
+ * controls row it rides inside .chart-heading-controls alongside the Trend
+ * button and the 90/180 toggle, so the select must size to its content (Bootstrap
+ * form-select is width:100% by default, which would stretch the flex row) and
+ * not wrap — keeping the whole row on one line on a 375px-wide phone. On
+ * docs/trend.html the control sits in its own grid column, where the full-width
+ * default already matches the neighbouring "Group by" select. */
+.star-filter-control {
+  display: flex;
+  align-items: center;
+}
+
+.chart-heading-controls .star-filter-select {
+  width: auto;
+  min-width: 4.5rem;
+  white-space: nowrap;
+}
+
 /* ---------------------------------------------------------------------------
  * Mobile chart pop-out overlay (issue #451, milestone #446)
  *

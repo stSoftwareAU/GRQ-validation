@@ -110,7 +110,31 @@
                     <option value="quarter">Quarter</option>
                   </select>
                 </div>
-                <div class="col-md-8 col-lg-9">
+                <!-- Minimum star-rating filter (issue #654, milestone #653).
+                     Same compact control as docs/index.html, reflecting and
+                     writing the SHARED, persisted threshold via GRQStarFilter
+                     (localStorage key grq.filter.minStars) so a choice made on
+                     either page is shared. Default "All" (0 = off); the Trend
+                     pipeline wiring lands in a sibling #653 sub-issue. -->
+                <div class="col-md-4 col-lg-3">
+                  <label for="starFilterSelect" class="form-label fw-bold"
+                  >Min stars:</label>
+                  <div class="star-filter-control" id="starFilterControl">
+                    <select
+                      id="starFilterSelect"
+                      class="form-select star-filter-select"
+                      aria-label="Minimum star rating"
+                    >
+                      <option value="0">All</option>
+                      <option value="1">1★+</option>
+                      <option value="2">2★+</option>
+                      <option value="3">3★+</option>
+                      <option value="4">4★+</option>
+                      <option value="5">5★+</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4 col-lg-6">
                   <fieldset>
                     <legend class="form-label fw-bold fs-6">
                       Benchmark overlays:
@@ -187,6 +211,10 @@
 
     <!-- Trend-view persisted settings (issue #432) -->
     <script src="trend_settings.js"></script>
+
+    <!-- Shared min-star filter persistence + change event (issue #654) — before
+         trend.js, which wires the #starFilterSelect control via GRQStarFilter. -->
+    <script src="star_filter_settings.js"></script>
 
     <!-- Transient ?group=day|week|month|quarter grouping deep-link (issue #481) —
          after trend_settings.js (reuses its granularities), before trend.js. -->
