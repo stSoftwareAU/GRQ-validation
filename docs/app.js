@@ -203,6 +203,41 @@ class GRQValidator {
         });
     }
 
+    // Restore the min-star filter control to the shared persisted threshold and,
+    // on change, persist it via GRQStarFilter — which also dispatches the
+    // documented `grq:star-filter-change` event (issue #654). The portfolio view
+    // subscribes to that event (issue #655) to re-render both the chart and the
+    // holdings table over the newly-filtered subset, without a page reload. With
+    // the control at its "All" (0) default, the filter is a no-op and nothing
+    // changes. Guarded so a missing control or helper degrades cleanly.
+    initStarFilterControl() {
+        const select = document.getElementById("starFilterSelect");
+        if (!select || typeof GRQStarFilter === "undefined") {
+            return;
+        }
+        select.value = String(GRQStarFilter.getMinStars());
+        select.addEventListener("change", (event) => {
+            GRQStarFilter.setMinStars(Number(event.target.value));
+        });
+        // Re-render the chart and table whenever the shared threshold changes
+        // (issue #655). Listening to the event — not just the select's change —
+        // keeps the select in sync even when the threshold is changed elsewhere
+        // (e.g. the Trend page) and reflects it on return. Guarded so a
+        // non-browser environment never throws.
+        if (typeof globalThis.addEventListener === "function") {
+            globalThis.addEventListener(
+                GRQStarFilter.CHANGE_EVENT,
+                (event) => {
+                    const minStars = event && event.detail
+                        ? event.detail.minStars
+                        : GRQStarFilter.getMinStars();
+                    select.value = String(minStars);
+                    this.updateDisplay();
+                },
+            );
+        }
+    }
+
     // Wire the footer "Share" button (issue #515). The deep-link builder and
     // clipboard/select-the-text fallback live in docs/share_link.js (issue
     // #495); the dashboard only has to supply the live selections via
@@ -224,6 +259,9 @@ class GRQValidator {
     initializeEventListeners() {
         // 90/180-day chart window toggle, now on every device (issue #449, #466).
         this.initChartWindowToggle();
+
+        // Shared min-star filter control (issue #654 foundation).
+        this.initStarFilterControl();
 
         // Footer "Share" deep-link button (issue #515 wires #495's builder).
         this.initShareButton();
@@ -752,25 +790,15 @@ class GRQValidator {
                             const msStars = msIndex !== -1 && values[msIndex] ? parseFloat(values[msIndex]) : null;
                             const tipsStars = tipsStarsIndex !== -1 && values[tipsStarsIndex] ? parseFloat(values[tipsStarsIndex]) : null;
                             
-                            // Calculate average star rating (Tips Stars divided by 2 to normalize to 1-5 scale)
-                            let avgStars = null;
-                            let validRatings = 0;
-                            let totalRating = 0;
-                            
-                            if (msStars !== null && !isNaN(msStars) && msStars >= 1 && msStars <= 5) {
-                                totalRating += msStars;
-                                validRatings++;
-                            }
-                            
-                            if (tipsStars !== null && !isNaN(tipsStars) && tipsStars >= 1 && tipsStars <= 10) {
-                                totalRating += tipsStars / 2; // Normalize to 1-5 scale
-                                validRatings++;
-                            }
-                            
-                            if (validRatings > 0) {
-                                avgStars = totalRating / validRatings;
-                            }
-                            
+                            // Combine the MS (1-5) and Tips Stars (1-10) ratings into
+                            // the single 1-5 avgStars figure via the shared kernel
+                            // (issue #656) so the portfolio view and the Trend chart
+                            // derive a stock's rating with identical maths.
+                            const avgStars = GRQProjection.combineStarRating(
+                                msStars,
+                                tipsStars,
+                            );
+
                             // Parse fair value data
                             const msFairValue = msFairValueIndex !== -1 && values[msFairValueIndex] ? 
                                 this.parseCurrencyValue(values[msFairValueIndex]) : null;
@@ -2918,12 +2946,19 @@ class GRQValidator {
             existingSummary.remove();
         }
 
-        // Determine which stocks to show
+        // Determine which stocks to show. In the aggregate view, a stock that
+        // fails the active minimum-star filter (issue #655) is HIDDEN entirely
+        // rather than struck through — unlike the priceable/low-volume/negative
+        // exclusions, the filter restricts the holdings universe itself. With
+        // the filter off meetsStarFilter is always true, so the set is
+        // unchanged. The drilled-into single-stock view always shows its stock.
         const stocksToShow = this.selectedStock
             ? this.scoreData.filter((stock) =>
                 stock.stock === this.selectedStock
             )
-            : this.scoreData;
+            : this.scoreData.filter((stock) =>
+                this.meetsStarFilter(stock.stock)
+            );
 
         if (this.selectedStock) {
             // Single stock view - show as card instead of table
@@ -3896,7 +3931,16 @@ class GRQValidator {
     // (current basis), never the raw `stock.target`.
     buildPortfolioTargetStocks() {
         const scoreDate = this.getScoreDate(this.selectedFile);
-        return this.scoreData.map((stock) => {
+        // Apply the active minimum-star filter (issue #655) here too: the target
+        // dot recomputes over the SAME filtered subset as the table and the
+        // chart performance line. This path builds raw inputs for the shared
+        // projection kernel rather than going through isStockPriceable, so the
+        // star gate is applied explicitly. With the filter off every stock
+        // passes and the target is unchanged.
+        const includedStocks = this.scoreData.filter((stock) =>
+            this.meetsStarFilter(stock.stock)
+        );
+        return includedStocks.map((stock) => {
             const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
             const hasTarget = stock.target !== null && !isNaN(stock.target);
             return {
@@ -4015,7 +4059,30 @@ class GRQValidator {
             buyPriceObj ? buyPriceObj.reliable !== false : true,
             this.isStockLowVolume(stockSymbol, scoreDate),
             score,
-        );
+        ) && this.meetsStarFilter(stockSymbol);
+    }
+
+    // Whether a stock clears the active minimum-star filter (issue #655). The
+    // shared GRQStarFilter threshold (foundation #654) is 0 ("All"/off) or a
+    // whole star 1–5. With the filter off every stock passes, so this gate is a
+    // no-op and the portfolio view is byte-for-byte unchanged. When a threshold
+    // is active a stock passes only when its combined star rating
+    // (analysisData[ticker].avgStars, populated by loadAnalysisData) is at least
+    // the threshold; a missing entry or a null/undefined avgStars (no rating) is
+    // excluded. Folded into isStockPriceable so the SAME filtered set feeds the
+    // holdings table and every aggregate (chart line, target dot, trend line,
+    // totals row) — no divergence between the numbers and the table.
+    meetsStarFilter(stockSymbol) {
+        const minStars =
+            (typeof GRQStarFilter !== "undefined" &&
+                    typeof GRQStarFilter.getMinStars === "function")
+                ? GRQStarFilter.getMinStars()
+                : 0;
+        const analysis = this.analysisData
+            ? this.analysisData[stockSymbol]
+            : null;
+        const avgStars = analysis ? analysis.avgStars : null;
+        return GRQProjection.meetsStarThreshold(avgStars, minStars);
     }
 
     calculatePortfolioPerformance90Day() {

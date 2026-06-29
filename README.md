@@ -57,19 +57,19 @@ Pages.
   (insufficient data ⇒ not flagged), so historical dates are never
   mass-excluded.
 - **Negative-Score Exclusion** — a stock whose raw AI model score is **≤ 0**
-  (zero or below) is predicted to fall, so we would hold cash rather than buy it.
-  Such a name is dropped from the dashboard portfolio and from every aggregate
-  (equal-weight) figure, re-weighting the remaining stocks, identical to the
-  low-volume treatment (issue #627). The gate keys on the **raw** model score,
-  not the volume-capped display score (#578), and is applied through the single
-  inclusion predicate shared by the dashboard (`isStockIncluded` in
+  (zero or below) is predicted to fall, so we would hold cash rather than buy
+  it. Such a name is dropped from the dashboard portfolio and from every
+  aggregate (equal-weight) figure, re-weighting the remaining stocks, identical
+  to the low-volume treatment (issue #627). The gate keys on the **raw** model
+  score, not the volume-capped display score (#578), and is applied through the
+  single inclusion predicate shared by the dashboard (`isStockIncluded` in
   `docs/projection.js`) and the Rust backend (`is_priceable` in `src/utils.rs`),
   so backend aggregates and the dashboard agree. The stock stays visible with a
-  red **Negative score** badge (its explanatory legend below the table shown only
-  when at least one stock is affected) rather than vanishing silently. An
-  unknown/missing score never excludes, so historical data without a usable score
-  is never mass-dropped. Today the top-20 selection means no negative scores
-  occur, so this is a defensive, forward-looking rule.
+  red **Negative score** badge (its explanatory legend below the table shown
+  only when at least one stock is affected) rather than vanishing silently. An
+  unknown/missing score never excludes, so historical data without a usable
+  score is never mass-dropped. Today the top-20 selection means no negative
+  scores occur, so this is a defensive, forward-looking rule.
 - **Low-Volume Valuation Cap** — beyond excluding illiquid names from
   aggregates, low volume is folded into the **valuation** of each prediction so
   an illiquid name can never surface as a strong recommendation (issue #578).
@@ -439,6 +439,63 @@ All views meet **WCAG 2 AA** colour contrast in both the light and dark themes;
 `pa11yci.json` scans the aggregate, single-stock and Trend views in both themes
 on every pull request that touches `docs/`.
 
+#### Optional minimum-star filter (shared foundation)
+
+A compact **Min stars** control rides on both the portfolio (`index.html`) and
+Trend (`trend.html`) controls rows, reading `All / 1★+ … / 5★+`. It reflects and
+writes a **single, persisted** whole-star threshold shared by both pages —
+backed by `docs/star_filter_settings.js` under the namespaced `localStorage` key
+`grq.filter.minStars` (default `0` = **All**, i.e. the filter is off). The
+module publishes the accessor contract on `globalThis.GRQStarFilter`:
+
+- `GRQStarFilter.getMinStars()` → the current threshold (`0` for All, else
+  `1`–`5`).
+- `GRQStarFilter.setMinStars(n)` persists the normalised value and dispatches a
+  `grq:star-filter-change` `CustomEvent` on `window`, with
+  `event.detail.minStars` carrying the new threshold.
+
+The foundation issue (#654) delivered the control, the persistence, and the
+change-event contract — with the control left at **All**, dashboard and Trend
+behaviour is byte-for-byte identical to before. As part of that change the
+verbose **📈 Prediction Trend** button was renamed to **Trend** so the portfolio
+controls row still fits on one line on a 375px-wide (iPhone) viewport.
+
+**Portfolio filtering (#655).** When a threshold is active, the dashboard
+restricts both the holdings table and **every** portfolio aggregate (chart
+performance line, target dot, trend line, and the totals-row metrics) to stocks
+whose combined star rating `avgStars` meets the threshold, then recomputes the
+aggregate over that filtered subset. A no-rating stock (`avgStars === null`) is
+excluded while the filter is on. The extra gate is folded into the shared
+`isStockPriceable()` inclusion check (and the target-dot input builder), so the
+table and the numbers are computed from the **same** filtered set and can never
+diverge. The pure decision lives in `GRQProjection.meetsStarThreshold(avgStars,
+minStars)`. The view subscribes to `grq:star-filter-change` and re-renders the
+chart and table without a page reload; at **All** the gate is a no-op and the
+view is unchanged.
+
+**Trend filtering (#656).** The Trend pipeline now also loads each matured
+date's analysis CSV (`scores/<YYYY>/<Month>/<DD>-analysis.csv`, tolerating a
+404 on older dates) and attaches the combined 1–5 `avgStars` to every stock,
+derived by the **shared** `GRQProjection.combineStarRating(msStars, tipsStars)`
+kernel — the same combination the portfolio view uses, so a stock's effective
+rating is identical between the two views. When a threshold is active,
+`GRQTrendSeries.buildMaturedTrendSeries` excludes stocks below it (and unrated
+stocks) **before** each date's Actual/Target means are computed, so the trend
+lines recompute over the qualifying subset. The control change re-filters the
+already-loaded predictions in memory and re-renders without a re-fetch; at
+**All** the series is byte-for-byte identical to before, and dates lacking an
+analysis CSV behave exactly as now.
+
+```mermaid
+flowchart LR
+    A[Min stars control<br/>index.html + trend.html] -->|setMinStars n| B[star_filter_settings.js<br/>grq.filter.minStars]
+    B -->|persist| C[(localStorage)]
+    B -->|grq:star-filter-change| D[Portfolio view #655<br/>filter table + aggregates]
+    B -->|grq:star-filter-change| E[Trend view #656<br/>filter before aggregation]
+    D -->|meetsStarThreshold| F[projection.js kernel]
+    E -->|combineStarRating + meetsStarThreshold| F
+```
+
 #### Prediction Trend view (`docs/trend.html`)
 
 A separate, purely additive page (reached via the **Prediction Trend** link on
@@ -458,12 +515,13 @@ dashboard does, so the two always agree.
 ```mermaid
 flowchart LR
     A[scores/index.json] -->|matured dates only| B[trend.js loader]
-    B -->|fetch tsv/csv/dividends| C[trend_predictions.js<br/>resolve per-stock figures]
-    C -->|reuse projection.js kernels| D[trend_series.js<br/>Actual/Target series + buckets]
+    B -->|fetch tsv/csv/dividends/analysis| C[trend_predictions.js<br/>resolve per-stock figures + avgStars]
+    C -->|reuse projection.js kernels| D[trend_series.js<br/>filter by min stars then<br/>Actual/Target series + buckets]
     D --> E[Chart.js line chart]
     F[market-indices.json] --> G[index_overlay.js<br/>benchmark datasets]
     G --> E
     H[trend_settings.js<br/>grouping + toggles] --> B
+    I[star_filter_settings.js<br/>grq.filter.minStars] -->|grq:star-filter-change| B
 ```
 
 ## CI/CD Pipeline
@@ -608,6 +666,7 @@ GRQ-validation/
 │   ├── trend_series.js     # Trend data engine (matured series + bucketing)
 │   ├── index_overlay.js    # Benchmark-index overlay engine for the Trend view
 │   ├── trend_settings.js   # Remembers Trend grouping + index toggles
+│   ├── star_filter_settings.js # Shared, persisted min-star filter threshold
 │   ├── styles.css          # Main dashboard styling
 │   ├── market-indices.json # First-party benchmark index data (same-origin)
 │   └── scores/             # Score files and generated market data

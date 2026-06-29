@@ -1,3 +1,20 @@
+// Load the shared projection helpers so the minimum-star filter predicate
+// (issue #655) is exercised against the REAL shipped kernel rather than a copy.
+import "../docs/projection.js";
+
+const starFilterG = globalThis as unknown as {
+  GRQProjection: {
+    meetsStarThreshold: (
+      avgStars: number | null | undefined,
+      minStars: number,
+    ) => boolean;
+    combineStarRating: (
+      msStars: number | string | null | undefined,
+      tipsStars: number | string | null | undefined,
+    ) => number | null;
+  };
+};
+
 // Star rating display function (copied from app.js)
 function getStarRatingDisplay(avgStars: number | null | undefined): string {
   if (avgStars === null || avgStars === undefined) {
@@ -508,6 +525,90 @@ Deno.test("Table Stars cell - negative age shows ⚠️ beside the rating", () =
 // cell could pass. The freshness-then-stars rendering is covered behaviourally by
 // the renderStarsCell tests above, which mirror the cell and assert the actual
 // output string. The grep tail has therefore been removed.
+
+// --- Minimum-star filter predicate (issue #655) ----------------------------
+//
+// meetsStarThreshold is the single source of truth for the optional portfolio
+// star filter: given a stock's combined avgStars and the active whole-star
+// threshold (0 = All/off, 1..5 = floor), decide whether the stock is included.
+
+Deno.test("meetsStarThreshold - filter off (0) includes every stock", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  // With the filter off the view is unchanged: even unrated stocks pass.
+  assertEquals(meetsStarThreshold(5, 0), true, "5★ passes when off");
+  assertEquals(meetsStarThreshold(1, 0), true, "1★ passes when off");
+  assertEquals(meetsStarThreshold(null, 0), true, "no rating passes when off");
+  assertEquals(
+    meetsStarThreshold(undefined, 0),
+    true,
+    "undefined rating passes when off",
+  );
+});
+
+Deno.test("meetsStarThreshold - rating at or above threshold is included", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  assertEquals(meetsStarThreshold(3, 3), true, "exactly at threshold");
+  assertEquals(meetsStarThreshold(3.5, 3), true, "above threshold");
+  assertEquals(meetsStarThreshold(5, 1), true, "1★+ includes a top rating");
+  assertEquals(meetsStarThreshold(1, 1), true, "1★+ includes any rating");
+});
+
+Deno.test("meetsStarThreshold - rating below threshold is excluded", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  assertEquals(meetsStarThreshold(2.9, 3), false, "just below threshold");
+  assertEquals(meetsStarThreshold(1, 4), false, "well below threshold");
+});
+
+Deno.test("meetsStarThreshold - no rating is excluded while the filter is active", () => {
+  const { meetsStarThreshold } = starFilterG.GRQProjection;
+  // "1★+ includes every stock that has any rating; stocks with no rating are
+  // excluded while the filter is on" (issue #655).
+  assertEquals(meetsStarThreshold(null, 1), false, "null avgStars excluded");
+  assertEquals(
+    meetsStarThreshold(undefined, 1),
+    false,
+    "undefined avgStars excluded",
+  );
+  assertEquals(meetsStarThreshold(NaN, 2), false, "NaN avgStars excluded");
+});
+
+// --- Combined star rating kernel (issue #656) ------------------------------
+//
+// combineStarRating is the single source of truth that turns the raw MS (1–5)
+// and Tips Stars (1–10) columns into the 1–5 avgStars both views filter on. The
+// portfolio view (docs/app.js) and the Trend pipeline (docs/trend_predictions.js)
+// both delegate here, so a stock's effective rating cannot drift between them.
+
+Deno.test("combineStarRating - averages MS and normalised Tips Stars", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  // 3 MS + 7 Tips → (3 + 3.5) / 2 = 3.25 (matches the portfolio view maths).
+  assertEquals(combineStarRating(3, 7), 3.25, "MS 3 + Tips 7 → 3.25");
+  // 5 MS + 10 Tips → (5 + 5) / 2 = 5.
+  assertEquals(combineStarRating(5, 10), 5, "MS 5 + Tips 10 → 5");
+});
+
+Deno.test("combineStarRating - falls back to whichever rating is present", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  assertEquals(combineStarRating(4, null), 4, "only MS present → MS");
+  assertEquals(combineStarRating(null, 8), 4, "only Tips present → Tips/2");
+});
+
+Deno.test("combineStarRating - accepts string inputs (CSV cells)", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  // localStorage / CSV cells arrive as strings; the kernel must coerce them.
+  assertEquals(combineStarRating("3", "7"), 3.25, "string MS + Tips → 3.25");
+});
+
+Deno.test("combineStarRating - out-of-range and missing ratings are ignored", () => {
+  const { combineStarRating } = starFilterG.GRQProjection;
+  assertEquals(combineStarRating(null, null), null, "neither rating → null");
+  assertEquals(combineStarRating(0, null), null, "MS below 1 ignored → null");
+  assertEquals(combineStarRating(6, null), null, "MS above 5 ignored → null");
+  assertEquals(combineStarRating(null, 11), null, "Tips above 10 ignored");
+  assertEquals(combineStarRating(NaN, NaN), null, "NaN ratings → null");
+  // A valid MS with an out-of-range Tips falls back to the MS alone.
+  assertEquals(combineStarRating(4, 99), 4, "invalid Tips → MS only");
+});
 
 // Helper function for assertions (Deno doesn't have assertEquals by default)
 function assertEquals(actual: unknown, expected: unknown, message?: string) {

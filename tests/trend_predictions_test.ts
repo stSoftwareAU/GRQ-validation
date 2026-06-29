@@ -18,10 +18,12 @@ import "../docs/trend_series.js";
 import "../docs/trend_predictions.js";
 
 interface ResolvedStock {
+  stock?: string;
   buyPrice: number | null;
   currentPrice: number | null;
   totalDividends: number;
   adjustedTarget: number | null;
+  avgStars?: number | null;
 }
 
 interface ScoreRow {
@@ -35,17 +37,21 @@ const g = globalThis as unknown as {
     parseScoreTsv: (text: string) => ScoreRow[];
     parseMarketCsv: (text: string) => Record<string, unknown[]>;
     parseDividendCsv: (text: string) => Record<string, unknown[]>;
+    parseCsvRecords: (text: string) => string[][];
+    parseAnalysisCsv: (text: string) => Record<string, number | null>;
     resolvePredictionStocks: (
       scoreRows: ScoreRow[],
       marketData: Record<string, unknown[]>,
       dividendData: Record<string, unknown[]>,
       scoreDate: Date,
+      starRatings?: Record<string, number | null>,
     ) => ResolvedStock[];
     buildPrediction: (
       date: string,
       tsvText: string,
       csvText: string,
       dividendCsvText: string,
+      analysisCsvText?: string,
     ) => { date: string; stocks: ResolvedStock[] };
     currentPriceWithinWindow: (
       points: unknown[],
@@ -229,4 +235,91 @@ Deno.test("buildPrediction - tolerates missing dividend data", () => {
   // AAA still resolves; just no dividends counted.
   assertAlmostEquals(prediction.stocks[0].totalDividends, 0);
   assertAlmostEquals(prediction.stocks[0].currentPrice as number, 110);
+});
+
+// --- Star ratings join (issue #656) ----------------------------------------
+//
+// The Trend pipeline now also reads each matured date's analysis CSV
+// (`<DD>-analysis.csv`) and attaches the combined 1–5 avgStars to each stock,
+// using the SAME GRQProjection.combineStarRating combination as the portfolio
+// view. The analysis CSV quotes currency columns (MS Fair Value / Tips Target)
+// that sit BEFORE the rating columns, so the parser must be quote-aware.
+const ANALYSIS = [
+  "Stock,Date,MS Fair Value,MS,Tips Target,Tips Stars",
+  // Quoted commas in columns 2 & 4 must NOT shift MS (col 3) / Tips Stars
+  // (col 5): AAA → (3 + 7/2) / 2 = 3.25.
+  'NYSE:AAA,2024-10-14,"1,200.00",3,"1,500.00",7',
+  // BBB has only an MS rating → 1.0; CCC is absent → unrated (null).
+  'NYSE:BBB,2024-10-14,"90.00",1,"110.00",',
+].join("\n");
+
+Deno.test("parseAnalysisCsv - combines MS and Tips columns past quoted commas", () => {
+  const ratings = Predictions.parseAnalysisCsv(ANALYSIS);
+  assertAlmostEquals(ratings["NYSE:AAA"] as number, 3.25);
+  assertAlmostEquals(ratings["NYSE:BBB"] as number, 1);
+  // A ticker not in the file has no entry at all.
+  assertEquals("NYSE:CCC" in ratings, false);
+});
+
+Deno.test("parseAnalysisCsv - tolerates a missing / empty analysis file", () => {
+  // A 404 is fetched as "" by the Trend loader; the parser returns {}.
+  assertEquals(Predictions.parseAnalysisCsv(""), {});
+  assertEquals(Predictions.parseAnalysisCsv("Stock,Date,MS,Tips Stars"), {});
+});
+
+Deno.test("parseCsvRecords - keeps a multi-line quoted header as one record", () => {
+  // The real analysis CSV wraps some headings across physical lines, e.g.
+  // "3 Mths\nTarget"; the record tokeniser must keep that as a single field.
+  const csv = 'Stock,"3 Mths\nTarget",MS\nNYSE:AAA,10,3\n';
+  const records = Predictions.parseCsvRecords(csv);
+  assertEquals(records.length, 2);
+  assertEquals(records[0], ["Stock", "3 Mths\nTarget", "MS"]);
+  assertEquals(records[1], ["NYSE:AAA", "10", "3"]);
+});
+
+Deno.test("resolvePredictionStocks - threads avgStars from the ratings map", () => {
+  const scoreRows = Predictions.parseScoreTsv(TSV);
+  const marketData = Predictions.parseMarketCsv(CSV);
+  const stocks = Predictions.resolvePredictionStocks(
+    scoreRows,
+    marketData,
+    {},
+    SCORE_DATE,
+    { "NYSE:AAA": 3.25 },
+  );
+  // AAA carries its rating; BBB (absent from the map) is unrated.
+  assertEquals(stocks[0].avgStars, 3.25);
+  assertEquals(stocks[1].avgStars, null);
+});
+
+Deno.test("resolvePredictionStocks - defaults avgStars to null without a ratings map", () => {
+  const stocks = Predictions.resolvePredictionStocks(
+    Predictions.parseScoreTsv(TSV),
+    Predictions.parseMarketCsv(CSV),
+    {},
+    SCORE_DATE,
+  );
+  for (const stock of stocks) {
+    assertEquals(stock.avgStars, null);
+  }
+});
+
+Deno.test("buildPrediction - joins the analysis CSV avgStars onto each stock", () => {
+  const prediction = Predictions.buildPrediction(
+    SCORE_DATE_STR,
+    TSV,
+    CSV,
+    DIVIDENDS,
+    ANALYSIS,
+  );
+  assertAlmostEquals(prediction.stocks[0].avgStars as number, 3.25); // AAA
+  assertAlmostEquals(prediction.stocks[1].avgStars as number, 1); // BBB
+  assertEquals(prediction.stocks[2].avgStars, null); // CCC unrated
+});
+
+Deno.test("buildPrediction - missing analysis file leaves every stock unrated", () => {
+  const prediction = Predictions.buildPrediction(SCORE_DATE_STR, TSV, CSV, "");
+  for (const stock of prediction.stocks) {
+    assertEquals(stock.avgStars, null);
+  }
 });

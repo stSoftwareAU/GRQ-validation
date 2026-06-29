@@ -1393,10 +1393,63 @@ function shouldShowLowVolumeLegend(lowVolumeFlags) {
     return Array.isArray(lowVolumeFlags) && lowVolumeFlags.some(Boolean);
 }
 
+// Whether a stock's combined star rating clears the active minimum-star filter
+// (issue #655). `minStars` is the shared GRQStarFilter threshold: 0 (or any
+// non-positive / non-finite value) means the filter is off ("All"), so every
+// stock passes and the portfolio view is byte-for-byte unchanged; 1..5 is an
+// active whole-star floor. `avgStars` is the stock's combined Morningstar /
+// TipRanks rating (1..5) or null/undefined when the stock has no rating. With
+// the filter active an unrated stock (null/undefined/NaN avgStars) is excluded,
+// and a rated stock passes only when its rating is at least the threshold. This
+// is the single source of truth for the extra portfolio gate, so the holdings
+// table and every aggregate figure stay consistent.
+// Combine a Morningstar rating (`MS`, 1–5) and a TipRanks rating (`Tips Stars`,
+// 1–10) into the single 1–5 `avgStars` figure both views filter on (issue #656).
+// This is the SINGLE SOURCE OF TRUTH for the combination, lifted out of the
+// portfolio view (docs/app.js) so the Trend pipeline reuses the identical maths
+// and a stock's effective rating cannot drift between the two views. The rules
+// mirror the portfolio view exactly:
+//   - a valid MS (number in 1..5) contributes as-is,
+//   - a valid Tips Stars (number in 1..10) contributes halved (normalised to
+//     the 1..5 scale),
+//   - avgStars is the mean of whichever of the two are valid, or null when
+//     neither is (an unrated stock).
+function combineStarRating(msStars, tipsStars) {
+    let total = 0;
+    let validRatings = 0;
+    const ms = typeof msStars === "string" ? Number(msStars) : msStars;
+    const tips = typeof tipsStars === "string" ? Number(tipsStars) : tipsStars;
+    if (typeof ms === "number" && !Number.isNaN(ms) && ms >= 1 && ms <= 5) {
+        total += ms;
+        validRatings++;
+    }
+    if (
+        typeof tips === "number" && !Number.isNaN(tips) && tips >= 1 &&
+        tips <= 10
+    ) {
+        total += tips / 2; // normalise the 1..10 Tips scale to 1..5
+        validRatings++;
+    }
+    return validRatings > 0 ? total / validRatings : null;
+}
+
+function meetsStarThreshold(avgStars, minStars) {
+    const threshold = Number(minStars);
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+        return true;
+    }
+    if (typeof avgStars !== "number" || Number.isNaN(avgStars)) {
+        return false;
+    }
+    return avgStars >= threshold;
+}
+
 // Publish on globalThis so the browser dashboard (classic script) and the Deno
 // test importer can both reach the helpers, mirroring docs/escape.js.
 globalThis.GRQProjection = {
     lowVolumeBadge,
+    combineStarRating,
+    meetsStarThreshold,
     shouldShowLowVolumeLegend,
     setDateToMidnight,
     deviceWindowDays,

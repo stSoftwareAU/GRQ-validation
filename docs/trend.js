@@ -57,6 +57,7 @@
     class GRQTrendView {
         constructor() {
             this.today = new Date();
+            this.predictions = []; // resolved per-date predictions (pre-filter)
             this.series = []; // matured per-date points from the data engine
             this.scoreDates = []; // matured score-date strings (for the overlay)
             this.marketIndices = null; // docs/market-indices.json contents
@@ -96,11 +97,13 @@
                 canvas: document.getElementById("trendChart"),
                 groupingSelect: document.getElementById("groupingSelect"),
                 overlayControls: document.getElementById("overlayControls"),
+                starFilterSelect: document.getElementById("starFilterSelect"),
             };
         }
 
         async init() {
             this.buildGroupingControl();
+            this.buildStarFilterControl();
             this.buildOverlayControls();
             try {
                 await this.loadData();
@@ -129,6 +132,58 @@
                 }
                 this.render();
             });
+        }
+
+        // Wire the shared min-star filter control to the persisted threshold and,
+        // on change, persist it via GRQStarFilter — which dispatches the
+        // documented `grq:star-filter-change` event (issue #654). The Trend
+        // pipeline (issue #656) subscribes to that event to re-filter each date's
+        // stocks and re-render WITHOUT a re-fetch, and listens to the event (not
+        // just this select) so a threshold changed elsewhere — e.g. the portfolio
+        // page — is reflected here on return. With the control at its "All" (0)
+        // default the filter is a no-op and the chart is byte-for-byte unchanged.
+        buildStarFilterControl() {
+            const select = this.elements.starFilterSelect;
+            if (!select || typeof globalThis.GRQStarFilter === "undefined") {
+                return;
+            }
+            select.value = String(GRQStarFilter.getMinStars());
+            select.addEventListener("change", () => {
+                GRQStarFilter.setMinStars(Number(select.value));
+            });
+            if (typeof globalThis.addEventListener === "function") {
+                globalThis.addEventListener(
+                    GRQStarFilter.CHANGE_EVENT,
+                    (event) => {
+                        const minStars = event && event.detail
+                            ? event.detail.minStars
+                            : GRQStarFilter.getMinStars();
+                        select.value = String(minStars);
+                        this.rebuildSeries();
+                        this.render();
+                    },
+                );
+            }
+        }
+
+        // The active whole-star threshold (0 = All/off) from the shared accessor,
+        // guarded so a missing helper degrades to the unfiltered default.
+        currentMinStars() {
+            return (typeof globalThis.GRQStarFilter !== "undefined" &&
+                    typeof GRQStarFilter.getMinStars === "function")
+                ? GRQStarFilter.getMinStars()
+                : 0;
+        }
+
+        // Recompute the matured series from the already-loaded predictions at the
+        // current threshold. Re-filtering in memory means a threshold change never
+        // re-fetches the per-date files (issue #656).
+        rebuildSeries() {
+            this.series = GRQTrendSeries.buildMaturedTrendSeries(
+                this.predictions,
+                this.today,
+                this.currentMinStars(),
+            );
         }
 
         // Build one on/off checkbox per benchmark index, restored from the
@@ -187,26 +242,30 @@
             const predictions = await Promise.all(
                 matured.map(async (entry) => {
                     const base = "scores/" + entry.file;
-                    const [tsv, csv, dividends] = await Promise.all([
+                    // Also fetch the per-date analysis CSV for the star ratings
+                    // (issue #656). fetchText tolerates a 404 (older dates may
+                    // lack the file) by returning "", so the filter treats those
+                    // stocks as unrated without breaking the pipeline.
+                    const [tsv, csv, dividends, analysis] = await Promise.all([
                         fetchText(base),
                         fetchText(base.replace(".tsv", ".csv")),
                         fetchText(base.replace(".tsv", "-dividends.csv")),
+                        fetchText(base.replace(".tsv", "-analysis.csv")),
                     ]);
                     return GRQTrendPredictions.buildPrediction(
                         entry.date,
                         tsv,
                         csv,
                         dividends,
+                        analysis,
                     );
                 }),
             );
 
-            this.series = GRQTrendSeries.buildMaturedTrendSeries(
-                predictions,
-                this.today,
-            );
+            this.predictions = predictions;
             this.scoreDates = matured.map((entry) => entry.date);
             this.marketIndices = await fetchJson("market-indices.json");
+            this.rebuildSeries();
         }
 
         // Active theme ("light"/"dark"), matching styles.css, so the chart text
