@@ -740,6 +740,14 @@ cargo test test_name
 deno test --allow-read tests/
 ```
 
+The Deno suite includes a **dashboard "Limited data mode" smoke test**
+(`tests/dashboard_limited_data_smoke_test.ts`). It drives the real
+`GRQTrendPredictions.parseMarketCsv` kernel over the published
+`docs/scores/**` CSVs and **fails** if a date with full market data would
+render the `.limited-data-message` ("Limited data mode") banner — the quality
+gate that catches a market-data regression before it ships. It runs on every PR
+via `deno-quality.yml` (which already executes `deno test tests/*.ts`).
+
 ## Configuration
 
 ### Environment Variables
