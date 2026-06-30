@@ -122,6 +122,68 @@ function parseMarketCsv(text) {
     return marketData;
 }
 
+// Classify the outcome of a market-data load attempt (issue #675, quality gate
+// form 3/3 of #671). This is the single source of truth that lets
+// GRQValidator.loadMarketData() and GRQValidator.updateDisplay() agree on
+// whether a load is a genuine DATA FAULT — a fetch failure, an empty file, a
+// header-only / zero-data-row CSV, or a parse error — versus a healthy load.
+//
+// A fault must surface a VISIBLE, DISTINCT error state, never the soft
+// "Limited data mode" placeholder, so a broken data pipeline can never pass as
+// a normal-but-sparse dashboard. The returned `reason` keeps the error
+// actionable (it names the fault) rather than a noisy catch-all.
+//
+// Returns one of:
+//   { state: "ok",    reason: "ok", marketData, tickerCount, rowCount }
+//   { state: "error", reason: "fetch-failed" | "empty-file" |
+//                             "no-data-rows" | "parse-error", message }
+function classifyMarketLoad({ fetchOk = false, text = null } = {}) {
+    if (!fetchOk) {
+        return {
+            state: "error",
+            reason: "fetch-failed",
+            message:
+                "Market data could not be loaded (network or file error). " +
+                "This is a data fault, not a sparse view.",
+        };
+    }
+    if (typeof text !== "string" || !text.trim()) {
+        return {
+            state: "error",
+            reason: "empty-file",
+            message: "Market data file is empty. This is a data fault.",
+        };
+    }
+    let marketData;
+    try {
+        marketData = parseMarketCsv(text);
+    } catch (_error) {
+        return {
+            state: "error",
+            reason: "parse-error",
+            message: "Market data could not be parsed. This is a data fault.",
+        };
+    }
+    const tickerCount = Object.keys(marketData).length;
+    const rowCount = Object.values(marketData).reduce(
+        (sum, rows) => sum + rows.length,
+        0,
+    );
+    // A header-only CSV parses to {} (or to tickers with no usable rows): the
+    // file exists but carries no market rows — the exact silent-degradation
+    // shape called out in #675. Treat zero data as a fault.
+    if (tickerCount === 0 || rowCount === 0) {
+        return {
+            state: "error",
+            reason: "no-data-rows",
+            message:
+                "Market data file has a header but no data rows. " +
+                "This is a data fault.",
+        };
+    }
+    return { state: "ok", reason: "ok", marketData, tickerCount, rowCount };
+}
+
 // Parse a dividend CSV into a { ticker: [{ exDivDate, amount }] } map, mirroring
 // GRQValidator.loadDividendData (ex-dividend dates snapped to local midnight).
 function parseDividendCsv(text) {
@@ -372,6 +434,7 @@ globalThis.GRQTrendPredictions = {
     parseScoreDateString,
     parseScoreTsv,
     parseMarketCsv,
+    classifyMarketLoad,
     parseDividendCsv,
     parseCsvRecords,
     parseAnalysisCsv,
