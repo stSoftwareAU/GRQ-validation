@@ -588,6 +588,11 @@ class GRQValidator {
 
     async loadMarketData() {
         const csvFile = this.selectedFile.replace(".tsv", ".csv");
+        // Reset the fault state for this load (issue #675). A genuine data fault
+        // sets this to a classifyMarketLoad() error object so updateDisplay()
+        // surfaces a loud, distinct error instead of the soft "Limited data
+        // mode" placeholder.
+        this.marketDataError = null;
         console.log('Loading market data from:', csvFile);
         console.log('Selected file:', this.selectedFile);
         console.log('CSV file path:', `scores/${csvFile}`);
@@ -637,6 +642,13 @@ class GRQValidator {
             if (!response || !response.ok) {
                 console.error('All attempts to load market data file failed');
                 this.marketData = null;
+                this.marketDataError = {
+                    state: "error",
+                    reason: "fetch-failed",
+                    message:
+                        "Market data could not be loaded (network or file " +
+                        "error). This is a data fault, not a sparse view.",
+                };
                 return;
             }
             console.log('Market data file loaded, size:', text.length, 'characters');
@@ -645,6 +657,11 @@ class GRQValidator {
             if (!text.trim()) {
                 console.warn('Market data file is empty');
                 this.marketData = null;
+                this.marketDataError = {
+                    state: "error",
+                    reason: "empty-file",
+                    message: "Market data file is empty. This is a data fault.",
+                };
                 return;
             }
 
@@ -707,6 +724,28 @@ class GRQValidator {
             console.log("Market data loaded for stocks:", Object.keys(this.marketData));
             console.log("Total market data entries:", Object.values(this.marketData).reduce((sum, data) => sum + data.length, 0));
 
+            // Header-only / zero-data-row CSV (issue #675): the file fetched and
+            // is non-empty but parsed to no usable market rows. This is the
+            // exact silent-degradation shape #671 called out — treat it as a
+            // loud data fault, never the soft "Limited data mode" placeholder.
+            const tickerCount = Object.keys(this.marketData).length;
+            const rowCount = Object.values(this.marketData).reduce(
+                (sum, data) => sum + data.length,
+                0,
+            );
+            if (tickerCount === 0 || rowCount === 0) {
+                console.error("Market data has no data rows (header-only or empty)");
+                this.marketData = null;
+                this.marketDataError = {
+                    state: "error",
+                    reason: "no-data-rows",
+                    message:
+                        "Market data file has a header but no data rows. " +
+                        "This is a data fault.",
+                };
+                return;
+            }
+
             // Load dividend data
             await this.loadDividendData();
         } catch (error) {
@@ -715,6 +754,13 @@ class GRQValidator {
                 error.message,
             );
             this.marketData = null;
+            this.marketDataError = {
+                state: "error",
+                reason: "parse-error",
+                message:
+                    "Market data could not be parsed (" + error.message +
+                    "). This is a data fault.",
+            };
         }
     }
 
@@ -1417,6 +1463,21 @@ class GRQValidator {
         if (!this.scoreData) {
             console.log('No score data available, showing error');
             this.showError("No score data available");
+            return;
+        }
+
+        // Loud, distinct data-fault state (issue #675). When loadMarketData()
+        // recorded a genuine fault — fetch failure, empty file, header-only /
+        // zero-data-row CSV, or parse error — surface a visible error instead
+        // of silently degrading to the soft "Limited data mode" placeholder, so
+        // a broken data pipeline cannot pass as a normal-but-sparse dashboard.
+        if (this.marketDataError && this.marketDataError.state === "error") {
+            console.error(
+                "Market data fault:",
+                this.marketDataError.reason,
+                this.marketDataError.message,
+            );
+            this.showMarketDataError(this.marketDataError);
             return;
         }
 
@@ -3782,6 +3843,48 @@ class GRQValidator {
         document.getElementById("noData").style.display = "block";
     }
 
+    // Render a visible, distinct DATA-FAULT state (issue #675). Unlike the soft
+    // amber "Limited data mode" placeholder (which signals an expected sparse
+    // view), this is a loud red error that clearly signals a broken data
+    // pipeline. It exposes stable DOM hooks the dashboard smoke test can assert
+    // on: the `.market-data-error` class, `data-market-data-state="error"` and
+    // `data-market-data-reason="<reason>"` on the #error element.
+    showMarketDataError(errorState) {
+        // Escape both values before they land in innerHTML (defence in depth,
+        // issue #675): the parse-error message embeds a JS error string.
+        const reason = escapeHtml((errorState && errorState.reason) || "unknown");
+        const detail = escapeHtml(
+            (errorState && errorState.message) ||
+                "Market data could not be loaded.",
+        );
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("summary").style.display = "none";
+        document.getElementById("noData").style.display = "none";
+
+        // Hide the chart — there is no real data to plot.
+        const chartContainer =
+            document.getElementById("performanceChart").parentElement;
+        if (chartContainer) {
+            chartContainer.style.display = "none";
+        }
+
+        const errorElement = document.getElementById("error");
+        errorElement.style.display = "block";
+        errorElement.classList.add("market-data-error");
+        errorElement.setAttribute("data-market-data-state", "error");
+        errorElement.setAttribute("data-market-data-reason", reason);
+        errorElement.innerHTML = `
+            <i class="fas fa-triangle-exclamation"></i>
+            <strong>Market data unavailable — data fault.</strong>
+            ${detail}
+            <br><br>
+            <small>This dashboard intentionally fails loudly rather than
+            showing partial results that could be mistaken for a healthy view.
+            Reason code: <code>${reason}</code>.</small>
+        `;
+    }
+
     showBasicScoreTable() {
         // Hide loading and error messages, show summary
         document.getElementById("loading").style.display = "none";
@@ -3828,7 +3931,13 @@ class GRQValidator {
 
     hideMessages() {
         document.getElementById("loading").style.display = "none";
-        document.getElementById("error").style.display = "none";
+        const errorElement = document.getElementById("error");
+        errorElement.style.display = "none";
+        // Clear any prior data-fault hooks (issue #675) so a recovered, healthy
+        // render leaves no stale error state for the smoke test to trip on.
+        errorElement.classList.remove("market-data-error");
+        errorElement.removeAttribute("data-market-data-state");
+        errorElement.removeAttribute("data-market-data-reason");
         document.getElementById("noData").style.display = "none";
         document.getElementById("summary").style.display = "block";
     }

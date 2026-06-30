@@ -748,6 +748,43 @@ render the `.limited-data-message` ("Limited data mode") banner — the quality
 gate that catches a market-data regression before it ships. It runs on every PR
 via `deno-quality.yml` (which already executes `deno test tests/*.ts`).
 
+### Market data fails loudly, not silently (data-fault state)
+
+The dashboard no longer degrades silently when it cannot load real market data.
+`GRQValidator.loadMarketData()` (`docs/app.js`) classifies every failure path —
+a fetch failure, an empty file, a header-only / zero-data-row CSV, or a parse
+error — as a **data fault** and records it on `this.marketDataError`.
+`updateDisplay()` then renders a **visible, distinct error state** (the loud red
+`#error` alert carrying the `.market-data-error` class and
+`data-market-data-state="error"` / `data-market-data-reason="<reason>"` hooks)
+instead of the soft amber "Limited data mode" placeholder. This makes a broken
+data pipeline impossible to mistake for a normal-but-sparse view, and gives the
+smoke test a stable hook to assert on.
+
+```mermaid
+flowchart TD
+    L[loadMarketData] --> F{fetch ok?}
+    F -- no --> E[fault: fetch-failed]
+    F -- yes --> T{file non-empty?}
+    T -- no --> E2[fault: empty-file]
+    T -- yes --> R{data rows > 0?}
+    R -- no --> E3[fault: no-data-rows]
+    R -- parse throws --> E4[fault: parse-error]
+    R -- yes --> OK[healthy market data]
+    E --> D[updateDisplay]
+    E2 --> D
+    E3 --> D
+    E4 --> D
+    OK --> D
+    D --> G{marketDataError?}
+    G -- yes --> LOUD["showMarketDataError()<br/>.market-data-error (loud, red)"]
+    G -- no --> NORM[normal chart / table render]
+```
+
+The shared kernel `GRQTrendPredictions.classifyMarketLoad()` mirrors this exact
+fault classification (just as `parseMarketCsv` mirrors the inline parse) and is
+exercised by `tests/market_data_fail_loud_test.ts`.
+
 ## Configuration
 
 ### Environment Variables
