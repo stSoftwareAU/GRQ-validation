@@ -20,6 +20,10 @@ use grq_validation::utils::{is_market_data_csv_empty, read_market_data_from_csv}
 const RESTORED_CSVS: &[(&str, &str)] = &[
     ("docs/scores/2026/March/30.csv", "NYSE:SITC"),
     ("docs/scores/2026/January/15.csv", ""),
+    // Issue #685: the reported symptom date. A recurring external "Auto commit
+    // models" push had re-wiped every 2026 CSV back to a lone header line,
+    // breaking https://stsoftwareau.github.io/GRQ-validation/?date=2026-04-02
+    ("docs/scores/2026/April/02.csv", "NASDAQ:ADI"),
 ];
 
 #[test]
@@ -78,5 +82,30 @@ fn symptom_date_csv_carries_the_expected_ticker() {
     assert!(
         !series.is_empty(),
         "{path}: {expected_ticker} has no close prices after restoration"
+    );
+}
+
+/// Issue #685: the dashboard URL in the report is `?date=2026-04-02`. Pin that
+/// exact date so a future re-wipe of `docs/scores/2026/April/02.csv` fails the
+/// build instead of silently degrading the page to "Limited data mode".
+#[test]
+fn issue_685_symptom_date_csv_carries_real_ohlc_rows() {
+    let path = "docs/scores/2026/April/02.csv";
+    let expected_ticker = "NASDAQ:ADI";
+
+    assert!(
+        !is_market_data_csv_empty(path),
+        "{path} is header-only — 2026-04-02 market data was re-wiped (issue #685)"
+    );
+
+    let market = read_market_data_from_csv(path)
+        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"));
+
+    let series = market.closes.get(expected_ticker).unwrap_or_else(|| {
+        panic!("{path} is missing OHLC rows for {expected_ticker} (issue #685)")
+    });
+    assert!(
+        !series.is_empty(),
+        "{path}: {expected_ticker} has no close prices after restoration (issue #685)"
     );
 }

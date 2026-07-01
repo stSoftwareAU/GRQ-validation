@@ -55,6 +55,16 @@ and this project adheres to
 
 ### Fixed
 
+- Re-restored the 161 market-data CSVs under `docs/scores/2026/` (and their
+  `index.json` performance figures) after a fresh "Auto commit models" push
+  (`642eb620`, author `scorer 3`) re-wiped every one back to a lone header row —
+  0 rows added, 205 488 deleted — which again forced the dashboard into "Limited
+  data mode" for every 2026 date, including the reported
+  `?date=2026-04-02`. `tests/regression_2026_market_data_test.rs` now also pins
+  `2026-04-02` so a future re-wipe fails the build. The durable fix — stopping
+  the external `scorer 3` pipeline from pushing header-only CSVs straight to
+  `main` (bypassing the PR-only presence gate) — needs a human and is tracked in
+  a follow-up (Issue #685).
 - Restored the 161 market-data CSVs under `docs/scores/2026/` that a stray "Auto
   commit models" had reduced to a bare header row, which had forced the
   dashboard into "Limited data mode" for every 2026 prediction date. The price
