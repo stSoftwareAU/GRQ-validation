@@ -2265,7 +2265,13 @@ class GRQValidator {
                     // ... existing code ...
                     // When calling calculateTrendLine, pass latestMarketDate as 'today'
                     const trendLine = this.calculateTrendLine(stock, scoreDate, latestMarketDate);
-                    if (trendLine && trendLine.dataPoints.length > 0) {
+                    // Hide the projection trend line once the 90-day window has
+                    // elapsed and the real actuals are in (issue #688) — it only
+                    // estimates the outcome before it is known.
+                    if (
+                        GRQProjection.shouldShowProjectionLines(daysElapsed) &&
+                        trendLine && trendLine.dataPoints.length > 0
+                    ) {
                         datasets.push({
                             label: "Projection (Trend Line)",
                             data: trendLine.dataPoints.map((p) => ({
@@ -2367,8 +2373,15 @@ class GRQValidator {
                 console.log("Attempting to generate hybrid projection for:", this.selectedStock);
                 const hybridData = this.calculateHybridProjectionData(stock, scoreDate);
                 console.log("Hybrid projection result:", hybridData);
-                
-                if (hybridData && hybridData.projection.confidence > 0.2) {
+
+                // Hide the hybrid projection line (every variant) and its
+                // 90-Day Point once the 90-day window has elapsed and the real
+                // actuals are in (issue #688) — they only estimate the outcome
+                // before it is known.
+                if (
+                    GRQProjection.shouldShowProjectionLines(daysElapsed) &&
+                    hybridData && hybridData.projection.confidence > 0.2
+                ) {
                     console.log("Hybrid projection confidence:", hybridData.projection.confidence, "- generating projection data");
                     
                     const trendData = hybridData.data;

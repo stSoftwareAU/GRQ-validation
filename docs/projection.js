@@ -220,6 +220,17 @@ function getDaysElapsed(scoreDate, today) {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// Whether the single-stock chart's projection series should be drawn (issue
+// #688). Projections — the green "Projection (Trend Line)", the "Hybrid
+// Projection" line (every variant) and its "Hybrid 90-Day Point" dot — exist
+// only to ESTIMATE the 90-day outcome before it is known. Once the 90-day
+// window has elapsed and the real actuals are in, they must disappear so the
+// chart shows just the actuals against the target. Show them only while the
+// prediction is UNDER 90 days old.
+function shouldShowProjectionLines(daysElapsed) {
+    return daysElapsed < 90;
+}
+
 // Total percentage return = price return + dividend return, relative to the
 // buy price. Returns null when the buy price is missing or non-positive (the
 // same guard the dashboard applies before reporting a performance figure).
@@ -1459,6 +1470,7 @@ globalThis.GRQProjection = {
     bridgeActualsAfter90,
     selectDefaultScore,
     getDaysElapsed,
+    shouldShowProjectionLines,
     calculatePerformanceReturn,
     costOfCapitalHurdle,
     returnAboveCostOfCapital,
