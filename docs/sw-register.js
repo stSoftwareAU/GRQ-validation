@@ -18,7 +18,7 @@
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=1.1.43")
+    navigator.serviceWorker.register("./sw.js?v=1.1.44")
       .then((registration) => {
         console.log("SW registered: ", registration);
 
