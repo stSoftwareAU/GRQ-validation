@@ -2,10 +2,10 @@
 //
 // The popover header inside every "show the working" tooltip used to render the
 // RAW internal field id, e.g. `Field: current-price`. That is wrong/misleading:
-// the dashboard deliberately labels that figure "90-Day Price" (issue #539),
-// never "Current Price", so it cannot be mistaken for a live quote. This change
-// maps each internal field id to its human-readable display label so the
-// working header reads `Field: 90-Day Price`.
+// the dashboard deliberately labels that figure "90-Day Actual" (issue #683,
+// formerly "90-Day Price" per #539), never "Current Price", so it cannot be
+// mistaken for a live quote. This change maps each internal field id to its
+// human-readable display label so the working header reads `Field: 90-Day Actual`.
 //
 // The helper is a PURE classic script (docs/field_label.js) published on
 // globalThis, mirroring docs/color_key.js / docs/series_label_colour.js, so the
@@ -27,10 +27,10 @@ const g = globalThis as unknown as {
 };
 const GRQFieldLabel = g.GRQFieldLabel;
 
-// --- the bug fix: current-price must read as "90-Day Price" -----------------
+// --- the bug fix: current-price must read as "90-Day Actual" ----------------
 
-Deno.test('fieldLabel - "current-price" maps to "90-Day Price", not a live-quote label', () => {
-  assertEquals(GRQFieldLabel.fieldLabel("current-price"), "90-Day Price");
+Deno.test('fieldLabel - "current-price" maps to "90-Day Actual", not a live-quote label', () => {
+  assertEquals(GRQFieldLabel.fieldLabel("current-price"), "90-Day Actual");
 });
 
 Deno.test('fieldLabel - never returns the misleading "Current Price" wording', () => {
@@ -49,7 +49,7 @@ Deno.test("fieldLabel - maps the documented field ids to their display labels", 
     "buy-price": "Buy Price",
     "target": "90-Day Target",
     "target-percentage": "Target Percentage",
-    "current-price": "90-Day Price",
+    "current-price": "90-Day Actual",
     "gain-loss": "Gain/Loss",
     "progress-vs-cost": "Return above Cost of Capital",
     "judgement": "Judgement",
@@ -92,7 +92,7 @@ Deno.test("workingHeader - renders the friendly field label, not the raw id", ()
   );
   assertEquals(
     header,
-    "Stock: NYSE:SCHW | Field: 90-Day Price | Score Date: 2025-01-15\n\n",
+    "Stock: NYSE:SCHW | Field: 90-Day Actual | Score Date: 2025-01-15\n\n",
   );
   assert(
     !header.includes("current-price"),

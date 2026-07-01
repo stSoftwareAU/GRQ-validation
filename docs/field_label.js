@@ -3,10 +3,11 @@
 // Each clickable dashboard value carries an internal `data-field` id (e.g.
 // "current-price"). The working popover used to print that RAW id in its header
 // — `Field: current-price` — which is wrong/misleading: the dashboard
-// deliberately labels that figure "90-Day Price" (issue #539), NOT "Current
-// Price", so it can never be mistaken for a live quote. This module maps each
-// field id to the SAME display label the column headers and popover titles use,
-// so the working header reads `Field: 90-Day Price`.
+// deliberately labels that figure "90-Day Actual" (issue #683, formerly
+// "90-Day Price" per #539), NOT "Current Price", so it can never be mistaken
+// for a live quote. This module maps each field id to the SAME display label
+// the column headers and popover titles use, so the working header reads
+// `Field: 90-Day Actual`.
 //
 // Like docs/color_key.js and docs/series_label_colour.js this is a PURE classic
 // script: no module syntax, helpers published on `globalThis`, so the browser
@@ -14,12 +15,13 @@
 
 // Field id -> display label. Labels mirror the column headers / popover titles
 // in docs/index.html and docs/app.js. The displayed price figure is the
-// "90-Day Price" (issue #539), never "Current Price".
+// "90-Day Actual" (issue #683, formerly "90-Day Price" per #539), never
+// "Current Price".
 const FIELD_LABELS = {
     "buy-price": "Buy Price",
     "target": "90-Day Target",
     "target-percentage": "Target Percentage",
-    "current-price": "90-Day Price",
+    "current-price": "90-Day Actual",
     "gain-loss": "Gain/Loss",
     "progress-vs-cost": "Return above Cost of Capital",
     "judgement": "Judgement",

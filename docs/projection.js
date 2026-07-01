@@ -668,7 +668,7 @@ function currentPriceFromLatest(marketData) {
 // today's live price beyond the 90-day horizon. When the 90-day window is not
 // yet complete, the `point.date <= ninetyDayDate` filter naturally yields the
 // latest available point. This is the RAW horizon midpoint shown by the
-// standalone "90-Day Price" field; the Actual-return readers restate it onto the
+// standalone "90-Day Actual" field; the Actual-return readers restate it onto the
 // buy price's current split basis via horizonPriceCurrentBasis (issue #569).
 // Returns null when there is no usable data on or before the horizon.
 function priceAtNinetyDayHorizon(marketData, scoreDate) {
