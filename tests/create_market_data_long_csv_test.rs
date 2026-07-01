@@ -204,3 +204,84 @@ fn create_market_data_long_csv_errors_when_all_tickers_skipped() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data() -> Result<()> {
+    // Regression for issue #687 (recurrences #672/#674/#685): when the upstream
+    // share-price data is unavailable for a date, the writer must NOT clobber an
+    // already-populated CSV with a bare header row. The external scorer pipeline
+    // runs this generator and commits its output straight to `main`, so a
+    // destructive truncation here wipes the dashboard's market data and forces
+    // "Limited data mode".
+    let out_dir = tempfile::tempdir()?;
+    let out_path = out_dir.path().join("populated.csv");
+    let out = out_path.to_str().expect("temp path is valid UTF-8");
+
+    // A pre-existing, populated market-data CSV (as produced by an earlier run).
+    let existing = "date,ticker,high,low,open,close,split_coefficient,volume\n\
+        2026-04-02,NYSE:GRQVTEST687,10.0,9.0,9.5,9.8,1.0,1000\n";
+    std::fs::write(&out_path, existing)?;
+
+    // No fixture installed -> the only ticker is skipped -> zero rows written.
+    let result =
+        create_market_data_long_csv(&["NYSE:GRQVTEST687MISSING".to_string()], SCORE_DATE, out);
+
+    // The writer still signals that no fresh data was available...
+    assert!(
+        result.is_err(),
+        "expected an error when no fresh rows are written and data is unavailable"
+    );
+
+    // ...but the existing populated CSV must be left completely untouched.
+    let after = std::fs::read_to_string(&out_path)?;
+    assert_eq!(
+        after, existing,
+        "existing market-data rows must be preserved when no fresh data is available"
+    );
+
+    // No stray temporary file must be left behind next to the destination.
+    assert!(
+        !Path::new(&format!("{out}.tmp")).exists(),
+        "the atomic-write temp file must not linger after a preserve"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> Result<()> {
+    // Complement to the preservation test: when fresh data IS available, the
+    // destination is replaced atomically with the new content — no stale rows
+    // and no leftover temp file (issue #687).
+    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL)?;
+
+    let out_dir = tempfile::tempdir()?;
+    let out_path = out_dir.path().join("replace.csv");
+    let out = out_path.to_str().expect("temp path is valid UTF-8");
+
+    // Stale content that must be fully replaced by the fresh write.
+    std::fs::write(&out_path, "stale,garbage\n1,2\n")?;
+
+    create_market_data_long_csv(&[FIXTURE_TICKER.to_string()], SCORE_DATE, out)?;
+
+    let csv = std::fs::read_to_string(&out_path)?;
+    assert_eq!(
+        csv.lines().next().unwrap(),
+        "date,ticker,high,low,open,close,split_coefficient,volume",
+        "unexpected header after replacement in:\n{csv}"
+    );
+    assert!(
+        csv.contains(&format!("2025-04-15,{FIXTURE_TICKER}")),
+        "expected the fresh window-start row after replacement in:\n{csv}"
+    );
+    assert!(
+        !csv.contains("stale,garbage"),
+        "stale content must be fully replaced in:\n{csv}"
+    );
+    assert!(
+        !Path::new(&format!("{out}.tmp")).exists(),
+        "the atomic-write temp file must not linger after a successful write"
+    );
+
+    Ok(())
+}

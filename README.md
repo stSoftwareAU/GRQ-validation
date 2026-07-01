@@ -339,6 +339,26 @@ cargo build --release
 ./target/release/grq-validation --docs-path docs --date 2025-01-15
 ```
 
+#### Non-destructive market-data writes
+
+Regenerating a date's market-data CSV is **non-destructive**: the generator
+builds the new CSV in memory and only replaces the file on disk — atomically,
+via a temporary file and rename — when it actually has price rows to write. When
+the upstream share-price repository is unavailable for a date, the existing
+populated CSV is **left untouched** rather than being truncated to a bare header
+row (issue #687). This stops a data-source outage from wiping the dashboard's
+market data down to "Limited data mode".
+
+```mermaid
+flowchart TD
+    A[Regenerate DD.csv for a date] --> B[Build CSV rows in memory]
+    B --> C{Any price rows written?}
+    C -- yes --> D[Atomic replace: write temp file, rename over DD.csv]
+    C -- no --> E{Existing DD.csv already populated?}
+    E -- yes --> F[Preserve existing rows; log + return 'no fresh data' error]
+    E -- no --> G[Write header-only placeholder; return error]
+```
+
 ### Web Interface
 
 ```bash

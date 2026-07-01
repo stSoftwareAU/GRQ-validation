@@ -758,14 +758,18 @@ pub fn create_market_data_long_csv(
 ) -> Result<()> {
     use crate::utils::extract_symbol_from_ticker;
     use csv::Writer;
-    use std::fs::File;
 
     let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
     let end_date = score_date + Duration::days(180);
     let end_date_str = end_date.format("%Y-%m-%d").to_string();
 
-    let file = File::create(output_path)?;
-    let mut writer = Writer::from_writer(file);
+    // Build the CSV in memory first so the destination file is only touched once
+    // we know whether we actually have data. The previous implementation wrote
+    // straight to `File::create(output_path)`, which truncated the existing CSV
+    // *before* the "no rows written" guard ran — so a run with no upstream data
+    // wiped an already-populated file down to a bare header row (issue #687,
+    // recurrences #672/#674/#685). Buffering keeps the write non-destructive.
+    let mut writer = Writer::from_writer(Vec::new());
     writer.write_record([
         "date",
         "ticker",
@@ -819,14 +823,70 @@ pub fn create_market_data_long_csv(
         }
     }
     writer.flush()?;
+    let csv_bytes = writer
+        .into_inner()
+        .map_err(|error| anyhow!("failed to finalise market-data CSV buffer: {error}"))?;
 
-    if !tickers.is_empty() && rows_written == 0 {
-        return Err(anyhow!(
-            "No market data rows written for {score_file_date} — \
-             is {MARKET_DATA_BASE_PATH} available and up to date?"
-        ));
+    if rows_written == 0 {
+        // No fresh data for this date. Never overwrite an already-populated CSV
+        // with a header-only file (issue #687): leave the existing rows intact
+        // so the dashboard keeps working, while still surfacing the "no data"
+        // error so the operator sees the upstream gap.
+        if !is_market_data_csv_empty(output_path) {
+            log::warn!(
+                "Preserving existing market data at {output_path}: no fresh rows for {score_file_date}"
+            );
+            if !tickers.is_empty() {
+                return Err(anyhow!(
+                    "No market data rows written for {score_file_date} — existing CSV at \
+                     {output_path} preserved; is {MARKET_DATA_BASE_PATH} available and up to date?"
+                ));
+            }
+            return Ok(());
+        }
+
+        // Nothing worth preserving (missing or already header-only): write the
+        // header-only placeholder as before so a genuinely-new date still gets a
+        // file, then surface the same error the caller expects.
+        write_atomically(output_path, &csv_bytes)?;
+        if !tickers.is_empty() {
+            return Err(anyhow!(
+                "No market data rows written for {score_file_date} — \
+                 is {MARKET_DATA_BASE_PATH} available and up to date?"
+            ));
+        }
+        return Ok(());
     }
 
+    // We have real data: replace the destination atomically so a crash mid-write
+    // can never leave a truncated CSV behind.
+    write_atomically(output_path, &csv_bytes)?;
+
+    Ok(())
+}
+
+/// Writes `bytes` to `path` atomically by staging them in a sibling temporary
+/// file and renaming it over `path`. A rename on the same filesystem is atomic,
+/// so neither a concurrent reader nor a crash ever observes a partially written
+/// or truncated file — the destination holds either the previous content or the
+/// complete new content. The market-data writer relies on this so a failed or
+/// interrupted regeneration can never wipe an existing populated CSV (issue
+/// #687).
+///
+/// # Errors
+///
+/// Returns an error if the temporary file cannot be created/written or the
+/// rename over `path` fails.
+fn write_atomically(path: &str, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+
+    let tmp_path = format!("{path}.tmp");
+    {
+        let mut tmp = std::fs::File::create(&tmp_path)?;
+        tmp.write_all(bytes)?;
+        tmp.flush()?;
+    }
+    std::fs::rename(&tmp_path, path)?;
     Ok(())
 }
 
