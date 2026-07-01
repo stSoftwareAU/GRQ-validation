@@ -3165,11 +3165,11 @@ class GRQValidator {
 }</span></div>
                   </div>
                   <div class="row mb-2">
-                    <div class="col-6"><strong>90-Day Price:</strong></div>
+                    <div class="col-6"><strong>90-Day Actual:</strong></div>
                     <div class="col-6">
                         <span class="clickable-value"
                             data-bs-toggle="popover" data-bs-trigger="click" data-bs-content=""
-                            data-bs-title="90-Day Price - ${safeStock}"
+                            data-bs-title="90-Day Actual - ${safeStock}"
                             data-field="current-price"
                             data-stock="${safeStock}">${currentPriceResult.formattedValue}</span>
                     </div>
@@ -3311,7 +3311,7 @@ class GRQValidator {
           <th>Buy Price</th>
           <th>Stars</th>
           <th>90-Day Target</th>
-          <th>90-Day Price</th>
+          <th>90-Day Actual</th>
           <th>Gain/Loss (%)</th>
           <th title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
           <th>Status/Projection</th>
@@ -3393,7 +3393,7 @@ class GRQValidator {
                 }</span></td>
             <td>
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                   data-bs-title="90-Day Price - ${safeStock}" data-field="current-price" data-stock="${safeStock}">${currentPrice}
+                   data-bs-title="90-Day Actual - ${safeStock}" data-field="current-price" data-stock="${safeStock}">${currentPrice}
                 </span>
             </td>
             <td><span class="clickable-value ${
@@ -3460,7 +3460,7 @@ class GRQValidator {
             totalsRow.classList.add("table-info", "fw-bold");
             // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
             // headers (issue #406). Column map: 1 Stock, 2 Buy Price, 3 Stars,
-            // 4 90-Day Target (Portfolio Target %), 5 90-Day Price,
+            // 4 90-Day Target (Portfolio Target %), 5 90-Day Actual,
             // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
             // 8 Status/Projection, 9 Dividends.
             totalsRow.innerHTML = `
@@ -4419,7 +4419,7 @@ class GRQValidator {
 
         const scoreDate = this.getScoreDate(this.selectedFile);
         // Use the human-readable field label (issue #542) so the working header
-        // reads e.g. "Field: 90-Day Price" rather than the raw "current-price"
+        // reads e.g. "Field: 90-Day Actual" rather than the raw "current-price"
         // id, which was misleading (it is never today's live price — issue #539).
         const scoreDateISO = scoreDate.toISOString().split("T")[0];
         const header = globalThis.GRQFieldLabel
@@ -4523,7 +4523,7 @@ class GRQValidator {
                 const marketData = this.marketData[stockSymbol];
                 if (!marketData || marketData.length === 0) {
                     return header +
-                        "90-Day Price working:\nNo market data available";
+                        "90-Day Actual working:\nNo market data available";
                 }
                 const ninetyDayDate = new Date(
                     scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
@@ -4533,14 +4533,14 @@ class GRQValidator {
                 );
                 if (within90Days.length === 0) {
                     return header +
-                        "90-Day Price working:\nNo market data within 90 days";
+                        "90-Day Actual working:\nNo market data within 90 days";
                 }
                 const lastData = within90Days[within90Days.length - 1];
                 const rawMid = (lastData.high + lastData.low) / 2;
                 // Restate onto the buy price's current split basis (issue #569):
                 // divide out any reconcilable split that falls between the
                 // horizon and the end of the data series, so the displayed
-                // 90-Day Price shares the buy price's basis.
+                // 90-Day Actual shares the buy price's basis.
                 const postHorizonFactor = GRQProjection.postHorizonSplitFactor(
                     marketData,
                     scoreDate,
@@ -4554,14 +4554,14 @@ class GRQValidator {
                     : "latest available price (90-day window not yet complete)";
                 if (Math.abs(postHorizonFactor - 1) > 1e-9) {
                     return header +
-                        `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote}, restated to the buy price's current split basis (issue #569)\n= ($${
+                        `90-Day Actual working:\n= (High + Low) / 2 from the ${basisNote}, restated to the buy price's current split basis (issue #569)\n= ($${
                             lastData.high.toFixed(2)
                         } + $${lastData.low.toFixed(2)}) / 2 ÷ ${postHorizonFactor}\n= $${
                             rawMid.toFixed(2)
                         } ÷ ${postHorizonFactor}\n= ${result.formattedValue}`;
                 } else {
                     return header +
-                        `90-Day Price working:\n= (High + Low) / 2 from the ${basisNote}\n= ($${
+                        `90-Day Actual working:\n= (High + Low) / 2 from the ${basisNote}\n= ($${
                             lastData.high.toFixed(2)
                         } + $${lastData.low.toFixed(2)}) / 2\n= ${
                             result.formattedValue
@@ -4583,7 +4583,7 @@ class GRQValidator {
                 const gainLossDividends = this.getDividendsWithin90Days(stockSymbol);
                 const gainLossTotalDividends = GRQProjection.sumDividends(gainLossDividends);
                 
-                // Get 90-Day Price for display, on the buy price's current split
+                // Get 90-Day Actual for display, on the buy price's current split
                 // basis (issue #569) so the working reconciles with the
                 // displayed Gain/Loss even when a split falls between the horizon
                 // and the series end.
@@ -4602,7 +4602,7 @@ class GRQValidator {
                 if (gainLossBuyPriceSplitAdjustment > 1.0) {
                     const gainLossOriginalBuyPrice = gainLossBuyPrice.price * gainLossBuyPriceSplitAdjustment;
                     return header +
-                        `Gain/Loss (%) working:\n= ((90-Day Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
+                        `Gain/Loss (%) working:\n= ((90-Day Actual + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
                         } + $${gainLossTotalDividends.toFixed(2)} - $${
                             gainLossBuyPrice.price.toFixed(2)
@@ -4618,12 +4618,12 @@ class GRQValidator {
                             gainLossOriginalBuyPrice.toFixed(2)
                         } ÷ ${gainLossBuyPriceSplitAdjustment} = $${
                             gainLossBuyPrice.price.toFixed(2)
-                        }\n- 90-Day Price: $${
+                        }\n- 90-Day Actual: $${
                             gainLossCurrentPrice.toFixed(2)
                         } (on the buy price's current split basis, issue #569)`;
                 } else {
                     return header +
-                        `Gain/Loss (%) working:\n= ((90-Day Price + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
+                        `Gain/Loss (%) working:\n= ((90-Day Actual + Total Dividends - Buy Price) / Buy Price) × 100\n= (($${
                             gainLossCurrentPrice.toFixed(2)
                         } + $${gainLossTotalDividends.toFixed(2)} - $${
                             gainLossBuyPrice.price.toFixed(2)

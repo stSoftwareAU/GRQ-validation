@@ -11,11 +11,11 @@ Pages.
 > window is not yet complete. It deliberately **never** shows today's live price
 > beyond the 90-day horizon: a prediction is judged purely on how the stock
 > moved within its 90 days. The dashboard therefore labels this figure **"90-Day
-> Price"** (issue #539), not "Current Price", so it cannot be mistaken for a
-> live quote. The "show the working" popovers use the same human-readable label
-> in their header — e.g. `Field: 90-Day Price`, never the raw `current-price` id
-> (issue #542). A later rally or slump outside the window does not change a
-> settled 90-day result.
+> Actual"** (issue #683, formerly "90-Day Price" per #539), not "Current Price",
+> so it cannot be mistaken for a live quote. The "show the working" popovers use
+> the same human-readable label in their header — e.g. `Field: 90-Day Actual`,
+> never the raw `current-price` id (issue #542). A later rally or slump outside
+> the window does not change a settled 90-day result.
 
 ## Features
 
