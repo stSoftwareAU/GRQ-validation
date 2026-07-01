@@ -24,8 +24,13 @@ Closes #683.
 
 ## Evidence
 
-Playwright MCP was unavailable in this environment, so no browser screenshot
-could be captured. The change is a pure label rename verified by:
+Detailed Information panel rendered from the local dashboard (mobile viewport),
+showing the renamed **"90-Day Actual:"** field where the issue circled
+"90-Day Price:":
+
+![Detailed Information panel showing the 90-Day Actual label](docs/evidence/issue-683-90-day-actual.png)
+
+The change is a pure label rename, further verified by:
 
 - The updated Deno unit tests in `tests/show_working_field_label_test.ts`
   (`fieldLabel("current-price")` now returns `"90-Day Actual"`; the working
