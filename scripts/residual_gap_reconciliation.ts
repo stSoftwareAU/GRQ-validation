@@ -24,6 +24,13 @@ import "../docs/projection.js";
 import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
+import type {
+  DividendPoint,
+  MarketPoint,
+  ResolvedStock,
+  ScoreRow,
+} from "./diagnostic_types.ts";
+
 // deno-lint-ignore no-explicit-any
 const P = (globalThis as any).GRQProjection;
 // deno-lint-ignore no-explicit-any
@@ -101,8 +108,7 @@ export const FAMILY_CONTRIBUTIONS: GapContribution[] = [
 ];
 
 /** Whether a stock has BOTH a usable Actual (included) AND a usable target. */
-// deno-lint-ignore no-explicit-any
-export function hasUsableTarget(stock: any): boolean {
+export function hasUsableTarget(stock: ResolvedStock): boolean {
   if (
     !P.isStockIncluded(stock.buyPrice, stock.currentPrice, stock.splitReliable)
   ) {
@@ -134,23 +140,18 @@ export interface DateAggregate {
 // target-present subset so the target-availability skew can be read off.
 export function aggregateDate(
   date: string,
-  // deno-lint-ignore no-explicit-any
-  scoreRows: any[],
-  // deno-lint-ignore no-explicit-any
-  marketData: Record<string, any[]>,
-  // deno-lint-ignore no-explicit-any
-  dividendData: Record<string, any[]>,
+  scoreRows: ScoreRow[],
+  marketData: Record<string, MarketPoint[]>,
+  dividendData: Record<string, DividendPoint[]>,
   scoreDate: Date,
 ): DateAggregate {
-  const stocks = TP.resolvePredictionStocks(
+  const stocks: ResolvedStock[] = TP.resolvePredictionStocks(
     scoreRows,
     marketData,
     dividendData,
     scoreDate,
   );
 
-  // `stocks` is the (untyped) kernel output, so `s` is implicitly any here —
-  // no explicit-any annotation needed.
   let includedRows = 0;
   for (const s of stocks) {
     if (P.isStockIncluded(s.buyPrice, s.currentPrice, s.splitReliable)) {
