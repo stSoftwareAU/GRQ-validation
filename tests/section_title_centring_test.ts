@@ -2,8 +2,14 @@
 // full available width (issue #277, part of milestone #269 item C).
 //
 // Section titles such as "Market Performance Comparison" live in a
-// `.card-header` as an `h5.card-title`. The centring/full-width/one-line
+// `.card-header` as a `.card-title` heading. The centring/full-width/one-line
 // behaviour is implemented in pure CSS.
+//
+// Issue #695: the heading tag was changed from `<h5>` to `<h3>` (with an `.h5`
+// utility class for identical visual size) to fix the h2 → h5 outline skip.
+// The centring CSS targets the `.card-title` class, not the `h5` tag, so the
+// enduring contract is the class hook — this test now matches any heading level
+// bearing `.card-title` rather than pinning the tag name.
 //
 // Issue #632: the former assertions read docs/styles.css as text and pinned the
 // exact declarations that produce the centring (`text-align: center`,
@@ -25,11 +31,12 @@ Deno.test("index.html: section titles carry the card-title hook", async () => {
     html.includes("Market Performance Comparison"),
     "the Market Performance Comparison section must exist",
   );
-  // The Market Performance Comparison heading uses h5.card-title in a header.
-  // (Issue #605 removed the "Individual Stock Performance" heading.)
-  const titles = html.match(/<h5 class="card-title[^"]*">/g) ?? [];
+  // The Market Performance Comparison heading carries the `card-title` class on
+  // a heading element (h3 since issue #695). (Issue #605 removed the
+  // "Individual Stock Performance" heading.)
+  const titles = html.match(/<h[1-6][^>]*class="[^"]*card-title[^"]*"/g) ?? [];
   assert(
     titles.length >= 1,
-    "section headings must use h5.card-title so the centring rule applies",
+    "section headings must carry the .card-title hook so the centring rule applies",
   );
 });
