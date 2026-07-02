@@ -22,6 +22,13 @@ import "../docs/projection.js";
 import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
+import type {
+  DividendPoint,
+  MarketPoint,
+  ResolvedStock,
+  ScoreRow,
+} from "./diagnostic_types.ts";
+
 // deno-lint-ignore no-explicit-any
 const P = (globalThis as any).GRQProjection;
 // deno-lint-ignore no-explicit-any
@@ -96,19 +103,15 @@ export interface DateAggregate {
 // dividend history keyed by stripped symbol (the training-credit source).
 export function aggregateDate(
   date: string,
-  // deno-lint-ignore no-explicit-any
-  scoreRows: any[],
-  // deno-lint-ignore no-explicit-any
-  marketData: Record<string, any[]>,
-  // deno-lint-ignore no-explicit-any
-  windowedDividends: Record<string, any[]>,
-  // deno-lint-ignore no-explicit-any
-  fullHistory: Record<string, any[]>,
+  scoreRows: ScoreRow[],
+  marketData: Record<string, MarketPoint[]>,
+  windowedDividends: Record<string, DividendPoint[]>,
+  fullHistory: Record<string, DividendPoint[]>,
   scoreDate: Date,
 ): DateAggregate {
   // Shipped resolver: gives buyPrice, currentPrice, splitReliable and the
   // realised in-window `totalDividends` — exactly the dashboard's Actual credit.
-  const stocks = TP.resolvePredictionStocks(
+  const stocks: ResolvedStock[] = TP.resolvePredictionStocks(
     scoreRows,
     marketData,
     windowedDividends,
@@ -121,8 +124,7 @@ export function aggregateDate(
   let windowedZeroCount = 0;
   let includedCount = 0;
 
-  // deno-lint-ignore no-explicit-any
-  stocks.forEach((stock: any, i: number) => {
+  stocks.forEach((stock, i) => {
     if (
       !P.isStockIncluded(
         stock.buyPrice,
@@ -134,6 +136,14 @@ export function aggregateDate(
     }
     includedCount += 1;
 
+    // `isStockIncluded` above already guarantees a positive numeric buyPrice, so
+    // this narrows `number | null` to `number` for the divisions below rather
+    // than adding new business logic (the null branch is unreachable here).
+    const buyPrice = stock.buyPrice;
+    if (buyPrice === null) {
+      return;
+    }
+
     const history = fullHistory[stripSymbol(scoreRows[i].stock)] || [];
     const flatCredit = P.trailingAnnualDividends(history, scoreDate) / 4;
     const windowedCredit = stock.totalDividends || 0;
@@ -141,14 +151,14 @@ export function aggregateDate(
     const diff = P.dividendBasisDifferencePercent(
       flatCredit,
       windowedCredit,
-      stock.buyPrice,
+      buyPrice,
     );
     if (diff === null) {
       return;
     }
     rowDiffsPp.push(diff);
-    flatYieldsPct.push((flatCredit / stock.buyPrice) * 100);
-    windowedYieldsPct.push((windowedCredit / stock.buyPrice) * 100);
+    flatYieldsPct.push((flatCredit / buyPrice) * 100);
+    windowedYieldsPct.push((windowedCredit / buyPrice) * 100);
     if (windowedCredit === 0) {
       windowedZeroCount += 1;
     }
@@ -351,17 +361,13 @@ export async function computeDividendBasisDiagnostic(
     const windowedDividends = TP.parseDividendCsv(divText);
 
     // Full trailing history per ticker on this date (cached across dates).
-    // deno-lint-ignore no-explicit-any
-    const fullHistory: Record<string, any[]> = {};
+    const fullHistory: Record<string, DividendPoint[]> = {};
     for (const row of scoreRows) {
       const sym = stripSymbol(row.stock);
       if (!historyCache.has(sym)) {
         historyCache.set(sym, await loadDividendHistory(dividendsRoot, sym));
       }
-      fullHistory[sym] = historyCache.get(sym) as {
-        exDivDate: Date;
-        amount: number;
-      }[];
+      fullHistory[sym] = historyCache.get(sym) as DividendPoint[];
     }
 
     aggregates.push(
