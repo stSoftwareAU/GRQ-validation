@@ -3320,15 +3320,15 @@ class GRQValidator {
                 "#stockTable thead tr",
             );
             thead.innerHTML = `
-          <th>Stock</th>
-          <th>Buy Price</th>
-          <th>Stars</th>
-          <th>90-Day Target</th>
-          <th>90-Day Actual</th>
-          <th>Gain/Loss (%)</th>
-          <th title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
-          <th>Status/Projection</th>
-          <th>Dividends</th>
+          <th scope="col">Stock</th>
+          <th scope="col">Buy Price</th>
+          <th scope="col">Stars</th>
+          <th scope="col">90-Day Target</th>
+          <th scope="col">90-Day Actual</th>
+          <th scope="col">Gain/Loss (%)</th>
+          <th scope="col" title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
+          <th scope="col">Status/Projection</th>
+          <th scope="col">Dividends</th>
         `;
 
             let totalPerformance = 0;
@@ -3574,14 +3574,14 @@ class GRQValidator {
         // Update table headers for basic view (no market data)
         const thead = document.querySelector("#stockTable thead tr");
         thead.innerHTML = `
-            <th>Stock</th>
-            <th>Score</th>
-            <th>90-Day Target</th>
-            <th>Ex-Dividend Date</th>
-            <th>Dividend Per Share</th>
-            <th>Intrinsic Value (Basic)</th>
-            <th>Intrinsic Value (Adjusted)</th>
-            <th>Notes</th>
+            <th scope="col">Stock</th>
+            <th scope="col">Score</th>
+            <th scope="col">90-Day Target</th>
+            <th scope="col">Ex-Dividend Date</th>
+            <th scope="col">Dividend Per Share</th>
+            <th scope="col">Intrinsic Value (Basic)</th>
+            <th scope="col">Intrinsic Value (Adjusted)</th>
+            <th scope="col">Notes</th>
         `;
 
         // Show all stocks with basic score data
