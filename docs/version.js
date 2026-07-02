@@ -11,9 +11,16 @@
   const VERSION = versionMeta ? versionMeta.getAttribute("content") || "" : "";
   globalThis.VERSION = VERSION;
 
+  // Augment the static <title> with the version (issue #694). Each page now
+  // carries a descriptive static <title> in its <head>, so no-JS/crawler/
+  // view-source contexts always see a title. Here we append the version to
+  // that base, falling back to the app-title meta if the document has no
+  // static title. Never emit a dangling " v" when the version is unknown.
   const titleMeta = document.querySelector('meta[name="app-title"]');
-  if (titleMeta) {
-    document.title = `${titleMeta.getAttribute("content")} v${VERSION}`;
+  const metaTitle = titleMeta ? titleMeta.getAttribute("content") || "" : "";
+  const baseTitle = document.title || metaTitle;
+  if (baseTitle) {
+    document.title = VERSION ? `${baseTitle} v${VERSION}` : baseTitle;
   }
 
   // Populate the footer version label once the DOM is parsed.
