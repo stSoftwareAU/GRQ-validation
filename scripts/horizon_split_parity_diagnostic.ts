@@ -25,6 +25,13 @@ import "../docs/projection.js";
 import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
+import type {
+  DividendPoint,
+  MarketPoint,
+  ResolvedStock,
+  ScoreRow,
+} from "./diagnostic_types.ts";
+
 // deno-lint-ignore no-explicit-any
 const P = (globalThis as any).GRQProjection;
 // deno-lint-ignore no-explicit-any
@@ -89,15 +96,12 @@ export interface DateAggregate {
 // and the market-data map.
 export function aggregateDate(
   date: string,
-  // deno-lint-ignore no-explicit-any
-  scoreRows: any[],
-  // deno-lint-ignore no-explicit-any
-  marketData: Record<string, any[]>,
-  // deno-lint-ignore no-explicit-any
-  dividendData: Record<string, any[]>,
+  scoreRows: ScoreRow[],
+  marketData: Record<string, MarketPoint[]>,
+  dividendData: Record<string, DividendPoint[]>,
   scoreDate: Date,
 ): DateAggregate {
-  const rawStocks = TP.resolvePredictionStocks(
+  const rawStocks: ResolvedStock[] = TP.resolvePredictionStocks(
     scoreRows,
     marketData,
     dividendData,
@@ -107,8 +111,7 @@ export function aggregateDate(
   const rowOffsetsPp: number[] = [];
   let splitAffectedRows = 0;
   let includedRows = 0;
-  // deno-lint-ignore no-explicit-any
-  const currentBasisStocks = rawStocks.map((stock: any, i: number) => {
+  const currentBasisStocks = rawStocks.map((stock, i) => {
     const points = marketData[scoreRows[i].stock];
     const currentBasisMid = P.horizonPriceCurrentBasis(points, scoreDate);
     const offset = P.horizonAsOfBasisOffsetPercent(

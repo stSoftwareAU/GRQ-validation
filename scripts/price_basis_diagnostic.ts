@@ -9,6 +9,13 @@ import "../docs/projection.js";
 import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
 
+import type {
+  DividendPoint,
+  MarketPoint,
+  ResolvedStock,
+  ScoreRow,
+} from "./diagnostic_types.ts";
+
 // deno-lint-ignore no-explicit-any
 const P = (globalThis as any).GRQProjection;
 // deno-lint-ignore no-explicit-any
@@ -68,15 +75,12 @@ export interface DateAggregate {
 // caller supplies already-parsed score rows and the market-data map.
 export function aggregateDate(
   date: string,
-  // deno-lint-ignore no-explicit-any
-  scoreRows: any[],
-  // deno-lint-ignore no-explicit-any
-  marketData: Record<string, any[]>,
-  // deno-lint-ignore no-explicit-any
-  dividendData: Record<string, any[]>,
+  scoreRows: ScoreRow[],
+  marketData: Record<string, MarketPoint[]>,
+  dividendData: Record<string, DividendPoint[]>,
   scoreDate: Date,
 ): DateAggregate {
-  const midStocks = TP.resolvePredictionStocks(
+  const midStocks: ResolvedStock[] = TP.resolvePredictionStocks(
     scoreRows,
     marketData,
     dividendData,
@@ -84,8 +88,7 @@ export function aggregateDate(
   );
 
   const rowOffsetsPp: number[] = [];
-  // deno-lint-ignore no-explicit-any
-  const lowStocks = midStocks.map((stock: any, i: number) => {
+  const lowStocks = midStocks.map((stock, i) => {
     const points = marketData[scoreRows[i].stock];
     const low = P.lowPriceAtNinetyDayHorizon(points, scoreDate);
     const offset = P.priceBasisOffsetPercent(

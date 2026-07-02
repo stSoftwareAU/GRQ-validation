@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Static, descriptive title (issue #694); version.js appends the version. -->
+    <title>GRQ Validation Trend</title>
     <!--
       Content-Security-Policy as defence-in-depth, mirroring docs/index.html
       (issue #189). All scripts are external so script-src omits 'unsafe-inline'.
@@ -24,7 +26,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.47">
+    <meta name="app-version" content="1.1.48">
     <meta name="app-title" content="GRQ Validation Trend">
 
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
@@ -70,7 +72,7 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body class="bg-light">
-    <div class="container-fluid">
+    <main class="container-fluid">
       <div class="row">
         <div class="col-12">
           <div class="card shadow-sm border-0">
@@ -183,7 +185,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- Version display -->
     <div class="text-center text-muted small py-2">
@@ -239,6 +241,6 @@
     <script src="trend.js"></script>
 
     <!-- Service Worker Registration (issue #224) -->
-    <script src="sw-register.js?v=1.1.47"></script>
+    <script src="sw-register.js?v=1.1.48"></script>
   </body>
 </html>
