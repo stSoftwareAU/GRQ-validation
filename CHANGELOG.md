@@ -55,6 +55,16 @@ and this project adheres to
 
 ### Fixed
 
+- Charts no longer keep the previous theme's colours after a theme switch,
+  which left the canvas-drawn axis ticks, axis titles and legend unreadable
+  (near-white text on a light page after switching to light; dark-on-dark after
+  switching to dark). Chart.js paints those colours once at build, so the fix
+  adds `GRQChartTheme.applyChartTheme(chart, theme)` — the single source of
+  truth that re-sources every canvas colour from the theme and repaints the
+  live chart — and calls it on the theme-toggle click and the
+  `prefers-color-scheme` change for the main dashboard chart (which the mobile
+  pop-out re-parents) and the trend chart, in both switch directions
+  (Issue #708).
 - Re-restored the 161 market-data CSVs under `docs/scores/2026/` (and their
   `index.json` performance figures) after a fresh "Auto commit models" push
   (`642eb620`, author `scorer 3`) re-wiped every one back to a lone header row —

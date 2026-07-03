@@ -5287,14 +5287,28 @@ class GRQValidator {
 // Initialize the validator
 const validator = new GRQValidator();
 
-// Re-derive the market title colours when the theme changes so they stay
-// AA-contrast-compliant against the new background (issue #278). The chart is
-// not rebuilt on a theme switch, so without this the titles would keep the
-// other theme's colours. Handlers are attached via addEventListener (no inline
+// Re-theme the live charts and re-derive the market title colours when the
+// theme changes so both stay legible and AA-contrast-compliant against the new
+// background (issues #278, #708). Chart.js paints the canvas title, axis
+// titles, tick labels, legend and grid ONCE at build, so without re-applying
+// the theme here the chart keeps the previous theme's colours — unreadable text
+// after a switch. GRQChartTheme.applyChartTheme re-sources every colour from the
+// theme and repaints the live chart (which the mobile pop-out re-parents, so
+// this covers it too). Handlers are attached via addEventListener (no inline
 // on* handlers, issue #268) and deferred so theme.js updates the <body> class
 // before we read it.
+function reapplyChartTheme() {
+    if (!globalThis.GRQChartTheme || !validator.chart) return;
+    globalThis.GRQChartTheme.applyChartTheme(
+        validator.chart,
+        validator.detectTheme(),
+    );
+}
 function reapplyMarketTitleColours() {
-    setTimeout(() => validator.applyMarketTitleColours(), 0);
+    setTimeout(() => {
+        reapplyChartTheme();
+        validator.applyMarketTitleColours();
+    }, 0);
 }
 const themeToggle = document.getElementById("theme-toggle");
 if (themeToggle) {
