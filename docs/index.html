@@ -38,7 +38,7 @@
     <meta name="msapplication-TileColor" content="#667eea">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="theme-color" content="#667eea">
-    <meta name="app-version" content="1.1.49">
+    <meta name="app-version" content="1.1.50">
     <meta name="app-title" content="GRQ Validation Dashboard">
     <!-- Version/title bootstrap (CSP-safe, issue #189) -->
     <script src="version.js"></script>
@@ -524,82 +524,82 @@
     ></script>
 
     <!-- Shared HTML/JS escaping helpers (issue #63) — must load before app.js -->
-    <script src="escape.js?v=1.1.49"></script>
+    <script src="escape.js?v=1.1.50"></script>
 
     <!-- Shared projection/scoring maths (issue #80) — must load before app.js -->
-    <script src="projection.js?v=1.1.49"></script>
+    <script src="projection.js?v=1.1.50"></script>
 
     <!-- Shared low-volume/liquidity helper (issue #576) — must load before
          app.js, which excludes flagged names from the portfolio (issue #577) -->
-    <script src="volume_recommend.js?v=1.1.49"></script>
+    <script src="volume_recommend.js?v=1.1.50"></script>
 
     <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->
-    <script src="chart_window_settings.js?v=1.1.49"></script>
+    <script src="chart_window_settings.js?v=1.1.50"></script>
 
     <!-- Shared min-star filter persistence + change event (issue #654) — before
          app.js, which wires the #starFilterSelect control via GRQStarFilter. -->
-    <script src="star_filter_settings.js?v=1.1.49"></script>
+    <script src="star_filter_settings.js?v=1.1.50"></script>
 
     <!-- Mobile colour-key entry builder (issue #244) — must load before app.js -->
-    <script src="color_key.js?v=1.1.49"></script>
+    <script src="color_key.js?v=1.1.50"></script>
 
     <!-- Market series title↔line colour pairing (issue #278) — before app.js -->
-    <script src="series_label_colour.js?v=1.1.49"></script>
+    <script src="series_label_colour.js?v=1.1.50"></script>
 
     <!-- AA-compliant themed colours for canvas chart text (issue #497) — before app.js -->
-    <script src="chart_theme.js?v=1.1.49"></script>
+    <script src="chart_theme.js?v=1.1.50"></script>
 
     <!-- Performance-chart heading text (issue #519) — before app.js -->
-    <script src="chart_title.js?v=1.1.49"></script>
+    <script src="chart_title.js?v=1.1.50"></script>
 
     <!-- Shared number-formatting helpers (issue #276) — must load before app.js -->
-    <script src="format.js?v=1.1.49"></script>
+    <script src="format.js?v=1.1.50"></script>
 
     <!-- Benchmark-index data extraction (issue #279) — must load before app.js -->
-    <script src="market_index.js?v=1.1.49"></script>
+    <script src="market_index.js?v=1.1.50"></script>
 
     <!-- Stock deep-link (?stock=) selection helpers (issue #281) — before app.js -->
-    <script src="stock_selection.js?v=1.1.49"></script>
+    <script src="stock_selection.js?v=1.1.50"></script>
 
     <!-- Yahoo Finance quote-link helper (issue #570) — before app.js -->
-    <script src="yahoo_finance.js?v=1.1.49"></script>
+    <script src="yahoo_finance.js?v=1.1.50"></script>
 
     <!-- Date deep-link (?date=) selection helpers (issue #436) — before app.js -->
-    <script src="date_selection.js?v=1.1.49"></script>
+    <script src="date_selection.js?v=1.1.50"></script>
 
     <!-- View deep-link (?view=portfolio|trend) selection helpers (issue #479) —
          before app.js, which routes ?view=trend to trend.html on load. -->
-    <script src="view_selection.js?v=1.1.49"></script>
+    <script src="view_selection.js?v=1.1.50"></script>
 
     <!-- Consolidated popover dismissal logic (issue #371) — before app.js -->
-    <script src="popover_dismiss.js?v=1.1.49"></script>
+    <script src="popover_dismiss.js?v=1.1.50"></script>
 
     <!-- Popover cleanup helpers (GRQPopovers, issue #370) — before app.js,
          which calls globalThis.GRQPopovers.clearAllPopovers() on every
          re-render. Without this the dashboard throws and never renders. -->
-    <script src="popover_cleanup.js?v=1.1.49"></script>
+    <script src="popover_cleanup.js?v=1.1.50"></script>
 
     <!-- Mobile chart pop-out overlay engine (issue #451) — before app.js,
          which wires it to the live chart via globalThis.GRQChartPopout. -->
-    <script src="chart_popout.js?v=1.1.49"></script>
+    <script src="chart_popout.js?v=1.1.50"></script>
 
     <!-- Footer "Share" deep-link builder (issue #495) — before app.js, which
          wires the footer button to the live selections via globalThis.GRQShare. -->
-    <script src="share_link.js?v=1.1.49"></script>
+    <script src="share_link.js?v=1.1.50"></script>
 
     <!-- "Show working" popover field labels (issue #542) — before app.js, which
          reads globalThis.GRQFieldLabel to render the working header. -->
-    <script src="field_label.js?v=1.1.49"></script>
+    <script src="field_label.js?v=1.1.50"></script>
 
     <!-- Stars popover freshness text (issue #550) — before app.js, which reads
          globalThis.GRQFreshness to append the analysis date + age. -->
-    <script src="freshness_text.js?v=1.1.49"></script>
+    <script src="freshness_text.js?v=1.1.50"></script>
 
     <!-- Dashboard bootstrap: loads app.js + debug info (CSP-safe, issue #189) -->
-    <script src="dashboard_boot.js?v=1.1.49"></script>
+    <script src="dashboard_boot.js?v=1.1.50"></script>
 
     <!-- Service Worker Registration (issue #224) — external file so the
          strict CSP can forbid 'unsafe-inline' on script-src. -->
-    <script src="sw-register.js?v=1.1.49"></script>
+    <script src="sw-register.js?v=1.1.50"></script>
   </body>
 </html>
