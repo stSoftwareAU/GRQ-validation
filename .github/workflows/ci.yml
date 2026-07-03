@@ -232,26 +232,72 @@ jobs:
       needs.check-changes.outputs.docs-changed == 'true'
     # A per-job block fully overrides the top-level default, so contents: read
     # is restated here for the checkout step alongside the Pages elevation.
+    # actions: write is needed so the cleanup step below can delete stale
+    # github-pages* artifacts left by an earlier attempt (Issue #706).
     permissions:
       contents: read
       pages: write
       id-token: write
+      actions: write
     steps:
     - name: Checkout code
       # actions/checkout@v4.2.2
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      
+
     - name: Setup Pages
       # actions/configure-pages@v4.0.0
       uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
-      
+
+    # Belt-and-braces against the duplicate-artifact failure (Issue #706).
+    # `deploy-pages` hard-fails when a run holds more than one `github-pages`
+    # artifact ("Multiple artifacts named github-pages … Artifact count is 2").
+    # A manual re-run reuses the same run id, so an earlier attempt's artifact
+    # lingers. Delete any leftover github-pages* artifacts on this run before
+    # uploading a fresh one.
+    - name: Delete stale github-pages artifacts from this run
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        artifacts=$(gh api \
+          "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+          --paginate \
+          --jq '.artifacts[] | select(.name | startswith("github-pages")) | .id')
+        for id in $artifacts; do
+          echo "Deleting stale artifact $id"
+          gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+        done
+
+    # Upload under a per-attempt name so a re-run never collides with an
+    # earlier attempt's artifact (Issue #706).
     - name: Upload artifact
       # actions/upload-pages-artifact@v3.0.1
       uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
       with:
         path: ./docs
-      
+        name: github-pages-${{ github.run_attempt }}
+
+    # First deploy attempt. continue-on-error keeps the job alive so a
+    # GitHub-side transient (as seen in Issue #706 attempt 1) can be retried.
     - name: Deploy to GitHub Pages
       id: deployment
+      continue-on-error: true
       # actions/deploy-pages@v4.0.5
       uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
+      with:
+        artifact_name: github-pages-${{ github.run_attempt }}
+
+    # Short pause before the single automatic retry so a transient can clear.
+    - name: Wait before retrying deploy
+      if: steps.deployment.outcome == 'failure'
+      run: sleep 30
+
+    # One automatic retry so unattended daily deploys self-recover. If this
+    # attempt fails the step (and job) fails as normal.
+    - name: Retry deploy to GitHub Pages
+      id: deployment_retry
+      if: steps.deployment.outcome == 'failure'
+      # actions/deploy-pages@v4.0.5
+      uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
+      with:
+        artifact_name: github-pages-${{ github.run_attempt }}
