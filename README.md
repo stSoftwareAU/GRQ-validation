@@ -397,13 +397,18 @@ deterministically — issue #281):
   instead of the aggregate dashboard.
 - `?theme=auto|light|dark` — force a theme for that page load (a transient
   override that is **not** persisted to `localStorage`).
-- `?window=90|180` — switch the chart (and aligned Market Performance summary)
-  to a 90- or 180-day window for that page load, on **both** desktop and mobile
-  (issues #450, #467). Like `?theme=`, this is a **transient** override: it wins
-  over the saved per-device choice but is **never** persisted, so a reload
-  without the param returns to the saved window (desktop 180 / mobile 90). Both
-  windows end on the same date (#367); an absent or invalid value falls back to
-  the saved choice, then the device default.
+- `?window=90|180` — switch the **chart** to a 90- or 180-day window for that
+  page load, on **both** desktop and mobile (issues #450, #467). This is a
+  **display-only** control: it changes how much of each index line the chart
+  draws, and **never** the judgement figures. The **Market Performance
+  Comparison** cards are always judged over the fixed **90-day** window — the
+  same mark the portfolio is judged on — so a 180-day chart does not inflate the
+  index gains (issue #705); the cards carry an "as at `<date>`" caption of the
+  exact 90-day close date. Like `?theme=`, the window override is **transient**:
+  it wins over the saved per-device choice but is **never** persisted, so a reload
+  without the param returns to the saved window (desktop 180 / mobile 90); an
+  absent or invalid value falls back to the saved choice, then the device
+  default.
 - `?stars=0|1|2|3|4|5` — pre-select the shared minimum-star filter for that page
   load on **both** the portfolio and Trend views (issue #666). `0` means **All**
   (filter off); `1`–`5` keep only holdings whose average rating meets that whole

@@ -1334,23 +1334,45 @@ class GRQValidator {
         // (this.marketIndexData, i.e. docs/market-indices.json) — no live fetch.
         // The same extraction feeds both the aggregate and single-stock views.
         //
-        // The summary is constrained to the SAME per-device window the chart
-        // plots (issue #367, milestone #333): its end price is the last close at
-        // or before scoreDate + the per-device chosen window — the shared single
-        // source of truth (currentWindowDays(): mobile 90/180, desktop 180/90 via
-        // the toggle, issue #466) — so the figures can never disagree with the
-        // chart's last visible point in direction. deviceWindowEnd returns null
-        // for a missing/unparseable score date, in which case marketPerformance
-        // Data falls back to the full-period figure rather than erroring.
-        const windowEnd = GRQProjection.deviceWindowEnd(
+        // The cards are judged over the SAME fixed 90-day window as the portfolio
+        // (issue #705), NOT the plotted chart window. Previously this passed the
+        // per-device chart window end (deviceWindowEnd, desktop default 180 days
+        // per #465/#466), so for a 5 Jan 2026 score date the cards reported each
+        // index's gain to the latest close (~178 days) while the portfolio was
+        // judged at 90 days — a direct mismatch. The end price is now the last
+        // close at or before scoreDate + 90 days (judgementWindowEnd); a score
+        // date younger than 90 days naturally falls back to the latest available
+        // close (a running figure, like the portfolio's Actual) until the window
+        // matures. judgementWindowEnd returns null for a missing/unparseable score
+        // date, in which case marketPerformanceData falls back to the full-period
+        // figure rather than erroring.
+        const windowEnd = GRQProjection.judgementWindowEnd(
             this.getScoreDate(this.selectedFile),
-            this.isMobileDevice(),
-            this.currentWindowDays(),
         );
         return GRQMarketIndex.marketPerformanceData(
             this.marketIndexData,
             windowEnd,
         );
+    }
+
+    // The exact close date the Market Performance Comparison cards were judged
+    // on: the last index close on or before the 90-day mark (issue #705). All
+    // three indices share the score date and window, so any present index
+    // resolves the same trading day. Returns null when no score date or index
+    // data is available, so the caller renders no caption rather than erroring.
+    getMarketComparisonAsOfDate() {
+        const windowEnd = GRQProjection.judgementWindowEnd(
+            this.getScoreDate(this.selectedFile),
+        );
+        if (!windowEnd || !this.marketIndexData) return null;
+        for (const { key } of GRQMarketIndex.BENCHMARK_INDICES) {
+            const series = this.marketIndexData[key];
+            if (series) {
+                const date = GRQMarketIndex.asOfDate(series, windowEnd);
+                if (date) return date;
+            }
+        }
+        return null;
     }
 
     showMarketComparisonLoading() {
@@ -1448,6 +1470,18 @@ class GRQValidator {
                 valueElement.className = 'h5 mb-0 text-muted';
                 detailsElement.textContent = '-';
             }
+        }
+
+        // Caption the cards with the exact 90-day judgement date (issue #705).
+        // Once pinned to the 90-day mark the cards no longer match a 180-day
+        // chart's right edge, so the "as at <date>" label is the guard against
+        // that reading as a new bug.
+        const asOfElement = document.getElementById('marketComparisonAsOf');
+        if (asOfElement) {
+            const asOfDate = this.getMarketComparisonAsOfDate();
+            asOfElement.textContent = asOfDate
+                ? `Judged at the 90-day mark, as at ${GRQFreshness.formatAnalysisDate(asOfDate)}.`
+                : '';
         }
     }
 

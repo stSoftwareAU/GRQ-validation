@@ -70,6 +70,31 @@ function deviceWindowEnd(scoreDate, isMobile, windowDays) {
     );
 }
 
+// The FIXED judgement window, in days (issue #705). The portfolio is always
+// judged at the 90-day mark, so the "Market Performance Comparison" cards must
+// be judged over the SAME 90 days — never the plotted chart window, which the
+// desktop toggle can widen to 180 days (#465/#466). Keeping this a separate,
+// device-independent constant is the guard against the two ever drifting apart
+// again: the chart window is a display control; judgement is not.
+const JUDGEMENT_WINDOW_DAYS = 90;
+
+// The 90-day judgement window end: scoreDate + 90 days at local midnight,
+// regardless of device or the selected chart window. Callers resolve the end
+// price as the last close on or before this date (via GRQMarketIndex.priceAsOf),
+// so a score date younger than 90 days naturally falls back to the latest
+// available close — a running figure, exactly like the portfolio's Actual —
+// until the window matures. Returns null when the score date is missing or
+// unparseable so the caller renders blank rather than erroring (mirrors
+// deviceWindowEnd).
+function judgementWindowEnd(scoreDate) {
+    if (scoreDate === null || scoreDate === undefined) return null;
+    const start = setDateToMidnight(new Date(scoreDate));
+    if (Number.isNaN(start.getTime())) return null;
+    return setDateToMidnight(
+        new Date(start.getTime() + JUDGEMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000),
+    );
+}
+
 // The single-stock "Stock Performance" chart x-axis max (issue #606).
 //
 // The single-stock chart pins its x-axis min to the score date and needs an
@@ -1465,6 +1490,7 @@ globalThis.GRQProjection = {
     setDateToMidnight,
     deviceWindowDays,
     deviceWindowEnd,
+    judgementWindowEnd,
     singleStockAxisMax,
     windowShowsActualsAfter90,
     bridgeActualsAfter90,
