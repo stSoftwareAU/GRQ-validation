@@ -72,6 +72,37 @@ function priceAsOf(seriesOrPoints, endDate) {
     return bestClose;
 }
 
+// The DATE of the close `priceAsOf` resolves: the date of the latest point with
+// `date <= endDate`, as a Date at local midnight, or null when nothing qualifies
+// (issue #705). Used to caption the Market Performance Comparison cards with the
+// exact "as at <date>" they were judged on, so pinning them to the 90-day mark
+// (which no longer matches a 180-day chart's right edge) cannot read as a new
+// bug. Pure: no DOM, no class state, never throws.
+function asOfDate(seriesOrPoints, endDate) {
+    const points = Array.isArray(seriesOrPoints)
+        ? seriesOrPoints
+        : (seriesOrPoints && Array.isArray(seriesOrPoints.data)
+            ? seriesOrPoints.data
+            : null);
+    if (!points || points.length === 0) return null;
+
+    const endTime = toMidnightTime(endDate);
+    if (Number.isNaN(endTime)) return null;
+
+    let bestTime = -Infinity;
+    for (const point of points) {
+        if (!point) continue;
+        const close = point.close;
+        if (typeof close !== "number" || !Number.isFinite(close)) continue;
+        const time = toMidnightTime(point.date);
+        if (Number.isNaN(time) || time > endTime) continue;
+        if (time > bestTime) {
+            bestTime = time;
+        }
+    }
+    return bestTime === -Infinity ? null : new Date(bestTime);
+}
+
 // Compute one benchmark index's performance from its processed series. Returns
 // null when the required prices are missing, so callers render blank and never
 // fetch live data. Pure: no DOM, no class state.
@@ -131,5 +162,6 @@ globalThis.GRQMarketIndex = {
     BENCHMARK_INDICES,
     indexPerformance,
     priceAsOf,
+    asOfDate,
     marketPerformanceData,
 };
