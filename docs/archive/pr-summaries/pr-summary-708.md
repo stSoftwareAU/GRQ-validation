@@ -72,7 +72,7 @@ sequenceDiagram
     Handler->>Helper: applyChartTheme(chart, detectTheme())
     Helper->>Chart: re-source text/title/legend/ticks/grid colours
     Helper->>Chart: chart.update() → repaint canvas
-    Note over Chart: no stale colours; axis text stays readable
+    Note over Chart: no stale colours — axis text stays readable
 ```
 
 ## Test Plan
