@@ -105,6 +105,7 @@
             this.buildGroupingControl();
             this.buildStarFilterControl();
             this.buildOverlayControls();
+            this.wireThemeChange();
             try {
                 await this.loadData();
             } catch (error) {
@@ -279,6 +280,34 @@
             this.scoreDates = matured.map((entry) => entry.date);
             this.marketIndices = await fetchJson("market-indices.json");
             this.rebuildSeries();
+        }
+
+        // Re-theme the live trend chart when the theme changes (issue #708).
+        // Chart.js paints axis/tick/title/legend/grid colours ONCE at build, so
+        // without this the chart keeps the previous theme's colours after a
+        // switch — unreadable text. Listen to both the header theme-toggle click
+        // and the OS prefers-color-scheme change, in both directions, and defer
+        // so theme.js updates the <body> class before we re-read it.
+        wireThemeChange() {
+            const reapply = () =>
+                setTimeout(() => {
+                    if (globalThis.GRQChartTheme && this.chart) {
+                        GRQChartTheme.applyChartTheme(
+                            this.chart,
+                            this.detectTheme(),
+                        );
+                    }
+                }, 0);
+            const toggle = typeof document !== "undefined"
+                ? document.getElementById("theme-toggle")
+                : null;
+            if (toggle && typeof toggle.addEventListener === "function") {
+                toggle.addEventListener("click", reapply);
+            }
+            if (typeof globalThis.matchMedia === "function") {
+                globalThis.matchMedia("(prefers-color-scheme: dark)")
+                    .addEventListener("change", reapply);
+            }
         }
 
         // Active theme ("light"/"dark"), matching styles.css, so the chart text

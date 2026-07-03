@@ -71,6 +71,47 @@
         return { text: TEXT[t], grid: GRID[t], background: BACKGROUNDS[t] };
     }
 
+    // Re-apply the theme's colours to a LIVE Chart.js instance and repaint it
+    // (issue #708). Chart.js paints the canvas title, axis titles, tick labels,
+    // legend labels and grid lines ONCE at build from the colours above, so a
+    // theme switch after build otherwise leaves the previous theme's colours
+    // frozen on the canvas — unreadable text (near-white on a light page, or
+    // dark-on-dark after switching to dark). DOM accessibility gates cannot see
+    // canvas pixels, so nothing catches it. Every colour is re-sourced from the
+    // theme here, keeping this file the single source of truth. A missing or
+    // half-built chart (no options yet) is a silent no-op returning false.
+    function applyChartTheme(chart, theme) {
+        if (!chart || !chart.options) return false;
+        const t = chartTheme(theme);
+        const options = chart.options;
+
+        // Default colour Chart.js falls back to for any element without an
+        // explicit `color` (e.g. the desktop legend renders from this default).
+        options.color = t.text;
+
+        const plugins = options.plugins;
+        if (plugins) {
+            if (plugins.title) plugins.title.color = t.text;
+            if (plugins.legend && plugins.legend.labels) {
+                plugins.legend.labels.color = t.text;
+            }
+        }
+
+        const scales = options.scales;
+        if (scales) {
+            for (const key of Object.keys(scales)) {
+                const scale = scales[key];
+                if (!scale) continue;
+                if (scale.title) scale.title.color = t.text;
+                if (scale.ticks) scale.ticks.color = t.text;
+                if (scale.grid) scale.grid.color = t.grid;
+            }
+        }
+
+        if (typeof chart.update === "function") chart.update();
+        return true;
+    }
+
     globalThis.GRQChartTheme = {
         BACKGROUNDS,
         TEXT,
@@ -80,5 +121,6 @@
         chartGridColour,
         chartBackground,
         chartTheme,
+        applyChartTheme,
     };
 })();
