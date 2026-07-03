@@ -406,9 +406,9 @@ deterministically — issue #281):
   index gains (issue #705); the cards carry an "as at `<date>`" caption of the
   exact 90-day close date. Like `?theme=`, the window override is **transient**:
   it wins over the saved per-device choice but is **never** persisted, so a reload
-  without the param returns to the saved window (desktop 180 / mobile 90); an
-  absent or invalid value falls back to the saved choice, then the device
-  default.
+  without the param returns to the saved window (180 on every form factor by
+  default, issue #711); an absent or invalid value falls back to the saved
+  choice, then the device default.
 - `?stars=0|1|2|3|4|5` — pre-select the shared minimum-star filter for that page
   load on **both** the portfolio and Trend views (issue #666). `0` means **All**
   (filter off); `1`–`5` keep only holdings whose average rating meets that whole

@@ -46,6 +46,10 @@ and this project adheres to
 
 ### Changed
 
+- Chart window now defaults to **180 days on every form factor** (previously 90
+  on mobile, 180 on desktop). A fresh device shows the full 180-day window; the
+  90/180 toggle, the per-device saved choice, and the transient `?window=` deep
+  link are unchanged, so a user can still opt into 90 (Issue #711).
 - `GRQProjection.deviceWindowDays`/`deviceWindowEnd` (`docs/projection.js`) now
   honour an explicit permitted window (90 or 180) on **either** device, relaxing
   the old desktop-180 lock so a desktop 90-day choice can take effect. Each

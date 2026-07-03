@@ -192,10 +192,10 @@
                            to desktop in issue #466). Shown on every device: it
                            switches the visible window between 90 and 180 days,
                            re-rendering the chart AND the Market Performance
-                           summary together (#367). Each device keeps its own
-                           default and store via GRQChartWindow (mobile 90,
-                           desktop 180); the static 90 default below is
-                           corrected per device on init. -->
+                           summary together (#367). Every form factor defaults
+                           to 180 (issue #711) via GRQChartWindow; the static 180
+                           default below is corrected per device on init if the
+                           user has opted into 90. -->
                       <div class="chart-window-control" id="chartWindowControl">
                         <!-- Issue #493: the visible "Chart window" label was
                              removed (the 90/180 buttons are self-explanatory).
@@ -220,7 +220,6 @@
                             value="90"
                             autocomplete="off"
                             aria-label="90 days"
-                            checked
                           />
                           <label
                             class="btn btn-outline-primary"
@@ -235,6 +234,7 @@
                             value="180"
                             autocomplete="off"
                             aria-label="180 days"
+                            checked
                           />
                           <label
                             class="btn btn-outline-primary"

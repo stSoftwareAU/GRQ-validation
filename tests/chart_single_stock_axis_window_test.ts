@@ -83,16 +83,15 @@ Deno.test("singleStockAxisMax - tracks deviceWindowEnd (window end + 5-day paddi
   }
 });
 
-Deno.test("singleStockAxisMax - bad stored window falls back to device default", () => {
-  // A bad value can never widen the window: mobile -> 90 (end 95), desktop ->
-  // 180 (end 185). Mirrors deviceWindowDays/deviceWindowEnd.
+Deno.test("singleStockAxisMax - bad stored window falls back to the 180 default", () => {
+  // A bad value inherits the default, now 180 on every form factor (issue #711),
+  // so both devices land on the 180-day end (185 with padding). Mirrors
+  // deviceWindowDays/deviceWindowEnd.
   const mobile = GRQProjection.singleStockAxisMax(SCORE_DATE, true, 999);
   const desktop = GRQProjection.singleStockAxisMax(SCORE_DATE, false, 999);
-  // 999 is not permitted, so it inherits the device default: mobile 90, desktop
-  // 180 — exactly as if those defaults had been passed.
   assertEquals(
     mobile.getTime(),
-    GRQProjection.singleStockAxisMax(SCORE_DATE, true, 90).getTime(),
+    GRQProjection.singleStockAxisMax(SCORE_DATE, true, 180).getTime(),
   );
   assertEquals(
     desktop.getTime(),

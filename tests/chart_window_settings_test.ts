@@ -70,7 +70,9 @@ Deno.test("GRQChartWindow is published on globalThis", () => {
     S,
     "chart_window_settings.js should publish globalThis.GRQChartWindow",
   );
-  assertEquals(S.MOBILE_WINDOW_DAYS_DEFAULT, 90);
+  // Issue #711: the mobile default is now 180 (the full window) on every form
+  // factor, matching desktop.
+  assertEquals(S.MOBILE_WINDOW_DAYS_DEFAULT, 180);
   assertEquals(S.ALLOWED_WINDOW_DAYS, [90, 180]);
 });
 
@@ -91,14 +93,16 @@ Deno.test("normaliseWindowDays coerces numeric strings", () => {
   assertEquals(S.normaliseWindowDays("180"), 180);
 });
 
-Deno.test("normaliseWindowDays falls back to 90 for junk", () => {
-  assertEquals(S.normaliseWindowDays("abc"), 90);
-  assertEquals(S.normaliseWindowDays(0), 90);
-  assertEquals(S.normaliseWindowDays(30), 90);
-  assertEquals(S.normaliseWindowDays(""), 90);
-  assertEquals(S.normaliseWindowDays(null), 90);
-  assertEquals(S.normaliseWindowDays(undefined), 90);
-  assertEquals(S.normaliseWindowDays({}), 90);
+// Issue #711: with no explicit fallback, junk now normalises to the 180 default
+// (previously 90).
+Deno.test("normaliseWindowDays falls back to 180 for junk", () => {
+  assertEquals(S.normaliseWindowDays("abc"), 180);
+  assertEquals(S.normaliseWindowDays(0), 180);
+  assertEquals(S.normaliseWindowDays(30), 180);
+  assertEquals(S.normaliseWindowDays(""), 180);
+  assertEquals(S.normaliseWindowDays(null), 180);
+  assertEquals(S.normaliseWindowDays(undefined), 180);
+  assertEquals(S.normaliseWindowDays({}), 180);
 });
 
 // --- round-trip ------------------------------------------------------------
@@ -117,19 +121,28 @@ Deno.test("write then read round-trips 180", () => {
   assertEquals(store._dump()[S.STORAGE_KEY], "180");
 });
 
-Deno.test("writeMobileWindowDays normalises junk to 90 before persisting", () => {
+Deno.test("writeMobileWindowDays normalises junk to 180 before persisting", () => {
+  // Issue #711: an out-of-range write falls back to the 180 default, not 90.
   const store = fakeStorage();
   assertEquals(S.writeMobileWindowDays(365, store), true);
-  assertEquals(store._dump()[S.STORAGE_KEY], "90");
-  assertEquals(S.readMobileWindowDays(store), 90);
+  assertEquals(store._dump()[S.STORAGE_KEY], "180");
+  assertEquals(S.readMobileWindowDays(store), 180);
 });
 
-Deno.test("readMobileWindowDays returns the default when storage is empty", () => {
-  assertEquals(S.readMobileWindowDays(fakeStorage()), 90);
+Deno.test("readMobileWindowDays returns the 180 default when storage is empty", () => {
+  // Issue #711: fresh device with nothing saved shows the full 180-day window.
+  assertEquals(S.readMobileWindowDays(fakeStorage()), 180);
 });
 
-Deno.test("readMobileWindowDays tolerates a corrupt stored value", () => {
+Deno.test("readMobileWindowDays tolerates a corrupt stored value (→180)", () => {
   const store = fakeStorage({ [S.STORAGE_KEY]: "garbage" });
+  assertEquals(S.readMobileWindowDays(store), 180);
+});
+
+Deno.test("readMobileWindowDays returns an explicit saved 90 (opt-in preserved)", () => {
+  // The user can still opt into 90; a valid saved choice is honoured over the
+  // new 180 default.
+  const store = fakeStorage({ [S.STORAGE_KEY]: "90" });
   assertEquals(S.readMobileWindowDays(store), 90);
 });
 
@@ -137,7 +150,7 @@ Deno.test("readMobileWindowDays tolerates a corrupt stored value", () => {
 
 Deno.test("read falls back to default when storage throws", () => {
   const store = throwingStorage();
-  assertEquals(S.readMobileWindowDays(store), 90);
+  assertEquals(S.readMobileWindowDays(store), 180);
 });
 
 Deno.test("write reports failure (not throw) when storage is unavailable", () => {
@@ -148,7 +161,7 @@ Deno.test("write reports failure (not throw) when storage is unavailable", () =>
 Deno.test("read/write fall back to default when no storage is available", () => {
   // Passing an explicit null storage models a non-browser / no-localStorage
   // environment without depending on the ambient global.
-  assertEquals(S.readMobileWindowDays(null), 90);
+  assertEquals(S.readMobileWindowDays(null), 180);
   assertEquals(S.writeMobileWindowDays(180, null), false);
 });
 
@@ -224,12 +237,13 @@ Deno.test("desktop write reports failure (not throw) when storage is unavailable
 
 Deno.test("writing the desktop key never changes readMobileWindowDays", () => {
   const store = fakeStorage();
-  assertEquals(S.writeDesktopWindowDays(180, store), true);
-  // Mobile still reads its own default — the desktop write did not touch it.
-  assertEquals(S.readMobileWindowDays(store), 90);
+  assertEquals(S.writeDesktopWindowDays(90, store), true);
+  // Mobile still reads its own default (180, issue #711) — the desktop write of
+  // 90 did not touch the mobile key.
+  assertEquals(S.readMobileWindowDays(store), 180);
   // Only the desktop key was written.
   assertEquals(store._dump()[S.STORAGE_KEY], undefined);
-  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], "180");
+  assertEquals(store._dump()[S.DESKTOP_STORAGE_KEY], "90");
 });
 
 Deno.test("writing the mobile key never changes readDesktopWindowDays", () => {
@@ -247,4 +261,14 @@ Deno.test("desktop and mobile choices coexist independently", () => {
   assertEquals(S.writeDesktopWindowDays(90, store), true);
   assertEquals(S.readMobileWindowDays(store), 180);
   assertEquals(S.readDesktopWindowDays(store), 90);
+});
+
+// --- issue #711: 180 is the default on every form factor -------------------
+
+Deno.test("issue #711: both mobile and desktop default to 180 with nothing saved", () => {
+  const store = fakeStorage();
+  assertEquals(S.readMobileWindowDays(store), 180);
+  assertEquals(S.readDesktopWindowDays(store), 180);
+  assertEquals(S.MOBILE_WINDOW_DAYS_DEFAULT, 180);
+  assertEquals(S.DESKTOP_WINDOW_DAYS_DEFAULT, 180);
 });

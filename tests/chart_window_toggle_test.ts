@@ -3,7 +3,7 @@
 //
 // Both phone (< 768px) and desktop now show the control, letting the user
 // switch the visible chart/summary window between 90 and 180 days. Each device
-// keeps its OWN default and store: mobile defaults to 90, desktop to 180. These
+// keeps its OWN store, but both default to 180 (issue #711). These
 // assertions pin:
 //   - the control markup in docs/index.html (present, accessible);
 //   - the CSS in docs/styles.css (shown on every device, phone reveal kept);
@@ -98,25 +98,25 @@ Deno.test("index.html: toggle offers both 90 and 180 day choices", () => {
   );
 });
 
-Deno.test("index.html: default selection is 90 days (reflects the stored default)", () => {
-  // The 90-day radio carries the `checked` attribute so a fresh device shows
-  // the 90-day default; the 180-day radio does not.
-  const ninety = html.slice(
-    html.indexOf('id="chartWindow90"'),
-    html.indexOf('id="chartWindow90"') + 260,
-  );
-  assert(
-    ninety.includes("checked"),
-    "the 90-day radio must default to checked",
-  );
-
+Deno.test("index.html: default selection is 180 days (reflects the stored default, issue #711)", () => {
+  // The 180-day radio carries the `checked` attribute so a fresh device shows
+  // the 180-day default on every form factor; the 90-day radio does not.
   const oneEighty = html.slice(
     html.indexOf('id="chartWindow180"'),
     html.indexOf('id="chartWindow180"') + 260,
   );
   assert(
-    !oneEighty.includes("checked"),
-    "the 180-day radio must NOT be checked by default",
+    oneEighty.includes("checked"),
+    "the 180-day radio must default to checked",
+  );
+
+  const ninety = html.slice(
+    html.indexOf('id="chartWindow90"'),
+    html.indexOf('id="chartWindow90"') + 260,
+  );
+  assert(
+    !ninety.includes("checked"),
+    "the 90-day radio must NOT be checked by default",
   );
 });
 

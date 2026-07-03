@@ -25,8 +25,8 @@ const GRQMarketIndex = g.GRQMarketIndex;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-Deno.test("deviceWindowDays - mobile is 90 days, desktop is 180 days", () => {
-  assertEquals(GRQProjection.deviceWindowDays(true), 90);
+Deno.test("deviceWindowDays - both mobile and desktop default to 180 days (issue #711)", () => {
+  assertEquals(GRQProjection.deviceWindowDays(true), 180);
   assertEquals(GRQProjection.deviceWindowDays(false), 180);
 });
 
@@ -36,22 +36,24 @@ Deno.test("deviceWindowEnd - end is scoreDate + per-device days at local midnigh
   const scoreDate = new Date("2026-01-01T13:45:00");
   const base = GRQProjection.setDateToMidnight(new Date("2026-01-01"));
 
-  const mobileEnd = GRQProjection.deviceWindowEnd(scoreDate, true);
-  const desktopEnd = GRQProjection.deviceWindowEnd(scoreDate, false);
+  // Issue #711: both devices now default to the 180-day window. Explicit 90 is
+  // still honoured and produces the shorter end date.
+  const defaultEnd = GRQProjection.deviceWindowEnd(scoreDate, true);
+  const shortEnd = GRQProjection.deviceWindowEnd(scoreDate, true, 90);
 
   // Mirror the production formula exactly so the assertion is DST-safe.
   assertEquals(
-    mobileEnd.getTime(),
+    shortEnd.getTime(),
     GRQProjection.setDateToMidnight(new Date(base.getTime() + 90 * DAY_MS))
       .getTime(),
   );
   assertEquals(
-    desktopEnd.getTime(),
+    defaultEnd.getTime(),
     GRQProjection.setDateToMidnight(new Date(base.getTime() + 180 * DAY_MS))
       .getTime(),
   );
-  assertEquals(mobileEnd.getHours(), 0);
-  assert(desktopEnd.getTime() > mobileEnd.getTime());
+  assertEquals(defaultEnd.getHours(), 0);
+  assert(defaultEnd.getTime() > shortEnd.getTime());
 });
 
 Deno.test("deviceWindowDays/deviceWindowEnd - selectable window keeps chart and summary on the SAME end date (issue #448; desktop-90 opt-in #464)", () => {
@@ -61,14 +63,14 @@ Deno.test("deviceWindowDays/deviceWindowEnd - selectable window keeps chart and 
   // identical calls proves they cannot drift for the selectable window.
   const scoreDate = new Date("2026-01-01T09:30:00");
   const pairs: Array<[boolean, number | undefined]> = [
-    [true, undefined], // mobile default -> 90
-    [true, 90], // mobile explicit 90
-    [true, 180], // mobile opting into the full window
-    [true, 999], // bad value -> falls back to mobile 90
+    [true, undefined], // mobile default -> 180 (issue #711)
+    [true, 90], // mobile opting into 90
+    [true, 180], // mobile explicit full window
+    [true, 999], // bad value -> falls back to the 180 default
     [false, undefined], // desktop default -> 180
     [false, 90], // desktop opting into 90 (the new #464 case)
     [false, 180], // desktop explicit 180
-    [false, 999], // bad value -> falls back to desktop 180
+    [false, 999], // bad value -> falls back to the 180 default
   ];
 
   for (const [isMobile, windowDays] of pairs) {
@@ -105,10 +107,11 @@ Deno.test("deviceWindowDays/deviceWindowEnd - selectable window keeps chart and 
   );
 
   // Symmetrically, a desktop (desktop, 90) window must land on the same end date
-  // the mobile default window does — the relaxed lock gives desktop the 90 window.
+  // an explicit mobile 90 window does — the relaxed lock gives desktop the 90
+  // window (mobile now defaults to 180, so 90 is compared explicitly, issue #711).
   assertEquals(
     GRQProjection.deviceWindowEnd(scoreDate, false, 90)!.getTime(),
-    GRQProjection.deviceWindowEnd(scoreDate, true)!.getTime(),
+    GRQProjection.deviceWindowEnd(scoreDate, true, 90)!.getTime(),
   );
 });
 
@@ -143,13 +146,14 @@ Deno.test("marketPerformanceData - summary follows the per-device window, not th
   );
   const marketIndexData = { sp500: series };
 
-  // Mobile (90 days): window ends 2026-04-01, inside the dip -> DOWN.
+  // Mobile default (180 days, issue #711): window ends 2026-06-30, still inside
+  // the dip (recovery is 2026-09-01) -> DOWN.
   const mobileEnd = GRQProjection.deviceWindowEnd(new Date(SCORE_DATE), true);
   const mobile = GRQMarketIndex.marketPerformanceData(
     marketIndexData,
     mobileEnd,
   );
-  assert(mobile.sp500.performance < 0, "mobile 90d summary must be negative");
+  assert(mobile.sp500.performance < 0, "mobile summary must be negative");
   assertEquals(mobile.sp500.currentPrice, 80);
 
   // Desktop (180 days): window ends 2026-06-30, still before the recovery -> DOWN.
@@ -177,7 +181,7 @@ Deno.test("marketPerformanceData - summary follows the per-device window, not th
 Deno.test("marketPerformanceData - a DESKTOP 90 choice narrows the summary to the dip (issue #466)", () => {
   // Issue #466: desktop may now opt into the 90-day window. With the same
   // #333-shaped fixture, a desktop 90 choice (deviceWindowEnd(scoreDate, false,
-  // 90)) must land inside the dip and read DOWN — exactly as mobile's default
+  // 90)) must land inside the dip and read DOWN — exactly as an explicit mobile
   // 90 does — and land on the IDENTICAL end date, proving chart and summary
   // narrow together to the same window.
   const series = GRQProjection.buildIndexSeriesFromMap(
@@ -204,8 +208,12 @@ Deno.test("marketPerformanceData - a DESKTOP 90 choice narrows the summary to th
   );
   assertEquals(desktop90.sp500.currentPrice, 80);
 
-  // Same end date as mobile's default 90 window — chart and summary coincide.
-  const mobile90End = GRQProjection.deviceWindowEnd(new Date(SCORE_DATE), true);
+  // Same end date as an explicit mobile 90 window — chart and summary coincide.
+  const mobile90End = GRQProjection.deviceWindowEnd(
+    new Date(SCORE_DATE),
+    true,
+    90,
+  );
   assertEquals(desktop90End!.getTime(), mobile90End!.getTime());
 
   // And strictly narrower than the desktop DEFAULT 180 window.
