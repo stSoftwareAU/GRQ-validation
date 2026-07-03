@@ -97,22 +97,22 @@ function makePoint(
 
 // --- selectable window (issue #448; desktop-180 lock relaxed by #464) -------
 
-Deno.test("deviceWindowDays honours an explicit permitted window on either device, each device keeps its own default", () => {
-  // Default mobile behaviour is unchanged (90 days).
-  assertEquals(GRQProjection.deviceWindowDays(true), 90);
-  // Mobile may opt into the full 180-day window.
-  assertEquals(GRQProjection.deviceWindowDays(true, 180), 180);
-  // Mobile explicit 90 stays 90.
+Deno.test("deviceWindowDays honours an explicit permitted window on either device, defaulting to 180 everywhere (issue #711)", () => {
+  // Issue #711: the default is now 180 on EVERY form factor, mobile included.
+  assertEquals(GRQProjection.deviceWindowDays(true), 180);
+  // Mobile explicit 90 stays 90 (opt-in preserved).
   assertEquals(GRQProjection.deviceWindowDays(true, 90), 90);
-  // A non-permitted value falls back to the mobile 90-day default.
-  assertEquals(GRQProjection.deviceWindowDays(true, 999), 90);
-  // Desktop default is preserved (180 days).
+  // Mobile explicit 180 stays 180.
+  assertEquals(GRQProjection.deviceWindowDays(true, 180), 180);
+  // A non-permitted value falls back to the 180 default.
+  assertEquals(GRQProjection.deviceWindowDays(true, 999), 180);
+  // Desktop default is 180 as before.
   assertEquals(GRQProjection.deviceWindowDays(false), 180);
-  // Desktop may now opt into 90 — the old #448 desktop-180 lock is relaxed (#464).
+  // Desktop may opt into 90 — the old #448 desktop-180 lock is relaxed (#464).
   assertEquals(GRQProjection.deviceWindowDays(false, 90), 90);
   // Desktop explicit 180 stays 180.
   assertEquals(GRQProjection.deviceWindowDays(false, 180), 180);
-  // A non-permitted value falls back to the desktop 180-day default.
+  // A non-permitted value falls back to the 180 default.
   assertEquals(GRQProjection.deviceWindowDays(false, 999), 180);
 });
 
@@ -125,15 +125,15 @@ Deno.test("deviceWindowEnd threads the chosen mobile window through to the end d
     GRQProjection.setDateToMidnight(new Date(base.getTime() + days * DAY_MS))
       .getTime();
 
-  // Mobile default stays 90 days.
+  // Mobile default is now 180 days (issue #711).
   assertEquals(
     GRQProjection.deviceWindowEnd(scoreDate, true)!.getTime(),
-    expectEnd(90),
-  );
-  // Mobile opting into 180 ends 180 days after the score date.
-  assertEquals(
-    GRQProjection.deviceWindowEnd(scoreDate, true, 180)!.getTime(),
     expectEnd(180),
+  );
+  // Mobile opting into 90 ends 90 days after the score date.
+  assertEquals(
+    GRQProjection.deviceWindowEnd(scoreDate, true, 90)!.getTime(),
+    expectEnd(90),
   );
   // Desktop default (no explicit value) still ends 180 days after.
   assertEquals(

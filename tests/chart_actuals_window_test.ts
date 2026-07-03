@@ -27,11 +27,12 @@ Deno.test("windowShowsActualsAfter90 - mobile 180-day window shows the after-90 
   assertEquals(GRQProjection.windowShowsActualsAfter90(true, 180), true);
 });
 
-Deno.test("windowShowsActualsAfter90 - mobile 90-day window omits the after-90 tail (unchanged)", () => {
-  // The 90-day mobile view ends at day 90, so there is no after-90 tail to draw.
+Deno.test("windowShowsActualsAfter90 - a 90-day window omits the after-90 tail", () => {
+  // A 90-day view ends at day 90, so there is no after-90 tail to draw.
   assertEquals(GRQProjection.windowShowsActualsAfter90(true, 90), false);
-  // Mobile default (no explicit window) resolves to 90 -> still omitted.
-  assertEquals(GRQProjection.windowShowsActualsAfter90(true, undefined), false);
+  // Mobile default (no explicit window) now resolves to 180 (issue #711), so the
+  // tail IS drawn — the mobile default view is the full window.
+  assertEquals(GRQProjection.windowShowsActualsAfter90(true, undefined), true);
 });
 
 Deno.test("windowShowsActualsAfter90 - desktop views are unchanged (180 shows, 90 omits)", () => {
@@ -55,10 +56,10 @@ Deno.test("windowShowsActualsAfter90 - mobile and desktop are in parity for the 
   }
 });
 
-Deno.test("windowShowsActualsAfter90 - bad stored window falls back to the device default", () => {
-  // A bad value can never widen the window, so it inherits the device default:
-  // mobile -> 90 (no tail), desktop -> 180 (tail). Mirrors deviceWindowDays.
-  assertEquals(GRQProjection.windowShowsActualsAfter90(true, 999), false);
+Deno.test("windowShowsActualsAfter90 - bad stored window falls back to the 180 default", () => {
+  // A bad value inherits the default, now 180 on every form factor (issue #711),
+  // so the after-90 tail is shown on both devices. Mirrors deviceWindowDays.
+  assertEquals(GRQProjection.windowShowsActualsAfter90(true, 999), true);
   assertEquals(GRQProjection.windowShowsActualsAfter90(false, 999), true);
 });
 

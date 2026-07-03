@@ -85,13 +85,13 @@ class GRQValidator {
         return breakpoint === 'xs' || breakpoint === 'sm';
     }
 
-    // The user's chosen mobile chart window in days (issue #449): 90 by default,
-    // or the full 180 when opted in via the toggle. Read from the per-device
+    // The user's chosen mobile chart window in days (issue #449): 180 by default
+    // (issue #711), or 90 when opted in via the toggle. Read from the per-device
     // persistence helper (docs/chart_window_settings.js); guarded so a missing
-    // helper or unavailable storage falls back to 90 and never throws.
+    // helper or unavailable storage falls back to 180 and never throws.
     mobileWindowDays() {
         if (typeof GRQChartWindow === "undefined") {
-            return 90;
+            return 180;
         }
         return GRQChartWindow.readMobileWindowDays();
     }
@@ -100,7 +100,8 @@ class GRQValidator {
     // default, or 90 when opted in via the now-desktop-visible toggle. Read from
     // the per-device persistence helper; guarded so a missing helper or
     // unavailable storage falls back to 180 and never throws. Desktop keeps its
-    // OWN key, so a desktop choice can never regress mobile's 90 default (#457).
+    // OWN key, so each device persists its choice independently (issue #711
+    // makes both default to 180).
     desktopWindowDays() {
         if (typeof GRQChartWindow === "undefined") {
             return 180;
@@ -109,17 +110,17 @@ class GRQValidator {
     }
 
     // The effective chart window for THIS device (issue #466): the mobile choice
-    // on phones (default 90), the desktop choice otherwise (default 180). Every
-    // window-sizing call site (chart, summary, cost-of-capital floor) resolves
-    // through this single accessor so the chart and the summary always cover the
-    // identical window (#367) — a desktop 90 choice narrows both together.
+    // on phones, the desktop choice otherwise — both defaulting to 180 (issue
+    // #711). Every window-sizing call site (chart, summary, cost-of-capital
+    // floor) resolves through this single accessor so the chart and the summary
+    // always cover the identical window (#367) — a 90 choice narrows both together.
     //
     // A `?window=90|180` deep link (issue #467) takes precedence for THIS visit
     // only: the transient URL value (parsed by the shared #450 helper) wins over
     // the saved per-device choice, which wins over the device default. The URL
     // value is NEVER persisted, so a reload without the param returns to the
-    // saved/180 window and mobile's 90 default is never regressed. Guarded so a
-    // missing helper degrades cleanly to the saved per-device value.
+    // saved/180 window. Guarded so a missing helper degrades cleanly to the
+    // saved per-device value.
     currentWindowDays() {
         const saved = this.isMobileDevice()
             ? this.mobileWindowDays()
@@ -178,8 +179,9 @@ class GRQValidator {
     // change, persist it to THIS device's store and re-render the chart AND the
     // Market Performance summary together so they always cover the identical
     // window (issue #449, #466, #367). The control now renders on desktop too
-    // (issue #466); mobile and desktop keep separate stores and defaults, so a
-    // desktop flip writes the desktop key and never regresses mobile's 90.
+    // (issue #466); mobile and desktop keep separate stores, so a desktop flip
+    // writes the desktop key and never touches the mobile choice (both default
+    // to 180, issue #711).
     initChartWindowToggle() {
         const control = document.getElementById("chartWindowControl");
         if (!control) {
@@ -2134,8 +2136,8 @@ class GRQValidator {
         const isMobile = this.isMobileDevice();
         
         // Per-device visible window, honouring the user's 90/180 toggle on
-        // EITHER device (issue #449, #466): mobile defaults 90, desktop defaults
-        // 180, each opt-in-able to the other. Shared with the Market Performance
+        // EITHER device (issue #449, #466): both default to 180 (issue #711),
+        // each opt-in-able to 90. Shared with the Market Performance
         // summary via GRQProjection so the chart and the summary cover the
         // identical window and cannot disagree (issue #367).
         const windowDays = this.currentWindowDays();
@@ -2997,7 +2999,7 @@ class GRQValidator {
 
         // Per-device visible window, shared with the chart and summary via the
         // single source of truth (issue #367) — the user's per-device 90/180
-        // toggle choice (issue #449, #466): mobile defaults 90, desktop 180.
+        // toggle choice (issue #449, #466): both default to 180 (issue #711).
         const maxDays = GRQProjection.deviceWindowDays(isMobile, this.currentWindowDays());
         const maxDate = new Date(
             this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)

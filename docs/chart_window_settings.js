@@ -3,9 +3,10 @@
 //
 // This remembers, per device, the user's choice of chart window — 90 days or
 // the full 180 days — backed by localStorage under namespaced `grq.chart.*`
-// keys (mirroring `grq.trend.*`). Mobile and desktop have SEPARATE keys and
-// SEPARATE defaults (mobile 90, desktop 180) so a desktop choice can never
-// regress mobile's required 90-day default (parent invariant #457).
+// keys (mirroring `grq.trend.*`). Mobile and desktop keep SEPARATE keys so a
+// choice on one device never overwrites the other's saved choice, but BOTH now
+// default to 180 days (issue #711): the full window is the default on every
+// form factor unless the user has specifically opted into 90.
 //
 // Like docs/trend_settings.js and docs/theme.js this file is loaded as a
 // classic <script> and is also imported by the Deno tests. It uses no module
@@ -24,8 +25,10 @@
 (function () {
   "use strict";
 
-  // The user-facing default mobile chart window, in days (issue #447: 90).
-  const MOBILE_WINDOW_DAYS_DEFAULT = 90;
+  // The user-facing default mobile chart window, in days. Originally 90
+  // (issue #447); raised to 180 by issue #711 so every form factor defaults to
+  // the full window unless the user has opted into 90.
+  const MOBILE_WINDOW_DAYS_DEFAULT = 180;
 
   // The user-facing default desktop chart window, in days (issue #465: 180).
   const DESKTOP_WINDOW_DAYS_DEFAULT = 180;
@@ -38,15 +41,16 @@
 
   // Namespaced localStorage key for the per-device desktop choice (issue #465).
   // Desktop keeps its OWN key so a desktop write can never change what mobile
-  // reads — preserving mobile's required 90-day default (parent #457).
+  // reads — each device persists its own choice independently (issue #711 makes
+  // both default to 180).
   const DESKTOP_STORAGE_KEY = "grq.chart.desktopWindowDays";
 
   // Coerce an arbitrary value to one of the allowed windows, defaulting to the
   // supplied fallback so a missing / corrupt stored value never breaks the
   // view. Accepts both numbers and their string forms (localStorage only stores
-  // strings). The fallback is parameterised (issue #465) so mobile falls back
-  // to 90 and desktop falls back to 180; an omitted fallback keeps the original
-  // mobile-90 behaviour for existing callers.
+  // strings). The fallback is parameterised (issue #465) so callers can choose
+  // the default; an omitted fallback uses MOBILE_WINDOW_DAYS_DEFAULT, which is
+  // now 180 on every form factor (issue #711).
   function normaliseWindowDays(value, fallback) {
     const def = fallback === undefined ? MOBILE_WINDOW_DAYS_DEFAULT : fallback;
     const num = typeof value === "string" ? Number(value) : value;
@@ -106,8 +110,8 @@
 
   // --- desktop chart window --------------------------------------------------
   // Separate key + 180 default (issue #465). A missing / corrupt / out-of-range
-  // desktop value falls back to 180, NOT 90, and writing here never touches the
-  // mobile key.
+  // desktop value falls back to 180, and writing here never touches the mobile
+  // key. Mobile now shares the same 180 default (issue #711).
 
   function readDesktopWindowDays(storage) {
     return normaliseWindowDays(
@@ -152,9 +156,9 @@
   // Resolve the effective chart window for a visit, applying the visit-only
   // precedence (issue #467): a `?window=` URL override (transient, never
   // persisted) wins over `savedWindowDays` — the already-resolved saved
-  // per-device choice or device default (mobile 90 / desktop 180). An absent or
-  // invalid override leaves the saved value in place. Pure: writes nothing, so
-  // a URL-supplied window is honoured for the visit without persisting.
+  // per-device choice or device default (180 on every form factor, issue #711).
+  // An absent or invalid override leaves the saved value in place. Pure: writes
+  // nothing, so a URL-supplied window is honoured for the visit without persisting.
   function effectiveWindowDays(search, savedWindowDays) {
     const fromUrl = windowDaysFromSearch(search);
     return fromUrl === null ? savedWindowDays : fromUrl;

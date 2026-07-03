@@ -20,15 +20,26 @@ function setDateToMidnight(date) {
     return d;
 }
 
-// Per-device chart/summary window (issue #367, milestone #333). The dashboard
-// chart truncates its visible benchmark series to a fixed window measured from
-// the score date — 90 days on mobile, 180 on desktop — so the "Market
-// Performance Comparison" summary must end on the SAME date or the two can
-// disagree in direction (chart down vs summary up). These pure helpers are the
-// single source of truth for that window, shared by prepareChartData (the
-// chart) and getMarketPerformanceData (the summary) so they cannot drift apart.
-const MOBILE_WINDOW_DAYS = 90;
-const DESKTOP_WINDOW_DAYS = 180;
+// The two permitted chart/summary window sizes (issue #367, milestone #333).
+// The dashboard chart truncates its visible benchmark series to a fixed window
+// measured from the score date, so the "Market Performance Comparison" summary
+// must end on the SAME date or the two can disagree in direction (chart down vs
+// summary up). These pure helpers are the single source of truth for that
+// window, shared by prepareChartData (the chart) and getMarketPerformanceData
+// (the summary) so they cannot drift apart. SHORT_WINDOW_DAYS / LONG_WINDOW_DAYS
+// name the two selectable sizes (90 and 180); they are NOT device defaults.
+const SHORT_WINDOW_DAYS = 90;
+const LONG_WINDOW_DAYS = 180;
+
+// The default chart window in days, now 180 on EVERY form factor (issue #711).
+// Previously mobile defaulted to 90 and desktop to 180; the full window is now
+// the default everywhere unless the user has opted into 90.
+const DEFAULT_WINDOW_DAYS = LONG_WINDOW_DAYS;
+
+// Back-compat aliases: earlier code (and the "actuals after 90" tail gate)
+// referred to these names as the short/long window sizes.
+const MOBILE_WINDOW_DAYS = SHORT_WINDOW_DAYS;
+const DESKTOP_WINDOW_DAYS = LONG_WINDOW_DAYS;
 
 // The chart window is selectable (issue #448, milestone #445; relaxed by #464,
 // milestone #457): the user may keep their device default or opt into the other
@@ -40,19 +51,19 @@ const PERMITTED_WINDOW_DAYS = [MOBILE_WINDOW_DAYS, DESKTOP_WINDOW_DAYS];
 // Days in the visible window for the current device.
 //
 // `windowDays` carries an explicit chosen window (90 or 180). An explicit
-// permitted value is honoured on EITHER device — desktop may now opt into 90
-// just as mobile may opt into 180 (issue #464 relaxes the old desktop-180 lock
-// from #448). When the value is missing (undefined) or not permitted, each
-// device keeps its own default: 90 on mobile, 180 on desktop.
-// projection.js stays pure: the caller supplies the value, this never reads
-// localStorage. Omitting the argument keeps every existing caller unchanged
+// permitted value is honoured on EITHER device — desktop may opt into 90 just
+// as mobile may opt into 180 (issue #464 relaxes the old desktop-180 lock from
+// #448). When the value is missing (undefined) or not permitted, the default is
+// 180 on EVERY form factor (issue #711) — mobile no longer defaults to 90.
+// `isMobile` is retained for call-site compatibility but no longer affects the
+// default. projection.js stays pure: the caller supplies the value, this never
+// reads localStorage. Omitting the argument keeps every existing caller working
 // (preserves the #367 single-source guarantee).
 function deviceWindowDays(isMobile, windowDays) {
-    const deviceDefault = isMobile ? MOBILE_WINDOW_DAYS : DESKTOP_WINDOW_DAYS;
-    if (windowDays === undefined) return deviceDefault;
+    if (windowDays === undefined) return DEFAULT_WINDOW_DAYS;
     return PERMITTED_WINDOW_DAYS.includes(windowDays)
         ? windowDays
-        : deviceDefault;
+        : DEFAULT_WINDOW_DAYS;
 }
 
 // The window's end date: scoreDate + resolved-device-days, at local midnight.

@@ -42,15 +42,17 @@ Deno.test("judgementWindowEnd - independent of the chart/device window (the #705
   // desktop: it is a fixed 90-day mark so the cards match the portfolio.
   const scoreDate = new Date("2026-01-05T09:30:00");
   const judgement = GRQProjection.judgementWindowEnd(scoreDate);
-  // Always equals the mobile 90-day window, never the desktop 180-day one.
+  // Always equals an explicit 90-day chart window, never the 180-day default.
+  // (Issue #711 makes 180 the default on every device, so 90 is compared
+  // explicitly rather than via the old mobile default.)
   assertEquals(
     judgement.getTime(),
-    GRQProjection.deviceWindowEnd(scoreDate, true).getTime(),
+    GRQProjection.deviceWindowEnd(scoreDate, true, 90).getTime(),
   );
   assert(
     judgement.getTime() < GRQProjection.deviceWindowEnd(scoreDate, false)
       .getTime(),
-    "judgement window must be shorter than the desktop 180-day chart window",
+    "judgement window must be shorter than the 180-day default chart window",
   );
 });
 
