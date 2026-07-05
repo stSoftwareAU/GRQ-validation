@@ -298,6 +298,26 @@ function returnAboveCostOfCapital(performance, costOfCapital, daysElapsed) {
     return performance - costOfCapitalHurdle(costOfCapital, daysElapsed);
 }
 
+// Cost-of-capital CHART series: the hurdle accrued at each plotted date, with
+// NO 90-day cap (issue #717). Unlike the judgement metrics (the per-stock and
+// portfolio "Return above Cost of Capital"), which intentionally cap
+// daysElapsed at 90, the chart line must keep accruing at `costOfCapital` p.a.
+// to the end of the visible window so it stays comparable with the plotted
+// actuals (~4.9% at day 180 for 10%/yr) rather than running dead flat after
+// day 90. Each entry mirrors the {x: Date, y: percent} shape the chart
+// consumes; `dates` is the sorted list of plotted market dates.
+function calculateCostOfCapitalSeries(scoreDate, dates, costOfCapital) {
+    const base = new Date(scoreDate).getTime();
+    return dates.map((date) => {
+        const point = new Date(date);
+        const daysSinceScore = (point.getTime() - base) / (24 * 60 * 60 * 1000);
+        return {
+            x: point,
+            y: costOfCapitalHurdle(costOfCapital, daysSinceScore),
+        };
+    });
+}
+
 // Single source of truth for the "is this stock included?" rule (issue #288,
 // extended #293, #577). Mirrors the Rust backend's `is_priceable` predicate
 // (src/utils.rs). A stock counts towards portfolio performance ONLY when it has
@@ -1511,6 +1531,7 @@ globalThis.GRQProjection = {
     calculatePerformanceReturn,
     costOfCapitalHurdle,
     returnAboveCostOfCapital,
+    calculateCostOfCapitalSeries,
     isStockIncluded,
     calculateIncludedPortfolioPerformance,
     dividendReturnPercent,

@@ -2994,7 +2994,6 @@ class GRQValidator {
     }
 
     calculateCostOfCapitalData() {
-        const breakpoint = this.getBootstrapBreakpoint();
         const isMobile = this.isMobileDevice();
 
         // Per-device visible window, shared with the chart and summary via the
@@ -3005,22 +3004,15 @@ class GRQValidator {
             this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
         );
 
-        // Debug logging for cost of capital mobile limitation
-        if (isMobile) {
-            console.log("Mobile detected - limiting cost of capital line to 90 days");
-            console.log("Cost of capital max date:", maxDate.toISOString().split('T')[0]);
-        }
-
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const costOfCapitalData = [];
 
-        // Get all unique dates from market data (limit based on mobile/desktop)
+        // Get all unique dates from market data (limited to the visible window).
         const allDates = new Set();
         this.scoreData.forEach((stock) => {
             const marketData = this.marketData[stock.stock];
             if (marketData) {
                 marketData.forEach((point) => {
-                    // Only include dates within the mobile/desktop limit
+                    // Only include dates within the visible window.
                     if (point.date <= maxDate) {
                         allDates.add(point.date.getTime());
                     }
@@ -3028,24 +3020,19 @@ class GRQValidator {
             }
         });
 
-        const sortedDates = Array.from(allDates).sort((a, b) => a - b);
+        const sortedDates = Array.from(allDates)
+            .sort((a, b) => a - b)
+            .map((timestamp) => new Date(timestamp));
 
-        sortedDates.forEach((timestamp) => {
-            const date = new Date(timestamp);
-            const daysSinceScore = (date - scoreDate) /
-                (1000 * 60 * 60 * 24);
-            // Cap cost of capital at 90 days to match portfolio view
-            const cappedDaysSinceScore = Math.min(daysSinceScore, 90);
-            const costOfCapitalReturn = (this.costOfCapital / 365) *
-                cappedDaysSinceScore;
-
-            costOfCapitalData.push({
-                x: new Date(date.getTime()), // Create clean Date object
-                y: costOfCapitalReturn,
-            });
-        });
-
-        return costOfCapitalData;
+        // Accrue the hurdle to the end of the visible window with NO 90-day cap
+        // (issue #717): the chart line keeps rising (~4.9% at day 180 for
+        // 10%/yr) rather than running flat after day 90. The 90-day cap on the
+        // judgement metrics is intentional and lives elsewhere.
+        return GRQProjection.calculateCostOfCapitalSeries(
+            scoreDate,
+            sortedDates,
+            this.costOfCapital,
+        );
     }
 
     getColor(index, alpha = 1) {
