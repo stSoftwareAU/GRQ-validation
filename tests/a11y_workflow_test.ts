@@ -286,3 +286,23 @@ Deno.test("a11y workflow pins actions to 40-character commit SHAs", async () => 
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
 });
+
+// Issue #728: the pa11y job checks out the repo but never pushes back or fetches
+// a private submodule, so it does not need the workflow's GITHUB_TOKEN persisted
+// into .git/config. Leaving it there widens the blast radius of any compromised
+// later step (a malicious dependency could read the token from disk and act as
+// it). Require persist-credentials: false on the pa11y checkout step.
+Deno.test("a11y pa11y checkout does not persist credentials", async () => {
+  const doc = await loadWorkflow();
+  const job = doc.jobs?.pa11y;
+  assert(job, "workflow must declare a pa11y job");
+  const checkout = (job.steps ?? []).find((s) =>
+    typeof s.uses === "string" && s.uses.startsWith("actions/checkout@")
+  );
+  assert(checkout, "pa11y job must have an actions/checkout step");
+  assertEquals(
+    checkout.with?.["persist-credentials"],
+    false,
+    "pa11y checkout must set persist-credentials: false so GITHUB_TOKEN is not written to .git/config",
+  );
+});

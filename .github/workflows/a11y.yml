@@ -68,6 +68,12 @@ jobs:
     steps:
       # actions/checkout@v4.2.2
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          # The pa11y job only reads the tree (serves docs/, runs pa11y-ci); it
+          # never pushes back or fetches a private submodule, so it does not need
+          # GITHUB_TOKEN persisted into .git/config. Not persisting it keeps a
+          # compromised later step from reading the token off disk (Issue #728).
+          persist-credentials: false
       # actions/setup-node@v4
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
