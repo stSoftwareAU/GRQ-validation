@@ -263,6 +263,25 @@ Deno.test("a11y multi-line bash run blocks begin with set -euo pipefail", async 
   }
 });
 
+// Issue #727: the check-docs-changes job only diffs docs/ paths — it never
+// pushes back to the repo or fetches a private submodule, so it must not let
+// actions/checkout persist GITHUB_TOKEN into .git/config, where a later
+// (possibly compromised) step could read it and act as the token.
+Deno.test("a11y check-docs-changes checkout does not persist credentials", async () => {
+  const doc = await loadWorkflow();
+  const job = doc.jobs?.["check-docs-changes"];
+  assert(job, "workflow must declare a check-docs-changes job");
+  const checkout = (job.steps ?? []).find((s) =>
+    typeof s.uses === "string" && s.uses.startsWith("actions/checkout@")
+  );
+  assert(checkout, "check-docs-changes job must have an actions/checkout step");
+  assertEquals(
+    checkout.with?.["persist-credentials"],
+    false,
+    "check-docs-changes checkout must set persist-credentials: false",
+  );
+});
+
 Deno.test("a11y workflow pins actions to 40-character commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
