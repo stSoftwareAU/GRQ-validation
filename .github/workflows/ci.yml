@@ -65,16 +65,16 @@ jobs:
         
         # Check if Rust files changed
         if grep -E "^(src/|Cargo\.toml|Cargo\.lock|tests/)" changed_files.txt > /dev/null; then
-          echo "rust=true" >> $GITHUB_OUTPUT
+          echo "rust=true" >> "$GITHUB_OUTPUT"
         else
-          echo "rust=false" >> $GITHUB_OUTPUT
+          echo "rust=false" >> "$GITHUB_OUTPUT"
         fi
         
         # Check if docs changed
         if grep -E "^(docs/)" changed_files.txt > /dev/null; then
-          echo "docs=true" >> $GITHUB_OUTPUT
+          echo "docs=true" >> "$GITHUB_OUTPUT"
         else
-          echo "docs=false" >> $GITHUB_OUTPUT
+          echo "docs=false" >> "$GITHUB_OUTPUT"
         fi
         
         echo "Changed files:"

@@ -1,0 +1,47 @@
+name: Actionlint
+
+# Lint gate for the workflow YAML itself (Issue #725).
+#
+# actionlint is the standard linter for GitHub Actions workflows: it catches
+# syntax errors, invalid `${{ }}` expressions, unknown runner labels, and —
+# through its bundled shellcheck integration — shell issues inside `run:`
+# blocks. Running it on every pull request fails the build when a workflow
+# regression is introduced, mirroring the shellcheck, markdown-lint, gitleaks
+# and semgrep gates already in this repo.
+#
+# The official rhysd/actionlint image is pinned to an immutable sha256 digest
+# rather than a mutable tag, matching the container pinning in semgrep.yml
+# (supply-chain hardening — Issue #72). Refresh the digest deliberately when
+# bumping the linter; resolve a new one with
+# `docker buildx imagetools inspect rhysd/actionlint:<version>`.
+
+on:
+  pull_request:
+    branches: ["*"]
+  push:
+    branches: [main, master]
+
+# Cancel superseded runs (Issue #139): rapid pushes to the same ref otherwise
+# queue redundant scans that each hold a runner. Keying on workflow + ref with
+# cancel-in-progress leaves only the latest run for a given ref alive.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # actions/checkout@v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      # rhysd/actionlint 1.7.9 official image, entrypoint `actionlint`, pinned
+      # to an immutable sha256 digest (Issue #72). The image bundles shellcheck
+      # so `run:` blocks are linted too. `-color` keeps annotations readable.
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint@sha256:a0383f60d92601e2694e24b24d37df7b6a40bed7cedbc447611c50009bf02d94
+        with:
+          args: -color
