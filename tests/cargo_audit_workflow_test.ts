@@ -86,6 +86,32 @@ Deno.test("Cargo Audit workflow pins actions to commit SHAs", async () => {
   assertActionsPinnedToSha(text);
 });
 
+// Issue #729: the audit job only checks out the repo to run cargo-audit — it
+// never pushes back or fetches a private submodule, so it does not need the
+// workflow's GITHUB_TOKEN persisted into .git/config. Leaving it there widens
+// the blast radius of any compromised later step (a malicious dependency could
+// read the token from disk and act as it). Require persist-credentials: false
+// on the audit checkout step.
+Deno.test("Cargo Audit audit checkout does not persist credentials", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as {
+    jobs: Record<string, { steps?: Array<Record<string, unknown>> }>;
+  };
+  const job = doc.jobs.audit;
+  assert(job, "workflow must declare an audit job");
+  const checkout = (job.steps ?? []).find((s) =>
+    typeof s.uses === "string" &&
+    (s.uses as string).startsWith("actions/checkout@")
+  );
+  assert(checkout, "audit job must have an actions/checkout step");
+  const withBlock = checkout.with as Record<string, unknown> | undefined;
+  assertEquals(
+    withBlock?.["persist-credentials"],
+    false,
+    "audit checkout must set persist-credentials: false so GITHUB_TOKEN is not written to .git/config",
+  );
+});
+
 // Concurrency cancellation (Issue #139). Without a concurrency group, rapid
 // pushes to the same ref queue redundant, overlapping runs that each hold a
 // runner. A top-level concurrency block keyed on workflow + ref with
