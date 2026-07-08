@@ -35,7 +35,37 @@ Deno.test("Markdown Lint workflow has correct triggers", async () => {
       | undefined;
   assert(on, "workflow must declare an 'on' trigger");
   assert("pull_request" in on, "must trigger on pull_request");
-  assert("push" in on, "must trigger on push");
+  // Issue #726: this is a lint/checker workflow that gates the PR. It must not
+  // re-run on push to the default branch — that duplicates the run which
+  // already gated the PR and wastes CI minutes. Allow manual dispatch instead.
+  assert("workflow_dispatch" in on, "must allow manual workflow_dispatch");
+});
+
+// Issue #726: a lint/checker gates the PR, so it must not fire on push to the
+// default branch. If the workflow keeps a `push:` trigger at all, its branch
+// filter must exclude `main` (and `master`); a bare `push:` reaching the
+// default branch re-runs the same check that already passed on the PR.
+Deno.test("Markdown Lint workflow does not trigger on push to the default branch", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const on = (doc.on ?? doc["true"] ??
+    (doc as Record<string, unknown>)[true as unknown as string]) as
+      | Record<string, unknown>
+      | undefined;
+  assert(on, "workflow must declare an 'on' trigger");
+  if (!("push" in on)) return; // No push trigger at all — compliant.
+  const push = on.push as { branches?: string[] } | null;
+  const branches = push?.branches ?? [];
+  assert(
+    branches.length > 0,
+    "a bare `push:` reaches the default branch — narrow its branches or drop push",
+  );
+  for (const branch of branches) {
+    assert(
+      branch !== "main" && branch !== "master",
+      `push trigger must not include the default branch (found "${branch}")`,
+    );
+  }
 });
 
 Deno.test("Markdown Lint workflow defines markdownlint job", async () => {

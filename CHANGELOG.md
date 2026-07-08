@@ -46,6 +46,12 @@ and this project adheres to
 
 ### Changed
 
+- Markdown Lint workflow (`.github/workflows/markdown-lint.yml`) no longer
+  triggers on push to the default branch. As a PR-gating lint check, a
+  post-merge push run only duplicated the run that already passed on the pull
+  request, wasting CI minutes; the `push:` trigger is replaced with
+  `workflow_dispatch` so the check still gates every PR and can be run manually
+  on demand (Issue #726).
 - Chart window now defaults to **180 days on every form factor** (previously 90
   on mobile, 180 on desktop). A fresh device shows the full 180-day window; the
   90/180 toggle, the per-device saved choice, and the transient `?window=` deep
