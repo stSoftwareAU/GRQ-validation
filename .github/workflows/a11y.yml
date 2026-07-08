@@ -45,8 +45,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 0
-          # This job only diffs docs/ paths; it never pushes back or fetches a
-          # private submodule, so do not persist GITHUB_TOKEN into .git/config
+          # Job only runs a local `git diff`; it never pushes back or fetches
+          # private submodules, so the GITHUB_TOKEN need not persist to disk
           # where a later step could read it (Issue #727).
           persist-credentials: false
       - name: Check for docs/ changes
