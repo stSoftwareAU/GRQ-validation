@@ -602,6 +602,11 @@ covering continuous integration, security scanning, and dependency hygiene.
 12. **Version Bump** (`version-bump.yml`) — on every pull request, runs
     `scripts/bump_version.ts` to increment the dashboard app version and commits
     the change back to the PR branch (see _Dashboard versioning_ below).
+13. **Actionlint** (`actionlint.yml`) — lints the workflow YAML itself on every
+    pull request with `actionlint`, catching syntax errors, invalid `${{ }}`
+    expressions, unknown runner labels, and — via its bundled `shellcheck`
+    integration — shell issues inside `run:` blocks, so workflow regressions
+    fail the build.
 
 ### Dashboard versioning
 

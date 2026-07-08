@@ -51,9 +51,9 @@ jobs:
           set -euo pipefail
           git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} > changed_files.txt
           if grep -E "^(docs/)" changed_files.txt > /dev/null; then
-            echo "docs=true" >> $GITHUB_OUTPUT
+            echo "docs=true" >> "$GITHUB_OUTPUT"
           else
-            echo "docs=false" >> $GITHUB_OUTPUT
+            echo "docs=false" >> "$GITHUB_OUTPUT"
           fi
 
   pa11y:
@@ -87,7 +87,7 @@ jobs:
           # Deno.args[0] (default 8000), so passing 8080 keeps the health check
           # and pa11yci.json target URLs unchanged.
           deno run --allow-net --allow-read helpers/server.ts 8080 &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -sSf http://localhost:8080/index.html >/dev/null 2>&1; then
               echo "Static server is up"
               break
