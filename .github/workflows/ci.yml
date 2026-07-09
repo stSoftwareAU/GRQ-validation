@@ -159,11 +159,16 @@ jobs:
     - name: Checkout code
       # actions/checkout@v4.2.2
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-      
+      with:
+        # Issue #730: build only compiles/uploads artifacts — it never pushes
+        # back or fetches a private submodule, so do not persist GITHUB_TOKEN
+        # into .git/config where a later compromised step could read it.
+        persist-credentials: false
+
     - name: Install Rust toolchain
       # dtolnay/rust-toolchain@stable
       uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
-        
+
     # Check bash script syntax
     - name: Check Bash Script Syntax
       run: |

@@ -115,6 +115,32 @@ Deno.test("build/test jobs do not declare their own permissions (inherit top-lev
   }
 });
 
+// Issue #730: the build job only checks out, compiles the release binary,
+// generates an SBOM and uploads artifacts — it never pushes back to the repo or
+// fetches a private submodule, so it does not need the workflow's GITHUB_TOKEN
+// persisted into .git/config. Leaving it there widens the blast radius of any
+// compromised later step (a malicious dependency could read the token from disk
+// and act as it). Require persist-credentials: false on the build checkout step.
+Deno.test("build job checkout does not persist credentials", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<
+    string,
+    { steps?: Array<{ uses?: string; with?: Record<string, unknown> }> }
+  >;
+  const job = jobs.build;
+  assert(job, "workflow must declare a build job");
+  const checkout = (job.steps ?? []).find((s) =>
+    typeof s.uses === "string" && s.uses.startsWith("actions/checkout@")
+  );
+  assert(checkout, "build job must have an actions/checkout step");
+  assertEquals(
+    checkout.with?.["persist-credentials"],
+    false,
+    "build checkout must set persist-credentials: false so GITHUB_TOKEN is not written to .git/config",
+  );
+});
+
 // Concurrency control (Issue #69). The pipeline triggers on push to main and
 // pull_request to main but, without a concurrency group, successive pushes or
 // rapid PR updates start a fresh full run (test, release build, SBOM, Pages
