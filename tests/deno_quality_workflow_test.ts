@@ -132,6 +132,33 @@ Deno.test("Deno Quality workflow triggers on a weekly schedule (Issue #59)", asy
   );
 });
 
+// Issue #734: the quality job only checks out to run the Deno quality checks
+// (lint, fmt, check, audit, test) and upload coverage — it never pushes back to
+// the repo or fetches a private submodule, so it does not need the workflow's
+// GITHUB_TOKEN persisted into .git/config. Leaving it there widens the blast
+// radius of any compromised later step (a malicious dependency could read the
+// token from disk and act as it). Require persist-credentials: false on the
+// checkout step.
+Deno.test("Deno Quality workflow checkout does not persist credentials", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<
+    string,
+    { steps?: Array<{ uses?: string; with?: Record<string, unknown> }> }
+  >;
+  const job = jobs.quality;
+  assert(job, "workflow must declare a quality job");
+  const checkout = (job.steps ?? []).find((s) =>
+    typeof s.uses === "string" && s.uses.startsWith("actions/checkout@")
+  );
+  assert(checkout, "quality job must have an actions/checkout step");
+  assertEquals(
+    checkout.with?.["persist-credentials"],
+    false,
+    "quality checkout must set persist-credentials: false so GITHUB_TOKEN is not written to .git/config",
+  );
+});
+
 Deno.test("Deno Quality workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
