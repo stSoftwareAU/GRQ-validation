@@ -21,5 +21,11 @@ jobs:
     steps:
       # actions/checkout@v4.2.2
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          # This job only reviews dependency changes — it never pushes back to
+          # the repo or fetches a private submodule, so the GITHUB_TOKEN must
+          # not be persisted into .git/config where a later compromised step
+          # could read it (Issue #735).
+          persist-credentials: false
       # actions/dependency-review-action@v4.9.0
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
