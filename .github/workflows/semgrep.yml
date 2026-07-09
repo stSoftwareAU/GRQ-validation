@@ -38,6 +38,12 @@ jobs:
     steps:
       # actions/checkout@v4.2.2
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          # The semgrep job only reads the repo to scan it — it never pushes
+          # back or fetches a private submodule, so the workflow GITHUB_TOKEN
+          # need not be written into .git/config (Issue #737). Not persisting
+          # it keeps a compromised later step from reading the token off disk.
+          persist-credentials: false
       - name: Run Semgrep CI
         run: semgrep ci --config p/default
         env:
