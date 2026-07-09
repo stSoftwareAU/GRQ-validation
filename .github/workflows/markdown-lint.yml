@@ -25,6 +25,12 @@ jobs:
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          # Issue #736: this job only lints markdown — it never pushes back nor
+          # fetches a private submodule, so it does not need the GITHUB_TOKEN
+          # written to .git/config, where a later compromised step could read
+          # it. Do not persist the credential to disk.
+          persist-credentials: false
       # actions/setup-node@v4
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
