@@ -251,6 +251,11 @@ jobs:
     - name: Checkout code
       # actions/checkout@v4.2.2
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      with:
+        # deploy-pages only reads ./docs to build the Pages artifact; it never
+        # pushes back or fetches private submodules, so the GITHUB_TOKEN must
+        # not be persisted into .git/config (Issue #732).
+        persist-credentials: false
 
     - name: Setup Pages
       # actions/configure-pages@v4.0.0
