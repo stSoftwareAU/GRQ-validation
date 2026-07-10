@@ -89,6 +89,21 @@ Deno.test("README.md documents the recent-files window used by run.sh", async ()
   );
 });
 
+Deno.test("README.md defines the GRQ acronym on first use (Issue #761)", async () => {
+  const text = await readText(README);
+  // The acronym must be glossed in the opening section, before the first
+  // "## " heading, so a first-time reader meets the definition immediately.
+  const opening = text.split(/^## /m)[0];
+  assert(
+    /Get Rich Quick/i.test(opening),
+    "README.md must expand GRQ (Get Rich Quick) in the opening section",
+  );
+  assert(
+    /\bGRQ\b/.test(opening),
+    "README.md opening section must use the GRQ acronym alongside its gloss",
+  );
+});
+
 Deno.test("Workflow listing helper finds the expected workflows", async () => {
   const workflows = await listWorkflowFiles();
   // Sanity check that the test environment can see the workflows directory.

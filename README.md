@@ -1,8 +1,10 @@
 # GRQ Validation
 
-A Rust-based system for validating AI predictions against 90-day targets and a
-10% annual cost of capital, paired with a static dashboard published via GitHub
-Pages.
+**GRQ** (short for _Get Rich Quick_) is the stSoftwareAU stock-prediction
+platform whose predictions this repository validates. GRQ Validation is a
+Rust-based system for validating those AI predictions against 90-day targets and
+a 10% annual cost of capital, paired with a static dashboard published via
+GitHub Pages.
 
 > **This is a 90-day prediction-validation tool, not a live stock-price app.**
 > Every price the tool reports and compares against is the price at the **90-day
@@ -215,11 +217,11 @@ prediction matures: a near-complete prediction extrapolates only a few days and
 should not be dismissed as "low confidence".
 
 | Days elapsed | R² confidence threshold |
-| --- | ---: |
-| 0–29 | 0.05 |
-| 30–59 | 0.03 |
-| 60–79 | 0.01 |
-| 80+ | 0.001 |
+| ------------ | ----------------------: |
+| 0–29         |                    0.05 |
+| 30–59        |                    0.03 |
+| 60–79        |                    0.01 |
+| 80+          |                   0.001 |
 
 ## How the GRQ model is trained
 
@@ -458,9 +460,9 @@ deterministically — issue #281):
   same mark the portfolio is judged on — so a 180-day chart does not inflate the
   index gains (issue #705); the cards carry an "as at `<date>`" caption of the
   exact 90-day close date. Like `?theme=`, the window override is **transient**:
-  it wins over the saved per-device choice but is **never** persisted, so a reload
-  without the param returns to the saved window (180 on every form factor by
-  default, issue #711); an absent or invalid value falls back to the saved
+  it wins over the saved per-device choice but is **never** persisted, so a
+  reload without the param returns to the saved window (180 on every form factor
+  by default, issue #711); an absent or invalid value falls back to the saved
   choice, then the device default.
 - `?stars=0|1|2|3|4|5` — pre-select the shared minimum-star filter for that page
   load on **both** the portfolio and Trend views (issue #666). `0` means **All**
@@ -506,11 +508,10 @@ deterministically — issue #281):
 A low-prominence **🔗 Share** button in the page footer does the inverse: it
 builds an absolute URL encoding the current selections (score file, stock,
 theme, 90/180 window, the shared min-star filter, and the transient mobile
-pop-out flag) and copies it to
-the clipboard (issue #495). It is **read-only** — generating a link never
-mutates your saved settings — and degrades to a select-the-text fallback where
-the async Clipboard API is unavailable. Pasting the link into a fresh tab
-reproduces the same view.
+pop-out flag) and copies it to the clipboard (issue #495). It is **read-only** —
+generating a link never mutates your saved settings — and degrades to a
+select-the-text fallback where the async Clipboard API is unavailable. Pasting
+the link into a fresh tab reproduces the same view.
 
 The single-stock detail view ends with a small, understated **Yahoo Finance**
 link as its lowest-priority item (issue #570) — a "here are our numbers; if a
@@ -556,17 +557,18 @@ aggregate over that filtered subset. A no-rating stock (`avgStars === null`) is
 excluded while the filter is on. The extra gate is folded into the shared
 `isStockPriceable()` inclusion check (and the target-dot input builder), so the
 table and the numbers are computed from the **same** filtered set and can never
-diverge. The pure decision lives in `GRQProjection.meetsStarThreshold(avgStars,
-minStars)`. The view subscribes to `grq:star-filter-change` and re-renders the
-chart and table without a page reload; at **All** the gate is a no-op and the
-view is unchanged.
+diverge. The pure decision lives in
+`GRQProjection.meetsStarThreshold(avgStars,
+minStars)`. The view subscribes to
+`grq:star-filter-change` and re-renders the chart and table without a page
+reload; at **All** the gate is a no-op and the view is unchanged.
 
 **Trend filtering (#656).** The Trend pipeline now also loads each matured
-date's analysis CSV (`scores/<YYYY>/<Month>/<DD>-analysis.csv`, tolerating a
-404 on older dates) and attaches the combined 1–5 `avgStars` to every stock,
-derived by the **shared** `GRQProjection.combineStarRating(msStars, tipsStars)`
-kernel — the same combination the portfolio view uses, so a stock's effective
-rating is identical between the two views. When a threshold is active,
+date's analysis CSV (`scores/<YYYY>/<Month>/<DD>-analysis.csv`, tolerating a 404
+on older dates) and attaches the combined 1–5 `avgStars` to every stock, derived
+by the **shared** `GRQProjection.combineStarRating(msStars, tipsStars)` kernel —
+the same combination the portfolio view uses, so a stock's effective rating is
+identical between the two views. When a threshold is active,
 `GRQTrendSeries.buildMaturedTrendSeries` excludes stocks below it (and unrated
 stocks) **before** each date's Actual/Target means are computed, so the trend
 lines recompute over the qualifying subset. The control change re-filters the
@@ -825,11 +827,11 @@ deno test --allow-read tests/
 
 The Deno suite includes a **dashboard "Limited data mode" smoke test**
 (`tests/dashboard_limited_data_smoke_test.ts`). It drives the real
-`GRQTrendPredictions.parseMarketCsv` kernel over the published
-`docs/scores/**` CSVs and **fails** if a date with full market data would
-render the `.limited-data-message` ("Limited data mode") banner — the quality
-gate that catches a market-data regression before it ships. It runs on every PR
-via `deno-quality.yml` (which already executes `deno test tests/*.ts`).
+`GRQTrendPredictions.parseMarketCsv` kernel over the published `docs/scores/**`
+CSVs and **fails** if a date with full market data would render the
+`.limited-data-message` ("Limited data mode") banner — the quality gate that
+catches a market-data regression before it ships. It runs on every PR via
+`deno-quality.yml` (which already executes `deno test tests/*.ts`).
 
 ### Market data fails loudly, not silently (data-fault state)
 

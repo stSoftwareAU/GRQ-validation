@@ -16,11 +16,24 @@ use std::path::{Path, PathBuf};
 
 /// Clearly-synthetic symbol so a fixture can never collide with a real symbol
 /// in an existing `MARKET_DATA_BASE_PATH` data repository.
+///
+/// Each fixture-installing test uses a *distinct* symbol so their fixture files
+/// never share a path: cargo runs tests in parallel by default, and a shared
+/// symbol meant one test's `Drop` could delete the JSON file out from under a
+/// concurrently-running test, leaving it with zero rows and a spurious "No
+/// market data rows written" failure.
 const FIXTURE_SYMBOL: &str = "GRQVTEST634A";
 
 /// Full ticker code as it appears in a scores file. The long writer keeps the
 /// whole code (exchange prefix included) in the `ticker` column.
 const FIXTURE_TICKER: &str = "NYSE:GRQVTEST634A";
+
+/// Distinct fixture symbol for the replacement test, so its fixture file never
+/// collides with [`FIXTURE_SYMBOL`]'s under parallel execution.
+const FIXTURE_SYMBOL_REPLACE: &str = "GRQVTEST634B";
+
+/// Full ticker code for the replacement test's fixture symbol.
+const FIXTURE_TICKER_REPLACE: &str = "NYSE:GRQVTEST634B";
 
 /// Score-file date used by the happy-path test; the 180-day window therefore
 /// runs from `2025-04-15` to `2025-10-12` inclusive.
@@ -253,7 +266,7 @@ fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> 
     // Complement to the preservation test: when fresh data IS available, the
     // destination is replaced atomically with the new content — no stale rows
     // and no leftover temp file (issue #687).
-    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL)?;
+    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL_REPLACE)?;
 
     let out_dir = tempfile::tempdir()?;
     let out_path = out_dir.path().join("replace.csv");
@@ -262,7 +275,7 @@ fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> 
     // Stale content that must be fully replaced by the fresh write.
     std::fs::write(&out_path, "stale,garbage\n1,2\n")?;
 
-    create_market_data_long_csv(&[FIXTURE_TICKER.to_string()], SCORE_DATE, out)?;
+    create_market_data_long_csv(&[FIXTURE_TICKER_REPLACE.to_string()], SCORE_DATE, out)?;
 
     let csv = std::fs::read_to_string(&out_path)?;
     assert_eq!(
@@ -271,7 +284,7 @@ fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> 
         "unexpected header after replacement in:\n{csv}"
     );
     assert!(
-        csv.contains(&format!("2025-04-15,{FIXTURE_TICKER}")),
+        csv.contains(&format!("2025-04-15,{FIXTURE_TICKER_REPLACE}")),
         "expected the fresh window-start row after replacement in:\n{csv}"
     );
     assert!(
