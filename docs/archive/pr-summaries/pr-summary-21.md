@@ -3,8 +3,8 @@
 Added the Semgrep SAST Scanning GitHub Actions workflow at
 `.github/workflows/semgrep.yml`. The workflow runs `semgrep ci --config
 p/default` inside the official `semgrep/semgrep` container on every
-pull request, surfacing static-analysis findings before merge. Closes
-#21.
+pull request, surfacing static-analysis findings before merge.
+Closes #21.
 
 Supply-chain hardening per the repo's existing pattern (gitleaks,
 cargo-audit): `actions/checkout` is pinned to a 40-character commit
