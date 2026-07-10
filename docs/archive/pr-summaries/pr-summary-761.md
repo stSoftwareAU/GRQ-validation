@@ -29,7 +29,7 @@ the changed files.
 
 - Added `tests/documentation_accuracy_test.ts::README.md defines the GRQ acronym
   on first use (Issue #761)` — reads `README.md`, splits off the opening section
-  before the first `## ` heading, and asserts it both expands the acronym
+  before the first `##` heading, and asserts it both expands the acronym
   ("Get Rich Quick") and uses the `GRQ` token alongside the gloss. Fails against
   the unfixed README, passes after the fix.
 - Ran the full `documentation_accuracy_test.ts` suite: 6 passed, 0 failed.
