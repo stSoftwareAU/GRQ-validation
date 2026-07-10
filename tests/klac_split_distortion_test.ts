@@ -16,7 +16,8 @@
 // now assert the *corrected* behaviour — the distorted series is flagged
 // `reliable: false` and no longer inflates, and the duplicate row de-duplicates
 // to a factor of 10. The reconciled (+74%) and clean (+15%) controls are
-// unchanged. Thresholds: docs/fixes/klac-split-distortion-investigation.md.
+// unchanged. Thresholds: README _Split-reconciliation thresholds_ (folded from
+// the pruned docs/fixes/ investigation in #759).
 import {
   assert,
   assertAlmostEquals,

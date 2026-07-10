@@ -124,8 +124,9 @@ pub fn is_priceable(buy_price: f64, current_price: f64, split_reliable: bool, sc
 }
 
 /// Trustworthy split-adjustment thresholds, mirroring `docs/projection.js`
-/// (issues #291/#292, parent #272). Agreed in the #291 investigation — see
-/// `docs/fixes/klac-split-distortion-investigation.md`.
+/// (issues #291/#292, parent #272). Agreed in the #291 investigation; the
+/// thresholds are documented under _Split-reconciliation thresholds_ in the
+/// README (the durable home after `docs/fixes/` was pruned in #759).
 const MAX_PLAUSIBLE_COEFFICIENT: f64 = 10.0; // a single split of <= 10:1 is plausible
 const DUPLICATE_WINDOW_DAYS: i64 = 5; // splits within 5 days = the same event twice
 const MAX_CUMULATIVE_FACTOR: f64 = 50.0; // cumulative factor cap over the window
@@ -1116,7 +1117,8 @@ pub fn create_dividend_csv_for_score_file(
 /// Annualises a period return using compound growth over the actual number of
 /// days observed.
 ///
-/// Spec (`docs/fixes/ANNUALIZED_PERFORMANCE_CALCULATION.md`):
+/// Spec (README _Annualised performance_ note, folded from the pruned
+/// `docs/fixes/` log in #759):
 /// `annualised = ((1 + performance/100) ^ (365.25 / days_elapsed) - 1) * 100`.
 ///
 /// Returns `0.0` when the period return is exactly zero or no days have
@@ -2217,7 +2219,7 @@ mod tests {
         // `calculate_portfolio_performance` uses to fill `performance_annualized`.
         //
         // Each expected value is derived directly from the spec formula in
-        // docs/fixes/ANNUALIZED_PERFORMANCE_CALCULATION.md:
+        // the README _Annualised performance_ note (#759):
         //   annualised = ((1 + p/100) ^ (365.25 / days) - 1) * 100
         // (e.g. 2% over 5 days: (1.02 ^ (365.25/5) - 1) * 100 = (1.02 ^ 73.05 - 1) * 100 ≈ 324.9),
         // rounded to one decimal place — not numbers copied from a one-off run.

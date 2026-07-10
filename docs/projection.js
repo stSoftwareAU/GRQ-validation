@@ -569,7 +569,8 @@ function formatCurrency(value) {
 }
 
 // Trustworthy split-adjustment thresholds (issue #292, parent #272). Agreed in
-// the #291 investigation — see docs/fixes/klac-split-distortion-investigation.md.
+// the #291 investigation; documented under _Split-reconciliation thresholds_ in
+// the README (durable home after docs/fixes/ was pruned in #759).
 const MAX_PLAUSIBLE_COEFFICIENT = 10.0; // a single split of <= 10:1 is plausible
 const DUPLICATE_WINDOW_DAYS = 5; // splits within 5 days = the same event twice
 const MAX_CUMULATIVE_FACTOR = 50.0; // cumulative factor cap over the window
