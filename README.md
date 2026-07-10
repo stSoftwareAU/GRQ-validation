@@ -168,6 +168,59 @@ When the guard trips it names both newest dates and the gap, e.g.
 `benchmark indices are stale: newest index date 2026-06-08 lags the newest
 actuals date 2026-06-18 by 7 trading days (tolerance is 3 trading days)`.
 
+## Calculation notes
+
+These durable calculation rules were previously kept as ad-hoc logs under
+`docs/fixes/`; that parallel store drifted from reality, so the learnings now
+live here as the single source of truth (issue #759). The Rust backend and the
+dashboard implement each rule identically so their figures always agree.
+
+### Annualised performance (compound growth, actual days)
+
+The annualised figure uses **compound growth**, never a simple `× 4`
+multiplication:
+
+```text
+annualised = ((1 + performance / 100) ^ (365.25 / days_elapsed) − 1) × 100
+```
+
+`days_elapsed` is the number of days with market data, **capped at 90** — so a
+prediction only a few days old annualises over those few days rather than a
+fixed 90-day window, which would badly understate an early-stage rate. A period
+return of exactly `0` (or zero days elapsed) annualises to `0`. Both
+`calculate_annualized_performance` (`src/utils.rs`) and the dashboard use this
+formula, which matches how funds and data providers report annualised returns.
+
+### Split-reconciliation thresholds
+
+`is_priceable` (backend, `src/utils.rs`) and `computeSplitAdjustment`
+(`docs/projection.js`) share one threshold set so a stock split inside the
+90-day window is reconciled consistently (see _Split-Aware Returns_ above). An
+unreconcilable series is excluded rather than silently inflating a return:
+
+- A single `split_coefficient` is plausible only when `1.0 ≤ c ≤ 10.0`; a
+  coefficient `≤ 0` or `NaN` is treated as `1.0` (no adjustment).
+- Two split points within **5 trading days** are the **same** event recorded
+  twice and are de-duplicated (real splits never recur within a week).
+- The cumulative factor over the window is capped at **50**; a larger factor
+  almost certainly means duplicated coefficients.
+- The cumulative factor must match the observed price drop to within **±15%**,
+  and the resulting 90-day return must fall within **−90% … +300%**; otherwise
+  the split is rejected (factor `1.0`) and the stock excluded.
+
+### Late-stage projection confidence
+
+The hybrid projection's trend line relaxes its R² confidence threshold as a
+prediction matures: a near-complete prediction extrapolates only a few days and
+should not be dismissed as "low confidence".
+
+| Days elapsed | R² confidence threshold |
+| --- | ---: |
+| 0–29 | 0.05 |
+| 30–59 | 0.03 |
+| 60–79 | 0.01 |
+| 80+ | 0.001 |
+
 ## How the GRQ model is trained
 
 > **High-level overview for general readers.** This section explains, at a

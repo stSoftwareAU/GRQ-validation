@@ -1,10 +1,19 @@
-// Tests for a self-describing repository root (Issue #78).
+// Tests for a self-describing repository root (Issue #78) and a pruned
+// docs/fixes/ learnings store (Issue #759).
 //
 // Historical "fix note" Markdown files and one-off test/debug scripts used to
 // accumulate at the repository root, burying the genuine entry points
-// (README.md, Cargo.toml, LICENSE, SECURITY.md). These tests assert that the
-// fix-notes now live under docs/fixes/ and the stray scripts under
-// scripts/debug/, and that none of them remain at the root.
+// (README.md, Cargo.toml, LICENSE, SECURITY.md). #78 moved the fix-notes under
+// docs/fixes/ and the stray scripts under scripts/debug/, and asserts none of
+// them remain at the root.
+//
+// #759 then pruned docs/fixes/ itself: it was a second, drifting learnings
+// store maintained in parallel with the README and the docs/archive/
+// pr-summaries archive. Every stale/redundant fix log has been removed after
+// confirming its durable learning is captured in the README or an existing
+// pr-summary. Only CI_CD_SETUP.md is retained, because the root README links it
+// twice. These tests assert that layout: no fix-note at the root, the pruned
+// notes gone from docs/fixes/ too, and CI_CD_SETUP.md still present.
 
 import { assert } from "@std/assert";
 
@@ -18,8 +27,18 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-// Fix-note / summary Markdown files that must move into docs/fixes/.
-const FIX_NOTES = [
+// The single fix-note retained under docs/fixes/ — the root README links it
+// twice (Setup + Support), so it must stay reachable at that path (#759).
+const RETAINED_FIX_NOTES = [
+  "CI_CD_SETUP.md",
+];
+
+// Fix-note / summary Markdown files pruned by #759. Each was either stale
+// (documented removed proxies/workflows) or a duplicate learnings store; its
+// durable learning now lives in the README or a docs/archive pr-summary. They
+// must not remain at the repository root (#78) and must not linger under
+// docs/fixes/ (#759).
+const PRUNED_FIX_NOTES = [
   "CARGO_AUDIT_FIX.md",
   "CLIPPY_FIXES.md",
   "CONFIDENCE_THRESHOLD_FIX.md",
@@ -27,10 +46,15 @@ const FIX_NOTES = [
   "DEPRECATED_ACTIONS_FIX.md",
   "fix_summary.md",
   "AUTO_FORMAT_WORKFLOW.md",
-  "CI_CD_SETUP.md",
   "ANNUALIZED_PERFORMANCE_CALCULATION.md",
   "TEST_CASES_SUMMARY.md",
+  "freshness-indicator-sign-investigation.md",
+  "klac-split-distortion-investigation.md",
+  "POPOVER_AUTO_DISMISS_FIX.md",
 ];
+
+// Every fix note, retained or pruned, must be gone from the repository root.
+const FIX_NOTES = [...RETAINED_FIX_NOTES, ...PRUNED_FIX_NOTES];
 
 // Stray test/debug scripts that must move into scripts/debug/.
 //
@@ -67,11 +91,21 @@ Deno.test("fix-note docs are removed from the repository root", async () => {
   }
 });
 
-Deno.test("fix-note docs live under docs/fixes/", async () => {
-  for (const name of FIX_NOTES) {
+Deno.test("retained fix-note docs live under docs/fixes/ (#759)", async () => {
+  for (const name of RETAINED_FIX_NOTES) {
     assert(
       await exists(`docs/fixes/${name}`),
-      `docs/fixes/${name} must exist`,
+      `docs/fixes/${name} must exist (README links it)`,
+    );
+  }
+});
+
+Deno.test("pruned fix-note docs are removed from docs/fixes/ (#759)", async () => {
+  for (const name of PRUNED_FIX_NOTES) {
+    assert(
+      !(await exists(`docs/fixes/${name}`)),
+      `docs/fixes/${name} must be pruned — its durable learning belongs in ` +
+        `the README or a docs/archive pr-summary, not a parallel fix log`,
     );
   }
 });

@@ -7,9 +7,11 @@ live data.
 
 These reproduce the split-adjustment distortion behind KLAC's inflated "Capital"
 figure. They are consumed by `tests/klac_split_distortion_test.ts` and by the
-follow-up `projection.js` helper and backend-guard sub-issues of #272. The full
-analysis and the agreed plausibility thresholds live in
-[`docs/fixes/klac-split-distortion-investigation.md`](../../docs/fixes/klac-split-distortion-investigation.md).
+follow-up `projection.js` helper and backend-guard sub-issues of #272. The
+agreed plausibility thresholds live under _Split-reconciliation thresholds_ in
+the [root README](../../README.md); the point-in-time #291 investigation is
+preserved in `docs/archive/pr-summaries/pr-summary-291.md`. (The parallel
+`docs/fixes/` log was pruned in #759.)
 
 All three share the same score/buy date (`2026-03-11`) and a raw buy midpoint of
 `(1495.00 + 1454.00) / 2 = 1474.50`.
