@@ -23,6 +23,12 @@ jobs:
     steps:
       # actions/checkout@v6.0.2
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          # This job only runs ShellCheck — it never pushes back to the repo or
+          # fetches a private submodule, so the GITHUB_TOKEN must not be
+          # persisted into .git/config where a later compromised step could read
+          # it (Issue #738).
+          persist-credentials: false
       # ludeeus/action-shellcheck pinned to commit SHA (Issue #27)
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca

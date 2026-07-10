@@ -39,6 +39,32 @@ Deno.test("ShellCheck workflow declares read-only contents permission", async ()
   assertEquals(doc.permissions.contents, "read");
 });
 
+// Issue #738: the shellcheck job only checks out to run ShellCheck — it never
+// pushes back to the repo or fetches a private submodule, so it does not need
+// the workflow's GITHUB_TOKEN persisted into .git/config. Leaving it there
+// widens the blast radius of any compromised later step (a malicious dependency
+// could read the token from disk and act as it). Require
+// persist-credentials: false on the checkout step.
+Deno.test("ShellCheck workflow checkout does not persist credentials", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<
+    string,
+    { steps?: Array<{ uses?: string; with?: Record<string, unknown> }> }
+  >;
+  const job = jobs.shellcheck;
+  assert(job, "workflow must declare a shellcheck job");
+  const checkout = (job.steps ?? []).find((s) =>
+    typeof s.uses === "string" && s.uses.startsWith("actions/checkout@")
+  );
+  assert(checkout, "shellcheck job must have an actions/checkout step");
+  assertEquals(
+    checkout.with?.["persist-credentials"],
+    false,
+    "shellcheck checkout must set persist-credentials: false so GITHUB_TOKEN is not written to .git/config",
+  );
+});
+
 // Concurrency cancellation (Issue #139). Without a concurrency group, rapid
 // pushes to the same ref queue redundant, overlapping runs that each hold a
 // runner. A top-level concurrency block keyed on workflow + ref with
