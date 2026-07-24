@@ -3,7 +3,7 @@
 ## Summary
 
 The benchmark index lines on the dashboard lagged the actuals by several days
-because the external daily **scorer** job (`stSoftwareAU/GRQ`, `worker/score.sh`
+because the external daily **scorer** job (the upstream scorer job
 — commits authored by `scorer 3`, messages like `Add scores for 2026-06-20`)
 committed new `docs/scores/...` and `docs/USDAUD.json` but never refreshed
 `docs/market-indices.json`. This change makes the indices refresh in **lockstep**
@@ -22,7 +22,7 @@ It has two parts:
    Exposed as `deno task refresh-indices`.
 
 2. **The scorer job (root-cause fix, cross-repo — Issue #2942).** A companion PR
-   against `stSoftwareAU/GRQ` invokes `deno task refresh-indices` inside the
+   against the upstream prediction repository invokes `deno task refresh-indices` inside the
    existing GRQ-validation checkout immediately before the daily
    `model_checkin.sh GRQ-validation "Add scores for YYYY-MM-DD"`. Because
    `model_checkin.sh` stages all local changes, the refreshed
@@ -45,7 +45,7 @@ Data-flow of the daily lockstep refresh:
 
 ```mermaid
 sequenceDiagram
-    participant Scorer as Scorer job (GRQ/worker/score.sh)
+    participant Scorer as Scorer job (upstream)
     participant Repo as GRQ-validation checkout
     participant Yahoo as Yahoo Finance
     Scorer->>Repo: write docs/scores/... + docs/USDAUD.json
@@ -88,6 +88,6 @@ safe-write guard tests continue to pass against the refactored fetcher.
 
 ## Cross-repo change
 
-The companion root-cause fix in `stSoftwareAU/GRQ` (`worker/score.sh`) is raised
+The companion root-cause fix in the upstream scorer job is raised
 as a separate PR in that repo and is **not** auto-merged (Issue #2944); it is a
 two-line, non-blocking invocation of the stable entry point added here.

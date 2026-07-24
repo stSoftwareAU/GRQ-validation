@@ -1,8 +1,8 @@
-# Confirm GRQ training `volumeRecommend` guard down-ranks low-volume names
+# Confirm upstream training `volumeRecommend` guard down-ranks low-volume names
 
 _Verification for Issue #579 (sub-issue of #563 — "flag/exclude low-volume
-stocks & never recommend"). The guard lives upstream in the **GRQ** training
-repo (`GRQ/src`); this document is the written confirmation requested by the
+stocks & never recommend"). The guard lives in the upstream training
+repository; this document is the written confirmation requested by the
 issue's acceptance criteria. **No production code is changed** — the
 investigation confirms the existing guard is applied and biting, so no tuning
 is warranted._
@@ -29,15 +29,15 @@ flowchart LR
 ## 1. The guard is applied on every path (no bypass)
 
 The training label is produced in exactly **one** place. A repo-wide search for
-output-array producers in `GRQ/src` returns a single hit:
+output-array producers in the upstream training code returns a single hit:
 
-- `GRQ/src/LearnUtil.ts:217` — `output: [recommend]` is the only construction of
-  a training item's `output`.
+- the upstream training-label producer — `output: [recommend]` is the only
+  construction of a training item's `output`.
 
 `recommend` is always the capped value computed immediately above it:
 
 ```ts
-// GRQ/src/LearnUtil.ts:154-157
+// upstream training code
 const recommend = Math.max(
   Math.min(core.volumeRecommend, priceRecommend, 1),
   -1,
@@ -52,11 +52,11 @@ output without passing through this cap.
 
 ## 2. `volumeRecommend` definition (single source of truth)
 
-`volumeRecommend` is computed in `GRQ/src/CoreFeatures.ts:225-260` from the last
+`volumeRecommend` is computed in the upstream training code from the last
 10 weekdays of volume and intraday-low price:
 
 ```ts
-// GRQ/src/CoreFeatures.ts (abridged)
+// upstream training code (abridged)
 const averagePV = totalPV / volumes.length;           // Σ(volume × lowPrice) / n, in CENTS·shares
 if (averagePV / 100 < BUDGET_DOLLARS) {                // below $10,000/day ⇒ never recommend
   volumeRecommend = -1;
@@ -67,18 +67,18 @@ if (averagePV / 100 < BUDGET_DOLLARS) {                // below $10,000/day ⇒ 
 }
 ```
 
-`BUDGET_DOLLARS = 10000` is defined once in `GRQ/src/LearnUtilTypes.ts:69` and
+`BUDGET_DOLLARS = 10000` is defined once in the upstream training code and
 is the **only** threshold — this verification deliberately reuses it rather than
 inventing a new one.
 
-## 3. Units assumption confirmed — GRQ prices are in cents
+## 3. Units assumption confirmed — upstream prices are in cents
 
-The `averagePV / 100` conversion assumes GRQ stores prices in **cents**. This is
+The `averagePV / 100` conversion assumes upstream stores prices in **cents**. This is
 correct for the current data:
 
-- `GRQ/src/Market.ts:494` — `dollars[i] = v != null ? v / 100 : null;` converts a
+- the upstream training code — `dollars[i] = v != null ? v / 100 : null;` converts a
   stored price to dollars by dividing by 100, i.e. stored prices are cents.
-- `GRQ/src/MarketStockInfo.ts:325` — `totalTradedDollars += v * p / 100;`
+- the upstream training code — `totalTradedDollars += v * p / 100;`
   computes dollar volume as `volume × price / 100`, the same cents→dollars rule.
 
 So `totalPV = Σ(volume × lowPriceInCents)` is in cents·shares, and `averagePV /
@@ -89,7 +89,7 @@ are already in dollars, so it omits the `/100`), reusing the same definition.
 
 ## 4. Empirical confirmation — the guard bites at the $10,000/day cliff
 
-Driving the **real** GRQ `profitRecommend` and `BUDGET_DOLLARS` exports with a
+Driving the **real** upstream `profitRecommend` and `BUDGET_DOLLARS` exports with a
 sweep of average daily dollar volumes (price fixed at $1.00/share so daily
 dollar volume equals the share volume), against a strong BUY price signal
 (`priceRecommend(+10% gain) = 0.9931`):
@@ -112,15 +112,15 @@ intended. Above the budget, `volumeRecommend` ramps up from 0 and stops
 constraining the score once it exceeds `priceRecommend` (the $5M row settles at
 the price-limited 0.9931).
 
-This reproduces the behaviour of the debug probe at `GRQ/src/LearnUtil.ts:179`
+This reproduces the behaviour of the debug probe in the upstream training code
 (`recommend + "(" + core.volumeRecommend + "," + priceRecommend + …`), which
 surfaces the same two components on the training path.
 
 ## 5. Conclusion — applied, biting, no tuning
 
 - **Applied on all paths:** the sole training-output producer
-  (`LearnUtil.ts:217`) always passes `volumeRecommend` through the
-  `Math.min(…)` cap (`LearnUtil.ts:154-157`). No bypass exists.
+  (the upstream training-label producer) always passes `volumeRecommend` through
+  the `Math.min(…)` cap in the upstream training code. No bypass exists.
 - **Biting:** sub-`$10,000`/day names are pinned to `−1` even against a maximal
   BUY price signal (§4).
 - **Units correct:** prices are cents; `averagePV / 100` yields dollars,

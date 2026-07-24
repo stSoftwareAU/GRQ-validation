@@ -2,14 +2,15 @@
 
 _Diagnostic for Issue #553 (sub-issue of #544 — one candidate source of the
 systematic Target-over-Actual measurement gap). The windowed credit lives in
-`GRQ-validation`; the flat training credit lives upstream in `GRQ`._
+`GRQ-validation`; the flat training credit lives in the upstream training
+repository._
 
 ## TL;DR
 
-GRQ training bakes a **flat** quarter of the trailing annual dividend,
+Upstream training bakes a **flat** quarter of the trailing annual dividend,
 `core.yearOfDividends / 4`, into the total-return label for **every** stock —
-whether or not a dividend actually lands in the forward window
-(`GRQ/src/LearnUtil.ts:147-148`, built from `GRQ/src/CoreFeatures.ts`). The
+whether or not a dividend actually lands in the forward window (in the upstream
+training code). The
 validation dashboard credits only the **actual ex-dividends inside the 90-day
 window** (`GRQ-validation/src/utils.rs` `calculate_dividends_for_period`,
 mirrored by the shipped JS kernels `filterDividendsWithin90Days` +
@@ -74,7 +75,7 @@ estimate is therefore the **1%-trimmed mean ≈ +1.36 pp** (and the median 0).
    price basis, which masked the gap.)
 3. **Fix-vs-leave recommendation** — see below.
 
-## Recommendation: real, same-direction contributor — **fix the basis upstream in `GRQ`** (align training onto realised forward-window dividends)
+## Recommendation: real, same-direction contributor — **fix the basis in the upstream training repository** (align training onto realised forward-window dividends)
 
 Unlike the price-basis candidate (#552, exonerated because it _hid_ the gap),
 the dividend basis is a **genuine, same-direction contributor** of roughly
@@ -85,12 +86,13 @@ direction is to **align both sides on realised dividends**:
   reflects the cash a holder actually received in the 90 days. Degrading it to a
   fabricated flat quarter (to match training) would credit dividend income that
   was never realised — strictly worse for a user-facing figure.
-- Therefore the clean fix lives **upstream in `GRQ`**: train/evaluate the label
+- Therefore the clean fix lives **in the upstream training repository**: train/evaluate the label
   on the dividends that actually fall in the forward 90-day window (the same
   basis `calculate_dividends_for_period` uses), instead of a flat
   `yearOfDividends / 4`. That removes the structural over-credit at source and
   makes Target and Actual like-for-like on dividends.
-- The root-cause change is a **training-label** decision in `GRQ`, out of scope
+- The root-cause change is a **training-label** decision in the upstream
+  training repository, out of scope
   for this `GRQ-validation` diagnostic issue (whose deliverable is the written
   analysis + recommendation). It should be carried as a fix candidate under
   milestone #544.
@@ -118,21 +120,21 @@ credit measured here is the dashboard's own credit, not a re-implementation:
   dashboard aggregates over.
 
 The flat credit is read from the full per-ticker dividend history in the
-sibling `../GRQ-dividends` tree (the same source `src/utils.rs` reads via
+private dividend-history tree (the same source `src/utils.rs` reads via
 `DIVIDEND_DATA_BASE_PATH`); the windowed credit is read from the committed
 per-score `*-dividends.csv` files.
 
 ```bash
-deno task diagnose-dividend-basis              # docs/, today, ../GRQ-dividends
+deno task diagnose-dividend-basis              # docs/, today, ../private-dividend-tree
 # raw form (pin an as-of date + explicit history root for a reproducible report):
-deno run --allow-read scripts/diagnose_dividend_basis.ts docs 2026-06-26 ../GRQ-dividends
+deno run --allow-read scripts/diagnose_dividend_basis.ts docs 2026-06-26 ../private-dividend-tree
 ```
 
 ```mermaid
 flowchart LR
     A[scores/index.json<br/>matured dates only] --> B[parse tsv/csv]
     B --> C[resolvePredictionStocks<br/>buyPrice + realised in-window totalDividends]
-    A --> D[../GRQ-dividends<br/>full per-ticker history]
+    A --> D[private dividend tree<br/>full per-ticker history]
     D --> E[trailingAnnualDividends / 4<br/>flat training credit]
     C --> F[dividendBasisDifferencePercent<br/>= flat - windowed / buyPrice]
     E --> F
@@ -141,9 +143,9 @@ flowchart LR
 
 ## Code references
 
-- Flat training credit: `GRQ/src/LearnUtil.ts:147-148`
+- Flat training credit: the upstream training code
   (`(targetPrice + core.yearOfDividends / 4) / core.monthsAgoPrice`),
-  `yearOfDividends` built in `GRQ/src/CoreFeatures.ts`.
+  `yearOfDividends` built in the upstream training code.
 - Windowed actual credit: `GRQ-validation/src/utils.rs`
   `calculate_dividends_for_period` (invoked at the 90-day window), mirrored by
   `docs/projection.js` `filterDividendsWithin90Days` + `sumDividends`.

@@ -10,7 +10,7 @@ set), and `calculate_dividends_for_period` (called at `src/utils.rs:807` and
 into `get_dividend_data_path`. That helper interpolated the ticker into a
 `format!` template, so `..` segments survived into the path handed to
 `File::open`, letting a crafted ticker such as `X/../../../../../../etc/some`
-escape the intended `../GRQ-dividends/data/` tree.
+escape the intended `../private-dividend-tree/data/` tree.
 
 The market-data path already neutralises this via `extract_symbol_from_ticker`,
 and the score-file path already rejects `..`/absolute segments in
@@ -40,7 +40,7 @@ flowchart LR
     B --> C[read_dividend_data]
     C --> D[get_dividend_data_path]
     D -->|"`..` or absolute segment"| E[Err -> 0.0 dividends]
-    D -->|normal segments only| F[../GRQ-dividends/data/L/TICKER.json]
+    D -->|normal segments only| F[private dividend tree data<br/>L/TICKER.json]
 ```
 
 ## Evidence

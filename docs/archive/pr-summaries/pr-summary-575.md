@@ -66,8 +66,8 @@ test result: ok. 78 passed; 1 failed; ...
 
 ### Pre-existing, environment-only failures (not introduced here)
 
-Two tests fail **only** because this worker's checkout of the external data
-repo (`../GRQ-shareprices2026Q2`) is a bare `.git` clone with no `data/`
+Two tests fail **only** because this worker's checkout of the external
+market-data repository is a bare `.git` clone with no `data/`
 directory: `utils::tests::test_read_market_data` and
 `tests/market_data_tests.rs::test_create_market_data_long_csv_for_first_score_file`.
 Both were confirmed to fail identically on the base branch before any change,
