@@ -48,7 +48,7 @@ via the test suite:
 - `./quality.sh` completes with `✅ Quality checks completed successfully!`
   (fmt, clippy `-D warnings`, type checks, tests, coverage, Deno checks).
 
-The fixture leaves no residue: `../GRQ-shareprices2026Q2` does not exist after
+The fixture leaves no residue: `../private-market-data-tree` does not exist after
 the run when it was absent beforehand.
 
 ## Test Plan

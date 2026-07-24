@@ -2,9 +2,9 @@
 
 _Diagnostic for Issue #556 (sub-issue of #544 — one candidate source of the
 systematic Target-over-Actual measurement gap). User-raised candidate. The
-score→target decode lives upstream in `GRQ`
-(`GRQ/src/LearnUtilTypes.ts`, called at `GRQ/src/portfolio/ScoreApp.ts:473`);
-this repo holds only the already-decoded Target in each score TSV._
+score→target decode lives upstream in the training repository (the upstream
+decode code, called from the upstream scoring app); this repo holds only the
+already-decoded Target in each score TSV._
 
 ## TL;DR
 
@@ -22,10 +22,10 @@ asymmetric clamps the issue flagged cannot bias the realised data:
 
 The only residual candidate is **encode-side quantisation** (a saturated
 `score == 1` is a fixed +50% point estimate of an unknown true intent ≥ the
-saturation threshold). That is information lost in `GRQ` at _encode_ time and is
+saturation threshold). That is information lost upstream at _encode_ time and is
 **not** a `reverseProfitRecommend` round-trip asymmetry — the dashboard decode
-cannot recover or distort it. It is flagged below for `GRQ` but is out of scope
-for this decode audit.
+cannot recover or distort it. It is flagged below for the upstream training
+repository but is out of scope for this decode audit.
 
 ## The mapping under test
 
@@ -48,7 +48,7 @@ data: a `score == 1` row (NYSE:DD, Target 68.39) decodes to `1.5 × 45.59 =
 
 ```mermaid
 flowchart LR
-    P["true return % (GRQ, unobserved)"] -->|"encode: tanh((pct-1.5)/3)"| S["score ∈ [-1, 1]"]
+    P["true return % (upstream, unobserved)"] -->|"encode: tanh((pct-1.5)/3)"| S["score ∈ [-1, 1]"]
     S -->|"decode: 3·atanh + 1.5, clamp"| D["decoded % → Target"]
     D -->|"re-encode"| S2["score'"]
     S2 -->|"re-decode"| D2["decoded %'"]
@@ -99,11 +99,11 @@ caps are unreachable in practice.
    **`0`/-100% floor** fires for **0 %** (no negative scores exist); the interior
    ±50% caps fire for **0 %**. The asymmetry the issue described is real in the
    code but **dormant** in the data. The `min(volumeRecommend, priceRecommend,
-   1)` interaction lives entirely upstream in `GRQ` training — it shapes which
-   `pct` was encoded, not how the dashboard decodes a given score — and so
+   1)` interaction lives entirely upstream in the training repository — it shapes
+   which `pct` was encoded, not how the dashboard decodes a given score — and so
    contributes nothing measurable on the decode side. Its only footprint here is
    that 38–46 % of scores **saturate** to exactly 1, which is the encode-side
-   point we hand to `GRQ` below.
+   point we hand to the upstream training repository below.
 3. **Whether decoding contributes to the gap → no.** Decoding does **not**
    contribute to the Target-over-Actual gap: it is an exact inverse on every
    realised score, and the asymmetric clamp that could have biased it never
@@ -111,7 +111,7 @@ caps are unreachable in practice.
 4. **Fix recommendation → explicit "ruled out".** No dashboard fix is warranted.
    `reverseProfitRecommend` is decoding faithfully. **Ruled out.**
 
-## Residual (encode-side) candidate — for `GRQ`, not this decode
+## Residual (encode-side) candidate — for the upstream training repository, not this decode
 
 A `score == 1` is a _saturated_ encode: `tanh` reaches 1.0 (in float) for any
 true return above roughly +28 %, so 38–46 % of names that "wanted ≥ ~28 %" all
@@ -119,13 +119,13 @@ collapse to the same score and the dashboard decodes every one of them to a
 fixed **+50 %**. If the true intent of those saturated names averages **below**
 +50 %, the decoded Target over-states them — a _plausibly upward_ contribution to
 Target-over-Actual. Crucially this is **information lost at encode time inside
-`GRQ`**, not a `reverseProfitRecommend` asymmetry: the dashboard receives only
-the saturated score and cannot recover the lost magnitude. Resolving it needs
-the _training-side_ distribution of true `pct` for saturated names, which lives
-in `GRQ` and is outside this repo's data.
+the upstream training repository**, not a `reverseProfitRecommend` asymmetry: the
+dashboard receives only the saturated score and cannot recover the lost
+magnitude. Resolving it needs the _training-side_ distribution of true `pct` for
+saturated names, which lives upstream and is outside this repo's data.
 
-**Recommendation:** keep the dashboard decode as-is (ruled out), and raise a
-`GRQ` issue to check whether saturating the score at +50 % on decode is the right
+**Recommendation:** keep the dashboard decode as-is (ruled out), and raise an
+upstream training issue to check whether saturating the score at +50 % on decode is the right
 point estimate for the ~38–46 % of names that hit `score == 1` — i.e. whether
 the encode should reserve headroom above +50 % or the decode should use a
 distribution-aware estimate rather than the cap. Cross-referenced from this
@@ -142,5 +142,5 @@ deno run --allow-read \
 The computation reuses the **shipped** score parser
 (`docs/trend_predictions.js → GRQTrendPredictions.parseScoreTsv`), so the scores
 it reads are exactly the column the dashboard reads. The `profitRecommend` /
-`reverseProfitRecommend` functions are ported faithfully from
-`GRQ/src/LearnUtilTypes.ts` (the source of truth lives upstream in `GRQ`).
+`reverseProfitRecommend` functions are ported faithfully from the upstream decode
+code (the source of truth lives upstream).

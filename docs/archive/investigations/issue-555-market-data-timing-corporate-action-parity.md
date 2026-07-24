@@ -2,8 +2,8 @@
 
 _Parity audit for Issue #555 (sub-issue of #544 — one candidate source of the
 systematic Target-over-Actual measurement gap). User-raised candidate. The
-training timing/adjustment lives upstream in `GRQ`; the dashboard
-timing/adjustment lives in `GRQ-validation`._
+training timing/adjustment lives upstream in the training repository; the
+dashboard timing/adjustment lives in `GRQ-validation`._
 
 ## TL;DR
 
@@ -60,15 +60,15 @@ gap), while the per-row distortion is large and two-sided:
 
 ## Parity table
 
-Training (`GRQ`) vs dashboard (`GRQ-validation`), each row marked **aligned** or
-**divergent**:
+Training (upstream) vs dashboard (`GRQ-validation`), each row marked **aligned**
+or **divergent**:
 
-| # | Decision | Training (GRQ) | Dashboard (GRQ-validation) | Status | Direction if divergent |
+| # | Decision | Training (upstream) | Dashboard (GRQ-validation) | Status | Direction if divergent |
 | --- | --- | --- | --- | --- | --- |
-| 1 | **Horizon-date selection** | `lowPrice` at `rewindToTradingDay(asOf + 90*DAY)` — trading day on/before exactly 90 days out (`GRQ/src/LearnUtil.ts:138-140`, `GRQ/src/Market.ts:241`) | last point with `date <= scoreDate + 90 days` (`priceAtNinetyDayHorizon` / `currentPriceWithinWindow`) | **Aligned** | — (same row on the stock's own daily series) |
+| 1 | **Horizon-date selection** | `lowPrice` at `rewindToTradingDay(asOf + 90*DAY)` — trading day on/before exactly 90 days out (upstream horizon selection) | last point with `date <= scoreDate + 90 days` (`priceAtNinetyDayHorizon` / `currentPriceWithinWindow`) | **Aligned** | — (same row on the stock's own daily series) |
 | 2 | **OHLC field — horizon** | intraday **low** (`market.lowPrice`) | **midpoint** `(high + low) / 2` | **Divergent** | mid ≥ low ⇒ Actual lifted ⇒ **masks** the gap; ~+2.2 pp — **owned by #552** |
-| 3 | **OHLC field — buy/score point** | **close** (`monthsAgoPrice = closePrices[0]`, `GRQ/src/CoreFeatures.ts`) | **midpoint** `(high + low) / 2` (`getBuyPrice`) | **Divergent** | symmetric ~+0.05 pp — **owned by #554** |
-| 4 | **Split/merge adjustment convention** | adjusted series; cumulative factor from each date to the data end (`GRQ/src/History.ts` accumulates `adj /= split` backwards) | on-the-fly restate-to-current via `computeSplitAdjustment` / `adjustHistoricalPriceToCurrent`, reconciliation-gated (`docs/projection.js:433-520`) | **Aligned** | — (same convention; reconciliation only _excludes_ a stock, it does not skew an included one) |
+| 3 | **OHLC field — buy/score point** | **close** (`monthsAgoPrice = closePrices[0]`, upstream close basis) | **midpoint** `(high + low) / 2` (`getBuyPrice`) | **Divergent** | symmetric ~+0.05 pp — **owned by #554** |
+| 4 | **Split/merge adjustment convention** | adjusted series; cumulative factor from each date to the data end (upstream split-adjusted series accumulates `adj /= split` backwards) | on-the-fly restate-to-current via `computeSplitAdjustment` / `adjustHistoricalPriceToCurrent`, reconciliation-gated (`docs/projection.js:433-520`) | **Aligned** | — (same convention; reconciliation only _excludes_ a stock, it does not skew an included one) |
 | 5 | **As-of split basis of the Actual horizon price** | both `monthsAgoPrice` (score close) and `targetPrice` (horizon low) carry the data-end `adj`; the post-horizon factor **cancels** in `targetPrice / monthsAgoPrice` | **buy price** & **target** restated to current terms, but the **Actual horizon price read RAW** (`getStockReturnBreakdown` app.js:4458, `currentPriceWithinWindow`) | **Divergent** | forward post-horizon split inflates Actual ⇒ **masks** (+0.482 pp portfolio); reverse split widens; ±extreme per-row (−316 → +1396 pp on 123/5 444 rows) |
 
 ## Why row 5 diverges (the mechanics)
@@ -97,7 +97,7 @@ post-horizon split. The divergence therefore shifts **only** the Actual side.
 
 ```mermaid
 flowchart TD
-    subgraph GRQ[Training — GRQ]
+    subgraph UP[Training — upstream]
         A["monthsAgoPrice = close@score · adj_dataEnd"] --> R["ratio = targetPrice / monthsAgoPrice<br/>S_after cancels ✓"]
         B["targetPrice = low@horizon · adj_dataEnd"] --> R
     end
@@ -186,10 +186,10 @@ flowchart LR
 
 ## Code references
 
-- Training horizon & adjustment: `GRQ/src/LearnUtil.ts:138-148`
-  (`rewindToTradingDay`, `lowPrice`, `restrictHistoryTo`), `GRQ/src/Market.ts:194`
-  (`lowPrice`), `:241` (`rewindToTradingDay`), `GRQ/src/CoreFeatures.ts`
-  (`monthsAgoPrice = closePrices[0]`), `GRQ/src/History.ts` (split-adjusted load).
+- Training horizon & adjustment: the upstream horizon-selection code
+  (`rewindToTradingDay`, `lowPrice`, `restrictHistoryTo`), the upstream market
+  code (`lowPrice`, `rewindToTradingDay`), the upstream close basis
+  (`monthsAgoPrice = closePrices[0]`) and the upstream split-adjusted load.
 - Dashboard horizon & adjustment: `GRQ-validation/docs/projection.js` —
   `priceAtNinetyDayHorizon`, `getBuyPrice`, `computeSplitAdjustment`,
   `adjustHistoricalPriceToCurrent`; `docs/app.js:4443-4490`

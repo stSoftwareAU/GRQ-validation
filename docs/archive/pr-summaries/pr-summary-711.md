@@ -88,7 +88,7 @@ New / updated tests (business-logic change — the mobile default moved from 90 
 
 - `quality.sh` reports one **pre-existing, environmental** cargo test failure:
   `create_market_data_long_csv_writes_eight_column_rows` fails with *"No market
-  data rows written for 2025-04-15 — is ../GRQ-shareprices2026Q2 available and up
+  data rows written for 2025-04-15 — is ../private-market-data-tree available and up
   to date?"*. This depends on an external share-prices dataset that is not fresh
   in this environment and is **unrelated** to this change — no Rust files were
   touched. All other cargo checks and the entire Deno suite pass.

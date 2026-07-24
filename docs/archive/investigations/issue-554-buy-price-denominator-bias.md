@@ -2,11 +2,12 @@
 
 _Diagnostic for Issue #554 (sub-issue of #544 — one candidate source of the
 systematic Target-over-Actual measurement gap). Measurement lives in
-`GRQ-validation`; the root denominator decision lives upstream in `GRQ`._
+`GRQ-validation`; the root denominator decision lives upstream in the training
+repository._
 
 ## TL;DR
 
-The GRQ model is trained on a 90-day return whose **denominator** is
+The upstream training model is trained on a 90-day return whose **denominator** is
 `monthsAgoPrice` — the **close** on the score date. The validation dashboard
 divides **both** Target and Actual by `buyPrice` — the **split-adjusted
 midpoint** `(high + low) / 2` of the first usable point. Because the dashboard
@@ -66,7 +67,7 @@ smaller than the gap itself.
 
 ```mermaid
 flowchart TD
-    subgraph GRQ[Training — GRQ]
+    subgraph UP[Training — upstream]
         A[closePrices0 = close on score date] --> B[monthsAgoPrice]
         B --> C["percentage = targetPrice + div/4 / monthsAgoPrice - 1"]
     end
@@ -78,10 +79,10 @@ flowchart TD
     C -. emits absolute target price .-> F
 ```
 
-- **Training denominator:** `GRQ/src/CoreFeatures.ts` sets
+- **Training denominator:** the upstream training code sets
   `monthsAgoPrice = closePrices[0]` (the close on the score date);
-  `GRQ/src/LearnUtil.ts:147-148` divides the labelled return by it, and
-  `:218` persists it with the train item.
+  the upstream label code divides the labelled return by it, and
+  persists it with the train item.
 - **Dashboard denominator:** `GRQ-validation/docs/projection.js`
   `getBuyPrice` (lines ~522-546) resolves the split-adjusted midpoint of the
   first usable point; **both** `calculateTargetPercentage` /
@@ -113,8 +114,8 @@ Target-over-Actual gap. The milestone (#544) should keep chasing genuine model
 optimism and the remaining candidates (price basis #552 — the dominant
 ~2.2 pp masking term; dividend basis #553; score decoding). If a fully
 like-for-like trend comparison is ever wanted, the cleaner fix is to align the
-_price basis_ (#552) upstream in `GRQ`, not to swap the dashboard's shared
-denominator for the training close.
+_price basis_ (#552) upstream in the training repository, not to swap the
+dashboard's shared denominator for the training close.
 
 ## How this was measured (reproducible)
 
@@ -152,9 +153,9 @@ flowchart LR
 
 ## Code references
 
-- Training denominator (close on score date): `GRQ/src/CoreFeatures.ts`
-  (`monthsAgoPrice = closePrices[0]`), `GRQ/src/LearnUtil.ts:147-148` (divides
-  by it), `:218` (persists it).
+- Training denominator (close on score date): the upstream training code
+  (`monthsAgoPrice = closePrices[0]`), the upstream label code (divides
+  by it and persists it).
 - Dashboard denominator (shared midpoint): `GRQ-validation/docs/projection.js`
   — `getBuyPrice`; consumed by `calculateTargetPercentage` /
   `calculatePortfolioTargetPercentage` and `calculatePerformanceReturn` /
