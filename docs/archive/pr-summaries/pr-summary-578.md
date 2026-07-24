@@ -5,8 +5,8 @@
 Beyond **excluding** low-volume names from aggregates (#577), low volume is now
 folded into the **valuation** of each prediction, so an illiquid name can never
 score as a strong recommendation — satisfying the "never recommend such names"
-requirement from #563. This mirrors GRQ training, where the score is capped via
-`Math.min(core.volumeRecommend, priceRecommend, 1)` (`GRQ/src/LearnUtil.ts:155`).
+requirement from #563. This mirrors the upstream training, where the score is capped via
+`Math.min(core.volumeRecommend, priceRecommend, 1)` (the upstream training code).
 
 The dashboard's displayed prediction Score is now passed through a
 volume-cap: `score = min(volumeRecommend, baseScore, 1)`. A flagged low-volume
@@ -20,7 +20,7 @@ threshold**. **Closes #578.**
 ### What changed
 
 - **`docs/volume_recommend.js`** — add `volumeCappedScore(baseScore, window)`,
-  the ported GRQ cap, published on `globalThis.GRQVolume`. Returns `baseScore`
+  the ported upstream cap, published on `globalThis.GRQVolume`. Returns `baseScore`
   unchanged when it is non-finite or when volume is unknown
   (`volumeRecommend === null`); otherwise `Math.min(volumeRecommend, baseScore, 1)`.
 - **`docs/app.js`** — add `volumeCappedScore(symbol, baseScore, scoreDate)` over

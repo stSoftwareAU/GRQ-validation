@@ -2,11 +2,12 @@
 
 _Diagnostic for Issue #552 (sub-issue of #544 — one candidate source of the
 systematic Target-over-Actual measurement gap). Measurement lives in
-`GRQ-validation`; the root price-basis decision lives upstream in `GRQ`._
+`GRQ-validation`; the root price-basis decision lives in the upstream training
+repository._
 
 ## TL;DR
 
-The GRQ model is trained on a return label measured at the **intraday low** of
+The upstream training model is trained on a return label measured at the **intraday low** of
 the trading day 90 days ahead, but the validation dashboard measures **Actual**
 at the **midpoint** `(high + low) / 2` of the horizon row. Because `mid >= low`
 on every row, the mid basis **lifts** the measured Actual.
@@ -72,7 +73,7 @@ A real, structural asymmetry **is** confirmed (a consistent, same-direction
 other #544 candidates (dividend timing, buy-price denominator, score decoding)
 as the real drivers. If a fully like-for-like trend comparison is later wanted,
 the cleaner fix is to **restate the model Target onto the midpoint basis**
-(upstream in `GRQ`) — i.e. train/evaluate both series on one consistent basis —
+(in the upstream training repository) — i.e. train/evaluate both series on one consistent basis —
 rather than degrade the dashboard's user-facing Actual to the intraday low. That
 is a separate, low-priority piece of measurement hygiene, not a gap-closing fix.
 
@@ -110,7 +111,7 @@ flowchart LR
 
 ## Code references
 
-- Training label (intraday low, 90 days ahead): `GRQ/src/LearnUtil.ts`
+- Training label (intraday low, 90 days ahead): the upstream training code
   (`market.lowPrice(symbol, targetDate)`).
 - Dashboard Actual (midpoint): `GRQ-validation/docs/projection.js`
   — `currentPriceFromLatest`, `priceAtNinetyDayHorizon`.

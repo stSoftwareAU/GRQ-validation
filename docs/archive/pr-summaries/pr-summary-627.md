@@ -74,5 +74,5 @@ Rust (`src/utils.rs`, `cargo test`):
 All new tests pass. The full Deno suite passes (1219 passed). `cargo fmt`,
 `cargo clippy`, and the Rust library tests pass, except the pre-existing
 `utils::tests::test_read_market_data`, which requires the external
-`../GRQ-shareprices2026Q2` data repository (verified failing on the unmodified
+market-data repository (verified failing on the unmodified
 baseline — unrelated to this change).

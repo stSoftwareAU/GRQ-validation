@@ -8,7 +8,7 @@ notably the "Actual (After 90 Days)" line — so a name too thin to trade neithe
 helps nor hurts the Actual/Target lines. Flagged names stay **visible** via a
 "Low volume" badge and a legend, rather than vanishing silently. **Closes #577.**
 
-The liquidity decision reuses GRQ training's `volumeRecommend` definition as a
+The liquidity decision reuses the upstream training model's `volumeRecommend` definition as a
 single source of truth (the #576 helper, added here since it was an unmet
 dependency): over a trailing 10-weekday window, the average daily **dollar**
 volume (`volume × low price`) below the `BUDGET_DOLLARS = 10000` trade budget
@@ -91,7 +91,7 @@ flagged path end-to-end.
 
 > **Pre-existing, unrelated failure:** `quality.sh`'s `cargo test` step fails on
 > `utils::tests::test_read_market_data`, which reads the external
-> `../GRQ-shareprices2026Q2` repo and needs a "SEM" symbol file that is absent
+> market-data repository and needs a "SEM" symbol file that is absent
 > in this environment. The failure reproduces identically with the parent
 > commit's unmodified `src/utils.rs` — this change touches **no** Rust — so it is
 > environmental and out of scope for #577.

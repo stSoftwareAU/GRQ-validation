@@ -6,7 +6,7 @@ GRQ prediction model", "GRQ training's `volumeRecommend`") assumed the reader
 already knew what GRQ meant. The opening paragraph now glosses it in plain
 English: **GRQ** (short for *Get Rich Quick*) is the stSoftwareAU
 stock-prediction platform whose predictions this repository validates. The
-expansion matches the upstream `stSoftwareAU/GRQ` repository description. The
+expansion matches the upstream prediction repository's description. The
 gloss appears only at the first occurrence so the rest of the document reads
 cleanly. Closes #761.
 
