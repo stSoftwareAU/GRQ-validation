@@ -56,7 +56,7 @@ flowchart TD
 ### Pre-existing unrelated failure
 
 `quality.sh` reports one Rust failure, `utils::tests::test_read_market_data`,
-because the external market-data repo (`../GRQ-shareprices2026Q2`) is present
+because the external market-data repository is present
 but empty in this environment (no `SEM` data file). This failure reproduces on
 a clean checkout **without** these changes and is unrelated to this docs-only
 change.

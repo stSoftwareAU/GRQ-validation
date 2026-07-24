@@ -2,10 +2,10 @@
 
 Adds a written diagnostic and reproducible analysis quantifying the
 Target-over-Actual bias that comes purely from the **dividend basis** mismatch
-between training and the dashboard (milestone #544 candidate). GRQ training bakes
+between training and the dashboard (milestone #544 candidate). The upstream training bakes
 a **flat** quarter of the trailing annual dividend, `core.yearOfDividends / 4`,
 into the total-return label for **every** stock
-(`GRQ/src/LearnUtil.ts:147-148`), whereas the validation side credits only the
+(the upstream training code), whereas the validation side credits only the
 **actual ex-dividends inside the 90-day window**
 (`GRQ-validation/src/utils.rs` `calculate_dividends_for_period`, mirrored by the
 shipped JS kernels `filterDividendsWithin90Days` + `sumDividends`).
@@ -25,7 +25,7 @@ dividends yet still receive the flat quarter in training**.
 
 **Recommendation:** a genuine, modest, same-direction contributor worth fixing
 by **aligning both sides on realised in-window dividends** — the clean fix is
-upstream in `GRQ` (train/evaluate the label on the forward-window dividends
+upstream (train/evaluate the label on the forward-window dividends
 rather than a flat `yearOfDividends / 4`), since degrading the dashboard's
 realised "Actual" to a fabricated flat quarter would credit dividends never
 received. The root-cause training-label change is out of scope for this
@@ -39,7 +39,7 @@ Backend/CLI diagnostic — no web UI to screenshot. Verified by the new unit tes
 (below) and by running the reproducible report:
 
 ```text
-$ deno run --allow-read scripts/diagnose_dividend_basis.ts docs 2026-06-26 ../GRQ-dividends
+$ deno run --allow-read scripts/diagnose_dividend_basis.ts docs 2026-06-26 ../private-dividend-tree
 Matured score dates:     274
 Included stock-rows:     5444
 Mean (raw):              +2.827 pp
@@ -60,7 +60,7 @@ acceptance criteria) lives in
 flowchart LR
     A[scores/index.json<br/>matured dates only] --> B[parse tsv/csv]
     B --> C[resolvePredictionStocks<br/>buyPrice + realised in-window totalDividends]
-    A --> D[../GRQ-dividends<br/>full per-ticker history]
+    A --> D[private dividend tree<br/>full per-ticker history]
     D --> E[trailingAnnualDividends / 4<br/>flat training credit]
     C --> F[dividendBasisDifferencePercent<br/>= flat - windowed / buyPrice]
     E --> F

@@ -94,7 +94,7 @@ DD analysis 23 Dec vs score 28 Dec
 ### Known unrelated failure
 
 `./quality.sh` fails only at the Rust test `utils::tests::test_read_market_data`,
-which reads files from the external `../GRQ-shareprices2026Q2` data repository.
+which reads files from the external market-data repository.
 That directory is present but **empty** in this environment, so the test's
 skip-guard does not trigger and the read fails. This is a pre-existing
 environmental failure — this PR contains **no Rust changes** — and is unrelated
