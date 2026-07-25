@@ -3615,7 +3615,10 @@
       "month": "June",
       "day": "25",
       "file": "2026/June/25.tsv",
-      "date": "2026-06-25"
+      "date": "2026-06-25",
+      "performance_90_day": 0.5641391861227476,
+      "performance_annualized": 7.342308968407707,
+      "total_stocks": 20
     }
   ]
 }

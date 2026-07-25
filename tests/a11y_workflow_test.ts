@@ -17,6 +17,7 @@ import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 import {
   assertActionsPinnedToSha,
+  assertSetupNodeRuntimeSupported,
   invokesTool,
 } from "./workflow_assertions.ts";
 
@@ -285,6 +286,17 @@ Deno.test("a11y check-docs-changes checkout does not persist credentials", async
 Deno.test("a11y workflow pins actions to 40-character commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
+});
+
+// Issue #789: setup-node v4 and older ship the node20 Actions runtime, which
+// GitHub removes on 2026-09-16 — a step on it hard-breaks the required pa11y
+// check at removal. The pinned SHA already resolves to a node24-era release, so
+// its `# actions/setup-node@vX.Y.Z` annotation must record that node24 major
+// (v5+), not a stale v4 that both misrecords the release and would map to the
+// removed runtime.
+Deno.test("a11y setup-node pin is annotated with a node24-era release", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  assertSetupNodeRuntimeSupported(text);
 });
 
 // Issue #728: the pa11y job checks out the repo but never pushes back or fetches

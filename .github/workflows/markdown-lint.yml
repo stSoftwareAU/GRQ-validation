@@ -31,7 +31,9 @@ jobs:
           # written to .git/config, where a later compromised step could read
           # it. Do not persist the credential to disk.
           persist-credentials: false
-      # actions/setup-node@v4
+      # actions/setup-node@v7.0.0 — runs on the node24 Actions runtime (Issue
+      # #789): the SHA already pins v7.0.0, but the annotation wrongly read v4,
+      # whose node20 runtime GitHub removes on 2026-09-16.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "lts/*"
