@@ -619,6 +619,13 @@ flowchart LR
 This repository ships a set of GitHub Actions workflows in `.github/workflows/`
 covering continuous integration, security scanning, and dependency hygiene.
 
+Every pull-request gate below runs on **all** base branches, including the
+`milestone/<slug>` integration branches that milestone sub-issue PRs target.
+Their triggers use `branches: ["**"]` (or no filter at all): GitHub's `*`
+wildcard stops at a `/`, so the earlier `["*"]` filter silently skipped every
+milestone PR and left the gaps to be caught only by the oversized rollup PR into
+`main` (Issue #788, following the same fix for `ci.yml` in Issue #342).
+
 ### Workflows
 
 1. **CI** (`ci.yml`) — main continuous integration: build, test, formatting,
