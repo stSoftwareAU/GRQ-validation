@@ -9,7 +9,9 @@ import { parse as parseYaml } from "@std/yaml";
 import { parse as parseJsonc } from "@std/jsonc";
 import {
   assertActionsPinnedToSha,
+  assertPullRequestRunsOnMilestone,
   assertSetupNodeRuntimeSupported,
+  type Workflow,
 } from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/markdown-lint.yml";
@@ -42,6 +44,14 @@ Deno.test("Markdown Lint workflow has correct triggers", async () => {
   // re-run on push to the default branch — that duplicates the run which
   // already gated the PR and wastes CI minutes. Allow manual dispatch instead.
   assert("workflow_dispatch" in on, "must allow manual workflow_dispatch");
+});
+
+// Issue #788: milestone sub-issue PRs target a shared `milestone/<slug>`
+// integration branch. A `branches: ["*"]` filter skips them because the `*`
+// glob does not match the `/`, so the gate must run on milestone branches too.
+Deno.test("Markdown Lint workflow runs on milestone/* pull requests", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  assertPullRequestRunsOnMilestone(parseYaml(text) as Workflow);
 });
 
 // Issue #726: a lint/checker gates the PR, so it must not fire on push to the

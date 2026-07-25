@@ -10,7 +10,9 @@ import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 import {
   assertActionsPinnedToSha,
+  assertPullRequestRunsOnMilestone,
   invokesTool,
+  type Workflow,
 } from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/deno-quality.yml";
@@ -36,6 +38,14 @@ Deno.test("Deno Quality workflow triggers on pull_request", async () => {
       | undefined;
   assert(on, "workflow must declare an 'on' trigger");
   assert("pull_request" in on, "must trigger on pull_request");
+});
+
+// Issue #788: milestone sub-issue PRs target a shared `milestone/<slug>`
+// integration branch. A `branches: ["*"]` filter skips them because the `*`
+// glob does not match the `/`, so the gate must run on milestone branches too.
+Deno.test("Deno Quality workflow runs on milestone/* pull requests", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  assertPullRequestRunsOnMilestone(parseYaml(text) as Workflow);
 });
 
 Deno.test("Deno Quality workflow declares read permissions for contents", async () => {

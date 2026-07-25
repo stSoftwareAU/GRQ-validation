@@ -6,6 +6,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
+import {
+  assertPullRequestRunsOnMilestone,
+  type Workflow,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/shellcheck.yml";
 
@@ -32,41 +36,12 @@ Deno.test("ShellCheck workflow triggers on pull_request", async () => {
   assert("pull_request" in on, "must trigger on pull_request");
 });
 
-// Milestone coverage (Issue #791 ordering prerequisite, tracks Issue #788).
-// `bash -n` in ci.yml's build job used to be the shell-syntax gate for
-// milestone/** PRs (ci.yml triggers on `[main, "milestone/**"]`). Before that
-// redundant step can be removed, shellcheck.yml must itself run on milestone
-// PRs — the `["*"]` glob does not match a `/`, so `milestone/<slug>` bases were
-// skipped. The pull_request trigger must list `milestone/**` so milestone PRs
-// keep a shell-syntax gate throughout.
-Deno.test("ShellCheck workflow triggers on pull_request to milestone branches", async () => {
+// Issue #788: milestone sub-issue PRs target a shared `milestone/<slug>`
+// integration branch. A `branches: ["*"]` filter skips them because the `*`
+// glob does not match the `/`, so the gate must run on milestone branches too.
+Deno.test("ShellCheck workflow runs on milestone/* pull requests", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
-  const doc = parseYaml(text) as Record<string, unknown>;
-  const on = (doc.on ?? doc["true"] ??
-    (doc as Record<string, unknown>)[true as unknown as string]) as
-      | { pull_request?: { branches?: string[] } }
-      | undefined;
-  assert(on, "workflow must declare an 'on' trigger");
-  const branches = on.pull_request?.branches ?? [];
-  assert(
-    branches.includes("milestone/**"),
-    "pull_request trigger must include `milestone/**` so milestone PRs are scanned",
-  );
-});
-
-Deno.test("ShellCheck workflow triggers on push to milestone branches", async () => {
-  const text = await Deno.readTextFile(WORKFLOW_PATH);
-  const doc = parseYaml(text) as Record<string, unknown>;
-  const on = (doc.on ?? doc["true"] ??
-    (doc as Record<string, unknown>)[true as unknown as string]) as
-      | { push?: { branches?: string[] } }
-      | undefined;
-  assert(on, "workflow must declare an 'on' trigger");
-  const branches = on.push?.branches ?? [];
-  assert(
-    branches.includes("milestone/**"),
-    "push trigger must include `milestone/**` so milestone integration pushes are scanned",
-  );
+  assertPullRequestRunsOnMilestone(parseYaml(text) as Workflow);
 });
 
 Deno.test("ShellCheck workflow declares read-only contents permission", async () => {
