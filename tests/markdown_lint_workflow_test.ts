@@ -7,7 +7,10 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 import { parse as parseJsonc } from "@std/jsonc";
-import { assertActionsPinnedToSha } from "./workflow_assertions.ts";
+import {
+  assertActionsPinnedToSha,
+  assertSetupNodeRuntimeSupported,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/markdown-lint.yml";
 const CONFIG_PATH = ".markdownlint-cli2.jsonc";
@@ -154,6 +157,17 @@ Deno.test("Markdown Lint workflow checkout does not persist credentials", async 
 Deno.test("Markdown Lint workflow pins actions to commit SHAs", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
+});
+
+// Issue #789: setup-node v4 and older ship the node20 Actions runtime, which
+// GitHub removes on 2026-09-16 — a step on it hard-breaks the required
+// markdownlint check at removal. The pinned SHA already resolves to a
+// node24-era release, so its `# actions/setup-node@vX.Y.Z` annotation must
+// record that node24 major (v5+), not a stale v4 that both misrecords the
+// release and would map to the removed runtime.
+Deno.test("Markdown Lint setup-node pin is annotated with a node24-era release", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  assertSetupNodeRuntimeSupported(text);
 });
 
 Deno.test("markdownlint-cli2 config exists and parses as JSONC", async () => {

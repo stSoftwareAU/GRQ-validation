@@ -158,6 +158,75 @@ export function stepIndexUsing(
   );
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * The `vMAJOR` recorded in the version-annotation comment directly above each
+ * SHA-pinned `uses: <actionPrefix>@<40-char-sha>` line, in source order.
+ *
+ * A GitHub Actions pin is an opaque 40-char SHA, so the adjacent
+ * `# owner/action@vX.Y.Z` comment is the only human-readable record of which
+ * release the SHA points at — and the record an audit reads to judge the
+ * runtime the action ships (Issue #789). When that comment drifts from the SHA
+ * it labels, the audit misjudges the runtime. Each returned entry is the major
+ * version parsed from the nearest preceding comment (blank lines skipped), or
+ * `NaN` when no `@vN` annotation precedes the pin. Empty when the action is
+ * unused.
+ */
+export function annotatedActionMajors(
+  text: string,
+  actionPrefix: string,
+): number[] {
+  const prefix = escapeRegExp(actionPrefix);
+  const usesRe = new RegExp(`^\\s*-?\\s*uses:\\s*${prefix}@[0-9a-f]{40}`);
+  const commentRe = new RegExp(`${prefix}@v(\\d+)`);
+  const lines = text.split("\n");
+  const majors: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!usesRe.test(lines[i])) continue;
+    // Walk up through the contiguous comment block above the pin (skipping a
+    // blank gap), so a multi-line annotation is matched wherever the `@vN`
+    // token sits within it.
+    let j = i - 1;
+    while (j >= 0 && lines[j].trim() === "") j--;
+    let major = NaN;
+    while (j >= 0 && lines[j].trim().startsWith("#")) {
+      const match = lines[j].match(commentRe);
+      if (match) {
+        major = Number(match[1]);
+        break;
+      }
+      j--;
+    }
+    majors.push(major);
+  }
+  return majors;
+}
+
+/**
+ * Assert every SHA-pinned `actions/setup-node` step is annotated with a
+ * node24-era major (v5 or newer). setup-node v4 and older ship the `node20`
+ * Actions runtime, which GitHub removes on 2026-09-16; an annotation still
+ * claiming v4 either pins the removed runtime or misrecords the release the SHA
+ * points at, misleading the runtime audit (Issue #789).
+ */
+export function assertSetupNodeRuntimeSupported(text: string): void {
+  const majors = annotatedActionMajors(text, "actions/setup-node");
+  assert(majors.length > 0, "workflow must pin actions/setup-node");
+  for (const major of majors) {
+    assert(
+      Number.isFinite(major),
+      "each actions/setup-node pin must carry a `# actions/setup-node@vX.Y.Z` version annotation recording the release it points at",
+    );
+    assert(
+      major >= 5,
+      `actions/setup-node must be annotated with a node24-era major (v5+); found v${major}, which maps to the removed node20 runtime`,
+    );
+  }
+}
+
 /**
  * Assert every `uses:` action in the workflow source is pinned to a 40-char
  * commit SHA, not a mutable tag/branch. SHA pinning is a genuine source-text
