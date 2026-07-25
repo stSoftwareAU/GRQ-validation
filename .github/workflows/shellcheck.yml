@@ -1,10 +1,15 @@
 name: ShellCheck
 
+# The `*` glob matches a single path segment and NOT `/`, so `["*"]` alone
+# skips PRs whose base is a `milestone/<slug>` branch. `milestone/**` is listed
+# explicitly so milestone integration PRs and pushes are scanned too — this is
+# the shell-syntax gate that ci.yml's removed `bash -n` step used to provide on
+# those branches (Issue #791; broader nine-workflow fix tracked in Issue #788).
 on:
   pull_request:
-    branches: ["*"]
+    branches: ["*", "milestone/**"]
   push:
-    branches: [main, master]
+    branches: [main, master, "milestone/**"]
 
 # Cancel superseded runs (Issue #139): rapid pushes to the same ref otherwise
 # queue redundant scans that each hold a runner. Keying on workflow + ref with
