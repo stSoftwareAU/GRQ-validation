@@ -228,6 +228,28 @@ export function assertSetupNodeRuntimeSupported(text: string): void {
 }
 
 /**
+ * Assert every SHA-pinned `actions/cache` step is annotated with a node24-era
+ * major (v5 or newer). actions/cache v4 and older ship the `node20` Actions
+ * runtime, which GitHub removes on 2026-09-16; an annotation still claiming v4
+ * either pins the removed runtime or misrecords the release the SHA points at,
+ * misleading the runtime audit (Issue #790).
+ */
+export function assertCacheRuntimeSupported(text: string): void {
+  const majors = annotatedActionMajors(text, "actions/cache");
+  assert(majors.length > 0, "workflow must pin actions/cache");
+  for (const major of majors) {
+    assert(
+      Number.isFinite(major),
+      "each actions/cache pin must carry a `# actions/cache@vX.Y.Z` version annotation recording the release it points at",
+    );
+    assert(
+      major >= 5,
+      `actions/cache must be annotated with a node24-era major (v5+); found v${major}, which maps to the removed node20 runtime`,
+    );
+  }
+}
+
+/**
  * Assert every `uses:` action in the workflow source is pinned to a 40-char
  * commit SHA, not a mutable tag/branch. SHA pinning is a genuine source-text
  * invariant (the literal ref is what runs), so this is the one grep we keep —
