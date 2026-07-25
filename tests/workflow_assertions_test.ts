@@ -9,6 +9,7 @@
 import { assert, assertEquals, assertFalse, assertThrows } from "@std/assert";
 import {
   assertActionsPinnedToSha,
+  assertPullRequestRunsOnMilestone,
   branchFilterMatches,
   commandSegments,
   invokesTool,
@@ -202,4 +203,36 @@ Deno.test("triggerBranches reports absent, unfiltered and filtered triggers", ()
   assertEquals(triggerBranches(doc, "pull_request"), ["main"]);
   assertEquals(triggerBranches(doc, "push"), undefined);
   assertEquals(triggerBranches(doc, "schedule"), null);
+});
+
+Deno.test("assertPullRequestRunsOnMilestone accepts a milestone-aware filter", () => {
+  const doc = {
+    on: { pull_request: { branches: ["*", "milestone/**"] } },
+  } as unknown as Workflow;
+  assertPullRequestRunsOnMilestone(doc);
+});
+
+Deno.test("assertPullRequestRunsOnMilestone accepts an unfiltered pull_request trigger", () => {
+  const doc = { on: { pull_request: null } } as unknown as Workflow;
+  assertPullRequestRunsOnMilestone(doc);
+});
+
+Deno.test("assertPullRequestRunsOnMilestone rejects a `*`-only filter", () => {
+  const doc = {
+    on: { pull_request: { branches: ["*"] } },
+  } as unknown as Workflow;
+  assertThrows(
+    () => assertPullRequestRunsOnMilestone(doc),
+    Error,
+    "does not match",
+  );
+});
+
+Deno.test("assertPullRequestRunsOnMilestone rejects a missing pull_request trigger", () => {
+  const doc = { on: { push: { branches: ["main"] } } } as unknown as Workflow;
+  assertThrows(
+    () => assertPullRequestRunsOnMilestone(doc),
+    Error,
+    "must trigger on pull_request",
+  );
 });

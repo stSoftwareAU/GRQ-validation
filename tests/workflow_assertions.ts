@@ -127,6 +127,26 @@ export function branchFilterMatches(
   return positive.some((p) => filterPatternToRegExp(p).test(branch));
 }
 
+/** Representative milestone integration branch used by the gate assertions. */
+export const MILESTONE_BRANCH = "milestone/star-filter-controls";
+
+/**
+ * Assert a workflow's `pull_request` trigger runs for a milestone integration
+ * PR. Milestone sub-issue PRs target a shared `milestone/<slug>` branch, and a
+ * `branches: ["*"]` filter skips them because `*` does not match `/` — so the
+ * gate would be silently absent from every sub-issue PR (Issue #788).
+ */
+export function assertPullRequestRunsOnMilestone(doc: Workflow): void {
+  const branches = triggerBranches(doc, "pull_request");
+  assert(branches !== null, "workflow must trigger on pull_request");
+  assert(
+    branchFilterMatches(branches, MILESTONE_BRANCH),
+    `pull_request filter ${
+      JSON.stringify(branches)
+    } does not match ${MILESTONE_BRANCH} — the gate would be skipped`,
+  );
+}
+
 /**
  * Every step across every job, or just the named job's steps when `jobName`
  * is given (empty array when the job or its steps are absent).
