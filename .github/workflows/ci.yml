@@ -40,7 +40,7 @@ jobs:
     steps:
     - name: Checkout code
       # actions/checkout@v4.2.2
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         fetch-depth: 0  # Fetch full history for proper diffs
         # check-changes only reads history for diffs; it never pushes back, so
@@ -93,7 +93,7 @@ jobs:
     steps:
     - name: Checkout code
       # actions/checkout@v4.2.2
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         # The test job only builds and runs quality checks; it never pushes back
         # to the repository, so the GITHUB_TOKEN must not be persisted into
@@ -166,7 +166,7 @@ jobs:
     steps:
     - name: Checkout code
       # actions/checkout@v4.2.2
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         # Issue #730: build only compiles/uploads artifacts — it never pushes
         # back or fetches a private submodule, so do not persist GITHUB_TOKEN
@@ -255,7 +255,7 @@ jobs:
     steps:
     - name: Checkout code
       # actions/checkout@v4.2.2
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         # deploy-pages only reads ./docs to build the Pages artifact; it never
         # pushes back or fetches private submodules, so the GITHUB_TOKEN must

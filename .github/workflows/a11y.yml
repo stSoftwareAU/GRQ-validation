@@ -42,7 +42,7 @@ jobs:
       docs-changed: ${{ steps.filter.outputs.docs }}
     steps:
       # actions/checkout@v4.2.2
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           # Job only runs a local `git diff`; it never pushes back or fetches
@@ -67,7 +67,7 @@ jobs:
     timeout-minutes: 15
     steps:
       # actions/checkout@v4.2.2
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           # The pa11y job only reads the tree (serves docs/, runs pa11y-ci); it
           # never pushes back or fetches a private submodule, so it does not need
