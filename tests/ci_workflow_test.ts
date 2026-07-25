@@ -276,6 +276,31 @@ Deno.test("deploy-pages stays main-only and is not widened to milestone branches
   );
 });
 
+// Redundant shell-syntax gate removed (Issue #791). The build job previously
+// ran `find . -name "*.sh" -type f -exec bash -n {} \;` to check that every
+// shell script parses. shellcheck.yml already scans the whole repo
+// (scandir: .) and reports parse/syntax errors at error level (included at
+// severity: warning), so the `bash -n` pass added no signal the ShellCheck
+// gate does not already provide. The build job must no longer declare it, so
+// one policy has a single home.
+Deno.test("CI workflow no longer runs a redundant bash -n shell-syntax step", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as Record<string, unknown>;
+  const jobs = doc.jobs as Record<string, { steps?: Step[] }>;
+  const buildSteps = jobs.build?.steps ?? [];
+  assert(
+    !buildSteps.some((s) => s.name === "Check Bash Script Syntax"),
+    'build job must not declare a "Check Bash Script Syntax" step',
+  );
+  // Guard against the check reappearing under a different step name.
+  assert(
+    !buildSteps.some((s) =>
+      typeof s.run === "string" && /bash\s+-n/.test(s.run)
+    ),
+    "build job must not run `bash -n` — shellcheck.yml is the single shell-syntax gate",
+  );
+});
+
 // Multi-line bash run: blocks must fail fast (Issue #73). Without
 // `set -euo pipefail` an intermediate command that fails (or an unset
 // variable) is masked by the success of the final command, so the step
@@ -300,10 +325,13 @@ function firstScriptLine(run: string): string {
 Deno.test("multi-line bash run blocks begin with set -euo pipefail", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   const doc = parseYaml(text) as Record<string, unknown>;
+  // NOTE (Issue #791): the "Check Bash Script Syntax" (`bash -n`) step was
+  // removed from the build job because shellcheck.yml already parses every
+  // *.sh in the repo (a parse error is reported at error level, included at
+  // severity: warning). It is therefore no longer a target here.
   const targets: Array<[string, string]> = [
     ["check-changes", "Check for changes"],
     ["build", "Generate CycloneDX SBOM"],
-    ["build", "Check Bash Script Syntax"],
   ];
   for (const [job, step] of targets) {
     const run = findRun(doc, job, step);

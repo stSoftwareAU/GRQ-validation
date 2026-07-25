@@ -177,14 +177,10 @@ jobs:
       # dtolnay/rust-toolchain@stable
       uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
 
-    # Check bash script syntax
-    - name: Check Bash Script Syntax
-      run: |
-        set -euo pipefail
-        echo "Checking bash script syntax..."
-        find . -name "*.sh" -type f -exec bash -n {} \;
-        echo "All bash scripts have valid syntax"
-
+    # Shell-script syntax is gated by shellcheck.yml (scandir: ., severity:
+    # warning), which parses every *.sh before linting and reports parse errors
+    # at error level. A separate `bash -n` pass here was redundant and gave the
+    # same policy two homes, so it was removed (Issue #791).
     - name: Cache dependencies
       # actions/cache@v6.1.0
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
