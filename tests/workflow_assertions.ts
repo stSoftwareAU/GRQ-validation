@@ -63,6 +63,71 @@ export function workflowTriggers(
 }
 
 /**
+ * The `branches:` filter of a trigger, or `undefined` when the trigger is
+ * present but unfiltered (a bare `pull_request:` runs on every base branch).
+ * Returns `null` when the trigger itself is absent.
+ */
+export function triggerBranches(
+  doc: Workflow,
+  trigger: string,
+): string[] | undefined | null {
+  const on = workflowTriggers(doc);
+  if (!on || !(trigger in on)) return null;
+  const spec = on[trigger] as { branches?: string[] } | null | undefined;
+  return spec?.branches;
+}
+
+/**
+ * Translate one GitHub Actions filter pattern into a regular expression.
+ *
+ * Follows the documented filter-pattern semantics: `*` matches any character
+ * except `/`, `**` matches any character including `/`, `?` matches zero or
+ * one of the preceding character, `+` matches one or more of the preceding
+ * character, and every other character is literal. This is why `["*"]` does
+ * *not* match a `milestone/<slug>` base branch (Issue #788).
+ */
+function filterPatternToRegExp(pattern: string): RegExp {
+  let source = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+    if (char === "*") {
+      if (pattern[i + 1] === "*") {
+        source += ".*";
+        i++;
+      } else {
+        source += "[^/]*";
+      }
+    } else if (char === "?" || char === "+") {
+      // Quantifiers apply to the preceding pattern element, which the loop
+      // has already emitted — pass them through untouched.
+      source += char;
+    } else {
+      source += char.replace(/[.\\/^$|()[\]{}]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${source}$`);
+}
+
+/**
+ * True when a workflow's `branches:` filter runs for a pull request against
+ * `branch`. An absent filter (`undefined`) means "every branch". A leading
+ * `!` marks an exclusion: the branch must match at least one positive pattern
+ * and no negative one.
+ */
+export function branchFilterMatches(
+  branches: string[] | undefined,
+  branch: string,
+): boolean {
+  if (branches === undefined) return true;
+  const positive = branches.filter((p) => !p.startsWith("!"));
+  const negative = branches.filter((p) => p.startsWith("!")).map((p) =>
+    p.slice(1)
+  );
+  if (negative.some((p) => filterPatternToRegExp(p).test(branch))) return false;
+  return positive.some((p) => filterPatternToRegExp(p).test(branch));
+}
+
+/**
  * Every step across every job, or just the named job's steps when `jobName`
  * is given (empty array when the job or its steps are absent).
  */

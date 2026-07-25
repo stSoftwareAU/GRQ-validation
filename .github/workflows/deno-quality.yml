@@ -2,7 +2,9 @@ name: Deno Quality
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not match `/`, so `milestone/**` is needed for milestone
+    # integration PRs to run this gate (Issue #788).
+    branches: ["*", "milestone/**"]
   schedule:
     # Weekly audit so a JSR/@std compromise is caught even with no open PR.
     - cron: "0 6 * * 1"

@@ -2,7 +2,9 @@ name: Cargo Audit
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not match `/`, so `milestone/**` is needed for milestone
+    # integration PRs to run this gate (Issue #788).
+    branches: ["*", "milestone/**"]
   schedule:
     - cron: "0 6 * * 1"
 

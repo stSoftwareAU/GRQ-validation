@@ -9,10 +9,12 @@
 import { assert, assertEquals, assertFalse, assertThrows } from "@std/assert";
 import {
   assertActionsPinnedToSha,
+  branchFilterMatches,
   commandSegments,
   invokesTool,
   stepIndexInvoking,
   stepIndexUsing,
+  triggerBranches,
   type Workflow,
   workflowSteps,
   workflowTriggers,
@@ -156,4 +158,48 @@ Deno.test("assertActionsPinnedToSha throws when no actions are present", () => {
     Error,
     "at least one action",
   );
+});
+
+// Branch-filter semantics (Issue #788). GitHub Actions filter patterns treat
+// `*` as "any character except `/`", so a `branches: ["*"]` filter silently
+// skips every pull request whose base is `milestone/<slug>`. These exercise
+// the real matcher with synthetic filters.
+Deno.test("branchFilterMatches treats an absent filter as every branch", () => {
+  assert(branchFilterMatches(undefined, "milestone/star-filter"));
+  assert(branchFilterMatches(undefined, "main"));
+});
+
+Deno.test("branchFilterMatches: `*` does not match a slash", () => {
+  assert(branchFilterMatches(["*"], "main"));
+  assertFalse(branchFilterMatches(["*"], "milestone/star-filter"));
+});
+
+Deno.test("branchFilterMatches: `**` matches across slashes", () => {
+  assert(branchFilterMatches(["milestone/**"], "milestone/star-filter"));
+  assert(branchFilterMatches(["milestone/**"], "milestone/a/b"));
+  assertFalse(branchFilterMatches(["milestone/**"], "main"));
+});
+
+Deno.test("branchFilterMatches: single-level glob stops at a nested slash", () => {
+  assert(branchFilterMatches(["milestone/*"], "milestone/star-filter"));
+  assertFalse(branchFilterMatches(["milestone/*"], "milestone/a/b"));
+});
+
+Deno.test("branchFilterMatches honours exclusion patterns", () => {
+  assertFalse(branchFilterMatches(["**", "!milestone/**"], "milestone/x"));
+  assert(branchFilterMatches(["**", "!milestone/**"], "main"));
+});
+
+Deno.test("branchFilterMatches treats dots and dashes literally", () => {
+  assert(branchFilterMatches(["release-1.2"], "release-1.2"));
+  assertFalse(branchFilterMatches(["release-1.2"], "release-1x2"));
+});
+
+Deno.test("triggerBranches reports absent, unfiltered and filtered triggers", () => {
+  const doc = {
+    on: { pull_request: { branches: ["main"] }, push: null },
+  } as unknown as Workflow;
+  assertEquals(triggerBranches(doc, "pull_request"), ["main"]);
+  assertEquals(triggerBranches(doc, "push"), undefined);
+  assertEquals(triggerBranches(doc, "schedule"), null);
 });

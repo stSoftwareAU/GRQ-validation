@@ -663,6 +663,17 @@ covering continuous integration, security scanning, and dependency hygiene.
     integration — shell issues inside `run:` blocks, so workflow regressions
     fail the build.
 
+### Milestone integration branches
+
+Milestone sub-issue PRs target a shared `milestone/<slug>` branch rather than
+`main`. GitHub Actions filter patterns treat `*` as "any character except `/`",
+so a `branches: ["*"]` filter silently skips every one of those PRs. Each gate
+therefore lists `milestone/**` alongside `*` — or omits the `branches:` filter
+entirely, as `a11y.yml` does (Issue #788). `version-bump.yml` is the deliberate
+exception: it stays `main`-only so the version bump lands once on the rollup PR.
+`tests/milestone_branch_filter_test.ts` evaluates each workflow's real filter
+against a milestone branch name to keep this from regressing.
+
 ### Dashboard versioning
 
 The dashboard app version is the cache-busting key for the service worker

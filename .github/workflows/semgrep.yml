@@ -14,7 +14,9 @@ name: Semgrep
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not match `/`, so `milestone/**` is needed for milestone
+    # integration PRs to run this gate (Issue #788).
+    branches: ["*", "milestone/**"]
 
 # Cancel superseded runs (Issue #139): rapid pushes to the same ref otherwise
 # queue redundant scans that each hold a runner. Keying on workflow + ref with
