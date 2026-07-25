@@ -12,7 +12,9 @@ name: Dependency Quarantine Gate
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not match `/`, so `milestone/**` is needed for milestone
+    # integration PRs to run this gate (Issue #788).
+    branches: ["*", "milestone/**"]
 
 # Cancel superseded runs on rapid pushes to the same ref.
 concurrency:

@@ -15,6 +15,7 @@
 
 import { assert, assertEquals } from "@std/assert";
 import {
+  assertPullRequestRunsOnMilestone,
   loadWorkflow,
   workflowSteps,
   workflowTriggers,
@@ -37,6 +38,14 @@ Deno.test("actionlint workflow triggers on pull_request", async () => {
   const on = workflowTriggers(doc);
   assert(on, "workflow must declare an 'on' trigger");
   assert("pull_request" in on, "must trigger on pull_request");
+});
+
+// Issue #788: milestone sub-issue PRs target a shared `milestone/<slug>`
+// integration branch. A `branches: ["*"]` filter skips them because the `*`
+// glob does not match the `/`, so the gate must run on milestone branches too.
+Deno.test("actionlint workflow runs on milestone/* pull requests", async () => {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  assertPullRequestRunsOnMilestone(doc);
 });
 
 Deno.test("actionlint workflow declares read-only contents permission", async () => {

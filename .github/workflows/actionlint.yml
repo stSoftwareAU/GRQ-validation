@@ -17,7 +17,9 @@ name: Actionlint
 
 on:
   pull_request:
-    branches: ["*"]
+    # `*` does not match `/`, so `milestone/**` is needed for milestone
+    # integration PRs to run this gate (Issue #788).
+    branches: ["*", "milestone/**"]
   push:
     branches: [main, master]
 

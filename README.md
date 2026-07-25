@@ -619,6 +619,13 @@ flowchart LR
 This repository ships a set of GitHub Actions workflows in `.github/workflows/`
 covering continuous integration, security scanning, and dependency hygiene.
 
+Every pull-request gate below runs on **all** base branches, including the
+`milestone/<slug>` integration branches that milestone sub-issue PRs target.
+Their triggers use `branches: ["**"]` (or no filter at all): GitHub's `*`
+wildcard stops at a `/`, so the earlier `["*"]` filter silently skipped every
+milestone PR and left the gaps to be caught only by the oversized rollup PR into
+`main` (Issue #788, following the same fix for `ci.yml` in Issue #342).
+
 ### Workflows
 
 1. **CI** (`ci.yml`) — main continuous integration: build, test, formatting,
@@ -662,6 +669,17 @@ covering continuous integration, security scanning, and dependency hygiene.
     expressions, unknown runner labels, and — via its bundled `shellcheck`
     integration — shell issues inside `run:` blocks, so workflow regressions
     fail the build.
+
+### Milestone integration branches
+
+Milestone sub-issue PRs target a shared `milestone/<slug>` branch rather than
+`main`. GitHub Actions filter patterns treat `*` as "any character except `/`",
+so a `branches: ["*"]` filter silently skips every one of those PRs. Each gate
+therefore lists `milestone/**` alongside `*` — or omits the `branches:` filter
+entirely, as `a11y.yml` does (Issue #788). `version-bump.yml` is the deliberate
+exception: it stays `main`-only so the version bump lands once on the rollup PR.
+`tests/milestone_branch_filter_test.ts` evaluates each workflow's real filter
+against a milestone branch name to keep this from regressing.
 
 ### Dashboard versioning
 
