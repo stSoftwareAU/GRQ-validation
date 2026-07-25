@@ -9,7 +9,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
-import { assertActionsPinnedToSha } from "./workflow_assertions.ts";
+import {
+  assertActionsPinnedToSha,
+  assertCacheRuntimeSupported,
+} from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/ci.yml";
 
@@ -27,6 +30,16 @@ Deno.test("CI workflow parses as valid YAML", async () => {
 Deno.test("CI workflow pins every action to a 40-char commit SHA", async () => {
   const text = await Deno.readTextFile(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
+});
+
+// Issue #790: actions/cache v4.x ships the deprecated node20 Actions runtime,
+// force-removed 2026-09-16. Both "Cache dependencies" steps (jobs `test` and
+// `build`) must be annotated with — and, via the SHA the annotation records,
+// pinned to — a node24-era release (v5+) so the merge gate keeps working after
+// runtime removal. Mirrors the setup-node guard for Issue #789.
+Deno.test("CI workflow pins actions/cache to a node24-runtime release", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  assertCacheRuntimeSupported(text);
 });
 
 Deno.test("CI workflow no longer references the mutable rust-toolchain stable branch", async () => {
