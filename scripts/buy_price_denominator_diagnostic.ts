@@ -6,12 +6,11 @@
 // diagnostic measures the dashboard's own denominator rather than a
 // re-implementation.
 //
-// The question: training divides the 90-day return by `monthsAgoPrice` (the
-// CLOSE on the score date — GRQ/src/CoreFeatures.ts -> GRQ/src/LearnUtil.ts),
-// while the dashboard divides BOTH Target and Actual by `buyPrice` (the
-// split-adjusted MIDPOINT of the first usable point). This module quantifies the
-// denominator offset and the gap it contributes when Target and Actual are
-// restated onto the trained close basis.
+// The question: upstream training divides the 90-day return by `monthsAgoPrice`
+// — the CLOSE on the score date — while the dashboard divides BOTH Target and
+// Actual by `buyPrice` (the split-adjusted MIDPOINT of the first usable point).
+// This module quantifies the denominator offset and the gap it contributes when
+// Target and Actual are restated onto the trained close basis.
 
 import "../docs/projection.js";
 import "../docs/volume_recommend.js";

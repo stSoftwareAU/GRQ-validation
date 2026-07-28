@@ -2,9 +2,9 @@
 // (milestone #544 — one candidate source of the systematic Target-over-Actual
 // measurement gap).
 //
-// The question: the AI emits a score in [-1, 1]; the GRQ dashboard derives the
-// Target from it via `reverseProfitRecommend(price, score)`
-// (GRQ/src/LearnUtilTypes.ts:19-39, called at GRQ/src/portfolio/ScoreApp.ts:473).
+// The question: the AI emits a score in [-1, 1]; the dashboard derives the
+// Target from it via `reverseProfitRecommend(price, score)`, the upstream
+// decoder the scoring app applies to every emitted score.
 // The FORWARD mapping used in training is
 //   profitRecommend(pct) = tanh((pct - 1.5) / 3)            (encode: pct → score)
 // and the REVERSE is
@@ -20,11 +20,11 @@
 // over the REALISED score distribution, decoding introduces a consistent
 // same-direction (plausibly upward) Target shift.
 //
-// This module ports the two GRQ functions faithfully (they live upstream in
-// `GRQ`, not in this repo) and measures the round-trip Target shift purely in
-// score↔return-percent space — the per-row pp shift is price-independent, so no
-// market data is needed. It also takes a census of how often the realised
-// scores land in each clamped region.
+// This module ports the two upstream functions faithfully (they live in the
+// training platform, not in this repo) and measures the round-trip Target shift
+// purely in score↔return-percent space — the per-row pp shift is
+// price-independent, so no market data is needed. It also takes a census of
+// how often the realised scores land in each clamped region.
 //
 // The score parsing is delegated to the SHIPPED dashboard kernel
 // (docs/trend_predictions.js → GRQTrendPredictions.parseScoreTsv), so the
@@ -38,12 +38,12 @@ const TP = (globalThis as any).GRQTrendPredictions;
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 
-/** The +50% cap / -50% interior cap magnitude from GRQ's LearnUtilTypes. */
+/** The +50% cap / -50% interior cap magnitude used by the upstream decoder. */
 export const MAX_REVERSE_PERCENT = 50;
 
 /**
  * Forward training encode: a candidate return percentage → score in (-1, 1).
- * Mirrors GRQ `profitRecommend` (GRQ/src/LearnUtilTypes.ts:12-15).
+ * Mirrors the upstream training-side `profitRecommend` encode.
  */
 export function profitRecommend(pct: number): number {
   return Math.tanh((pct - 1.5) / 3);
@@ -64,11 +64,11 @@ export interface DecodeResult {
 }
 
 /**
- * Reverse decode: score → return percentage, with GRQ's three clamps.
- * Mirrors the percentage half of GRQ `reverseProfitRecommend`
- * (GRQ/src/LearnUtilTypes.ts:19-39). The `target = price * (1 + pct/100)` step
- * is split out into {@link reverseProfitTarget} so the round-trip can be
- * measured in price-independent return-percent space.
+ * Reverse decode: score → return percentage, with the upstream three clamps.
+ * Mirrors the percentage half of the upstream `reverseProfitRecommend` decoder.
+ * The `target = price * (1 + pct/100)` step is split out into
+ * {@link reverseProfitTarget} so the round-trip can be measured in
+ * price-independent return-percent space.
  */
 export function reverseProfitPct(score: number): DecodeResult {
   if (score >= 1) {

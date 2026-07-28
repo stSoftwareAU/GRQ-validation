@@ -2,9 +2,9 @@
 // decoding `reverseProfitRecommend` adds a systematic bias to the dashboard's
 // Target.
 //
-//   - The AI emits a score in [-1, 1]; the GRQ dashboard derives Target via
-//     reverseProfitRecommend(price, score) (GRQ/src/portfolio/ScoreApp.ts:473,
-//     defined in GRQ/src/LearnUtilTypes.ts:19-39).
+//   - The AI emits a score in [-1, 1]; the dashboard derives Target via
+//     reverseProfitRecommend(price, score), the upstream decoder that inverts
+//     the training-side profitRecommend encode.
 //   - Forward (training) encode:  profitRecommend(pct) = tanh((pct - 1.5) / 3).
 //   - Reverse (dashboard) decode: pct = 3*atanh(score) + 1.5, then
 //     target = price * (1 + pct/100), with clamps score>=1 → +50%,
