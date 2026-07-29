@@ -69,7 +69,7 @@ Deno.test("diagnostic scripts still explain the ported training semantics", asyn
     "scripts/buy_price_denominator_diagnostic.ts": ["training", "CLOSE"],
     "scripts/diagnose_buy_price_denominator.ts": ["training", "CLOSE"],
     "scripts/diagnose_dividend_basis.ts": ["training", "yearOfDividends"],
-    "scripts/dividend_basis_diagnostic.ts": ["Training", "yearOfDividends"],
+    "scripts/dividend_basis_diagnostic.ts": ["training", "yearOfDividends"],
     "scripts/diagnose_price_basis.ts": ["trained", "LOW"],
     "scripts/diagnose_score_target_decoding.ts": [
       "training",
