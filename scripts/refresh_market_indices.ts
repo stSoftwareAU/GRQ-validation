@@ -2,11 +2,11 @@
 //
 // Daily lockstep wrapper for the benchmark indices (issue #238).
 //
-// The external "scorer" job (stSoftwareAU/GRQ, worker/score.sh) checks out this
-// repo and, once a day, commits new docs/scores/... and docs/USDAUD.json with a
-// message like "Add scores for 2026-06-20". Before #238 the benchmark indices
-// (docs/market-indices.json) were not part of that job, so they drifted days
-// behind the actuals.
+// The external "scorer" job, run from the upstream prediction platform, checks
+// out this repo and, once a day, commits new docs/scores/... and
+// docs/USDAUD.json with a message like "Add scores for 2026-06-20".
+// Before #238 the benchmark indices (docs/market-indices.json) were not part of
+// that job, so they drifted days behind the actuals.
 //
 // This wrapper is the stable entry point the scorer invokes immediately before
 // that commit, so the indices reach the last trading day in lockstep with the
