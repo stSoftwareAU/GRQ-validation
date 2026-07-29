@@ -753,8 +753,8 @@ function priceAtNinetyDayHorizon(marketData, scoreDate) {
 }
 
 // Intraday LOW of the last market-data point on or before the 90-day horizon —
-// the price basis the GRQ model is TRAINED on (GRQ/src/LearnUtil.ts uses
-// `market.lowPrice(symbol, targetDate)` for the 90-day return label). The
+// the price basis the GRQ model is TRAINED on (training labels the 90-day
+// return off the intraday LOW at the target date). The
 // dashboard measures Actual at the midpoint (priceAtNinetyDayHorizon); this
 // helper exposes the matching low so a like-for-like, same-basis comparison can
 // be made (issue #552). Mirrors priceAtNinetyDayHorizon's horizon selection
@@ -795,8 +795,8 @@ function priceBasisOffsetPercent(buyPrice, midPrice, lowPrice) {
 // Buy-price denominator on the model's TRAINED basis: the split-adjusted
 // CLOSE of the first usable market-data point on or within five days after the
 // score date (issue #554). The GRQ training label divides the 90-day return by
-// `core.monthsAgoPrice`, which is `closePrices[0]` — the close on the score date
-// (GRQ/src/CoreFeatures.ts -> GRQ/src/LearnUtil.ts). The dashboard instead
+// `core.monthsAgoPrice`, which is `closePrices[0]` — the close on the score
+// date. The dashboard instead
 // divides by `getBuyPrice`, the split-adjusted MIDPOINT `(high + low) / 2` of
 // the same first point. This helper mirrors `getBuyPrice`'s point selection and
 // split adjustment EXACTLY — only the close replaces the midpoint — so a
@@ -926,8 +926,9 @@ function horizonAsOfBasisOffsetPercent(buyPrice, rawHorizonMid, currentBasisHori
 
 // Trailing-365-day dividend total as of the score date — the quantity the GRQ
 // model turns into a FLAT training credit of `yearOfDividends / 4`
-// (GRQ/src/CoreFeatures.ts builds `yearOfDividends`; GRQ/src/LearnUtil.ts bakes
-// `yearOfDividends / 4` into the total-return label for EVERY stock). Sums the
+// (training builds the trailing annual dividend total `yearOfDividends`, then
+// bakes a flat `yearOfDividends / 4` into the total-return label for EVERY
+// stock). Sums the
 // cash amount of every dividend whose ex-dividend date falls in the year ending
 // at the score date (`scoreDate - 365 days < exDivDate <= scoreDate`). Mirrors
 // the shape `filterDividendsWithin90Days`/`sumDividends` consume so the
