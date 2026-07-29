@@ -3,10 +3,9 @@
 // Quantifies the Target/Actual bias that comes from the DIVIDEND basis mismatch
 // between training and the dashboard:
 //
-//   - Training (GRQ/src/LearnUtil.ts:147-148) bakes a FLAT quarter of the
-//     trailing annual dividend, `core.yearOfDividends / 4`, into the
-//     total-return label for EVERY stock, whether or not a dividend actually
-//     falls in the forward window.
+//   - Upstream training bakes a FLAT quarter of the trailing annual dividend,
+//     `core.yearOfDividends / 4`, into the total-return label for EVERY stock,
+//     whether or not a dividend actually falls in the forward window.
 //   - The dashboard/validation side credits only the ACTUAL ex-dividends that
 //     fall inside the 90-day window
 //     (GRQ-validation/src/utils.rs `calculate_dividends_for_period`, mirrored on

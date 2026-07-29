@@ -2,8 +2,8 @@
 // that comes purely from the price BASIS mismatch between training and the
 // dashboard.
 //
-//   - The GRQ model is trained on the intraday LOW of the trading day 90 days
-//     ahead (GRQ/src/LearnUtil.ts -> market.lowPrice(symbol, targetDate)).
+//   - The model is trained on the intraday LOW of the trading day 90 days
+//     ahead (upstream training reads the low price at the target date).
 //   - The dashboard measures Actual at the MIDPOINT (high + low) / 2 of the last
 //     point on or before the 90-day horizon (docs/projection.js).
 //

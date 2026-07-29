@@ -2,9 +2,9 @@
 // that comes purely from the buy-price DENOMINATOR mismatch between training and
 // the dashboard.
 //
-//   - The GRQ model is trained on a 90-day return divided by `monthsAgoPrice`,
-//     which is the CLOSE on the score date (GRQ/src/CoreFeatures.ts builds
-//     `monthsAgoPrice = closePrices[0]`; GRQ/src/LearnUtil.ts divides by it).
+//   - The model is trained on a 90-day return divided by `monthsAgoPrice`,
+//     which is the CLOSE on the score date (upstream training takes the first
+//     close of the series as `monthsAgoPrice` and divides the return by it).
 //   - The dashboard divides BOTH Target and Actual by `buyPrice`, the
 //     split-adjusted MIDPOINT (high + low) / 2 of the first usable point
 //     (docs/projection.js -> getBuyPrice).
