@@ -2,10 +2,9 @@
 // dashboard's "is this name too illiquid to trade?" decision (issue #576,
 // consumed by the exclusion sub-issue #577 and the valuation sub-issue #578).
 //
-// Ported from GRQ training's `volumeRecommend` (GRQ/src/CoreFeatures.ts) so the
-// dashboard and the trainer agree on ONE definition — do not invent a new
-// threshold. The only constant is `BUDGET_DOLLARS = 10000`
-// (GRQ/src/LearnUtilTypes.ts).
+// Ported from GRQ training's `volumeRecommend` feature so the dashboard and
+// the trainer agree on ONE definition — do not invent a new threshold. The only
+// constant is `BUDGET_DOLLARS = 10000`, matching the training-side budget.
 //
 // UNITS CAVEAT (critical correctness note): GRQ stores prices in CENTS and so
 // divides dollar volume by 100 before comparing to BUDGET_DOLLARS. The
@@ -19,7 +18,8 @@
 // browser dashboard and the tests exercise the exact same code. The helpers are
 // published on `globalThis.GRQVolume`.
 
-// The single liquidity threshold, in DOLLARS (GRQ/src/LearnUtilTypes.ts:69).
+// The single liquidity threshold, in DOLLARS — the training-side budget
+// constant, unchanged.
 const BUDGET_DOLLARS = 10000;
 
 // GRQ's "last 10 weekdays" lookback. Daily market-data rows are already
@@ -96,8 +96,7 @@ function isLowVolume(window) {
 
 // Fold low volume into a prediction's VALUATION (issue #578). Ported from GRQ
 // training's score cap `Math.min(core.volumeRecommend, priceRecommend, 1)`
-// (GRQ/src/LearnUtil.ts:155) so the dashboard's recommendation strength and the
-// trainer agree on ONE definition — an illiquid name can never score as a
+// so the dashboard's recommendation strength and the trainer agree on ONE definition — an illiquid name can never score as a
 // strong recommendation. `baseScore` is the dashboard's price-based prediction
 // score; `window` is a trailing volume window (buildTrailingVolumeWindow).
 //
