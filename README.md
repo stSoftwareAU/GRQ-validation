@@ -118,8 +118,8 @@ and committed, so a visitor's browser never calls an untrusted third-party relay
 
 ### Daily benchmark refresh (in lockstep with the scores)
 
-The actuals stay current because an external daily **scorer** job
-(`stSoftwareAU/GRQ`, `worker/score.sh`) checks out this repo and commits new
+The actuals stay current because an external daily **scorer** job (run from the
+upstream prediction platform) checks out this repo and commits new
 `docs/scores/...` and `docs/USDAUD.json` with a message like
 `Add scores for 2026-06-20`. To stop the benchmark indices drifting behind the
 actuals (issue #238), that same job now refreshes `docs/market-indices.json`
@@ -141,7 +141,7 @@ indices reach the last trading day in lockstep with the actuals.
 
 ```mermaid
 sequenceDiagram
-    participant Scorer as Scorer job (GRQ/worker/score.sh)
+    participant Scorer as External daily scorer job
     participant Repo as GRQ-validation checkout
     participant Yahoo as Yahoo Finance
     Scorer->>Repo: write docs/scores/... + docs/USDAUD.json
@@ -152,7 +152,7 @@ sequenceDiagram
     else fetch fails
         Repo-->>Repo: log + exit 0, keep last-good file
     end
-    Scorer->>Repo: model_checkin.sh "Add scores for YYYY-MM-DD"
+    Scorer->>Repo: commit "Add scores for YYYY-MM-DD"
     Note over Repo: scores + USDAUD + indices in one commit
 ```
 
