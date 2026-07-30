@@ -54,6 +54,18 @@ and this project adheres to
 
 ### Changed
 
+- The four market-data/dividend integration tests
+  (`tests/create_market_data_csv_test.rs`,
+  `tests/create_market_data_long_csv_test.rs`, `tests/market_data_tests.rs`,
+  `tests/dividend_tests.rs`) are now **hermetic**: each builds a synthetic
+  fixture tree in its own `tempfile::tempdir()` root via the shared builders in
+  `tests/common/mod.rs`, so none reads or writes a configured data root, none
+  skips, and `tests/dividend_tests.rs` no longer rewrites the committed
+  `docs/scores/2025/March/5-dividends.csv`. `scripts/check_hermetic_tests.sh`
+  gates this on every PR — it runs the four tests with no data root configured
+  and fails on a skip, a private data-tree reference under `tests/`, or a
+  dirtied working tree (Issue #804).
+
 - Markdown Lint workflow (`.github/workflows/markdown-lint.yml`) no longer
   triggers on push to the default branch. As a PR-gating lint check, a
   post-merge push run only duplicated the run that already passed on the pull
