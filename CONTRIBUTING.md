@@ -76,7 +76,17 @@ cargo test test_name
 
 # Run the Deno test suite (dashboard / workflow tests)
 deno test --allow-read tests/
+
+# Verify the market-data/dividend tests stayed hermetic (also run by CI)
+./scripts/check_hermetic_tests.sh
 ```
+
+The Rust tests are **hermetic**: they never read the data roots you configured
+above. Every market-data and dividend fixture is synthetic, hand-written in
+`tests/common/mod.rs`, and built inside the test's own `tempfile::tempdir()`, so
+`cargo test` behaves identically on CI and on a maintainer's machine and leaves
+`git status` clean. Keep it that way — a new test must not skip when a data root
+is absent, and must not write outside its temp directory (Issue #804).
 
 ## Formatting and linting
 

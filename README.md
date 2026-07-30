@@ -841,6 +841,34 @@ cargo test test_name
 
 # Run the Deno test suite (dashboard / workflow tests)
 deno test --allow-read tests/
+
+# Verify the market-data/dividend tests stayed hermetic (also run by CI)
+./scripts/check_hermetic_tests.sh
+```
+
+#### Hermetic Rust tests
+
+The Rust tests never touch the data roots configured below: every market-data
+and dividend fixture is synthetic, hand-written in `tests/common/mod.rs`, and
+built inside the test's own `tempfile::tempdir()` through the same
+`get_market_data_path_in` / `get_dividend_data_path_in` resolvers the code under
+test uses. So `cargo test` asserts identically on CI and on a maintainer's
+machine, never skips for a missing data tree, and leaves `git status` clean
+(Issue #804).
+
+`scripts/check_hermetic_tests.sh` — run by `quality.sh` and by the CI Rust job —
+is the gate: it runs the four market-data/dividend integration tests with both
+root variables unset and fails if any of them skips, if `tests/` names a private
+data tree, or if the run dirties the working tree.
+
+```mermaid
+flowchart LR
+    T["tests/common/mod.rs<br/>synthetic fixtures"] --> R["tempfile::tempdir()<br/>&lt;temp&gt;/data/&lt;LETTER&gt;/&lt;SYM&gt;.json"]
+    R --> W["writers under test<br/>(root passed as a parameter)"]
+    W --> O["CSV written inside the temp dir"]
+    O --> G{{"check_hermetic_tests.sh"}}
+    G -- "skip, private-tree ref, or dirty tree" --> X["CI fails loud"]
+    G -- clean --> P[green]
 ```
 
 The Deno suite includes a **dashboard "Limited data mode" smoke test**

@@ -1,100 +1,109 @@
+//! End-to-end test of the score-file → market-data CSV path (issue #804).
+//!
+//! This was a best-effort smoke test against the operator's private share-price
+//! checkout: it skipped unless that tree happened to hold a data file for one of
+//! the committed score file's tickers, so on CI and any public checkout it never
+//! asserted anything. It now builds a synthetic score file and a synthetic
+//! market-data tree inside its own temporary directories, so it runs everywhere
+//! and genuinely covers ticker extraction, per-ticker path resolution, and the
+//! long-format writer's score-file wrapper.
+
+mod common;
+
 use anyhow::Result;
+use common::{write_market_data, write_score_file, PricePoint};
 use grq_validation::utils::{
     create_market_data_long_csv_for_score_file, extract_symbol_from_ticker,
-    extract_ticker_codes_from_score_file, get_market_data_path, market_data_root,
+    extract_ticker_codes_from_score_file, get_market_data_path_in,
 };
+use std::path::Path;
 
-/// Best-effort smoke test against the external share-price repository. It only
-/// asserts when real market data for this score file's date is genuinely
-/// present; otherwise it skips.
-///
-/// The guard must NOT be a bare market-data-root existence check.
-/// Sibling tests (`create_market_data_csv_test.rs`,
-/// `create_market_data_long_csv_test.rs`) drop synthetic fixtures under that
-/// same base directory, so a bare existence check is a shared, mutable sentinel
-/// that another test can transiently satisfy — making this test run against a
-/// directory that exists but holds none of its tickers. Combined with the
-/// non-destructive writer's "no rows written → error" guard (#687), that race
-/// turned this test into an intermittent CI failure. The current share-price
-/// repo also spans a single quarter and need not contain this file's date at
-/// all. We therefore gate on a real data file for one of this file's tickers,
-/// which a synthetic `GRQVTEST…` fixture never creates.
+/// Synthetic tickers, including a dotted code so the `.` → `-` symbol mapping
+/// (`NYSE:GRQVTEST804.A` → `GRQVTEST804-A`) is exercised end to end.
+const TICKERS: [&str; 2] = ["NYSE:GRQVTEST804A", "NYSE:GRQVTEST804.A"];
+
+/// Score-file date; the 180-day window runs from `2025-06-20` to `2025-12-17`.
+const SCORE_DATE: &str = "2025-06-20";
+
 #[test]
 fn test_create_market_data_long_csv_for_first_score_file() -> Result<()> {
-    // The market-data root is caller-supplied (issue #802); without it there is
-    // nothing to smoke-test against, so skip exactly as when the tree is absent.
-    let market_data_root = match market_data_root() {
-        Ok(root) => root,
-        Err(error) => {
-            println!("Skipping test_create_market_data_long_csv_for_first_score_file: {error}");
-            return Ok(());
-        }
-    };
+    let workspace = tempfile::tempdir()?;
+    let market_root = tempfile::tempdir()?;
 
-    let score_file_path = "docs/scores/2025/June/20.tsv";
-    let score_file_date = "2025-06-20";
-    let output_dir = "target/test_output";
+    // A synthetic score file stands in for a committed `docs/scores/**/DD.tsv`,
+    // so the test reads nothing outside its own temporary directory.
+    let score_file = write_score_file(&workspace.path().join("20.tsv"), &TICKERS)?;
+    let score_file_path = score_file.to_str().expect("temp path is valid UTF-8");
 
-    // Extract ticker codes from the score file (the file itself is committed, so
-    // this works regardless of the external repository's availability).
     let ticker_codes = extract_ticker_codes_from_score_file(score_file_path)?;
-
-    // Skip unless the external repository genuinely holds a data file for one of
-    // these tickers. This distinguishes a real clone from an empty or
-    // fixture-polluted base directory.
-    let has_real_data = ticker_codes.iter().any(|ticker| {
-        let symbol = extract_symbol_from_ticker(ticker);
-        get_market_data_path(&symbol)
-            .map(|path| std::path::Path::new(&path).exists())
-            .unwrap_or(false)
-    });
-    if !has_real_data {
-        println!(
-            "Skipping test_create_market_data_long_csv_for_first_score_file: \
-             no market data for this score file's tickers under {root}",
-            root = market_data_root.display()
-        );
-        return Ok(());
-    }
-
-    println!(
-        "Found {} ticker codes: {:?}",
-        ticker_codes.len(),
-        ticker_codes
+    assert_eq!(
+        ticker_codes,
+        TICKERS.map(String::from).to_vec(),
+        "every ticker in the score file must be extracted, in file order"
     );
 
-    // Create output directory if it doesn't exist.
-    std::fs::create_dir_all(output_dir)?;
+    // One in-window fixture per ticker, written at the path the writer resolves.
+    for ticker in &ticker_codes {
+        let symbol = extract_symbol_from_ticker(ticker);
+        write_market_data(
+            market_root.path(),
+            &symbol,
+            &[PricePoint::detailed(
+                SCORE_DATE, "10.10", "10.50", "9.90", "10.25", "123456",
+            )],
+        )?;
+    }
 
-    // Create market data CSV. When the repository holds ticker files but no rows
-    // fall inside this date's 180-day window, the non-destructive writer returns
-    // a "no rows written" error (#687). That means the data is present but not
-    // for this date, so skip rather than fail — the writer's error contract is
-    // covered directly by the fixture-based tests in
-    // `create_market_data_long_csv_test.rs`.
-    let output_path = match create_market_data_long_csv_for_score_file(
-        &market_data_root,
+    // Per-ticker path resolution: each symbol resolves to the bucketed JSON file
+    // just written, under the caller-supplied root and nowhere else.
+    for ticker in &ticker_codes {
+        let symbol = extract_symbol_from_ticker(ticker);
+        let resolved = get_market_data_path_in(market_root.path(), &symbol)?;
+        assert!(
+            Path::new(&resolved).starts_with(market_root.path()),
+            "{symbol} must resolve under the supplied root, got {resolved}"
+        );
+        assert!(
+            Path::new(&resolved).exists(),
+            "expected the fixture for {symbol} at {resolved}"
+        );
+    }
+
+    let output_dir = workspace.path().join("out");
+    std::fs::create_dir_all(&output_dir)?;
+    let output_dir_str = output_dir.to_str().expect("temp path is valid UTF-8");
+
+    let output_path = create_market_data_long_csv_for_score_file(
+        market_root.path(),
         score_file_path,
         &ticker_codes,
-        score_file_date,
-        Some(output_dir),
-    ) {
-        Ok(path) => path,
-        Err(error) => {
-            println!("Skipping test_create_market_data_long_csv_for_first_score_file: {error}");
-            return Ok(());
-        }
-    };
+        SCORE_DATE,
+        Some(output_dir_str),
+    )?;
 
-    println!("Created market data CSV: {output_path}");
+    // The wrapper names the CSV after the score file's stem, inside output_dir.
+    assert_eq!(
+        Path::new(&output_path),
+        output_dir.join("20.csv"),
+        "unexpected derived output path"
+    );
 
-    // Verify the file was created and has content.
     let content = std::fs::read_to_string(&output_path)?;
     assert!(!content.is_empty());
     assert!(content.contains("date,ticker,high,low,open,close"));
 
-    // Clean up.
-    let _ = std::fs::remove_file(&output_path);
+    // A row per ticker, keyed by the full ticker code, plus the header.
+    for ticker in &ticker_codes {
+        assert!(
+            content.contains(&format!("{SCORE_DATE},{ticker},10.50,9.90,10.10,10.25")),
+            "expected a fully-mapped row for {ticker} in:\n{content}"
+        );
+    }
+    assert_eq!(
+        content.lines().count(),
+        TICKERS.len() + 1,
+        "expected one header row plus one row per ticker in:\n{content}"
+    );
 
     Ok(())
 }
