@@ -69,26 +69,11 @@ const PRIVATE_DATA_ROOT_PATTERNS = [
  * Every exception is visible here rather than being a silent hole, and the
  * "every allowlist entry is still live" case below fails once one goes stale.
  */
-const ALLOWLIST = [
-  {
-    // Issue #804's hermetic-test gate greps `tests/` for these names, so its
-    // PRIVATE_TREE_PATTERN definition IS the literal — the same exemption this
-    // test claims for its own source.
-    path: "scripts/check_hermetic_tests.sh",
-    reason: "issue #804 gate: the literal is the pattern it greps tests/ for",
-  },
-  {
-    // TEMPORARY — issue #805 makes the dividend-history root caller-supplied
-    // and rewords these comments. Delete this entry with that change; the
-    // liveness case below turns red the moment the literal is gone.
-    path: "scripts/diagnose_dividend_basis.ts",
-    reason: "pending issue #805 (dividend-history root still defaults here)",
-  },
-  {
-    // TEMPORARY — see the note on scripts/diagnose_dividend_basis.ts (#805).
-    path: "scripts/dividend_basis_diagnostic.ts",
-    reason: "pending issue #805 (dividend-history root still defaults here)",
-  },
+const ALLOWLIST: Array<{ path: string; reason: string }> = [
+  // Empty by design. The three former entries retired with issue #805 (#810):
+  // the two dividend diagnostics take a caller-supplied root and the #804
+  // hermetic gate writes its pattern as an alternation, so none of them spells
+  // a literal any more. This file's own source stays exempt via SELF.
 ];
 
 const ALLOWLISTED_PATHS = new Set(ALLOWLIST.map((entry) => entry.path));

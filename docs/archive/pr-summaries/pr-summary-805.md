@@ -103,7 +103,7 @@ Rows with 0 in-window:   50.0 %
 **Acceptance grep**:
 
 ```text
-$ rg -n 'GRQ-shareprices|GRQ-dividends' scripts/
+$ rg -n 'GRQ-(shareprices|dividends)' scripts/
 NO MATCHES in scripts/
 ```
 
