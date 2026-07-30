@@ -58,7 +58,7 @@ $ grep -nE '^Skipping |external data repository not available' <test output>
 $ git status --porcelain
 (empty)
 
-$ grep -rn 'GRQ-shareprices|GRQ-dividends|MARKET_DATA_BASE_PATH|DIVIDEND_DATA_BASE_PATH' tests/
+$ grep -rnE "$PRIVATE_TREE_PATTERN" tests/   # slugs + deleted base-path constants
 (no matches)
 
 $ ./scripts/check_hermetic_tests.sh

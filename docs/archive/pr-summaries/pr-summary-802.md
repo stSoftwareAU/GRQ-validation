@@ -54,12 +54,10 @@ flowchart LR
 
 **Acceptance criteria, verified locally:**
 
-1. No private-repo literal under `src/`:
-
-   ```console
-   $ grep -rn 'GRQ-shareprices\|GRQ-dividends' src/
-   (no matches)
-   ```
+1. No private-repo literal under `src/` — a `grep -rn` over `src/` for the two
+   private data-tree checkout slugs returned no matches. (That check is now the
+   standing repo-wide guard `tests/private_data_root_reference_test.ts`, which
+   holds the patterns so this prose no longer has to.)
 
 2. `./quality.sh < /dev/null` → exit 0 (includes
    `cargo clippy --all-targets --all-features -- -D warnings`,
@@ -79,7 +77,8 @@ flowchart LR
 
 4. Byte-identical output with the variable set. A copy of `docs/` (index trimmed
    to `2025-03-05`) was processed by the pre-change binary (`git stash`) and by
-   the new binary with `GRQ_MARKET_DATA_PATH=../GRQ-shareprices2026Q2`:
+   the new binary with `GRQ_MARKET_DATA_PATH` pointed at the private
+   market-data tree:
 
    ```console
    $ diff -r /tmp/802-base/docs /tmp/802-new/docs
@@ -105,8 +104,8 @@ Modified:
 
 - `test_ensure_market_data_repository_err_when_absent` — asserts the base path
   passed in plus `/data`, that the message names `GRQ_MARKET_DATA_PATH`, and
-  that it names no repository (replaces the old
-  `contains("GRQ-shareprices2026Q2")` assertion).
+  that it names no repository (replaces the old assertion that the message
+  contained the private market-data checkout slug).
 - The #182/#195 traversal-guard tests and the path-shape tests now run against a
   `tempfile::tempdir()` root via the `_in` cores.
 - Three skip guards now gate on `market_data_root()` instead of the constant.
