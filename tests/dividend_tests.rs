@@ -1,13 +1,13 @@
 use anyhow::Result;
 use grq_validation::utils::{
-    create_dividend_csv_for_score_file, extract_ticker_codes_from_score_file,
-    DIVIDEND_DATA_BASE_PATH,
+    create_dividend_csv_for_score_file, dividend_data_root, extract_ticker_codes_from_score_file,
 };
 
 #[test]
 fn test_create_dividend_csv_for_first_score_file() -> Result<()> {
-    // Skip test if external data repository is not available
-    if !std::path::Path::new(DIVIDEND_DATA_BASE_PATH).exists() {
+    // Skip test if the caller-supplied dividend root is unset or absent
+    // (issue #802).
+    if !dividend_data_root().is_ok_and(|root| root.exists()) {
         println!("Skipping test_create_dividend_csv_for_first_score_file: external data repository not available");
         return Ok(());
     }

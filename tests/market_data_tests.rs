@@ -1,14 +1,14 @@
 use anyhow::Result;
 use grq_validation::utils::{
     create_market_data_long_csv_for_score_file, extract_symbol_from_ticker,
-    extract_ticker_codes_from_score_file, get_market_data_path, MARKET_DATA_BASE_PATH,
+    extract_ticker_codes_from_score_file, get_market_data_path, market_data_root,
 };
 
 /// Best-effort smoke test against the external share-price repository. It only
 /// asserts when real market data for this score file's date is genuinely
 /// present; otherwise it skips.
 ///
-/// The guard must NOT be a bare `MARKET_DATA_BASE_PATH` existence check.
+/// The guard must NOT be a bare market-data-root existence check.
 /// Sibling tests (`create_market_data_csv_test.rs`,
 /// `create_market_data_long_csv_test.rs`) drop synthetic fixtures under that
 /// same base directory, so a bare existence check is a shared, mutable sentinel
@@ -21,6 +21,16 @@ use grq_validation::utils::{
 /// which a synthetic `GRQVTEST…` fixture never creates.
 #[test]
 fn test_create_market_data_long_csv_for_first_score_file() -> Result<()> {
+    // The market-data root is caller-supplied (issue #802); without it there is
+    // nothing to smoke-test against, so skip exactly as when the tree is absent.
+    let market_data_root = match market_data_root() {
+        Ok(root) => root,
+        Err(error) => {
+            println!("Skipping test_create_market_data_long_csv_for_first_score_file: {error}");
+            return Ok(());
+        }
+    };
+
     let score_file_path = "docs/scores/2025/June/20.tsv";
     let score_file_date = "2025-06-20";
     let output_dir = "target/test_output";
@@ -41,7 +51,8 @@ fn test_create_market_data_long_csv_for_first_score_file() -> Result<()> {
     if !has_real_data {
         println!(
             "Skipping test_create_market_data_long_csv_for_first_score_file: \
-             no market data for this score file's tickers under {MARKET_DATA_BASE_PATH}"
+             no market data for this score file's tickers under {root}",
+            root = market_data_root.display()
         );
         return Ok(());
     }
