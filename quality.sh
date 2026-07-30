@@ -29,6 +29,9 @@ cargo check --all-targets --all-features
 echo "🧪 Running tests..."
 cargo test --all-targets --all-features --verbose
 
+echo "🔒 Verifying the integration tests are hermetic..."
+./scripts/check_hermetic_tests.sh
+
 echo "📊 Running tests with coverage..."
 # Install tarpaulin if not available
 if ! command -v cargo-tarpaulin &> /dev/null; then
@@ -44,7 +47,7 @@ echo "🏗️ Building release version..."
 cargo build --release
 
 echo "🔍 Running DenoJS tests..."
-deno test --allow-read tests/*.ts
+deno test --allow-read --allow-env tests/*.ts
 
 echo "📝 Formatting JS, HTML, and CSS files with deno fmt..."
 deno fmt docs/*.js docs/*.html docs/*.css helpers/*.ts tests/*.ts

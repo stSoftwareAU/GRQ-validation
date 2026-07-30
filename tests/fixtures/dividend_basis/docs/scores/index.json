@@ -1,0 +1,20 @@
+{
+  "scores": [
+    {
+      "year": "2026",
+      "month": "January",
+      "day": "1",
+      "file": "2026/January/1.tsv",
+      "date": "2026-01-01",
+      "total_stocks": 2
+    },
+    {
+      "year": "2026",
+      "month": "June",
+      "day": "1",
+      "file": "2026/June/1.tsv",
+      "date": "2026-06-01",
+      "total_stocks": 1
+    }
+  ]
+}

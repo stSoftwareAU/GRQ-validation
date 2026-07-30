@@ -85,8 +85,12 @@ fn update_index_with_performance_writes_settled_and_open_entries() {
     );
     write_file(&scores.join("index.json"), &index_json);
 
-    // Act: run the real write path against the fixture.
-    update_index_with_performance(docs.to_str().unwrap())
+    // Act: run the real write path against the fixture. The dividend root is
+    // caller-supplied (issue #803); this fixture's synthetic ticker has no
+    // dividend history, so an absent root keeps the expected figures purely
+    // price-driven.
+    let dividend_root = dir.path().join("absent-dividend-root");
+    update_index_with_performance(&dividend_root, docs.to_str().unwrap())
         .expect("update_index_with_performance should succeed");
 
     // Assert on the persisted output, located by `file` rather than position.

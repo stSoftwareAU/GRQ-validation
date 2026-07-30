@@ -11,9 +11,9 @@ Three private repos were confirmed private and are now absent from
 
 - **the upstream prediction/scorer platform** — previously named by the slug
   `stSoftwareAU/GRQ`, the bare token `GRQ`, and `GRQ/src/…` source paths.
-- **the private market-data tree** — previously `GRQ-shareprices2026Q2` (and the
-  prior-quarter `GRQ-shareprices2025Q1`).
-- **the private dividend-history tree** — previously `GRQ-dividends`.
+- **the private market-data tree** — previously named by its quarter-suffixed
+  checkout slug (and the prior quarter's).
+- **the private dividend-history tree** — previously named by its checkout slug.
 
 ### Reword convention applied
 
@@ -21,8 +21,8 @@ Three private repos were confirmed private and are now absent from
 | --- | --- |
 | `stSoftwareAU/GRQ`, bare `GRQ` (upstream repo) | "the upstream prediction/training repository", "upstream" |
 | `GRQ/src/LearnUtil.ts:217` and other `GRQ/src/…` paths | concept phrases — "the upstream training code", "the upstream training-label producer" |
-| `../GRQ-shareprices2026Q2` (prose) | "the private market-data tree" |
-| `../GRQ-dividends` (prose) | "the private dividend-history tree" |
+| the market-data sibling checkout slug (prose) | "the private market-data tree" |
+| the dividend-history sibling checkout slug (prose) | "the private dividend-history tree" |
 | path literals in shell/Mermaid | placeholders `../private-market-data-tree`, `../private-dividend-tree` |
 
 Deliberately **kept** (not private): the public product/acronym name
@@ -58,8 +58,10 @@ Backend/CLI-free, documentation-only change — there is no web interface to
 screenshot. Verification was performed by repository-wide grep confirming that no
 private token survives in `docs/archive/`:
 
-- `grep -rnE 'GRQ/src|GRQ-shareprices|GRQ-dividends' docs/archive/` → **no
-  matches**.
+- A `grep -rnE` over `docs/archive/` for the upstream source-path prefix and the
+  two private data-tree checkout slugs → **no matches**. (That one-liner is now
+  the standing repo-wide guard `tests/private_data_root_reference_test.ts`,
+  which holds the patterns so this prose no longer has to.)
 - `grep -rnE 'stSoftwareAU/GRQ([^-]|$)' docs/archive/` → **no matches** (the
   private slug is gone; `stSoftwareAU/GRQ-validation` correctly remains).
 - The only remaining bare `GRQ` tokens are the public acronym/product mentions

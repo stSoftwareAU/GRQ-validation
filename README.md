@@ -841,6 +841,64 @@ cargo test test_name
 
 # Run the Deno test suite (dashboard / workflow tests)
 deno test --allow-read tests/
+
+# Verify the market-data/dividend tests stayed hermetic (also run by CI)
+./scripts/check_hermetic_tests.sh
+```
+
+#### Hermetic Rust tests
+
+The Rust tests never touch the data roots configured below: every market-data
+and dividend fixture is synthetic, hand-written in `tests/common/mod.rs`, and
+built inside the test's own `tempfile::tempdir()` through the same
+`get_market_data_path_in` / `get_dividend_data_path_in` resolvers the code under
+test uses. So `cargo test` asserts identically on CI and on a maintainer's
+machine, never skips for a missing data tree, and leaves `git status` clean
+(Issue #804).
+
+`scripts/check_hermetic_tests.sh` — run by `quality.sh` and by the CI Rust job —
+is the gate: it runs the four market-data/dividend integration tests with both
+root variables unset and fails if any of them skips, if `tests/` names a private
+data tree, or if the run dirties the working tree.
+
+```mermaid
+flowchart LR
+    T["tests/common/mod.rs<br/>synthetic fixtures"] --> R["tempfile::tempdir()<br/>&lt;temp&gt;/data/&lt;LETTER&gt;/&lt;SYM&gt;.json"]
+    R --> W["writers under test<br/>(root passed as a parameter)"]
+    W --> O["CSV written inside the temp dir"]
+    O --> G{{"check_hermetic_tests.sh"}}
+    G -- "skip, private-tree ref, or dirty tree" --> X["CI fails loud"]
+    G -- clean --> P[green]
+```
+
+#### No private data-root literals anywhere
+
+`tests/private_data_root_reference_test.ts` is the repo-wide backstop
+(Issue #806). It walks `src/`, `tests/`, `scripts/`, `helpers/`, `docs/` and the
+root-level `*.sh`/`*.json`/`*.md` files and fails with `file:line: match` for
+every private sibling data-checkout name it finds — the market-data slug (any
+quarter suffix), the dividend-history slug, and any `../GRQ-*` relative sibling
+path other than this repo's own public checkouts.
+
+Two properties keep it honest:
+
+- **Positive controls.** Separate cases assert the walk reaches known files, the
+  matcher finds a planted literal, and scanning with the exemptions dropped
+  surfaces the guard's own pattern definitions. A walk that silently returns
+  nothing fails rather than passing as "no matches".
+- **Live allowlist.** Every exemption lives in `ALLOWLIST` with the reason it is
+  sanctioned, and a case asserts each entry still matches something — so a stale
+  exemption turns red instead of quietly widening the hole.
+
+```mermaid
+flowchart LR
+    W["walk src/ tests/ scripts/<br/>helpers/ docs/ + root files"] --> M{{"private data-root<br/>patterns"}}
+    M -- match --> A{"allowlisted?"}
+    A -- "no" --> X["fail: file:line: match"]
+    A -- "yes, with reason" --> P[green]
+    M -- "no match" --> L{"allowlist entry<br/>still live?"}
+    L -- no --> S["fail: remove stale exemption"]
+    L -- yes --> P
 ```
 
 The Deno suite includes a **dashboard "Limited data mode" smoke test**
@@ -890,14 +948,129 @@ exercised by `tests/market_data_fail_loud_test.ts`.
 
 ## Configuration
 
-### Environment Variables
+### Required data roots
+
+The processor reads share prices and dividend history from two directories the
+**caller supplies**. **This repository ships no market or dividend data, and
+names no upstream source for it** — point each root at your own tree (built by
+whatever provider or process you choose) and the run reproduces exactly.
+
+Each root can be given as a flag or an environment variable; the **flag wins**.
+There is deliberately no default: an absent, blank, or non-directory root is a
+fail-loud start-up error listing _every_ unusable root, never a silent `../…`
+guess that would write header-only CSVs (issues #802, #803).
+
+| Root          | Flag                   | Environment variable      |
+| ------------- | ---------------------- | ------------------------- |
+| Market data   | `--market-data-path`   | `GRQ_MARKET_DATA_PATH`    |
+| Dividend data | `--dividend-data-path` | `GRQ_DIVIDEND_DATA_PATH`  |
+
+```bash
+export GRQ_MARKET_DATA_PATH=/path/to/market-data
+export GRQ_DIVIDEND_DATA_PATH=/path/to/dividend-history
+./run.sh                     # or: ./process_date.sh 2025-06-20
+
+# The flag overrides the variable for a one-off run:
+./target/release/grq-validation --docs-path docs \
+    --market-data-path /other/market-data \
+    --dividend-data-path /other/dividend-history
+```
+
+`run.sh` and `process_date.sh` check both variables before building or writing
+anything and exit non-zero naming what is missing, then pass the roots through
+as flags — so the roots are resolved in exactly one place.
+
+The dividend-basis diagnostic follows the same rule (issue #805): it needs the
+dividend-history root and has no default either.
+
+```bash
+# Third positional argument, or GRQ_DIVIDEND_DATA_PATH; with neither, the task
+# prints its usage and exits non-zero.
+deno task diagnose-dividend-basis docs 2026-06-01 /path/to/dividend-history
+```
+
+#### Expected on-disk layout
+
+Both trees use the same shape: a `data/` directory, one subdirectory per
+**upper-case first letter** of the symbol, and one JSON file per symbol.
+
+```text
+<root>/data/<UPPERCASE-FIRST-LETTER>/<SYMBOL>.json
+```
+
+For example, `SEM` resolves to `<root>/data/S/SEM.json`. The symbol is the part
+of the score-file ticker after the last `:`, with `.` replaced by `-` (so
+`NYSE:HEI.A` → `HEI-A`).
+
+#### Expected JSON shapes
+
+Market-data files deserialise into `MarketData` (`src/models.rs`):
+
+```json
+{
+  "Meta Data": {
+    "1. Information": "Daily Prices",
+    "2. Symbol": "SEM",
+    "3. Last Refreshed": "2025-06-20",
+    "4. Output Size": "Full size",
+    "5. Time Zone": "US/Eastern"
+  },
+  "Time Series (Daily)": {
+    "2025-06-20": {
+      "1. open": "10.10",
+      "2. high": "10.50",
+      "3. low": "9.90",
+      "4. close": "10.25",
+      "5. adjusted close": "10.25",
+      "6. volume": "123456",
+      "7. dividend amount": "0.0",
+      "8. split coefficient": "1.0"
+    }
+  }
+}
+```
+
+Dividend files deserialise into `DividendData` (`src/models.rs`):
+
+```json
+{
+  "symbol": "SEM",
+  "data": [
+    {
+      "ex_dividend_date": "2025-05-15",
+      "declaration_date": "2025-05-01",
+      "record_date": "2025-05-15",
+      "payment_date": "2025-05-30",
+      "amount": "0.09375"
+    }
+  ]
+}
+```
+
+Prices and amounts are strings (they are parsed defensively); a malformed value
+is skipped with a warning rather than corrupting the derived CSV.
+
+### Other environment variables
 
 - `RUST_LOG` — logging level (default: `info`).
 - `CARGO_TERM_COLOR` — terminal colour output.
 
+```mermaid
+flowchart LR
+    F["--market-data-path<br/>--dividend-data-path"] --> R{{"DataRoots::resolve()<br/>(flag wins over env)"}}
+    E["GRQ_MARKET_DATA_PATH<br/>GRQ_DIVIDEND_DATA_PATH"] --> R
+    R -- unset/blank/not a directory --> X["one start-up error<br/>listing every bad root<br/>(exit non-zero, no CSV written)"]
+    R -- both valid --> P["pipeline entry points<br/>(roots threaded as parameters)"]
+    P --> C["get_market_data_path_in()<br/>get_dividend_data_path_in()<br/>(traversal guards)"]
+    C --> O["&lt;root&gt;/data/&lt;LETTER&gt;/&lt;SYMBOL&gt;.json"]
+```
+
 ### Command Line Options
 
 - `--docs-path` — path to the docs directory (default: `docs`).
+- `--market-data-path` — market-data root; overrides `GRQ_MARKET_DATA_PATH`.
+- `--dividend-data-path` — dividend-data root; overrides
+  `GRQ_DIVIDEND_DATA_PATH`.
 - `--process-all` — process every score file, not just recent ones.
 - `--calculate-performance` — calculate performance metrics for score files.
 - `--date` — process a specific date in `YYYY-MM-DD` format.

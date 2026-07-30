@@ -1,35 +1,31 @@
 //! Behaviour tests for `create_market_data_long_csv` (issue #634).
 //!
-//! The long-format market-data writer previously had no unconditional test:
-//! its only test-adjacent reference (`create_market_data_long_csv_for_score_file`
-//! in `tests/market_data_tests.rs`) early-returns unless an external
-//! `MARKET_DATA_BASE_PATH` repository exists, so on CI and most machines it
-//! never runs. These tests drop a small, fully controlled market-data fixture
-//! at the location the function reads from and assert the observable contract —
-//! the 8-column `date,ticker,high,low,open,close,split_coefficient,volume`
-//! output and the "no rows written → error" guard — without caring how the
-//! writer is implemented. They mirror `tests/create_market_data_csv_test.rs`.
+//! Each test builds a small, fully controlled market-data fixture inside its
+//! own `tempfile::tempdir()` root and asserts the observable contract — the
+//! 8-column `date,ticker,high,low,open,close,split_coefficient,volume` output
+//! and the "no rows written → error" guard — without caring how the writer is
+//! implemented. They mirror `tests/create_market_data_csv_test.rs`.
+//!
+//! The fixtures are synthetic and hermetic (issue #804): every read and write
+//! stays inside the test's temporary directory, so the tests run identically on
+//! CI and on a maintainer's machine and never touch a configured data root.
+
+mod common;
 
 use anyhow::Result;
-use grq_validation::utils::{create_market_data_long_csv, MARKET_DATA_BASE_PATH};
-use std::path::{Path, PathBuf};
+use common::{write_market_data, PricePoint};
+use grq_validation::utils::create_market_data_long_csv;
+use std::path::Path;
 
-/// Clearly-synthetic symbol so a fixture can never collide with a real symbol
-/// in an existing `MARKET_DATA_BASE_PATH` data repository.
-///
-/// Each fixture-installing test uses a *distinct* symbol so their fixture files
-/// never share a path: cargo runs tests in parallel by default, and a shared
-/// symbol meant one test's `Drop` could delete the JSON file out from under a
-/// concurrently-running test, leaving it with zero rows and a spurious "No
-/// market data rows written" failure.
+/// Clearly-synthetic symbol for the happy-path test. Each fixture-installing
+/// test uses a *distinct* symbol under its own temporary root.
 const FIXTURE_SYMBOL: &str = "GRQVTEST634A";
 
 /// Full ticker code as it appears in a scores file. The long writer keeps the
 /// whole code (exchange prefix included) in the `ticker` column.
 const FIXTURE_TICKER: &str = "NYSE:GRQVTEST634A";
 
-/// Distinct fixture symbol for the replacement test, so its fixture file never
-/// collides with [`FIXTURE_SYMBOL`]'s under parallel execution.
+/// Distinct fixture symbol for the replacement test.
 const FIXTURE_SYMBOL_REPLACE: &str = "GRQVTEST634B";
 
 /// Full ticker code for the replacement test's fixture symbol.
@@ -39,132 +35,31 @@ const FIXTURE_TICKER_REPLACE: &str = "NYSE:GRQVTEST634B";
 /// runs from `2025-04-15` to `2025-10-12` inclusive.
 const SCORE_DATE: &str = "2025-04-15";
 
-/// RAII guard that installs a market-data fixture for a given symbol under
-/// `MARKET_DATA_BASE_PATH` and removes exactly what it created on drop, so the
-/// test leaves no trace whether or not the external data repository pre-exists.
-struct MarketDataFixture {
-    json_path: PathBuf,
-    /// The outermost directory this guard created (and must remove on drop), or
-    /// `None` when the whole tree already existed.
-    created_root: Option<PathBuf>,
-}
-
-impl MarketDataFixture {
-    /// Writes a fixture for `symbol` whose daily series contains one row inside
-    /// the 180-day window, one row before it, and one row after it, so a test
-    /// can assert both inclusion and exclusion.
-    fn install(symbol: &str) -> Result<Self> {
-        let base = Path::new(MARKET_DATA_BASE_PATH);
-        let first_letter = symbol.chars().next().unwrap().to_string();
-        let symbol_dir = base.join("data").join(&first_letter);
-
-        let created_root = first_missing_ancestor(&symbol_dir);
-        std::fs::create_dir_all(&symbol_dir)?;
-
-        let json_path = symbol_dir.join(format!("{symbol}.json"));
-        std::fs::write(&json_path, fixture_json(symbol))?;
-
-        Ok(Self {
-            json_path,
-            created_root,
-        })
-    }
-}
-
-impl Drop for MarketDataFixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.json_path);
-
-        // Prune the directories we created, bottom-up, removing each only when
-        // it is empty. `remove_dir` (not `remove_dir_all`) means a directory
-        // shared with a concurrently-running test's fixture is left intact
-        // until that test has cleaned up too, so cleanup never races.
-        if let Some(root) = &self.created_root {
-            let mut dir = self.json_path.parent().map(Path::to_path_buf);
-            while let Some(current) = dir {
-                if std::fs::remove_dir(&current).is_err() {
-                    break; // non-empty (another fixture present) or already gone
-                }
-                if current == *root {
-                    break;
-                }
-                dir = current.parent().map(Path::to_path_buf);
-            }
-        }
-    }
-}
-
-/// Returns the shallowest ancestor of `dir` (including `dir` itself) that does
-/// not yet exist, i.e. the outermost directory `create_dir_all` would create.
-/// Returns `None` when `dir` already exists.
-fn first_missing_ancestor(dir: &Path) -> Option<PathBuf> {
-    if dir.exists() {
-        return None;
-    }
-    let mut candidate = dir.to_path_buf();
-    while let Some(parent) = candidate.parent() {
-        if parent.exists() {
-            return Some(candidate);
-        }
-        candidate = parent.to_path_buf();
-    }
-    Some(candidate)
-}
-
-/// Builds an Alpha Vantage-shaped market-data JSON document with three dated
-/// rows: before, inside, and after the 180-day window from [`SCORE_DATE`]. The
-/// in-window row uses distinct open/high/low/close/volume/split values so a
-/// test can verify each long-format column is mapped to the right field.
-fn fixture_json(symbol: &str) -> String {
-    fn daily(
-        open: &str,
-        high: &str,
-        low: &str,
-        close: &str,
-        volume: &str,
-        split: &str,
-    ) -> serde_json::Value {
-        serde_json::json!({
-            "1. open": open,
-            "2. high": high,
-            "3. low": low,
-            "4. close": close,
-            "5. adjusted close": close,
-            "6. volume": volume,
-            "7. dividend amount": "0.0",
-            "8. split coefficient": split,
-        })
-    }
-
-    serde_json::json!({
-        "Meta Data": {
-            "1. Information": "Daily Prices (fixture)",
-            "2. Symbol": symbol,
-            "3. Last Refreshed": "2025-10-12",
-            "4. Output Size": "Full size",
-            "5. Time Zone": "US/Eastern",
-        },
-        "Time Series (Daily)": {
-            // before the window -> excluded
-            "2024-01-01": daily("1.0", "1.0", "1.0", "1.0", "10", "1.0"),
-            // window start (inclusive) -> included, with distinct columns
-            "2025-04-15": daily("100.5", "105.25", "98.75", "102.0", "123456", "1.0"),
-            // after the window -> excluded
-            "2025-12-01": daily("9.0", "9.0", "9.0", "9.0", "20", "1.0"),
-        },
-    })
-    .to_string()
+/// Three hand-written daily rows: before, inside, and after the 180-day window
+/// from [`SCORE_DATE`]. The in-window row uses distinct
+/// open/high/low/close/volume values so a test can verify each long-format
+/// column is mapped to the right field.
+fn fixture_points() -> Vec<PricePoint<'static>> {
+    vec![
+        // before the window -> excluded
+        PricePoint::detailed("2024-01-01", "1.0", "1.0", "1.0", "1.0", "10"),
+        // window start (inclusive) -> included, with distinct columns
+        PricePoint::detailed("2025-04-15", "100.5", "105.25", "98.75", "102.0", "123456"),
+        // after the window -> excluded
+        PricePoint::detailed("2025-12-01", "9.0", "9.0", "9.0", "9.0", "20"),
+    ]
 }
 
 #[test]
 fn create_market_data_long_csv_writes_eight_column_rows() -> Result<()> {
-    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL)?;
+    let root = tempfile::tempdir()?;
+    write_market_data(root.path(), FIXTURE_SYMBOL, &fixture_points())?;
 
     let out_dir = tempfile::tempdir()?;
     let out_path = out_dir.path().join("long.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
 
-    create_market_data_long_csv(&[FIXTURE_TICKER.to_string()], SCORE_DATE, out)?;
+    create_market_data_long_csv(root.path(), &[FIXTURE_TICKER.to_string()], SCORE_DATE, out)?;
 
     let csv = std::fs::read_to_string(&out_path)?;
 
@@ -199,16 +94,21 @@ fn create_market_data_long_csv_writes_eight_column_rows() -> Result<()> {
 
 #[test]
 fn create_market_data_long_csv_errors_when_all_tickers_skipped() -> Result<()> {
-    // No fixture installed: the symbol has no market-data file, so the only
+    // An empty fixture root: the symbol has no market-data file, so the only
     // ticker is skipped and no data rows are written. The documented guard at
     // `src/utils.rs` must turn this into an error rather than a silent
-    // header-only CSV. A synthetic symbol guarantees no real data file exists.
+    // header-only CSV.
+    let root = tempfile::tempdir()?;
     let out_dir = tempfile::tempdir()?;
     let out_path = out_dir.path().join("empty.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
 
-    let result =
-        create_market_data_long_csv(&["NYSE:GRQVTEST634MISSING".to_string()], SCORE_DATE, out);
+    let result = create_market_data_long_csv(
+        root.path(),
+        &["NYSE:GRQVTEST634MISSING".to_string()],
+        SCORE_DATE,
+        out,
+    );
 
     assert!(
         result.is_err(),
@@ -226,6 +126,7 @@ fn create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data() -> R
     // runs this generator and commits its output straight to `main`, so a
     // destructive truncation here wipes the dashboard's market data and forces
     // "Limited data mode".
+    let root = tempfile::tempdir()?;
     let out_dir = tempfile::tempdir()?;
     let out_path = out_dir.path().join("populated.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
@@ -235,9 +136,13 @@ fn create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data() -> R
         2026-04-02,NYSE:GRQVTEST687,10.0,9.0,9.5,9.8,1.0,1000\n";
     std::fs::write(&out_path, existing)?;
 
-    // No fixture installed -> the only ticker is skipped -> zero rows written.
-    let result =
-        create_market_data_long_csv(&["NYSE:GRQVTEST687MISSING".to_string()], SCORE_DATE, out);
+    // Empty fixture root -> the only ticker is skipped -> zero rows written.
+    let result = create_market_data_long_csv(
+        root.path(),
+        &["NYSE:GRQVTEST687MISSING".to_string()],
+        SCORE_DATE,
+        out,
+    );
 
     // The writer still signals that no fresh data was available...
     assert!(
@@ -266,7 +171,8 @@ fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> 
     // Complement to the preservation test: when fresh data IS available, the
     // destination is replaced atomically with the new content — no stale rows
     // and no leftover temp file (issue #687).
-    let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL_REPLACE)?;
+    let root = tempfile::tempdir()?;
+    write_market_data(root.path(), FIXTURE_SYMBOL_REPLACE, &fixture_points())?;
 
     let out_dir = tempfile::tempdir()?;
     let out_path = out_dir.path().join("replace.csv");
@@ -275,7 +181,12 @@ fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> 
     // Stale content that must be fully replaced by the fresh write.
     std::fs::write(&out_path, "stale,garbage\n1,2\n")?;
 
-    create_market_data_long_csv(&[FIXTURE_TICKER_REPLACE.to_string()], SCORE_DATE, out)?;
+    create_market_data_long_csv(
+        root.path(),
+        &[FIXTURE_TICKER_REPLACE.to_string()],
+        SCORE_DATE,
+        out,
+    )?;
 
     let csv = std::fs::read_to_string(&out_path)?;
     assert_eq!(

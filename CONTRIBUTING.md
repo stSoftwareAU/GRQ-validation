@@ -19,6 +19,33 @@ cd GRQ-validation
 cargo build --release
 ```
 
+## Configuring the data roots
+
+The processor reads share prices and dividend history from two directories
+**you** supply. This repository ships no such data and names no upstream source
+for it, so before running anything point both roots at your own tree:
+
+```bash
+export GRQ_MARKET_DATA_PATH=/path/to/market-data
+export GRQ_DIVIDEND_DATA_PATH=/path/to/dividend-history
+```
+
+Each root can also be given as a flag — `--market-data-path` and
+`--dividend-data-path` — and the flag wins over the variable. There is no
+default: an absent, blank, or non-directory root fails at start-up with one
+message listing every unusable root, before any CSV is written.
+
+Both trees use the same layout, one JSON file per symbol under the upper-case
+first letter of that symbol:
+
+```text
+<root>/data/<UPPERCASE-FIRST-LETTER>/<SYMBOL>.json
+```
+
+The JSON shapes are `MarketData` and `DividendData` in `src/models.rs`; the
+README's _Required data roots_ section shows a worked example of each, so you
+can construct or substitute your own tree and reproduce a run.
+
 ## Building and running
 
 ```bash
@@ -32,7 +59,10 @@ cargo build --release
 ./run.sh --process-all
 
 # Process a specific date
-./target/release/grq-validation --docs-path docs --date 2025-01-15
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" \
+    --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH" \
+    --date 2025-01-15
 ```
 
 ## Testing
@@ -46,7 +76,17 @@ cargo test test_name
 
 # Run the Deno test suite (dashboard / workflow tests)
 deno test --allow-read tests/
+
+# Verify the market-data/dividend tests stayed hermetic (also run by CI)
+./scripts/check_hermetic_tests.sh
 ```
+
+The Rust tests are **hermetic**: they never read the data roots you configured
+above. Every market-data and dividend fixture is synthetic, hand-written in
+`tests/common/mod.rs`, and built inside the test's own `tempfile::tempdir()`, so
+`cargo test` behaves identically on CI and on a maintainer's machine and leaves
+`git status` clean. Keep it that way — a new test must not skip when a data root
+is absent, and must not write outside its temp directory (Issue #804).
 
 ## Formatting and linting
 

@@ -137,6 +137,13 @@ jobs:
     - name: Run tests
       run: cargo test --locked --all-targets --all-features --verbose
 
+    # Hermetic-test gate (Issue #804): the market-data/dividend integration
+    # tests must run for real on a public runner with no data root configured.
+    # The gate fails if any of them skips, names the private data tree, or
+    # leaves the working tree dirty — the silent-skip escape hatch is gone.
+    - name: Verify the integration tests are hermetic
+      run: ./scripts/check_hermetic_tests.sh
+
     - name: Generate test coverage
       # Pin the tool to an explicit version with --locked so CI does not
       # compile and run an arbitrary newest cargo-tarpaulin dependency tree

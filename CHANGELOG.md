@@ -10,6 +10,14 @@ and this project adheres to
 
 ### Added
 
+- `--market-data-path` / `--dividend-data-path` CLI flags (each overriding
+  `GRQ_MARKET_DATA_PATH` / `GRQ_DIVIDEND_DATA_PATH`) so an operator can point
+  the pipeline at their own data tree. Both roots are resolved once into a
+  `DataRoots` value and threaded explicitly through the pipeline, validated
+  before any work begins, and a single start-up error lists every unusable
+  root. `run.sh` and `process_date.sh` check both variables before building or
+  writing anything and pass them through as flags (Issue #803).
+
 - Market-data presence quality gate (`tests/market_data_presence_test.ts`): a
   Deno test, run on every PR via `deno-quality.yml`, that iterates every
   committed `docs/scores/**/DD.tsv` prediction and fails CI when the sibling
@@ -45,6 +53,25 @@ and this project adheres to
   idempotent relative to the base branch (Issue #323).
 
 ### Changed
+
+- The dividend-basis diagnostic no longer defaults its dividend-history root to
+  a private sibling checkout. `computeDividendBasisDiagnostic` takes the root as
+  a **required** parameter, and `deno task diagnose-dividend-basis` resolves it
+  from the third positional argument or `GRQ_DIVIDEND_DATA_PATH` (hence the
+  added `--allow-env`), printing a usage message naming the argument, the
+  variable and the expected layout — and exiting non-zero — when neither is
+  supplied (Issue #805).
+- The four market-data/dividend integration tests
+  (`tests/create_market_data_csv_test.rs`,
+  `tests/create_market_data_long_csv_test.rs`, `tests/market_data_tests.rs`,
+  `tests/dividend_tests.rs`) are now **hermetic**: each builds a synthetic
+  fixture tree in its own `tempfile::tempdir()` root via the shared builders in
+  `tests/common/mod.rs`, so none reads or writes a configured data root, none
+  skips, and `tests/dividend_tests.rs` no longer rewrites the committed
+  `docs/scores/2025/March/5-dividends.csv`. `scripts/check_hermetic_tests.sh`
+  gates this on every PR — it runs the four tests with no data root configured
+  and fails on a skip, a private data-tree reference under `tests/`, or a
+  dirtied working tree (Issue #804).
 
 - Markdown Lint workflow (`.github/workflows/markdown-lint.yml`) no longer
   triggers on push to the default branch. As a PR-gating lint check, a
