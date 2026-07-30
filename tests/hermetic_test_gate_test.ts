@@ -44,10 +44,16 @@ Deno.test("hermetic-test gate script exists and is executable", async () => {
 });
 
 Deno.test("hermetic-test gate rejects every private data-tree marker", async () => {
+  // Assert on what the gate's pattern MATCHES rather than on how it is spelled:
+  // since issue #805 the gate writes the checkout names as an alternation so
+  // that `scripts/` contains no private-tree literal of its own.
   const script = await Deno.readTextFile(GATE_SCRIPT);
+  const declared = script.match(/^PRIVATE_TREE_PATTERN='([^']+)'/m);
+  assert(declared, `${GATE_SCRIPT} should declare PRIVATE_TREE_PATTERN`);
+  const pattern = new RegExp(declared[1]);
   for (const marker of PRIVATE_TREE_MARKERS) {
     assert(
-      script.includes(marker),
+      pattern.test(marker),
       `${GATE_SCRIPT} should reject the ${marker} marker`,
     );
   }
