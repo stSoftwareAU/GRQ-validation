@@ -899,7 +899,7 @@ whatever provider or process you choose) and the run reproduces exactly.
 
 Each root can be given as a flag or an environment variable; the **flag wins**.
 There is deliberately no default: an absent, blank, or non-directory root is a
-fail-loud start-up error listing *every* unusable root, never a silent `../…`
+fail-loud start-up error listing _every_ unusable root, never a silent `../…`
 guess that would write header-only CSVs (issues #802, #803).
 
 | Root          | Flag                   | Environment variable      |
