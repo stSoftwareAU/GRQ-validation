@@ -23,7 +23,9 @@ HERMETIC_TESTS=(
 )
 
 # Private-tree checkout names and the base-path constants deleted in #802.
-PRIVATE_TREE_PATTERN='GRQ-shareprices|GRQ-dividends|MARKET_DATA_BASE_PATH|DIVIDEND_DATA_BASE_PATH'
+# Written as an alternation so this gate does not itself spell the checkout
+# names — scripts/ must stay free of private-tree literals (issue #805).
+PRIVATE_TREE_PATTERN='GRQ-(shareprices|dividends)|MARKET_DATA_BASE_PATH|DIVIDEND_DATA_BASE_PATH'
 
 fail() {
     echo "ERROR: $*" >&2

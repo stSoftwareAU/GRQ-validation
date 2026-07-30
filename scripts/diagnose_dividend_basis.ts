@@ -20,19 +20,36 @@
 // GRQTrendPredictions resolver/parsers — so the windowed credit it reports is
 // computed on exactly the same basis the dashboard uses.
 //
-// Run: deno run --allow-read scripts/diagnose_dividend_basis.ts \
-//        [docsPath] [asOf YYYY-MM-DD] [dividendsRoot]
-// (defaults: docsPath="docs", asOf=today, dividendsRoot="../GRQ-dividends").
-// Read-only; prints a Markdown-friendly report.
+// Run: deno run --allow-read --allow-env scripts/diagnose_dividend_basis.ts \
+//        [docsPath] [asOf YYYY-MM-DD] <dividendsRoot>
+// (defaults: docsPath="docs", asOf=today). The dividend-history root is
+// REQUIRED — pass it as the third argument or set GRQ_DIVIDEND_DATA_PATH (hence
+// --allow-env); there is no default, because that tree is private and is never
+// assumed to sit beside this checkout. Read-only; prints a Markdown-friendly
+// report.
 
-import { computeDividendBasisDiagnostic } from "./dividend_basis_diagnostic.ts";
+import {
+  computeDividendBasisDiagnostic,
+  DIVIDEND_DATA_PATH_ENV,
+  requireDividendsRoot,
+} from "./dividend_basis_diagnostic.ts";
 
 const docsPath = Deno.args[0] ?? "docs";
 // "Today" governs which score dates have a complete 90-day window. Default to
 // the real clock; allow an override (second arg, YYYY-MM-DD) for reproducible
 // reports pinned to a specific as-of date.
 const asOf = Deno.args[1] ? new Date(Deno.args[1]) : new Date();
-const dividendsRoot = Deno.args[2] ?? "../GRQ-dividends";
+
+let dividendsRoot: string;
+try {
+  dividendsRoot = requireDividendsRoot(
+    Deno.args[2],
+    Deno.env.get(DIVIDEND_DATA_PATH_ENV),
+  );
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  Deno.exit(2);
+}
 
 const report = await computeDividendBasisDiagnostic(
   docsPath,

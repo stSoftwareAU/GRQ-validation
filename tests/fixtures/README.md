@@ -34,3 +34,21 @@ All three share the same score/buy date (`2026-03-11`) and a raw buy midpoint of
 
 The test also injects a duplicate of the 10:1 row in memory to demonstrate the
 literal no-de-duplication defect (factor compounds 10 → 100).
+
+## Dividend-basis diagnostic root (issue #805)
+
+`dividend_basis/` is a self-contained, committed stand-in for the two roots
+`computeDividendBasisDiagnostic` reads, so the end-to-end test in
+`tests/dividend_basis_diagnostic_test.ts` needs neither the private
+dividend-history tree nor write permission:
+
+- `dividend_basis/docs/scores/` — a score index with one matured date
+  (`2026-01-01`, evaluated at an as-of of `2026-06-01`) plus one still-immature
+  date, and that date's `1.tsv` / `1.csv` / `1-dividends.csv`.
+- `dividend_basis/dividend-history/` — the `data/<LETTER>/<SYMBOL>.json`
+  trailing-history layout the diagnostic expects, for the two tickers scored.
+
+`NYSE:X` pays semi-annually with nothing in the forward window (flat credit
+0.25, windowed 0 → **+0.25 pp**); `NYSE:Q` pays quarterly with one realised
+in-window dividend (flat 0.25, windowed 0.25 → **0 pp**). Both buy at a midpoint
+of 100, so the report's mean difference is **+0.125 pp** over 2 rows.

@@ -4,13 +4,23 @@
 // aggregation in scripts/dividend_basis_diagnostic.ts with synthetic data,
 // asserting on computed results — not source text.
 
-import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
+import {
+  assert,
+  assertAlmostEquals,
+  assertEquals,
+  assertThrows,
+} from "@std/assert";
+import { fromFileUrl } from "@std/path";
 import "../docs/projection.js";
 import "../docs/trend_predictions.js";
 import {
   aggregateDate,
   buildReport,
+  computeDividendBasisDiagnostic,
   type DateAggregate,
+  DIVIDEND_DATA_PATH_ENV,
+  DIVIDENDS_ROOT_USAGE,
+  requireDividendsRoot,
   stripSymbol,
   summariseDiffs,
   trimmedMean,
@@ -257,6 +267,95 @@ Deno.test("buildReport: positive mean difference contributes to (widens) the gap
     r.verdict.includes("CONTRIBUTES") && r.verdict.includes("flat training"),
     "verdict states the contributing direction",
   );
+});
+
+// --- Issue #805: the dividend-history root is REQUIRED, never defaulted. ---
+
+Deno.test("requireDividendsRoot prefers the explicit argument over the environment", () => {
+  assertEquals(
+    requireDividendsRoot("/opt/history", "/env/history"),
+    "/opt/history",
+  );
+  assertEquals(requireDividendsRoot("/opt/history", undefined), "/opt/history");
+});
+
+Deno.test("requireDividendsRoot falls back to the environment variable", () => {
+  assertEquals(requireDividendsRoot(undefined, "/env/history"), "/env/history");
+  // A blank/whitespace argument counts as "not supplied", not as an empty root.
+  assertEquals(requireDividendsRoot("   ", "/env/history"), "/env/history");
+});
+
+Deno.test("requireDividendsRoot fails loud when no root is supplied", () => {
+  // No silent fallback to a sibling checkout: the caller MUST supply a root.
+  const err = assertThrows(
+    () => requireDividendsRoot(undefined, undefined),
+    Error,
+  );
+  assertEquals(err.message, DIVIDENDS_ROOT_USAGE);
+  assertThrows(() => requireDividendsRoot("", "  "), Error);
+});
+
+Deno.test("the missing-root usage text names the argument, the variable and the layout", () => {
+  assert(
+    DIVIDENDS_ROOT_USAGE.includes("dividendsRoot"),
+    "usage names the positional argument",
+  );
+  assert(
+    DIVIDENDS_ROOT_USAGE.includes(DIVIDEND_DATA_PATH_ENV),
+    "usage names the environment variable",
+  );
+  assert(
+    DIVIDENDS_ROOT_USAGE.includes(
+      "<root>/data/<UPPERCASE-FIRST-LETTER>/<SYMBOL>.json",
+    ),
+    "usage documents the expected on-disk layout",
+  );
+  assert(
+    DIVIDENDS_ROOT_USAGE.includes("{ exDivDate, amount }"),
+    "usage documents the record shape",
+  );
+  assertEquals(DIVIDEND_DATA_PATH_ENV, "GRQ_DIVIDEND_DATA_PATH");
+});
+
+Deno.test("computeDividendBasisDiagnostic reads an explicitly supplied root", async () => {
+  // End-to-end over a committed fixture root (see tests/fixtures/README.md):
+  // NYSE:X flat 0.25 / windowed 0 -> +0.25 pp; NYSE:Q flat 0.25 / windowed 0.25
+  // -> 0 pp; both buy at 100. The second index date is not yet matured at the
+  // as-of date, so exactly one date contributes.
+  const fixture = fromFileUrl(
+    new URL("./fixtures/dividend_basis/", import.meta.url),
+  );
+  const report = await computeDividendBasisDiagnostic(
+    `${fixture}docs`,
+    midnight("2026-06-01"),
+    `${fixture}dividend-history`,
+  );
+  assertEquals(report.maturedDates, 1);
+  assertEquals(report.rowCount, 2);
+  assertAlmostEquals(report.meanDiffPp, 0.125, 1e-9);
+  assertAlmostEquals(report.maxDiffPp, 0.25, 1e-9);
+  assertAlmostEquals(report.minDiffPp, 0, 1e-9);
+  assertAlmostEquals(report.meanFlatYieldPct, 0.25, 1e-9);
+  assertAlmostEquals(report.meanWindowedYieldPct, 0.125, 1e-9);
+  assertAlmostEquals(report.windowedZeroSharePct, 50, 1e-9);
+  assert(report.verdict.includes("CONTRIBUTES"));
+});
+
+Deno.test("computeDividendBasisDiagnostic yields a zero flat credit for an unknown root", async () => {
+  // A root with no matching history files is not an error: every ticker simply
+  // contributes a 0 flat credit. This is the behaviour that used to hide the
+  // missing private sibling checkout, which is why the root is now required.
+  const fixture = fromFileUrl(
+    new URL("./fixtures/dividend_basis/", import.meta.url),
+  );
+  const report = await computeDividendBasisDiagnostic(
+    `${fixture}docs`,
+    midnight("2026-06-01"),
+    `${fixture}no-such-history`,
+  );
+  assertEquals(report.rowCount, 2);
+  assertAlmostEquals(report.meanFlatYieldPct, 0, 1e-9);
+  assertAlmostEquals(report.meanDiffPp, -0.125, 1e-9);
 });
 
 Deno.test("buildReport: realised dividends exceeding the flat quarter OFFSET the gap", () => {

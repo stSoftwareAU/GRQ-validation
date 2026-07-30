@@ -1,0 +1,9 @@
+{
+  "symbol": "Q",
+  "data": [
+    { "ex_dividend_date": "2025-02-15", "amount": 0.25 },
+    { "ex_dividend_date": "2025-05-15", "amount": 0.25 },
+    { "ex_dividend_date": "2025-08-15", "amount": 0.25 },
+    { "ex_dividend_date": "2025-11-15", "amount": 0.25 }
+  ]
+}

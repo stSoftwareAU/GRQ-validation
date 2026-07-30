@@ -980,6 +980,15 @@ export GRQ_DIVIDEND_DATA_PATH=/path/to/dividend-history
 anything and exit non-zero naming what is missing, then pass the roots through
 as flags — so the roots are resolved in exactly one place.
 
+The dividend-basis diagnostic follows the same rule (issue #805): it needs the
+dividend-history root and has no default either.
+
+```bash
+# Third positional argument, or GRQ_DIVIDEND_DATA_PATH; with neither, the task
+# prints its usage and exits non-zero.
+deno task diagnose-dividend-basis docs 2026-06-01 /path/to/dividend-history
+```
+
 #### Expected on-disk layout
 
 Both trees use the same shape: a `data/` directory, one subdirectory per
