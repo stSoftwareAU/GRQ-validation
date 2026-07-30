@@ -892,8 +892,31 @@ exercised by `tests/market_data_fail_loud_test.ts`.
 
 ### Environment Variables
 
+- `GRQ_MARKET_DATA_PATH` — **required.** Directory holding the market-data
+  `data/<letter>/<SYM>.json` tree.
+- `GRQ_DIVIDEND_DATA_PATH` — **required for dividend processing.** Directory
+  holding the dividend-history `data/<letter>/<SYM>.json` tree.
 - `RUST_LOG` — logging level (default: `info`).
 - `CARGO_TERM_COLOR` — terminal colour output.
+
+Both data roots are **caller-supplied** (issue #802): the crate names no data
+checkout of its own. An unset or blank root is a fail-loud error — the processor
+exits non-zero naming the variable rather than silently writing header-only
+market-data CSVs.
+
+```bash
+export GRQ_MARKET_DATA_PATH=/path/to/market-data
+export GRQ_DIVIDEND_DATA_PATH=/path/to/dividend-history
+./run.sh
+```
+
+```mermaid
+flowchart LR
+    ENV["GRQ_MARKET_DATA_PATH<br/>GRQ_DIVIDEND_DATA_PATH"] --> R{{"market_data_root()<br/>dividend_data_root()"}}
+    R -- unset/blank --> F["Err naming the variable<br/>(exit non-zero)"]
+    R -- resolved root --> C["get_market_data_path_in()<br/>get_dividend_data_path_in()<br/>(traversal guards)"]
+    C --> O["&lt;root&gt;/data/&lt;letter&gt;/&lt;SYM&gt;.json"]
+```
 
 ### Command Line Options
 

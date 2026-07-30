@@ -3,19 +3,22 @@
 //! The long-format market-data writer previously had no unconditional test:
 //! its only test-adjacent reference (`create_market_data_long_csv_for_score_file`
 //! in `tests/market_data_tests.rs`) early-returns unless an external
-//! `MARKET_DATA_BASE_PATH` repository exists, so on CI and most machines it
-//! never runs. These tests drop a small, fully controlled market-data fixture
+//! share-price repository exists, so on CI and most machines it never runs. These tests drop a small, fully controlled market-data fixture
 //! at the location the function reads from and assert the observable contract —
 //! the 8-column `date,ticker,high,low,open,close,split_coefficient,volume`
 //! output and the "no rows written → error" guard — without caring how the
 //! writer is implemented. They mirror `tests/create_market_data_csv_test.rs`.
+//!
+//! The fixtures live under the caller-supplied market-data root (issue #802),
+//! so each test skips when `GRQ_MARKET_DATA_PATH` is unset. Making them
+//! hermetic against a temporary root is tracked separately.
 
 use anyhow::Result;
-use grq_validation::utils::{create_market_data_long_csv, MARKET_DATA_BASE_PATH};
+use grq_validation::utils::{create_market_data_long_csv, market_data_root};
 use std::path::{Path, PathBuf};
 
 /// Clearly-synthetic symbol so a fixture can never collide with a real symbol
-/// in an existing `MARKET_DATA_BASE_PATH` data repository.
+/// in an existing market-data repository.
 ///
 /// Each fixture-installing test uses a *distinct* symbol so their fixture files
 /// never share a path: cargo runs tests in parallel by default, and a shared
@@ -39,9 +42,9 @@ const FIXTURE_TICKER_REPLACE: &str = "NYSE:GRQVTEST634B";
 /// runs from `2025-04-15` to `2025-10-12` inclusive.
 const SCORE_DATE: &str = "2025-04-15";
 
-/// RAII guard that installs a market-data fixture for a given symbol under
-/// `MARKET_DATA_BASE_PATH` and removes exactly what it created on drop, so the
-/// test leaves no trace whether or not the external data repository pre-exists.
+/// RAII guard that installs a market-data fixture for a given symbol under the
+/// caller-supplied market-data root and removes exactly what it created on
+/// drop, so the test leaves no trace whether or not the data tree pre-exists.
 struct MarketDataFixture {
     json_path: PathBuf,
     /// The outermost directory this guard created (and must remove on drop), or
@@ -54,7 +57,7 @@ impl MarketDataFixture {
     /// the 180-day window, one row before it, and one row after it, so a test
     /// can assert both inclusion and exclusion.
     fn install(symbol: &str) -> Result<Self> {
-        let base = Path::new(MARKET_DATA_BASE_PATH);
+        let base = market_data_root()?;
         let first_letter = symbol.chars().next().unwrap().to_string();
         let symbol_dir = base.join("data").join(&first_letter);
 
@@ -90,6 +93,18 @@ impl Drop for MarketDataFixture {
                 }
                 dir = current.parent().map(Path::to_path_buf);
             }
+        }
+    }
+}
+
+/// Returns `true` when a market-data root is configured, otherwise prints a
+/// skip line for `test_name` and returns `false` (issue #802).
+fn market_data_root_configured(test_name: &str) -> bool {
+    match market_data_root() {
+        Ok(_) => true,
+        Err(error) => {
+            println!("Skipping {test_name}: {error}");
+            false
         }
     }
 }
@@ -158,6 +173,9 @@ fn fixture_json(symbol: &str) -> String {
 
 #[test]
 fn create_market_data_long_csv_writes_eight_column_rows() -> Result<()> {
+    if !market_data_root_configured("create_market_data_long_csv_writes_eight_column_rows") {
+        return Ok(());
+    }
     let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL)?;
 
     let out_dir = tempfile::tempdir()?;
@@ -199,6 +217,9 @@ fn create_market_data_long_csv_writes_eight_column_rows() -> Result<()> {
 
 #[test]
 fn create_market_data_long_csv_errors_when_all_tickers_skipped() -> Result<()> {
+    if !market_data_root_configured("create_market_data_long_csv_errors_when_all_tickers_skipped") {
+        return Ok(());
+    }
     // No fixture installed: the symbol has no market-data file, so the only
     // ticker is skipped and no data rows are written. The documented guard at
     // `src/utils.rs` must turn this into an error rather than a silent
@@ -220,6 +241,11 @@ fn create_market_data_long_csv_errors_when_all_tickers_skipped() -> Result<()> {
 
 #[test]
 fn create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data() -> Result<()> {
+    if !market_data_root_configured(
+        "create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data",
+    ) {
+        return Ok(());
+    }
     // Regression for issue #687 (recurrences #672/#674/#685): when the upstream
     // share-price data is unavailable for a date, the writer must NOT clobber an
     // already-populated CSV with a bare header row. The external scorer pipeline
@@ -263,6 +289,11 @@ fn create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data() -> R
 
 #[test]
 fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> Result<()> {
+    if !market_data_root_configured(
+        "create_market_data_long_csv_replaces_existing_when_fresh_data_available",
+    ) {
+        return Ok(());
+    }
     // Complement to the preservation test: when fresh data IS available, the
     // destination is replaced atomically with the new content — no stale rows
     // and no leftover temp file (issue #687).

@@ -5,10 +5,63 @@ use crate::models::{
 use anyhow::{anyhow, Result};
 use chrono::{Duration, NaiveDate};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// Base path of the external share-price data repository.
-pub const MARKET_DATA_BASE_PATH: &str = "../GRQ-shareprices2026Q2";
+/// Environment variable naming the market-data root directory.
+pub const MARKET_DATA_ROOT_ENV: &str = "GRQ_MARKET_DATA_PATH";
+
+/// Environment variable naming the dividend-data root directory.
+pub const DIVIDEND_DATA_ROOT_ENV: &str = "GRQ_DIVIDEND_DATA_PATH";
+
+/// Resolves a caller-supplied data root from `raw`, the value of `variable`.
+///
+/// Injectable core of [`market_data_root`]/[`dividend_data_root`] so the
+/// fail-loud contract is testable without mutating the process environment —
+/// the unit tests run in parallel and many of them read these variables, so a
+/// scoped `set_var`/`remove_var` would race with those readers.
+///
+/// # Errors
+///
+/// Returns an error naming only `variable` and the expected tree shape when the
+/// value is absent or blank. There is deliberately no default: a silent
+/// fallback would let the pipeline produce header-only CSVs instead of failing.
+fn data_root_from_value(variable: &str, kind: &str, raw: Option<String>) -> Result<PathBuf> {
+    match raw {
+        Some(value) if !value.trim().is_empty() => Ok(PathBuf::from(value)),
+        _ => Err(anyhow!(
+            "{variable} is not set — set it to the directory holding the {kind} \
+             `data/<letter>/<SYM>.json` tree"
+        )),
+    }
+}
+
+/// Resolves the market-data root from the `GRQ_MARKET_DATA_PATH` environment
+/// variable.
+///
+/// # Errors
+///
+/// Returns an error when the variable is unset or blank.
+pub fn market_data_root() -> Result<PathBuf> {
+    data_root_from_value(
+        MARKET_DATA_ROOT_ENV,
+        "market-data",
+        std::env::var(MARKET_DATA_ROOT_ENV).ok(),
+    )
+}
+
+/// Resolves the dividend-data root from the `GRQ_DIVIDEND_DATA_PATH`
+/// environment variable.
+///
+/// # Errors
+///
+/// Returns an error when the variable is unset or blank.
+pub fn dividend_data_root() -> Result<PathBuf> {
+    data_root_from_value(
+        DIVIDEND_DATA_ROOT_ENV,
+        "dividend-data",
+        std::env::var(DIVIDEND_DATA_ROOT_ENV).ok(),
+    )
+}
 
 /// Returns `true` when a share-price data repository exists at `base` (i.e. it
 /// contains a `data/` subdirectory). Path-injectable core of
@@ -19,8 +72,14 @@ fn market_data_repository_available_at(base: &Path) -> bool {
 }
 
 /// Returns `true` when the share-price data repository is present on disk.
+///
+/// Signature note (issue #802): this stays a `bool`, so an unresolvable root
+/// reads the same as "repository absent". It is a best-effort probe only —
+/// [`ensure_market_data_repository`] is the fail-loud gate that distinguishes
+/// "[`MARKET_DATA_ROOT_ENV`] unset" from "root set but empty", and every batch
+/// entry point calls that instead.
 pub fn market_data_repository_available() -> bool {
-    market_data_repository_available_at(Path::new(MARKET_DATA_BASE_PATH))
+    market_data_root().is_ok_and(|root| market_data_repository_available_at(&root))
 }
 
 /// Ensures a share-price data repository is present at `base` before batch
@@ -35,7 +94,8 @@ fn ensure_market_data_repository_at(base: &Path) -> Result<()> {
     } else {
         Err(anyhow!(
             "Market data repository not found at {}/data — \
-             clone GRQ-shareprices2026Q2 as a sibling directory",
+             point {MARKET_DATA_ROOT_ENV} at a directory holding a \
+             `data/<letter>/<SYM>.json` tree",
             base.display()
         ))
     }
@@ -45,9 +105,10 @@ fn ensure_market_data_repository_at(base: &Path) -> Result<()> {
 ///
 /// # Errors
 ///
-/// Returns an error when [`MARKET_DATA_BASE_PATH`]/`data` is missing.
+/// Returns an error when [`MARKET_DATA_ROOT_ENV`] is unset or blank, or when
+/// the resolved root has no `data/` subdirectory.
 pub fn ensure_market_data_repository() -> Result<()> {
-    ensure_market_data_repository_at(Path::new(MARKET_DATA_BASE_PATH))
+    ensure_market_data_repository_at(&market_data_root()?)
 }
 
 /// Returns `true` when a market-data CSV is missing or contains only the header row.
@@ -65,8 +126,6 @@ pub fn is_market_data_csv_empty(csv_path: &str) -> bool {
         Err(_) => true,
     }
 }
-/// Base path of the external dividend data repository.
-pub const DIVIDEND_DATA_BASE_PATH: &str = "../GRQ-dividends";
 
 /// Returns `true` if `symbol` is a plausible stock symbol.
 ///
@@ -354,25 +413,25 @@ pub fn extract_ticker_from_symbol(symbol: &str) -> Option<String> {
         .map(|colon_pos| symbol[colon_pos + 1..].to_string())
 }
 
-/// Builds the market-data JSON path for `ticker` under [`MARKET_DATA_BASE_PATH`],
-/// bucketed by uppercased first letter (e.g. `"SEM"` → `.../data/S/SEM.json`),
-/// guarding against path traversal.
+/// Builds the market-data JSON path for `ticker` under `root`, bucketed by
+/// uppercased first letter (e.g. `"SEM"` → `<root>/data/S/SEM.json`), guarding
+/// against path traversal. Path-injectable core of [`get_market_data_path`].
 ///
 /// The `ticker`/`symbol` originates from the `stock` column of a daily score
 /// TSV, which is attacker-influenceable (a contributor, a compromised upstream
 /// data step, or a malicious pull request against the data set), exactly like
 /// the `file` field guarded by [`build_score_file_path`] and the ticker guarded
 /// by [`get_dividend_data_path`]. To stop a crafted symbol such as
-/// `"../../../../etc/hosts"` escaping the intended `MARKET_DATA_BASE_PATH/data/`
-/// tree, the path is built with `Path::join` over validated components rather
-/// than plain string interpolation: any parent-directory (`..`), root, or
-/// prefix component is a traversal attempt and is rejected (issue #195).
+/// `"../../../../etc/hosts"` escaping the intended `<root>/data/` tree, the
+/// path is built with `Path::join` over validated components rather than plain
+/// string interpolation: any parent-directory (`..`), root, or prefix component
+/// is a traversal attempt and is rejected (issue #195).
 ///
 /// # Errors
 ///
 /// Returns an error if `ticker` is absolute or contains a parent-directory
 /// (`..`) segment.
-pub fn get_market_data_path(ticker: &str) -> Result<String> {
+pub fn get_market_data_path_in(root: &Path, ticker: &str) -> Result<String> {
     use std::path::Component;
 
     let first_letter = ticker
@@ -384,9 +443,7 @@ pub fn get_market_data_path(ticker: &str) -> Result<String> {
 
     // Build within the market-data root via join rather than string
     // concatenation, keeping only normal segments.
-    let mut full_path = Path::new(MARKET_DATA_BASE_PATH)
-        .join("data")
-        .join(&first_letter);
+    let mut full_path = root.join("data").join(&first_letter);
 
     let file_name = format!("{ticker}.json");
     for component in Path::new(&file_name).components() {
@@ -406,6 +463,18 @@ pub fn get_market_data_path(ticker: &str) -> Result<String> {
     }
 
     Ok(full_path.to_string_lossy().into_owned())
+}
+
+/// Builds the market-data JSON path for `ticker` under the caller-supplied
+/// market-data root, resolving [`market_data_root`] and delegating to
+/// [`get_market_data_path_in`].
+///
+/// # Errors
+///
+/// Returns an error when [`MARKET_DATA_ROOT_ENV`] is unset or blank, or when
+/// `ticker` is absolute or contains a parent-directory (`..`) segment.
+pub fn get_market_data_path(ticker: &str) -> Result<String> {
+    get_market_data_path_in(&market_data_root()?, ticker)
 }
 
 /// Reads a tab-separated score file into a vector of [`StockRecord`]s.
@@ -760,6 +829,11 @@ pub fn create_market_data_long_csv(
     use crate::utils::extract_symbol_from_ticker;
     use csv::Writer;
 
+    // Resolve the caller-supplied root up front so an unset root fails loud
+    // here rather than silently writing a header-only CSV (issue #802).
+    let root = market_data_root()?;
+    let root_display = root.display();
+
     let score_date = NaiveDate::parse_from_str(score_file_date, "%Y-%m-%d")?;
     let end_date = score_date + Duration::days(180);
     let end_date_str = end_date.format("%Y-%m-%d").to_string();
@@ -840,7 +914,7 @@ pub fn create_market_data_long_csv(
             if !tickers.is_empty() {
                 return Err(anyhow!(
                     "No market data rows written for {score_file_date} — existing CSV at \
-                     {output_path} preserved; is {MARKET_DATA_BASE_PATH} available and up to date?"
+                     {output_path} preserved; is {root_display} available and up to date?"
                 ));
             }
             return Ok(());
@@ -853,7 +927,7 @@ pub fn create_market_data_long_csv(
         if !tickers.is_empty() {
             return Err(anyhow!(
                 "No market data rows written for {score_file_date} — \
-                 is {MARKET_DATA_BASE_PATH} available and up to date?"
+                 is {root_display} available and up to date?"
             ));
         }
         return Ok(());
@@ -915,15 +989,16 @@ pub fn create_market_data_long_csv_for_score_file(
     Ok(output_path)
 }
 
-/// Gets the dividend data path for a given ticker.
+/// Gets the dividend data path for a given ticker under `root`. Path-injectable
+/// core of [`get_dividend_data_path`].
 ///
-/// For example: `"SEM"` -> `"../GRQ-dividends/data/S/SEM.json"`.
+/// For example: `"SEM"` -> `<dividend-root>/data/S/SEM.json`.
 ///
 /// The `ticker` field of a score TSV is attacker-influenceable (a contributor,
 /// a compromised upstream data step, or a malicious pull request against the
 /// data set), exactly like the `file` field guarded by [`build_score_file_path`].
 /// To stop a crafted ticker such as `"X/../../../../../../etc/some"` escaping
-/// the intended `../GRQ-dividends/data/` tree, the path is built with
+/// the intended `<dividend-root>/data/` tree, the path is built with
 /// `Path::join` over validated components rather than plain string
 /// interpolation: any parent-directory (`..`), root, or prefix component is a
 /// traversal attempt and is rejected. This mirrors the defence-in-depth posture
@@ -934,7 +1009,7 @@ pub fn create_market_data_long_csv_for_score_file(
 ///
 /// Returns an error if `ticker` is absolute or contains a parent-directory
 /// (`..`) segment.
-pub fn get_dividend_data_path(ticker: &str) -> Result<String> {
+pub fn get_dividend_data_path_in(root: &Path, ticker: &str) -> Result<String> {
     use std::path::Component;
 
     let first_letter = ticker
@@ -946,9 +1021,7 @@ pub fn get_dividend_data_path(ticker: &str) -> Result<String> {
 
     // Build within the dividend-data root via join rather than string
     // concatenation, keeping only normal segments.
-    let mut full_path = Path::new(DIVIDEND_DATA_BASE_PATH)
-        .join("data")
-        .join(&first_letter);
+    let mut full_path = root.join("data").join(&first_letter);
 
     let file_name = format!("{ticker}.json");
     for component in Path::new(&file_name).components() {
@@ -968,6 +1041,18 @@ pub fn get_dividend_data_path(ticker: &str) -> Result<String> {
     }
 
     Ok(full_path.to_string_lossy().into_owned())
+}
+
+/// Gets the dividend data path for a given ticker under the caller-supplied
+/// dividend-data root, resolving [`dividend_data_root`] and delegating to
+/// [`get_dividend_data_path_in`].
+///
+/// # Errors
+///
+/// Returns an error when [`DIVIDEND_DATA_ROOT_ENV`] is unset or blank, or when
+/// `ticker` is absolute or contains a parent-directory (`..`) segment.
+pub fn get_dividend_data_path(ticker: &str) -> Result<String> {
+    get_dividend_data_path_in(&dividend_data_root()?, ticker)
 }
 
 /// Reads dividend data for a given ticker
@@ -1683,14 +1768,107 @@ mod tests {
         assert!(!market_data_repository_available_at(dir.path()));
         let err = ensure_market_data_repository_at(dir.path()).unwrap_err();
         let msg = err.to_string();
+        let expected = format!("{}/data", dir.path().display());
         assert!(
-            msg.contains("GRQ-shareprices2026Q2"),
-            "message names the repository: {msg}"
+            msg.contains(&expected),
+            "message names the missing data directory {expected}: {msg}"
         );
         assert!(
-            msg.contains("/data"),
-            "message names the missing data directory: {msg}"
+            msg.contains(MARKET_DATA_ROOT_ENV),
+            "message names the environment variable to set: {msg}"
         );
+        assert!(
+            !msg.contains("GRQ-"),
+            "message must not name a private repository: {msg}"
+        );
+    }
+
+    // Issue #802: the data roots are caller-supplied. An unset or blank root is
+    // a fail-loud error naming only the environment variable — never a silent
+    // default, which is what produced header-only market-data CSVs.
+    #[test]
+    fn test_market_data_root_unset_fails_loud() {
+        let err = data_root_from_value(MARKET_DATA_ROOT_ENV, "market-data", None).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(MARKET_DATA_ROOT_ENV),
+            "message names the environment variable: {msg}"
+        );
+        assert!(
+            msg.contains("data/<letter>/<SYM>.json"),
+            "message says what the variable must point at: {msg}"
+        );
+        assert!(
+            !msg.contains("GRQ-"),
+            "message must not name a private repository: {msg}"
+        );
+
+        // A blank value is treated exactly like an unset one.
+        assert!(
+            data_root_from_value(MARKET_DATA_ROOT_ENV, "market-data", Some("  ".to_string()))
+                .is_err(),
+            "a blank root must not resolve to the current directory"
+        );
+    }
+
+    #[test]
+    fn test_dividend_data_root_unset_fails_loud() {
+        let err = data_root_from_value(DIVIDEND_DATA_ROOT_ENV, "dividend-data", None).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(DIVIDEND_DATA_ROOT_ENV),
+            "message names the environment variable: {msg}"
+        );
+        assert!(
+            msg.contains("data/<letter>/<SYM>.json"),
+            "message says what the variable must point at: {msg}"
+        );
+        assert!(
+            !msg.contains("GRQ-"),
+            "message must not name a private repository: {msg}"
+        );
+
+        assert!(
+            data_root_from_value(DIVIDEND_DATA_ROOT_ENV, "dividend-data", Some(String::new()))
+                .is_err(),
+            "a blank root must not resolve to the current directory"
+        );
+    }
+
+    #[test]
+    fn test_data_root_from_value_returns_caller_supplied_path() {
+        let root = data_root_from_value(
+            MARKET_DATA_ROOT_ENV,
+            "market-data",
+            Some("/tmp/md".to_string()),
+        )
+        .unwrap();
+        assert_eq!(root, PathBuf::from("/tmp/md"));
+    }
+
+    /// Read-only wiring check: the public resolvers must read their environment
+    /// variable and must not fall back to a default when it is absent. Asserted
+    /// against whatever the ambient environment holds, so it never mutates
+    /// process state that the parallel tests around it read.
+    #[test]
+    fn test_data_roots_resolve_from_environment() {
+        for (variable, resolved) in [
+            (MARKET_DATA_ROOT_ENV, market_data_root()),
+            (DIVIDEND_DATA_ROOT_ENV, dividend_data_root()),
+        ] {
+            match std::env::var(variable) {
+                Ok(value) if !value.trim().is_empty() => {
+                    assert_eq!(resolved.unwrap(), PathBuf::from(value));
+                }
+                _ => {
+                    let msg = resolved.unwrap_err().to_string();
+                    assert!(
+                        msg.contains(variable),
+                        "unset {variable} must fail loud naming itself, got: {msg}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -1786,32 +1964,23 @@ mod tests {
     }
 
     #[test]
-    fn test_market_data_base_path_points_to_current_quarter() {
-        // Pins the configured share-price repository (issue #183).
-        assert_eq!(MARKET_DATA_BASE_PATH, "../GRQ-shareprices2026Q2");
-    }
-
-    #[test]
     fn test_get_market_data_path() {
         // Signature changed to `Result<String>` in issue #195 to guard against
-        // path traversal; legitimate tickers still resolve to the same path.
+        // path traversal; legitimate tickers still resolve under the
+        // caller-supplied root (issue #802).
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
         assert_eq!(
-            get_market_data_path("SEM").unwrap(),
-            Path::new(MARKET_DATA_BASE_PATH)
-                .join("data/S/SEM.json")
-                .to_string_lossy()
+            get_market_data_path_in(root, "SEM").unwrap(),
+            root.join("data/S/SEM.json").to_string_lossy()
         );
         assert_eq!(
-            get_market_data_path("AAPL").unwrap(),
-            Path::new(MARKET_DATA_BASE_PATH)
-                .join("data/A/AAPL.json")
-                .to_string_lossy()
+            get_market_data_path_in(root, "AAPL").unwrap(),
+            root.join("data/A/AAPL.json").to_string_lossy()
         );
         assert_eq!(
-            get_market_data_path("TSLA").unwrap(),
-            Path::new(MARKET_DATA_BASE_PATH)
-                .join("data/T/TSLA.json")
-                .to_string_lossy()
+            get_market_data_path_in(root, "TSLA").unwrap(),
+            root.join("data/T/TSLA.json").to_string_lossy()
         );
     }
 
@@ -1819,12 +1988,11 @@ mod tests {
     fn test_get_market_data_path_allows_plain_ticker_with_exchange_prefix() {
         // A legitimate ticker with an exchange prefix contains no path
         // separators or traversal segments and must still resolve.
-        let path = get_market_data_path("NYSE:SEM").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = get_market_data_path_in(dir.path(), "NYSE:SEM").unwrap();
         assert_eq!(
             path,
-            Path::new(MARKET_DATA_BASE_PATH)
-                .join("data/N/NYSE:SEM.json")
-                .to_string_lossy()
+            dir.path().join("data/N/NYSE:SEM.json").to_string_lossy()
         );
     }
 
@@ -1832,7 +2000,8 @@ mod tests {
     // attacker-influenceable symbol must not escape the market-data root.
     #[test]
     fn test_get_market_data_path_rejects_parent_dir_traversal() {
-        let result = get_market_data_path("../../../../etc/hosts");
+        let dir = tempfile::tempdir().unwrap();
+        let result = get_market_data_path_in(dir.path(), "../../../../etc/hosts");
         assert!(
             result.is_err(),
             "expected a symbol containing `..` to be rejected, got {result:?}"
@@ -1842,7 +2011,8 @@ mod tests {
 
     #[test]
     fn test_get_market_data_path_rejects_absolute_symbol() {
-        let result = get_market_data_path("/etc/hosts");
+        let dir = tempfile::tempdir().unwrap();
+        let result = get_market_data_path_in(dir.path(), "/etc/hosts");
         assert!(
             result.is_err(),
             "expected an absolute symbol to be rejected, got {result:?}"
@@ -2004,7 +2174,7 @@ mod tests {
     #[test]
     fn test_read_market_data() {
         // Skip test if external data repository is not available
-        if !std::path::Path::new(MARKET_DATA_BASE_PATH).exists() {
+        if !market_data_root().is_ok_and(|root| root.exists()) {
             println!("Skipping test_read_market_data: external data repository not available");
             return;
         }
@@ -2028,7 +2198,7 @@ mod tests {
     #[test]
     fn test_filter_market_data_by_date_range() {
         // Skip test if external data repository is not available
-        if !std::path::Path::new(MARKET_DATA_BASE_PATH).exists() {
+        if !market_data_root().is_ok_and(|root| root.exists()) {
             println!("Skipping test_filter_market_data_by_date_range: external data repository not available");
             return;
         }
@@ -2064,23 +2234,19 @@ mod tests {
 
     #[test]
     fn test_get_dividend_data_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
         assert_eq!(
-            get_dividend_data_path("SEM").unwrap(),
-            Path::new(DIVIDEND_DATA_BASE_PATH)
-                .join("data/S/SEM.json")
-                .to_string_lossy()
+            get_dividend_data_path_in(root, "SEM").unwrap(),
+            root.join("data/S/SEM.json").to_string_lossy()
         );
         assert_eq!(
-            get_dividend_data_path("AAPL").unwrap(),
-            Path::new(DIVIDEND_DATA_BASE_PATH)
-                .join("data/A/AAPL.json")
-                .to_string_lossy()
+            get_dividend_data_path_in(root, "AAPL").unwrap(),
+            root.join("data/A/AAPL.json").to_string_lossy()
         );
         assert_eq!(
-            get_dividend_data_path("").unwrap(),
-            Path::new(DIVIDEND_DATA_BASE_PATH)
-                .join("data/X/.json")
-                .to_string_lossy()
+            get_dividend_data_path_in(root, "").unwrap(),
+            root.join("data/X/.json").to_string_lossy()
         );
     }
 
@@ -2088,7 +2254,8 @@ mod tests {
     // attacker-influenceable ticker must not escape the dividend data root.
     #[test]
     fn test_get_dividend_data_path_rejects_parent_dir_traversal() {
-        let result = get_dividend_data_path("X/../../../../../../etc/some");
+        let dir = tempfile::tempdir().unwrap();
+        let result = get_dividend_data_path_in(dir.path(), "X/../../../../../../etc/some");
         assert!(
             result.is_err(),
             "expected a ticker containing `..` to be rejected, got {result:?}"
@@ -2097,7 +2264,8 @@ mod tests {
 
     #[test]
     fn test_get_dividend_data_path_rejects_absolute_ticker() {
-        let result = get_dividend_data_path("/etc/passwd");
+        let dir = tempfile::tempdir().unwrap();
+        let result = get_dividend_data_path_in(dir.path(), "/etc/passwd");
         assert!(
             result.is_err(),
             "expected an absolute ticker to be rejected, got {result:?}"
@@ -2108,12 +2276,11 @@ mod tests {
     fn test_get_dividend_data_path_allows_plain_ticker_with_exchange_prefix() {
         // A legitimate ticker with an exchange prefix contains no path
         // separators or traversal segments and must still resolve.
-        let path = get_dividend_data_path("NYSE:SEM").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = get_dividend_data_path_in(dir.path(), "NYSE:SEM").unwrap();
         assert_eq!(
             path,
-            Path::new(DIVIDEND_DATA_BASE_PATH)
-                .join("data/N/NYSE:SEM.json")
-                .to_string_lossy()
+            dir.path().join("data/N/NYSE:SEM.json").to_string_lossy()
         );
     }
 
@@ -2157,7 +2324,7 @@ mod tests {
     #[test]
     fn test_calculate_performance_november_15_2024() {
         // Skip test if external data repository is not available
-        if !std::path::Path::new(MARKET_DATA_BASE_PATH).exists() {
+        if !market_data_root().is_ok_and(|root| root.exists()) {
             println!("Skipping test_calculate_performance_november_15_2024: external data repository not available");
             return;
         }

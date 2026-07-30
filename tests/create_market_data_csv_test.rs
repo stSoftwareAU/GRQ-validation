@@ -2,22 +2,24 @@
 //! `create_market_data_csv_for_score_file` (issue #265).
 //!
 //! These were previously the only market-data writers with no test exercising
-//! them, directly or indirectly. Rather than depend on the external
-//! `MARKET_DATA_BASE_PATH` data repository (which is absent in CI and makes the
-//! sibling long-format test skip), each test drops a small, fully controlled
+//! them, directly or indirectly. Each test drops a small, fully controlled
 //! market-data fixture at the location the function reads from, asserts the
 //! observable CSV output, then removes the fixture again. The assertions pin
 //! the public contract — the `date,symbol,close` header and the inclusive
 //! 180-day window filter — without caring how the function computes them.
+//!
+//! The fixtures live under the caller-supplied market-data root (issue #802),
+//! so each test skips when `GRQ_MARKET_DATA_PATH` is unset. Making them
+//! hermetic against a temporary root is tracked separately.
 
 use anyhow::Result;
 use grq_validation::utils::{
-    create_market_data_csv, create_market_data_csv_for_score_file, MARKET_DATA_BASE_PATH,
+    create_market_data_csv, create_market_data_csv_for_score_file, market_data_root,
 };
 use std::path::{Path, PathBuf};
 
 /// Clearly-synthetic symbols so a fixture can never collide with a real symbol
-/// in an existing `MARKET_DATA_BASE_PATH` data repository. Each test uses a
+/// in an existing market-data repository. Each test uses a
 /// distinct symbol so the fixtures live at distinct paths and never race when
 /// the test harness runs them in parallel (one test's `Drop` must not delete a
 /// fixture another test is still reading).
@@ -28,9 +30,9 @@ const FIXTURE_SYMBOL_WRAPPER: &str = "GRQVTEST265B";
 /// `2025-04-15` to `2025-10-12` inclusive.
 const SCORE_DATE: &str = "2025-04-15";
 
-/// RAII guard that installs a market-data fixture for a given symbol under
-/// `MARKET_DATA_BASE_PATH` and removes exactly what it created on drop, so the
-/// test leaves no trace whether or not the external data repository pre-exists.
+/// RAII guard that installs a market-data fixture for a given symbol under the
+/// caller-supplied market-data root and removes exactly what it created on
+/// drop, so the test leaves no trace whether or not the data tree pre-exists.
 struct MarketDataFixture {
     json_path: PathBuf,
     /// The outermost directory this guard created (and must remove on drop), or
@@ -43,7 +45,7 @@ impl MarketDataFixture {
     /// the 180-day window, one row before it, and one row after it, so a test
     /// can assert both inclusion and exclusion.
     fn install(symbol: &str) -> Result<Self> {
-        let base = Path::new(MARKET_DATA_BASE_PATH);
+        let base = market_data_root()?;
         let first_letter = symbol.chars().next().unwrap().to_string();
         let symbol_dir = base.join("data").join(&first_letter);
 
@@ -81,6 +83,18 @@ impl Drop for MarketDataFixture {
                 }
                 dir = current.parent().map(Path::to_path_buf);
             }
+        }
+    }
+}
+
+/// Returns `true` when a market-data root is configured, otherwise prints a
+/// skip line for `test_name` and returns `false` (issue #802).
+fn market_data_root_configured(test_name: &str) -> bool {
+    match market_data_root() {
+        Ok(_) => true,
+        Err(error) => {
+            println!("Skipping {test_name}: {error}");
+            false
         }
     }
 }
@@ -137,6 +151,9 @@ fn fixture_json(symbol: &str) -> String {
 
 #[test]
 fn create_market_data_csv_writes_windowed_rows() -> Result<()> {
+    if !market_data_root_configured("create_market_data_csv_writes_windowed_rows") {
+        return Ok(());
+    }
     let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL_DIRECT)?;
 
     let out_dir = tempfile::tempdir()?;
@@ -175,6 +192,9 @@ fn create_market_data_csv_writes_windowed_rows() -> Result<()> {
 
 #[test]
 fn create_market_data_csv_for_score_file_writes_derived_csv() -> Result<()> {
+    if !market_data_root_configured("create_market_data_csv_for_score_file_writes_derived_csv") {
+        return Ok(());
+    }
     let _fixture = MarketDataFixture::install(FIXTURE_SYMBOL_WRAPPER)?;
 
     // The wrapper derives the output path by swapping the score file's
