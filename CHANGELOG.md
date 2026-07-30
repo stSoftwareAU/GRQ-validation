@@ -54,6 +54,13 @@ and this project adheres to
 
 ### Changed
 
+- The dividend-basis diagnostic no longer defaults its dividend-history root to
+  a private sibling checkout. `computeDividendBasisDiagnostic` takes the root as
+  a **required** parameter, and `deno task diagnose-dividend-basis` resolves it
+  from the third positional argument or `GRQ_DIVIDEND_DATA_PATH` (hence the
+  added `--allow-env`), printing a usage message naming the argument, the
+  variable and the expected layout — and exiting non-zero — when neither is
+  supplied (Issue #805).
 - The four market-data/dividend integration tests
   (`tests/create_market_data_csv_test.rs`,
   `tests/create_market_data_long_csv_test.rs`, `tests/market_data_tests.rs`,

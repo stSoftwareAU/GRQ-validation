@@ -40,8 +40,8 @@ export interface MarketPoint {
 
 /**
  * One parsed dividend record for a ticker. Both the in-window dividend map from
- * `parseDividendCsv` and the full trailing history loaded from the
- * GRQ-dividends tree share this `{ exDivDate, amount }` shape.
+ * `parseDividendCsv` and the full trailing history loaded from the private
+ * dividend-history tree share this `{ exDivDate, amount }` shape.
  */
 export interface DividendPoint {
   exDivDate: Date;

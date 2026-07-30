@@ -35,6 +35,42 @@ const TP = (globalThis as any).GRQTrendPredictions;
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 
+/** Environment variable naming the private dividend-history root (issue #805). */
+export const DIVIDEND_DATA_PATH_ENV = "GRQ_DIVIDEND_DATA_PATH";
+
+/** Printed when no dividend-history root is supplied; the CLI then exits non-zero. */
+export const DIVIDENDS_ROOT_USAGE = [
+  "ERROR: no dividend-history root supplied.",
+  "",
+  "Usage: deno run --allow-read --allow-env scripts/diagnose_dividend_basis.ts \\",
+  "         [docsPath] [asOf YYYY-MM-DD] <dividendsRoot>",
+  "",
+  "Supply the root as the third positional argument (dividendsRoot) or set",
+  `${DIVIDEND_DATA_PATH_ENV}. There is no default: the dividend-history tree is`,
+  "private, so it is never assumed to sit beside this checkout.",
+  "",
+  "Expected layout: <root>/data/<UPPERCASE-FIRST-LETTER>/<SYMBOL>.json, each",
+  'file holding { "data": [ { "ex_dividend_date": "...", "amount": ... }, ... ] }',
+  "records, read as the { exDivDate, amount } shape the shipped kernels consume.",
+].join("\n");
+
+/**
+ * Resolve the REQUIRED dividend-history root: an explicit argument wins, then
+ * the environment variable. Blank/whitespace values count as absent. Throws
+ * with the usage text rather than falling back to a relative sibling path, so a
+ * missing root fails loud instead of reaching for a private checkout (#805).
+ */
+export function requireDividendsRoot(
+  argRoot: string | undefined,
+  envRoot: string | undefined,
+): string {
+  const root = (argRoot ?? "").trim() || (envRoot ?? "").trim();
+  if (!root) {
+    throw new Error(DIVIDENDS_ROOT_USAGE);
+  }
+  return root;
+}
+
 /** Summary statistics for a list of per-row differences (percentage points). */
 export interface DiffSummary {
   count: number;
@@ -288,10 +324,10 @@ interface DividendHistoryRecord {
   amount?: string | number;
 }
 
-// Load one ticker's FULL dividend history from the GRQ-dividends tree
-// (../GRQ-dividends/data/<L>/<SYM>.json) into the { exDivDate, amount } shape the
-// kernels consume. Returns [] when the file is absent or unparseable so a ticker
-// with no published history simply contributes a 0 flat credit.
+// Load one ticker's FULL dividend history from the private dividend-history
+// tree (<root>/data/<LETTER>/<SYMBOL>.json) into the { exDivDate, amount } shape
+// the kernels consume. Returns [] when the file is absent or unparseable so a
+// ticker with no published history simply contributes a 0 flat credit.
 async function loadDividendHistory(
   dividendsRoot: string,
   strippedSymbol: string,
@@ -329,12 +365,14 @@ async function loadDividendHistory(
 
 // Load the matured score set from disk and compute the full diagnostic.
 // A score date is "matured" once its full 90-day window has elapsed by `asOf`.
-// `dividendsRoot` points at the GRQ-dividends history tree (default
-// "../GRQ-dividends", matching src/utils.rs DIVIDEND_DATA_BASE_PATH).
+// `dividendsRoot` is REQUIRED and points at the private dividend-history tree:
+// it has no default because that tree is private and is never assumed to sit
+// beside this checkout (issue #805). Callers resolve it from an explicit
+// argument or the operator's environment — see `requireDividendsRoot`.
 export async function computeDividendBasisDiagnostic(
   docsPath: string,
   asOf: Date,
-  dividendsRoot = "../GRQ-dividends",
+  dividendsRoot: string,
 ): Promise<DividendBasisReport> {
   const indexText = await Deno.readTextFile(`${docsPath}/scores/index.json`);
   const index = JSON.parse(indexText) as { scores: ScoreIndexEntry[] };

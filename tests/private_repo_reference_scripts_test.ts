@@ -13,6 +13,13 @@ const PRIVATE_PATH_PATTERN = /GRQ\/src\/[A-Za-z0-9_./-]+/g;
 /** "lives upstream in `GRQ`" style pointers at the private repo itself. */
 const PRIVATE_REPO_POINTER_PATTERN = /\bin\s+`GRQ`/g;
 
+/**
+ * Issue #805: runtime DATA-path references to the private sibling checkouts —
+ * the private market-data and dividend-history trees. Written as an alternation
+ * so this guard does not itself spell the checkout names.
+ */
+const PRIVATE_DATA_TREE_PATTERN = /GRQ-(shareprices|dividends)[\w.-]*/g;
+
 async function scriptSources(): Promise<Array<[string, string]>> {
   const sources: Array<[string, string]> = [];
   for await (const entry of Deno.readDir(SCRIPTS_DIR)) {
@@ -55,6 +62,18 @@ Deno.test("diagnostic scripts do not point at the private repo by name", async (
     if (matches) hits.push(`${name}: ${matches.join(", ")}`);
   }
   assertEquals(hits, [], `Private repo pointers found:\n${hits.join("\n")}`);
+});
+
+Deno.test("diagnostic scripts name no private data-tree checkout (issue #805)", async () => {
+  // A data-path default reaching for a private sibling checkout makes the
+  // script unusable outside the operator's machine, so the root must always be
+  // supplied by the caller instead.
+  const hits = offenders(PRIVATE_DATA_TREE_PATTERN, await scriptSources());
+  assertEquals(
+    hits,
+    [],
+    `Private data-tree references found:\n${hits.join("\n")}`,
+  );
 });
 
 Deno.test("the scripts still document the ported training semantics", async () => {

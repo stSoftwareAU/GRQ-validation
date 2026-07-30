@@ -1,0 +1,7 @@
+{
+  "symbol": "X",
+  "data": [
+    { "ex_dividend_date": "2025-06-15", "amount": "0.50" },
+    { "ex_dividend_date": "2025-12-15", "amount": "0.50" }
+  ]
+}
