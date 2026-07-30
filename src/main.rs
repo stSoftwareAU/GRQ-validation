@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
+use grq_validation::data_roots::DataRoots;
 use grq_validation::utils::{
     build_score_file_path, create_dividend_csv_for_score_file,
     create_market_data_long_csv_for_score_file, derive_csv_output_path,
-    ensure_market_data_repository, extract_ticker_codes_from_score_file, is_market_data_csv_empty,
-    read_index_json,
+    ensure_market_data_repository_at, extract_ticker_codes_from_score_file,
+    is_market_data_csv_empty, read_index_json,
 };
 use log::info;
 use std::path::Path;
@@ -16,6 +17,14 @@ struct Args {
     /// Path to the docs directory containing TSV files
     #[arg(short, long, default_value = "docs")]
     docs_path: String,
+
+    /// Directory holding the market-data `data/<LETTER>/<SYMBOL>.json` tree; overrides GRQ_MARKET_DATA_PATH
+    #[arg(long)]
+    market_data_path: Option<String>,
+
+    /// Directory holding the dividend-history `data/<LETTER>/<SYMBOL>.json` tree; overrides GRQ_DIVIDEND_DATA_PATH
+    #[arg(long)]
+    dividend_data_path: Option<String>,
 
     /// Enable verbose logging
     #[arg(short, long)]
@@ -50,6 +59,16 @@ fn main() -> Result<()> {
 
     info!("Starting GRQ Validation processor");
     info!("Docs path: {}", args.docs_path);
+
+    // Resolve and validate both caller-supplied data roots before any work
+    // begins, so a misconfigured host fails loudly at start-up with one message
+    // listing every unusable root — never per-ticker deep in a run (issue #803).
+    let roots = DataRoots::resolve(
+        args.market_data_path.as_deref(),
+        args.dividend_data_path.as_deref(),
+    )?;
+    info!("Market data root: {}", roots.market.display());
+    info!("Dividend data root: {}", roots.dividends.display());
 
     // Process a specific date if provided
     if let Some(date) = args.date {
@@ -97,6 +116,7 @@ fn main() -> Result<()> {
             // Use regular performance calculation. `?` propagates the error to
             // `main`, which prints the full context chain on exit.
             let performance = grq_validation::utils::calculate_portfolio_performance(
+                &roots.dividends,
                 &score_file_path,
                 score_file_date,
             )
@@ -157,6 +177,7 @@ fn main() -> Result<()> {
             .context("reading market data CSV")?
             .closes;
             let performance = grq_validation::utils::calculate_hybrid_projection(
+                &roots.dividends,
                 &stock_records,
                 score_file_date,
                 &market_data_csv,
@@ -219,7 +240,10 @@ fn main() -> Result<()> {
     // Calculate performance for all score files that are at least 90 days old
     if args.calculate_performance {
         info!("Calculating performance metrics for all score files...");
-        match grq_validation::utils::update_index_with_performance(&args.docs_path) {
+        match grq_validation::utils::update_index_with_performance(
+            &roots.dividends,
+            &args.docs_path,
+        ) {
             Ok(_) => {
                 info!("Successfully updated index.json with performance metrics");
             }
@@ -230,7 +254,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    ensure_market_data_repository()?;
+    ensure_market_data_repository_at(&roots.market)?;
 
     // Read the index to get all score files
     let index_data = read_index_json(&args.docs_path)?;
@@ -310,6 +334,7 @@ fn main() -> Result<()> {
 
                 // Create CSV file with market data in long format in the same directory as the score file
                 match create_market_data_long_csv_for_score_file(
+                    &roots.market,
                     &score_file_path,
                     &ticker_codes,
                     &score_entry.date,
@@ -325,6 +350,7 @@ fn main() -> Result<()> {
 
                 // Create dividend CSV file
                 match create_dividend_csv_for_score_file(
+                    &roots.dividends,
                     &score_file_path,
                     &ticker_codes,
                     &score_entry.date,
@@ -340,6 +366,7 @@ fn main() -> Result<()> {
                 // Calculate performance for this score file immediately after creating CSVs
                 info!("Calculating performance for {}", score_entry.date);
                 match grq_validation::utils::calculate_portfolio_performance(
+                    &roots.dividends,
                     &score_file_path,
                     &score_entry.date,
                 ) {

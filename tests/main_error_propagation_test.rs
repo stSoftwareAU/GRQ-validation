@@ -16,17 +16,64 @@ fn date_days_ago(days: i64) -> String {
 }
 
 /// Run the binary for a single date against an empty docs directory.
+///
+/// Both data roots are supplied as flags at temporary directories (issue #803):
+/// the start-up guard now validates them before any date processing, so these
+/// tests pass usable roots to keep exercising the *date* error paths below.
 fn run_for_date(date: &str) -> std::process::Output {
     let docs_dir = tempfile::tempdir().expect("create temp docs dir");
+    let roots_dir = tempfile::tempdir().expect("create temp roots dir");
+    let market = roots_dir.path().join("market-data");
+    let dividends = roots_dir.path().join("dividend-data");
+    std::fs::create_dir_all(market.join("data")).expect("create market data tree");
+    std::fs::create_dir_all(dividends.join("data")).expect("create dividend data tree");
+
     Command::new(env!("CARGO_BIN_EXE_grq-validation"))
         .args([
             "--date",
             date,
             "--docs-path",
             docs_dir.path().to_str().unwrap(),
+            "--market-data-path",
+            market.to_str().unwrap(),
+            "--dividend-data-path",
+            dividends.to_str().unwrap(),
         ])
         .output()
         .expect("run grq-validation binary")
+}
+
+/// A run with no data roots at all must fail at start-up — before the date
+/// branches run — so the operator sees the configuration fault rather than a
+/// per-ticker failure deep in the run (issue #803).
+#[test]
+fn missing_data_roots_fail_before_date_processing() {
+    let docs_dir = tempfile::tempdir().expect("create temp docs dir");
+    let output = Command::new(env!("CARGO_BIN_EXE_grq-validation"))
+        .env_remove("GRQ_MARKET_DATA_PATH")
+        .env_remove("GRQ_DIVIDEND_DATA_PATH")
+        .args([
+            "--date",
+            &date_days_ago(10),
+            "--docs-path",
+            docs_dir.path().to_str().unwrap(),
+        ])
+        .output()
+        .expect("run grq-validation binary");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit, stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("GRQ_MARKET_DATA_PATH") && stderr.contains("GRQ_DIVIDEND_DATA_PATH"),
+        "expected the start-up error naming both roots, stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("reading TSV file"),
+        "the run must stop before any date processing, stderr: {stderr}"
+    );
 }
 
 #[test]

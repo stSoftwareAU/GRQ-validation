@@ -160,7 +160,12 @@ fn create_market_data_csv_writes_windowed_rows() -> Result<()> {
     let out_path = out_dir.path().join("md.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
 
-    create_market_data_csv(&[FIXTURE_SYMBOL_DIRECT.to_string()], SCORE_DATE, out)?;
+    create_market_data_csv(
+        &market_data_root()?,
+        &[FIXTURE_SYMBOL_DIRECT.to_string()],
+        SCORE_DATE,
+        out,
+    )?;
 
     let csv = std::fs::read_to_string(&out_path)?;
 
@@ -205,6 +210,7 @@ fn create_market_data_csv_for_score_file_writes_derived_csv() -> Result<()> {
     let score_file_str = score_file.to_str().expect("temp path is valid UTF-8");
 
     create_market_data_csv_for_score_file(
+        &market_data_root()?,
         score_file_str,
         &[FIXTURE_SYMBOL_WRAPPER.to_string()],
         SCORE_DATE,
