@@ -871,6 +871,36 @@ flowchart LR
     G -- clean --> P[green]
 ```
 
+#### No private data-root literals anywhere
+
+`tests/private_data_root_reference_test.ts` is the repo-wide backstop
+(Issue #806). It walks `src/`, `tests/`, `scripts/`, `helpers/`, `docs/` and the
+root-level `*.sh`/`*.json`/`*.md` files and fails with `file:line: match` for
+every private sibling data-checkout name it finds — the market-data slug (any
+quarter suffix), the dividend-history slug, and any `../GRQ-*` relative sibling
+path other than this repo's own public checkouts.
+
+Two properties keep it honest:
+
+- **Positive controls.** Separate cases assert the walk reaches known files, the
+  matcher finds a planted literal, and scanning with the exemptions dropped
+  surfaces the guard's own pattern definitions. A walk that silently returns
+  nothing fails rather than passing as "no matches".
+- **Live allowlist.** Every exemption lives in `ALLOWLIST` with the reason it is
+  sanctioned, and a case asserts each entry still matches something — so a stale
+  exemption turns red instead of quietly widening the hole.
+
+```mermaid
+flowchart LR
+    W["walk src/ tests/ scripts/<br/>helpers/ docs/ + root files"] --> M{{"private data-root<br/>patterns"}}
+    M -- match --> A{"allowlisted?"}
+    A -- "no" --> X["fail: file:line: match"]
+    A -- "yes, with reason" --> P[green]
+    M -- "no match" --> L{"allowlist entry<br/>still live?"}
+    L -- no --> S["fail: remove stale exemption"]
+    L -- yes --> P
+```
+
 The Deno suite includes a **dashboard "Limited data mode" smoke test**
 (`tests/dashboard_limited_data_smoke_test.ts`). It drives the real
 `GRQTrendPredictions.parseMarketCsv` kernel over the published `docs/scores/**`

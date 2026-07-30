@@ -30,8 +30,13 @@ fail() {
     exit 1
 }
 
+# The repo-wide guard (issue #806) necessarily spells the same names in its own
+# pattern definitions; it excludes itself for the same reason, and it covers the
+# rest of tests/ — so skipping that one file here loses no coverage.
+GUARD_TEST='private_data_root_reference_test.ts'
+
 echo "🔍 Checking tests/ for private data-tree references..."
-if grep -rEn "$PRIVATE_TREE_PATTERN" tests/; then
+if grep -rEn --exclude="$GUARD_TEST" "$PRIVATE_TREE_PATTERN" tests/; then
     fail "tests/ must not reference the private data tree or a deleted base-path constant (issue #804)"
 fi
 
