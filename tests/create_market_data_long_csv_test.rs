@@ -182,7 +182,12 @@ fn create_market_data_long_csv_writes_eight_column_rows() -> Result<()> {
     let out_path = out_dir.path().join("long.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
 
-    create_market_data_long_csv(&[FIXTURE_TICKER.to_string()], SCORE_DATE, out)?;
+    create_market_data_long_csv(
+        &market_data_root()?,
+        &[FIXTURE_TICKER.to_string()],
+        SCORE_DATE,
+        out,
+    )?;
 
     let csv = std::fs::read_to_string(&out_path)?;
 
@@ -228,8 +233,12 @@ fn create_market_data_long_csv_errors_when_all_tickers_skipped() -> Result<()> {
     let out_path = out_dir.path().join("empty.csv");
     let out = out_path.to_str().expect("temp path is valid UTF-8");
 
-    let result =
-        create_market_data_long_csv(&["NYSE:GRQVTEST634MISSING".to_string()], SCORE_DATE, out);
+    let result = create_market_data_long_csv(
+        &market_data_root()?,
+        &["NYSE:GRQVTEST634MISSING".to_string()],
+        SCORE_DATE,
+        out,
+    );
 
     assert!(
         result.is_err(),
@@ -262,8 +271,12 @@ fn create_market_data_long_csv_preserves_existing_rows_when_no_fresh_data() -> R
     std::fs::write(&out_path, existing)?;
 
     // No fixture installed -> the only ticker is skipped -> zero rows written.
-    let result =
-        create_market_data_long_csv(&["NYSE:GRQVTEST687MISSING".to_string()], SCORE_DATE, out);
+    let result = create_market_data_long_csv(
+        &market_data_root()?,
+        &["NYSE:GRQVTEST687MISSING".to_string()],
+        SCORE_DATE,
+        out,
+    );
 
     // The writer still signals that no fresh data was available...
     assert!(
@@ -306,7 +319,12 @@ fn create_market_data_long_csv_replaces_existing_when_fresh_data_available() -> 
     // Stale content that must be fully replaced by the fresh write.
     std::fs::write(&out_path, "stale,garbage\n1,2\n")?;
 
-    create_market_data_long_csv(&[FIXTURE_TICKER_REPLACE.to_string()], SCORE_DATE, out)?;
+    create_market_data_long_csv(
+        &market_data_root()?,
+        &[FIXTURE_TICKER_REPLACE.to_string()],
+        SCORE_DATE,
+        out,
+    )?;
 
     let csv = std::fs::read_to_string(&out_path)?;
     assert_eq!(

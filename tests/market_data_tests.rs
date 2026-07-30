@@ -73,6 +73,7 @@ fn test_create_market_data_long_csv_for_first_score_file() -> Result<()> {
     // covered directly by the fixture-based tests in
     // `create_market_data_long_csv_test.rs`.
     let output_path = match create_market_data_long_csv_for_score_file(
+        &market_data_root,
         score_file_path,
         &ticker_codes,
         score_file_date,

@@ -41,7 +41,19 @@ setup_rust_environment() {
     fi
 }
 
+
+# Pre-flight guard for the caller-supplied data roots (issue #803). A missing
+# helper is itself a fault, so it fails loud rather than skipping the check.
+DATA_ROOT_GUARD="$REPO_DIR/scripts/require_data_roots.sh"
+if [ ! -f "$DATA_ROOT_GUARD" ]; then
+    echo "ERROR: missing data-root guard: $DATA_ROOT_GUARD" >&2
+    exit 1
+fi
+# shellcheck source=scripts/require_data_roots.sh
+. "$DATA_ROOT_GUARD"
+
 setup_rust_environment
+require_data_roots
 
 # Change to repository directory
 cd "$REPO_DIR" || exit 1
@@ -78,6 +90,12 @@ fi
 # Run the program
 log "Running GRQ validation program"
 
+# The data roots are passed explicitly so the binary never guesses (issue #803).
+DATA_ROOT_FLAGS=(
+    --market-data-path "$GRQ_MARKET_DATA_PATH"
+    --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH"
+)
+
 # Check for command line arguments
 PROCESS_ALL=false
 REGENERATE_EMPTY=false
@@ -95,14 +113,14 @@ fi
 # or omit for recent dates only (within 180 days)
 if [ "$PROCESS_ALL" = true ]; then
     # For full reload, process all files (performance is calculated inline)
-    if ./target/release/grq-validation --docs-path docs --process-all; then
+    if ./target/release/grq-validation --docs-path docs "${DATA_ROOT_FLAGS[@]}" --process-all; then
         log "Program completed successfully"
     else
         log "ERROR: Program failed"
         exit 1
     fi
 elif [ "$REGENERATE_EMPTY" = true ]; then
-    if ./target/release/grq-validation --docs-path docs --regenerate-empty; then
+    if ./target/release/grq-validation --docs-path docs "${DATA_ROOT_FLAGS[@]}" --regenerate-empty; then
         log "Program completed successfully"
     else
         log "ERROR: Program failed"
@@ -110,7 +128,7 @@ elif [ "$REGENERATE_EMPTY" = true ]; then
     fi
 else
     # For recent files only, process files (performance is calculated inline)
-    if ./target/release/grq-validation --docs-path docs; then
+    if ./target/release/grq-validation --docs-path docs "${DATA_ROOT_FLAGS[@]}"; then
         log "Program completed successfully"
     else
         log "ERROR: Program failed"

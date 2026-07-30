@@ -10,6 +10,14 @@ and this project adheres to
 
 ### Added
 
+- `--market-data-path` / `--dividend-data-path` CLI flags (each overriding
+  `GRQ_MARKET_DATA_PATH` / `GRQ_DIVIDEND_DATA_PATH`) so an operator can point
+  the pipeline at their own data tree. Both roots are resolved once into a
+  `DataRoots` value and threaded explicitly through the pipeline, validated
+  before any work begins, and a single start-up error lists every unusable
+  root. `run.sh` and `process_date.sh` check both variables before building or
+  writing anything and pass them through as flags (Issue #803).
+
 - Market-data presence quality gate (`tests/market_data_presence_test.ts`): a
   Deno test, run on every PR via `deno-quality.yml`, that iterates every
   committed `docs/scores/**/DD.tsv` prediction and fails CI when the sibling

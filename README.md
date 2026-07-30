@@ -890,37 +890,120 @@ exercised by `tests/market_data_fail_loud_test.ts`.
 
 ## Configuration
 
-### Environment Variables
+### Required data roots
 
-- `GRQ_MARKET_DATA_PATH` — **required.** Directory holding the market-data
-  `data/<letter>/<SYM>.json` tree.
-- `GRQ_DIVIDEND_DATA_PATH` — **required for dividend processing.** Directory
-  holding the dividend-history `data/<letter>/<SYM>.json` tree.
-- `RUST_LOG` — logging level (default: `info`).
-- `CARGO_TERM_COLOR` — terminal colour output.
+The processor reads share prices and dividend history from two directories the
+**caller supplies**. **This repository ships no market or dividend data, and
+names no upstream source for it** — point each root at your own tree (built by
+whatever provider or process you choose) and the run reproduces exactly.
 
-Both data roots are **caller-supplied** (issue #802): the crate names no data
-checkout of its own. An unset or blank root is a fail-loud error — the processor
-exits non-zero naming the variable rather than silently writing header-only
-market-data CSVs.
+Each root can be given as a flag or an environment variable; the **flag wins**.
+There is deliberately no default: an absent, blank, or non-directory root is a
+fail-loud start-up error listing *every* unusable root, never a silent `../…`
+guess that would write header-only CSVs (issues #802, #803).
+
+| Root          | Flag                   | Environment variable      |
+| ------------- | ---------------------- | ------------------------- |
+| Market data   | `--market-data-path`   | `GRQ_MARKET_DATA_PATH`    |
+| Dividend data | `--dividend-data-path` | `GRQ_DIVIDEND_DATA_PATH`  |
 
 ```bash
 export GRQ_MARKET_DATA_PATH=/path/to/market-data
 export GRQ_DIVIDEND_DATA_PATH=/path/to/dividend-history
-./run.sh
+./run.sh                     # or: ./process_date.sh 2025-06-20
+
+# The flag overrides the variable for a one-off run:
+./target/release/grq-validation --docs-path docs \
+    --market-data-path /other/market-data \
+    --dividend-data-path /other/dividend-history
 ```
+
+`run.sh` and `process_date.sh` check both variables before building or writing
+anything and exit non-zero naming what is missing, then pass the roots through
+as flags — so the roots are resolved in exactly one place.
+
+#### Expected on-disk layout
+
+Both trees use the same shape: a `data/` directory, one subdirectory per
+**upper-case first letter** of the symbol, and one JSON file per symbol.
+
+```text
+<root>/data/<UPPERCASE-FIRST-LETTER>/<SYMBOL>.json
+```
+
+For example, `SEM` resolves to `<root>/data/S/SEM.json`. The symbol is the part
+of the score-file ticker after the last `:`, with `.` replaced by `-` (so
+`NYSE:HEI.A` → `HEI-A`).
+
+#### Expected JSON shapes
+
+Market-data files deserialise into `MarketData` (`src/models.rs`):
+
+```json
+{
+  "Meta Data": {
+    "1. Information": "Daily Prices",
+    "2. Symbol": "SEM",
+    "3. Last Refreshed": "2025-06-20",
+    "4. Output Size": "Full size",
+    "5. Time Zone": "US/Eastern"
+  },
+  "Time Series (Daily)": {
+    "2025-06-20": {
+      "1. open": "10.10",
+      "2. high": "10.50",
+      "3. low": "9.90",
+      "4. close": "10.25",
+      "5. adjusted close": "10.25",
+      "6. volume": "123456",
+      "7. dividend amount": "0.0",
+      "8. split coefficient": "1.0"
+    }
+  }
+}
+```
+
+Dividend files deserialise into `DividendData` (`src/models.rs`):
+
+```json
+{
+  "symbol": "SEM",
+  "data": [
+    {
+      "ex_dividend_date": "2025-05-15",
+      "declaration_date": "2025-05-01",
+      "record_date": "2025-05-15",
+      "payment_date": "2025-05-30",
+      "amount": "0.09375"
+    }
+  ]
+}
+```
+
+Prices and amounts are strings (they are parsed defensively); a malformed value
+is skipped with a warning rather than corrupting the derived CSV.
+
+### Other environment variables
+
+- `RUST_LOG` — logging level (default: `info`).
+- `CARGO_TERM_COLOR` — terminal colour output.
 
 ```mermaid
 flowchart LR
-    ENV["GRQ_MARKET_DATA_PATH<br/>GRQ_DIVIDEND_DATA_PATH"] --> R{{"market_data_root()<br/>dividend_data_root()"}}
-    R -- unset/blank --> F["Err naming the variable<br/>(exit non-zero)"]
-    R -- resolved root --> C["get_market_data_path_in()<br/>get_dividend_data_path_in()<br/>(traversal guards)"]
-    C --> O["&lt;root&gt;/data/&lt;letter&gt;/&lt;SYM&gt;.json"]
+    F["--market-data-path<br/>--dividend-data-path"] --> R{{"DataRoots::resolve()<br/>(flag wins over env)"}}
+    E["GRQ_MARKET_DATA_PATH<br/>GRQ_DIVIDEND_DATA_PATH"] --> R
+    R -- unset/blank/not a directory --> X["one start-up error<br/>listing every bad root<br/>(exit non-zero, no CSV written)"]
+    R -- both valid --> P["pipeline entry points<br/>(roots threaded as parameters)"]
+    P --> C["get_market_data_path_in()<br/>get_dividend_data_path_in()<br/>(traversal guards)"]
+    C --> O["&lt;root&gt;/data/&lt;LETTER&gt;/&lt;SYMBOL&gt;.json"]
 ```
 
 ### Command Line Options
 
 - `--docs-path` — path to the docs directory (default: `docs`).
+- `--market-data-path` — market-data root; overrides `GRQ_MARKET_DATA_PATH`.
+- `--dividend-data-path` — dividend-data root; overrides
+  `GRQ_DIVIDEND_DATA_PATH`.
 - `--process-all` — process every score file, not just recent ones.
 - `--calculate-performance` — calculate performance metrics for score files.
 - `--date` — process a specific date in `YYYY-MM-DD` format.

@@ -7,10 +7,13 @@ use grq_validation::utils::{
 fn test_create_dividend_csv_for_first_score_file() -> Result<()> {
     // Skip test if the caller-supplied dividend root is unset or absent
     // (issue #802).
-    if !dividend_data_root().is_ok_and(|root| root.exists()) {
-        println!("Skipping test_create_dividend_csv_for_first_score_file: external data repository not available");
-        return Ok(());
-    }
+    let dividend_root = match dividend_data_root() {
+        Ok(root) if root.exists() => root,
+        _ => {
+            println!("Skipping test_create_dividend_csv_for_first_score_file: external data repository not available");
+            return Ok(());
+        }
+    };
 
     // Test with the March 5 score file which is older and should have dividends
     let score_file_path = "docs/scores/2025/March/5.tsv";
@@ -25,7 +28,12 @@ fn test_create_dividend_csv_for_first_score_file() -> Result<()> {
     );
 
     // Create dividend CSV
-    create_dividend_csv_for_score_file(score_file_path, &ticker_codes, score_file_date)?;
+    create_dividend_csv_for_score_file(
+        &dividend_root,
+        score_file_path,
+        &ticker_codes,
+        score_file_date,
+    )?;
 
     // Verify the dividend file was created
     let dividend_output_path = "docs/scores/2025/March/5-dividends.csv";
