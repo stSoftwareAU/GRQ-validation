@@ -3655,21 +3655,30 @@
       "month": "July",
       "day": "01",
       "file": "2026/July/01.tsv",
-      "date": "2026-07-01"
+      "date": "2026-07-01",
+      "performance_90_day": 0.5385041494283552,
+      "performance_annualized": 6.998187116197663,
+      "total_stocks": 20
     },
     {
       "year": "2026",
       "month": "July",
       "day": "02",
       "file": "2026/July/02.tsv",
-      "date": "2026-07-02"
+      "date": "2026-07-02",
+      "performance_90_day": 1.3636572366057211,
+      "performance_annualized": 19.325189557214028,
+      "total_stocks": 20
     },
     {
       "year": "2026",
       "month": "July",
       "day": "03",
       "file": "2026/July/03.tsv",
-      "date": "2026-07-03"
+      "date": "2026-07-03",
+      "performance_90_day": -1.8317920010522244,
+      "performance_annualized": -22.12758869224789,
+      "total_stocks": 20
     }
   ]
 }
