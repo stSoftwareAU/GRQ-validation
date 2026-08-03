@@ -92,6 +92,16 @@ and this project adheres to
 
 ### Fixed
 
+- `run.sh` no longer reuses a stale release binary. The rebuild check diffed
+  `HEAD~1..HEAD` only, so a sync that fast-forwarded several commits at once —
+  or that landed a docs commit on top of a `src/` change — kept the previously
+  built binary; a pre-#803 binary then met the post-#803 caller and exited 1
+  with `unexpected argument '--market-data-path' found`, reddening GRQ-3's
+  scorer every cycle. `run.sh` now always runs `cargo build --release`, which
+  cargo's own freshness check makes a near no-op when the binary is current, so
+  hosts holding a stale binary self-heal on their next run
+  (Issue #816, stSoftwareAU/GRQ#3876).
+
 - Charts no longer keep the previous theme's colours after a theme switch,
   which left the canvas-drawn axis ticks, axis titles and legend unreadable
   (near-white text on a light page after switching to light; dark-on-dark after

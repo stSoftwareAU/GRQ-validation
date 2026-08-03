@@ -59,33 +59,17 @@ require_data_roots
 cd "$REPO_DIR" || exit 1
 log "Working directory: $REPO_DIR"
 
-# Check if Rust program needs rebuilding
-log "Checking if rebuild is needed"
-NEED_REBUILD=false
-
-# Check if Cargo.toml or source files changed
-if git diff --name-only HEAD~1 HEAD | grep -E "(Cargo\.toml|src/)" > /dev/null; then
-    NEED_REBUILD=true
-    log "Source files changed, rebuild needed"
+# Always build. The old check diffed HEAD~1..HEAD only, so a sync that
+# fast-forwarded several commits at once kept the previously built binary — a
+# pre-#803 binary then met a post-#803 caller and rejected --market-data-path
+# (issue #816). Cargo's own freshness check makes this a near no-op when the
+# binary is already current, and it can never leave a stale one behind.
+log "Building Rust program (cargo skips the work when it is already current)"
+if ! cargo build --release; then
+    log "ERROR: Build failed"
+    exit 1
 fi
-
-# Check if binary doesn't exist
-if [ ! -f "target/release/grq-validation" ]; then
-    NEED_REBUILD=true
-    log "Binary doesn't exist, rebuild needed"
-fi
-
-# Build if needed
-if [ "$NEED_REBUILD" = true ]; then
-    log "Building Rust program"
-    if ! cargo build --release; then
-        log "ERROR: Build failed"
-        exit 1
-    fi
-    log "Build completed successfully"
-else
-    log "No rebuild needed, using existing binary"
-fi
+log "Build completed successfully"
 
 # Run the program
 log "Running GRQ validation program"
