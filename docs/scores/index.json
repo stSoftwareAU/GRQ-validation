@@ -2366,9 +2366,9 @@
       "day": "08",
       "file": "2026/February/08.tsv",
       "date": "2026-02-08",
-      "performance_90_day": 29.429221073774073,
-      "performance_annualized": 188.2525516823208,
-      "total_stocks": 20
+      "performance_90_day": 31.509680912854115,
+      "performance_annualized": 207.74746184522604,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2376,9 +2376,9 @@
       "day": "09",
       "file": "2026/February/09.tsv",
       "date": "2026-02-09",
-      "performance_90_day": 21.61243290291421,
-      "performance_annualized": 125.27182976661302,
-      "total_stocks": 20
+      "performance_90_day": 23.281482838264782,
+      "performance_annualized": 138.38433975810548,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2416,9 +2416,9 @@
       "day": "13",
       "file": "2026/February/13.tsv",
       "date": "2026-02-13",
-      "performance_90_day": 13.17406487901586,
-      "performance_annualized": 65.24293328204239,
-      "total_stocks": 20
+      "performance_90_day": 14.931974306237231,
+      "performance_annualized": 75.90945603079622,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2426,9 +2426,9 @@
       "day": "14",
       "file": "2026/February/14.tsv",
       "date": "2026-02-14",
-      "performance_90_day": 11.723065308956995,
-      "performance_annualized": 56.81214794798832,
-      "total_stocks": 20
+      "performance_90_day": 13.7227627694641,
+      "performance_annualized": 68.51841764039935,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2436,9 +2436,9 @@
       "day": "15",
       "file": "2026/February/15.tsv",
       "date": "2026-02-15",
-      "performance_90_day": 11.723065308956995,
-      "performance_annualized": 57.6068108398486,
-      "total_stocks": 20
+      "performance_90_day": 13.7227627694641,
+      "performance_annualized": 69.5094724313887,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2466,9 +2466,9 @@
       "day": "18",
       "file": "2026/February/18.tsv",
       "date": "2026-02-18",
-      "performance_90_day": -0.5221499264346134,
-      "performance_annualized": -2.102199270535321,
-      "total_stocks": 20
+      "performance_90_day": 0.8073088124811667,
+      "performance_annualized": 3.316999368739859,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2476,9 +2476,9 @@
       "day": "19",
       "file": "2026/February/19.tsv",
       "date": "2026-02-19",
-      "performance_90_day": 8.813900378645473,
-      "performance_annualized": 40.88911224252403,
-      "total_stocks": 20
+      "performance_90_day": 10.691831053106815,
+      "performance_annualized": 51.02042724808431,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -2486,9 +2486,9 @@
       "day": "20",
       "file": "2026/February/20.tsv",
       "date": "2026-02-20",
-      "performance_90_day": -1.7348177181280335,
-      "performance_annualized": -6.8559101278430905,
-      "total_stocks": 20
+      "performance_90_day": -0.2668979801323071,
+      "performance_annualized": -1.0787483378986051,
+      "total_stocks": 19
     },
     {
       "year": "2026",
@@ -3166,8 +3166,8 @@
       "day": "05",
       "file": "2026/May/05.tsv",
       "date": "2026-05-05",
-      "performance_90_day": -4.282644438532619,
-      "performance_annualized": -16.78652100511352,
+      "performance_90_day": -3.3830003262701895,
+      "performance_annualized": -13.035438591379831,
       "total_stocks": 20
     },
     {
@@ -3176,8 +3176,8 @@
       "day": "06",
       "file": "2026/May/06.tsv",
       "date": "2026-05-06",
-      "performance_90_day": -9.107792315109055,
-      "performance_annualized": -33.34099393953189,
+      "performance_90_day": -5.746209355312329,
+      "performance_annualized": -21.350481793265253,
       "total_stocks": 20
     },
     {
@@ -3186,8 +3186,8 @@
       "day": "07",
       "file": "2026/May/07.tsv",
       "date": "2026-05-07",
-      "performance_90_day": -6.522123684827098,
-      "performance_annualized": -25.159935904695253,
+      "performance_90_day": -2.730863764327233,
+      "performance_annualized": -10.74132123064141,
       "total_stocks": 20
     },
     {
@@ -3196,8 +3196,8 @@
       "day": "08",
       "file": "2026/May/08.tsv",
       "date": "2026-05-08",
-      "performance_90_day": -2.4828095061519924,
-      "performance_annualized": -10.355709658007918,
+      "performance_90_day": 1.7927714057413209,
+      "performance_annualized": 7.6538782191145405,
       "total_stocks": 20
     },
     {
@@ -3206,8 +3206,8 @@
       "day": "09",
       "file": "2026/May/09.tsv",
       "date": "2026-05-09",
-      "performance_90_day": -2.2087664336839294,
-      "performance_annualized": -9.36126737636922,
+      "performance_90_day": 1.5462747494499431,
+      "performance_annualized": 6.6540355537054285,
       "total_stocks": 20
     },
     {
@@ -3216,8 +3216,8 @@
       "day": "10",
       "file": "2026/May/10.tsv",
       "date": "2026-05-10",
-      "performance_90_day": -2.2087664336839294,
-      "performance_annualized": -9.469845580173176,
+      "performance_90_day": 1.5462747494499431,
+      "performance_annualized": 6.733956917805095,
       "total_stocks": 20
     },
     {
@@ -3226,8 +3226,8 @@
       "day": "11",
       "file": "2026/May/11.tsv",
       "date": "2026-05-11",
-      "performance_90_day": -2.2883134879735656,
-      "performance_annualized": -9.91215380296262,
+      "performance_90_day": 1.6257127597550258,
+      "performance_annualized": 7.175347622588801,
       "total_stocks": 20
     },
     {
@@ -3236,8 +3236,8 @@
       "day": "12",
       "file": "2026/May/12.tsv",
       "date": "2026-05-12",
-      "performance_90_day": -0.71542365913977,
-      "performance_annualized": -3.2249490593622476,
+      "performance_90_day": 3.316354437978479,
+      "performance_annualized": 15.241835762834713,
       "total_stocks": 20
     },
     {
@@ -3246,8 +3246,8 @@
       "day": "13",
       "file": "2026/May/13.tsv",
       "date": "2026-05-13",
-      "performance_90_day": -0.18173258849680377,
-      "performance_annualized": -0.8374636494266174,
+      "performance_90_day": 3.8513416139353582,
+      "performance_annualized": 18.09273391933186,
       "total_stocks": 20
     },
     {
@@ -3256,8 +3256,8 @@
       "day": "14",
       "file": "2026/May/14.tsv",
       "date": "2026-05-14",
-      "performance_90_day": -1.155869362569517,
-      "performance_annualized": -5.29856654272467,
+      "performance_90_day": 2.793779027672067,
+      "performance_annualized": 13.05856845882305,
       "total_stocks": 20
     },
     {
@@ -3266,8 +3266,8 @@
       "day": "15",
       "file": "2026/May/15.tsv",
       "date": "2026-05-15",
-      "performance_90_day": 0.5586110614334514,
-      "performance_annualized": 2.6776226506682432,
+      "performance_90_day": 4.9902097814753485,
+      "performance_annualized": 24.556225175831848,
       "total_stocks": 20
     },
     {
@@ -3276,8 +3276,8 @@
       "day": "16",
       "file": "2026/May/16.tsv",
       "date": "2026-05-16",
-      "performance_90_day": 1.3904638246024763,
-      "performance_annualized": 6.861591094796005,
+      "performance_90_day": 5.933382098274293,
+      "performance_annualized": 30.10397074204039,
       "total_stocks": 20
     },
     {
@@ -3286,8 +3286,8 @@
       "day": "17",
       "file": "2026/May/17.tsv",
       "date": "2026-05-17",
-      "performance_90_day": 3.901100827480547,
-      "performance_annualized": 20.48698173522867,
+      "performance_90_day": 8.09790458793331,
+      "performance_annualized": 43.33471619054321,
       "total_stocks": 20
     },
     {
@@ -3296,8 +3296,8 @@
       "day": "18",
       "file": "2026/May/18.tsv",
       "date": "2026-05-18",
-      "performance_90_day": 2.3975319115428637,
-      "performance_annualized": 12.405347057106296,
+      "performance_90_day": 6.552510535585126,
+      "performance_annualized": 34.60843161740299,
       "total_stocks": 20
     },
     {
@@ -3306,8 +3306,8 @@
       "day": "19",
       "file": "2026/May/19.tsv",
       "date": "2026-05-19",
-      "performance_90_day": 8.876839054945197,
-      "performance_annualized": 53.03966646027705,
+      "performance_90_day": 12.570517052964426,
+      "performance_annualized": 75.3610805096554,
       "total_stocks": 20
     },
     {
@@ -3316,8 +3316,8 @@
       "day": "20",
       "file": "2026/May/20.tsv",
       "date": "2026-05-20",
-      "performance_90_day": 4.399905407504702,
-      "performance_annualized": 24.412516646046335,
+      "performance_90_day": 7.79096669917848,
+      "performance_annualized": 43.41292136945849,
       "total_stocks": 20
     },
     {
@@ -3326,8 +3326,8 @@
       "day": "21",
       "file": "2026/May/21.tsv",
       "date": "2026-05-21",
-      "performance_90_day": 1.20362895529061,
-      "performance_annualized": 6.348303821085799,
+      "performance_90_day": 4.35209917821296,
+      "performance_annualized": 23.055433517873425,
       "total_stocks": 20
     },
     {
@@ -3336,8 +3336,8 @@
       "day": "22",
       "file": "2026/May/22.tsv",
       "date": "2026-05-22",
-      "performance_90_day": 1.5188590583744317,
-      "performance_annualized": 8.183217192958935,
+      "performance_90_day": 4.897626340242407,
+      "performance_annualized": 26.617977968804052,
       "total_stocks": 20
     },
     {
@@ -3346,8 +3346,8 @@
       "day": "23",
       "file": "2026/May/23.tsv",
       "date": "2026-05-23",
-      "performance_90_day": -3.605828859578535,
-      "performance_annualized": -17.667156374291228,
+      "performance_90_day": -1.7549851454744825,
+      "performance_annualized": -8.477836178096442,
       "total_stocks": 20
     },
     {
@@ -3356,8 +3356,8 @@
       "day": "27",
       "file": "2026/May/27.tsv",
       "date": "2026-05-27",
-      "performance_90_day": -4.7781990822314695,
-      "performance_annualized": -24.052256689867846,
+      "performance_90_day": -1.9728286758995872,
+      "performance_annualized": -10.01031506480653,
       "total_stocks": 20
     },
     {
@@ -3366,8 +3366,8 @@
       "day": "28",
       "file": "2026/May/28.tsv",
       "date": "2026-05-28",
-      "performance_90_day": -3.694889152630806,
-      "performance_annualized": -19.33479414193876,
+      "performance_90_day": -1.1385779047986508,
+      "performance_annualized": -5.965413201813807,
       "total_stocks": 20
     },
     {
@@ -3376,8 +3376,8 @@
       "day": "29",
       "file": "2026/May/29.tsv",
       "date": "2026-05-29",
-      "performance_90_day": -1.0887979508403267,
-      "performance_annualized": -6.14982147460017,
+      "performance_90_day": 1.3414781260006776,
+      "performance_annualized": 7.534808338478394,
       "total_stocks": 20
     },
     {
@@ -3386,8 +3386,8 @@
       "day": "02",
       "file": "2026/June/02.tsv",
       "date": "2026-06-02",
-      "performance_90_day": 1.23443609638384,
-      "performance_annualized": 7.891092733083194,
+      "performance_90_day": 6.436843472466604,
+      "performance_annualized": 43.57175754945008,
       "total_stocks": 19
     },
     {
@@ -3396,8 +3396,8 @@
       "day": "03",
       "file": "2026/June/03.tsv",
       "date": "2026-06-03",
-      "performance_90_day": -1.3825577677222851,
-      "performance_annualized": -8.393948653652728,
+      "performance_90_day": -0.8902429519927988,
+      "performance_annualized": -5.131664839066463,
       "total_stocks": 20
     },
     {
@@ -3406,8 +3406,8 @@
       "day": "04",
       "file": "2026/June/04.tsv",
       "date": "2026-06-04",
-      "performance_90_day": 8.516430914197898,
-      "performance_annualized": 68.8307061578661,
+      "performance_90_day": 10.240186983277267,
+      "performance_annualized": 79.27472876058961,
       "total_stocks": 20
     },
     {
@@ -3416,8 +3416,8 @@
       "day": "05",
       "file": "2026/June/05.tsv",
       "date": "2026-06-05",
-      "performance_90_day": 8.861391694966638,
-      "performance_annualized": 73.98159631028065,
+      "performance_90_day": 10.598408779838616,
+      "performance_annualized": 84.63808996619547,
       "total_stocks": 20
     },
     {
@@ -3426,8 +3426,8 @@
       "day": "06",
       "file": "2026/June/06.tsv",
       "date": "2026-06-06",
-      "performance_90_day": 8.05139935103181,
-      "performance_annualized": 67.23855275911856,
+      "performance_90_day": 9.771930704420535,
+      "performance_annualized": 78.10192600536925,
       "total_stocks": 20
     },
     {
@@ -3436,8 +3436,8 @@
       "day": "07",
       "file": "2026/June/07.tsv",
       "date": "2026-06-07",
-      "performance_90_day": 8.05139935103181,
-      "performance_annualized": 68.8388012003134,
+      "performance_90_day": 9.771930704420535,
+      "performance_annualized": 79.88315191055597,
       "total_stocks": 20
     },
     {
@@ -3446,8 +3446,8 @@
       "day": "08",
       "file": "2026/June/08.tsv",
       "date": "2026-06-08",
-      "performance_90_day": 8.05139935103181,
-      "performance_annualized": 70.5156281808502,
+      "performance_90_day": 9.771930704420535,
+      "performance_annualized": 81.74564204765169,
       "total_stocks": 20
     },
     {
@@ -3456,8 +3456,8 @@
       "day": "09",
       "file": "2026/June/09.tsv",
       "date": "2026-06-09",
-      "performance_90_day": 7.231951876284481,
-      "performance_annualized": 63.30460298463687,
+      "performance_90_day": 8.927687910242694,
+      "performance_annualized": 74.6738267640769,
       "total_stocks": 20
     },
     {
@@ -3466,8 +3466,8 @@
       "day": "10",
       "file": "2026/June/10.tsv",
       "date": "2026-06-10",
-      "performance_90_day": 6.560601088996284,
-      "performance_annualized": 57.63069744385145,
+      "performance_90_day": 8.25947683611545,
+      "performance_annualized": 69.38894699193972,
       "total_stocks": 20
     },
     {
@@ -3476,8 +3476,8 @@
       "day": "11",
       "file": "2026/June/11.tsv",
       "date": "2026-06-11",
-      "performance_90_day": 1.0323967325914754,
-      "performance_annualized": 7.791642428238821,
+      "performance_90_day": 0.7854790841537447,
+      "performance_annualized": 5.4346728474955475,
       "total_stocks": 20
     },
     {
@@ -3486,8 +3486,8 @@
       "day": "12",
       "file": "2026/June/12.tsv",
       "date": "2026-06-12",
-      "performance_90_day": -0.3816360557212671,
-      "performance_annualized": -2.8099537427725862,
+      "performance_90_day": -0.6383813979534049,
+      "performance_annualized": -4.317535644484072,
       "total_stocks": 20
     },
     {
@@ -3496,8 +3496,8 @@
       "day": "13",
       "file": "2026/June/13.tsv",
       "date": "2026-06-13",
-      "performance_90_day": 0.9407013660289654,
-      "performance_annualized": 7.384633352773706,
+      "performance_90_day": 0.6567649629655608,
+      "performance_annualized": 4.705409384252124,
       "total_stocks": 20
     },
     {
@@ -3506,8 +3506,8 @@
       "day": "14",
       "file": "2026/June/14.tsv",
       "date": "2026-06-14",
-      "performance_90_day": 0.9407013660289654,
-      "performance_annualized": 7.547540264424346,
+      "performance_90_day": 0.6567649629655608,
+      "performance_annualized": 4.799852287863637,
       "total_stocks": 20
     },
     {
@@ -3516,8 +3516,8 @@
       "day": "15",
       "file": "2026/June/15.tsv",
       "date": "2026-06-15",
-      "performance_90_day": -0.31386014443736077,
-      "performance_annualized": -2.465143432770389,
+      "performance_90_day": 0.20829791150354787,
+      "performance_annualized": 1.5316449626190387,
       "total_stocks": 20
     },
     {
@@ -3526,8 +3526,8 @@
       "day": "16",
       "file": "2026/June/16.tsv",
       "date": "2026-06-16",
-      "performance_90_day": 1.8216739964986537,
-      "performance_annualized": 15.780802642248505,
+      "performance_90_day": 1.9284756966223031,
+      "performance_annualized": 15.301658545945296,
       "total_stocks": 20
     },
     {
@@ -3536,8 +3536,8 @@
       "day": "17",
       "file": "2026/June/17.tsv",
       "date": "2026-06-17",
-      "performance_90_day": 1.438162401826223,
-      "performance_annualized": 12.584458755019655,
+      "performance_90_day": 1.879747710819288,
+      "performance_annualized": 15.224164050956611,
       "total_stocks": 20
     },
     {
@@ -3546,8 +3546,8 @@
       "day": "18",
       "file": "2026/June/18.tsv",
       "date": "2026-06-18",
-      "performance_90_day": 6.8050709460114,
-      "performance_annualized": 74.93015755900691,
+      "performance_90_day": 5.060662605430915,
+      "performance_annualized": 46.7632172046641,
       "total_stocks": 20
     },
     {
@@ -3556,8 +3556,8 @@
       "day": "19",
       "file": "2026/June/19.tsv",
       "date": "2026-06-19",
-      "performance_90_day": -0.6802400501586534,
-      "performance_annualized": -5.763132911977009,
+      "performance_90_day": 0.4185502186036393,
+      "performance_annualized": 3.3720510932522707,
       "total_stocks": 20
     },
     {
@@ -3566,8 +3566,8 @@
       "day": "20",
       "file": "2026/June/20.tsv",
       "date": "2026-06-20",
-      "performance_90_day": -0.3814498331485814,
-      "performance_annualized": -3.3473511998649452,
+      "performance_90_day": 0.5947418474388583,
+      "performance_annualized": 4.930729711458937,
       "total_stocks": 20
     },
     {
@@ -3576,8 +3576,8 @@
       "day": "21",
       "file": "2026/June/21.tsv",
       "date": "2026-06-21",
-      "performance_90_day": -0.3814498331485814,
-      "performance_annualized": -3.429583488753063,
+      "performance_90_day": 0.5947418474388583,
+      "performance_annualized": 5.045572968441148,
       "total_stocks": 20
     },
     {
@@ -3586,8 +3586,8 @@
       "day": "22",
       "file": "2026/June/22.tsv",
       "date": "2026-06-22",
-      "performance_90_day": 0.12128981085559944,
-      "performance_annualized": 1.141705677425464,
+      "performance_90_day": -0.0172794382772568,
+      "performance_annualized": -0.14667976581662634,
       "total_stocks": 20
     },
     {
@@ -3596,8 +3596,8 @@
       "day": "23",
       "file": "2026/June/23.tsv",
       "date": "2026-06-23",
-      "performance_90_day": -0.6695804955240794,
-      "performance_annualized": -6.253462429033519,
+      "performance_90_day": 0.4464375144600396,
+      "performance_annualized": 3.9497802080746824,
       "total_stocks": 20
     },
     {
@@ -3606,8 +3606,8 @@
       "day": "24",
       "file": "2026/June/24.tsv",
       "date": "2026-06-24",
-      "performance_90_day": -0.7244609917678779,
-      "performance_annualized": -6.926097590264901,
+      "performance_90_day": 1.8657999301107977,
+      "performance_annualized": 17.90203326579285,
       "total_stocks": 20
     },
     {
@@ -3616,8 +3616,8 @@
       "day": "25",
       "file": "2026/June/25.tsv",
       "date": "2026-06-25",
-      "performance_90_day": -2.5685056345410366,
-      "performance_annualized": -23.20275741748799,
+      "performance_90_day": -1.896651089144266,
+      "performance_annualized": -16.041823085954466,
       "total_stocks": 20
     },
     {
@@ -3626,8 +3626,8 @@
       "day": "26",
       "file": "2026/June/26.tsv",
       "date": "2026-06-26",
-      "performance_90_day": 1.2902794094727317,
-      "performance_annualized": 14.315112459029278,
+      "performance_90_day": 1.791774968277961,
+      "performance_annualized": 18.095210135584416,
       "total_stocks": 20
     },
     {
@@ -3636,8 +3636,8 @@
       "day": "29",
       "file": "2026/June/29.tsv",
       "date": "2026-06-29",
-      "performance_90_day": -0.35701660367456467,
-      "performance_annualized": -4.000097887947085,
+      "performance_90_day": 1.6200412903223824,
+      "performance_annualized": 17.7094945241816,
       "total_stocks": 20
     },
     {
@@ -3646,8 +3646,8 @@
       "day": "30",
       "file": "2026/June/30.tsv",
       "date": "2026-06-30",
-      "performance_90_day": -0.7622124328247678,
-      "performance_annualized": -8.62057484707346,
+      "performance_90_day": 0.8332720278713902,
+      "performance_annualized": 9.04577806229665,
       "total_stocks": 20
     },
     {
@@ -3656,8 +3656,8 @@
       "day": "01",
       "file": "2026/July/01.tsv",
       "date": "2026-07-01",
-      "performance_90_day": 2.6091230587258067,
-      "performance_annualized": 36.8324985820123,
+      "performance_90_day": 5.416503176757966,
+      "performance_annualized": 76.23780210375945,
       "total_stocks": 20
     },
     {
@@ -3666,8 +3666,8 @@
       "day": "02",
       "file": "2026/July/02.tsv",
       "date": "2026-07-02",
-      "performance_90_day": 3.255085371660551,
-      "performance_annualized": 49.69673065633897,
+      "performance_90_day": 5.583481354793306,
+      "performance_annualized": 82.45869790654059,
       "total_stocks": 20
     },
     {
@@ -3676,8 +3676,8 @@
       "day": "03",
       "file": "2026/July/03.tsv",
       "date": "2026-07-03",
-      "performance_90_day": 0.06660945931391478,
-      "performance_annualized": 0.8723906922842639,
+      "performance_90_day": 2.962205543951305,
+      "performance_annualized": 39.54221860998053,
       "total_stocks": 20
     },
     {
@@ -3686,8 +3686,8 @@
       "day": "04",
       "file": "2026/July/04.tsv",
       "date": "2026-07-04",
-      "performance_90_day": 1.4283205685277993,
-      "performance_annualized": 21.14925746106977,
+      "performance_90_day": 4.255134261963262,
+      "performance_annualized": 63.39127010720593,
       "total_stocks": 20
     },
     {
@@ -3695,14 +3695,20 @@
       "month": "July",
       "day": "05",
       "file": "2026/July/05.tsv",
-      "date": "2026-07-05"
+      "date": "2026-07-05",
+      "performance_90_day": 2.798183820356229,
+      "performance_annualized": 39.93384085071283,
+      "total_stocks": 20
     },
     {
       "year": "2026",
       "month": "July",
       "day": "06",
       "file": "2026/July/06.tsv",
-      "date": "2026-07-06"
+      "date": "2026-07-06",
+      "performance_90_day": 2.798183820356229,
+      "performance_annualized": 41.564569884700944,
+      "total_stocks": 20
     }
   ]
 }
