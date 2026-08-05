@@ -120,6 +120,9 @@ change.
   above remains.
 - `Cargo.lock` — dependency bump performed by `quality.sh`'s own `cargo update`,
   riding this PR per the repo's dependency policy. Tests pass on the new lock.
+  `regex-automata` is held at 0.4.16: `cargo update` picked up 0.4.18, published
+  ~20h earlier, which the 24h quarantine gate rightly rejected. The bump can
+  ride a later PR once it clears.
 - Service-worker `APP_VERSION` bumped 1.1.88 -> 1.1.89 via
   `scripts/bump_version.ts`, as issue #817 requires for any `docs/app.js` change.
 - No new dependency, no new input surface, no new HTML sink — the change is
