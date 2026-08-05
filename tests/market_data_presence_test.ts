@@ -11,19 +11,14 @@
 // src/utils.rs::is_market_data_csv_empty.
 
 import { assert, assertEquals } from "@std/assert";
+// Single source of truth, shared with the promotion guard (issue #821): the
+// gate that catches a half-populated date in CI and the guard that stops the
+// scorer committing one must apply the same emptiness rule.
+import { isMarketDataCsvEmpty } from "../scripts/check_score_data_pairing.ts";
 
 const SCORES_DIR = "docs/scores";
 
-/**
- * Mirrors src/utils.rs::is_market_data_csv_empty: a market-data CSV counts as
- * empty when it is missing (null), blank, or contains only the header row —
- * i.e. one or fewer non-blank lines.
- */
-export function isMarketDataCsvEmpty(content: string | null): boolean {
-  if (content === null) return true;
-  const nonBlank = content.split("\n").filter((line) => line.trim() !== "");
-  return nonBlank.length <= 1;
-}
+export { isMarketDataCsvEmpty };
 
 /** Reads a file, returning null when it does not exist. */
 async function readCsvOrNull(path: string): Promise<string | null> {
