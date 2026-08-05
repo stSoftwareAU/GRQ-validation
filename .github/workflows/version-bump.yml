@@ -3,6 +3,12 @@ name: Version Bump
 # Auto-increment the dashboard app version on every pull request so the
 # service-worker cache key changes and clients pick up the new build
 # (Issue #323). This replaces the unreliable local pre-commit hook.
+#
+# The same job also increments the Rust [package].version in Cargo.toml
+# (Issue #818): the deployed scorer decides whether to rebuild by comparing its
+# binary's --version against that field, so every merged change must carry a
+# new one. Both bumps ride a single commit — two workflows pushing to the same
+# PR head ref would race.
 on:
   pull_request:
     branches: [ main ]
@@ -58,6 +64,35 @@ jobs:
           deno run --allow-read --allow-write scripts/bump_version.ts \
             --base-version "${BASE_VERSION}"
 
+      # Cargo is needed to refresh Cargo.lock after the manifest bump; pin the
+      # toolchain rather than depending on whatever the runner image ships.
+      # dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+
+      # Bump the Rust package version so a deployed binary built from an
+      # earlier commit is detectable as stale by scripts/needs_rebuild.sh
+      # (Issue #818). The helper is idempotent against the base branch, so a
+      # re-run — or a branch that bumped by hand — makes no further change.
+      - name: Increment Cargo package version if not already bumped
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin "${BASE_REF}"
+          if ./scripts/version-increment.sh --already-bumped \
+              --manifest ./Cargo.toml \
+              --base-ref "origin/${BASE_REF}"; then
+            echo "Cargo package version already bumped on this branch; no change."
+            exit 0
+          fi
+          ./scripts/version-increment.sh --run \
+            --manifest ./Cargo.toml \
+            --base-ref "origin/${BASE_REF}"
+          # CI builds with --locked, so the lock file's record of this package
+          # must move with the manifest. --workspace updates workspace members
+          # only, leaving every external crate pinned where the lock has it.
+          cargo update --workspace
+
       - name: Commit and push the bump
         # Pass untrusted `github` context through env to avoid shell injection
         # in the run script (semgrep run-shell-injection).
@@ -66,11 +101,12 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet; then
-            echo "App version already bumped on this branch; nothing to commit."
+            echo "Versions already bumped on this branch; nothing to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/index.html docs/sw.js docs/sw-register.js docs/trend.html
-          git commit -m "Auto-increment app version (Issue #323)"
+          git add Cargo.toml Cargo.lock
+          git commit -m "Auto-increment app and package versions (Issues #323, #818)"
           git push origin "HEAD:${HEAD_REF}"

@@ -8,7 +8,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Stale-binary rebuild check in `run.sh`: it now compares the built binary's
+  `--version` with `[package].version` in `Cargo.toml`
+  (`scripts/needs_rebuild.sh`) and rebuilds on a mismatch, a missing binary, or
+  a binary that cannot answer `--version`. The previous `HEAD~1..HEAD` diff
+  reused the stale binary whenever a multi-commit pull ended on a commit that
+  touched neither `src/` nor `Cargo.toml`, leaving the deployed scorer running a
+  binary that predated `--market-data-path` and failing every cycle (Issues
+  #816, #818).
+
 ### Added
+
+- `scripts/version-increment.sh`, ported from NEAT-AI-scorer, and a Version Bump
+  workflow step that increments `[package].version` (patch) on every pull
+  request unless the branch already bumped it, refreshing `Cargo.lock` to match.
+  Every merged change therefore carries a new version for the rebuild check to
+  detect (Issue #818).
 
 - `--market-data-path` / `--dividend-data-path` CLI flags (each overriding
   `GRQ_MARKET_DATA_PATH` / `GRQ_DIVIDEND_DATA_PATH`) so an operator can point

@@ -52,6 +52,16 @@ fi
 # shellcheck source=scripts/require_data_roots.sh
 . "$DATA_ROOT_GUARD"
 
+# Staleness check for the compiled binary (issue #818). A missing helper is
+# itself a fault, so it fails loud rather than skipping the check.
+REBUILD_CHECK="$REPO_DIR/scripts/needs_rebuild.sh"
+if [ ! -f "$REBUILD_CHECK" ]; then
+    echo "ERROR: missing rebuild check: $REBUILD_CHECK" >&2
+    exit 1
+fi
+# shellcheck source=scripts/needs_rebuild.sh
+. "$REBUILD_CHECK"
+
 setup_rust_environment
 require_data_roots
 
@@ -59,24 +69,13 @@ require_data_roots
 cd "$REPO_DIR" || exit 1
 log "Working directory: $REPO_DIR"
 
-# Check if Rust program needs rebuilding
+# Check if the Rust program needs rebuilding. The binary reports the version it
+# was built from, so comparing it with Cargo.toml catches a stale deployment
+# however many commits arrived in one pull — the old HEAD~1..HEAD diff missed a
+# source change whenever the newest commit did not touch src/ (issue #818).
 log "Checking if rebuild is needed"
-NEED_REBUILD=false
-
-# Check if Cargo.toml or source files changed
-if git diff --name-only HEAD~1 HEAD | grep -E "(Cargo\.toml|src/)" > /dev/null; then
-    NEED_REBUILD=true
-    log "Source files changed, rebuild needed"
-fi
-
-# Check if binary doesn't exist
-if [ ! -f "target/release/grq-validation" ]; then
-    NEED_REBUILD=true
-    log "Binary doesn't exist, rebuild needed"
-fi
-
-# Build if needed
-if [ "$NEED_REBUILD" = true ]; then
+if needs_rebuild "target/release/grq-validation" "$REPO_DIR/Cargo.toml"; then
+    log "Rebuild needed: $REBUILD_REASON"
     log "Building Rust program"
     if ! cargo build --release; then
         log "ERROR: Build failed"
@@ -84,7 +83,7 @@ if [ "$NEED_REBUILD" = true ]; then
     fi
     log "Build completed successfully"
 else
-    log "No rebuild needed, using existing binary"
+    log "No rebuild needed, using existing binary ($REBUILD_REASON)"
 fi
 
 # Run the program
