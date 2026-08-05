@@ -82,7 +82,29 @@ GitHub Pages.
   detail view shows a **Low volume — not recommended** badge), partial
   illiquidity proportionally down-weights, and unknown volume leaves the score
   unchanged.
-- **Dividend Tracking** — calculate dividend income and total returns.
+- **Dividend Tracking** — calculate dividend income and total returns. The
+  **90-day judgement** metric credits dividends going ex inside
+  `[score date, day 90]` and stays capped there (issue #717 precedent). The
+  **chart** is a display surface, not a judgement, so its "Actual" line credits
+  every dividend already ex on or before each plotted point
+  (`GRQProjection.cumulativeDividendsAt`) — including one going ex between day
+  91 and day 180 on the 180-day view (issue #817). Both the portfolio and the
+  single-stock line therefore plot **total return**, so a large distribution —
+  NYSE:SITC's US$1.00 special, ex 2026-08-03 on a ~US$4.30 share — no longer
+  reads as an uncompensated ~23% crash the day the price drops out the
+  dividend. At day 90 the two rules agree exactly, so widening the chart credit
+  cannot move a settled 90-day result.
+
+  ```mermaid
+  flowchart LR
+      D[Dividend ex-date] --> Q{On or before day 90?}
+      Q -->|Yes| J[90-day judgement<br/>filterDividendsWithin90Days]
+      Q -->|Yes| C[Chart line<br/>cumulativeDividendsAt]
+      Q -->|No, day 91-180| C
+      Q -->|No, day 91-180| X[Not judged<br/>90-day metric unchanged]
+      C --> P[Total-return series<br/>offsets the ex-date price fall]
+  ```
+
 - **Web Dashboard** — interactive charts and tables for performance analysis,
   served as a static site from `docs/`. On mobile, a pop-out control expands the
   performance chart into a full-viewport overlay (dismissed by ✕, Esc or the
