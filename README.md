@@ -432,8 +432,8 @@ branch already bumped it, and refreshes `Cargo.lock` to match
 changes under `src/`, so a pull landing several commits at once reused a stale
 binary whenever the newest commit happened to touch neither `src/` nor
 `Cargo.toml` — which is how a deployed scorer kept running a binary that
-predated the `--market-data-path` flag and failed every cycle (issues #816,
-#818).
+predated the `--market-data-path` flag and failed every cycle
+(issues #816, #818).
 
 ```mermaid
 flowchart TD

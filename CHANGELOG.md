@@ -8,17 +8,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Fixed
-
-- Stale-binary rebuild check in `run.sh`: it now compares the built binary's
-  `--version` with `[package].version` in `Cargo.toml`
-  (`scripts/needs_rebuild.sh`) and rebuilds on a mismatch, a missing binary, or
-  a binary that cannot answer `--version`. The previous `HEAD~1..HEAD` diff
-  reused the stale binary whenever a multi-commit pull ended on a commit that
-  touched neither `src/` nor `Cargo.toml`, leaving the deployed scorer running a
-  binary that predated `--market-data-path` and failing every cycle (Issues
-  #816, #818).
-
 ### Added
 
 - `scripts/version-increment.sh`, ported from NEAT-AI-scorer, and a Version Bump
@@ -109,6 +98,14 @@ and this project adheres to
 
 ### Fixed
 
+- Stale-binary rebuild check in `run.sh`: it now compares the built binary's
+  `--version` with `[package].version` in `Cargo.toml`
+  (`scripts/needs_rebuild.sh`) and rebuilds on a mismatch, a missing binary, or
+  a binary that cannot answer `--version`. The previous `HEAD~1..HEAD` diff
+  reused the stale binary whenever a multi-commit pull ended on a commit that
+  touched neither `src/` nor `Cargo.toml`, leaving the deployed scorer running a
+  binary that predated `--market-data-path` and failing every cycle (Issues
+  #816, #818).
 - Charts no longer keep the previous theme's colours after a theme switch,
   which left the canvas-drawn axis ticks, axis titles and legend unreadable
   (near-white text on a light page after switching to light; dark-on-dark after

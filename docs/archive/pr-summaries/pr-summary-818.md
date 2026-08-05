@@ -14,13 +14,13 @@ The fix adopts the version-number logic used in NEAT-AI-scorer:
   a missing binary, or a `--version` probe that fails (a pre-clap binary) all
   force a rebuild; an unreadable manifest exits 2 and `run.sh` aborts rather
   than silently reusing the old binary.
-- **`scripts/version_increment.sh`** — the guarded Cargo version-increment
+- **`scripts/version-increment.sh`** — the guarded Cargo version-increment
   helper ported from NEAT-AI-scorer#20 (`--get-version`, `--bump-patch`,
   `--already-bumped`, `--run`), with the defaults adapted to this repo
   (manifest `Cargo.toml`, base ref `origin/main`). It also updates the
   package's own `Cargo.lock` entry so `cargo --locked` (CI, #124) still builds.
 - **`.github/workflows/version-bump.yml`** — the existing Version Bump job now
-  runs `version_increment.sh --run` alongside the dashboard app-version bump
+  runs `version-increment.sh --run` alongside the dashboard app-version bump
   and stages `Cargo.toml`/`Cargo.lock` with it, so every merged change carries
   a new version.
 
@@ -110,7 +110,7 @@ sequenceDiagram
     participant Main as main
     participant Host as GRQ-3 host
     PR->>CI: opened / synchronised
-    CI->>CI: version_increment.sh --run (skips if branch already bumped)
+    CI->>CI: version-increment.sh --run (skips if branch already bumped)
     CI->>PR: commit Cargo.toml + Cargo.lock bump
     PR->>Main: merge
     Main->>Host: git pull (any number of commits)
