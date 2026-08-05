@@ -19,7 +19,7 @@ interface Dividend {
 
 const g = globalThis as unknown as {
   GRQProjection: {
-    cumulativeDividendsAt: (
+    sumDividendsToDate: (
       dividends: Dividend[] | undefined,
       pointDate: Date,
     ) => number;
@@ -55,32 +55,32 @@ const DAY_90 = new Date(2026, 6, 2); // 2 July 2026.
 const DAY_122 = new Date(2026, 7, 3); // 3 August 2026 — the ex-date.
 const DAY_180 = new Date(2026, 8, 30); // 30 September 2026.
 
-Deno.test("cumulativeDividendsAt credits a dividend going ex between day 91 and day 180", () => {
+Deno.test("sumDividendsToDate credits a dividend going ex between day 91 and day 180", () => {
   assertAlmostEquals(
-    GRQProjection.cumulativeDividendsAt(SITC_DIVIDENDS, DAY_180),
+    GRQProjection.sumDividendsToDate(SITC_DIVIDENDS, DAY_180),
     1.0,
     1e-9,
     "The US$1.00 special is credited at the 180-day edge",
   );
   assertAlmostEquals(
-    GRQProjection.cumulativeDividendsAt(SITC_DIVIDENDS, DAY_122),
+    GRQProjection.sumDividendsToDate(SITC_DIVIDENDS, DAY_122),
     1.0,
     1e-9,
     "It is credited from the ex-date itself, the day the price falls",
   );
 });
 
-Deno.test("cumulativeDividendsAt withholds the credit before the ex-date", () => {
+Deno.test("sumDividendsToDate withholds the credit before the ex-date", () => {
   // 31 July 2026 — the last close before the 3 August ex-date.
   const preEx = new Date(2026, 6, 31);
   assertEquals(
-    GRQProjection.cumulativeDividendsAt(SITC_DIVIDENDS, preEx),
+    GRQProjection.sumDividendsToDate(SITC_DIVIDENDS, preEx),
     0,
     "Nothing is credited while the entitlement still travels with the share",
   );
 });
 
-Deno.test("cumulativeDividendsAt leaves the 90-day judgement window untouched", () => {
+Deno.test("sumDividendsToDate leaves the 90-day judgement window untouched", () => {
   // Regression guard for the #717 precedent: on or before day 90 the display
   // kernel must agree exactly with the 90-day judgement filter, so widening the
   // chart credit cannot move a settled 90-day result. WFG's real dividend
@@ -98,7 +98,7 @@ Deno.test("cumulativeDividendsAt leaves the 90-day judgement window untouched", 
     GRQProjection.filterDividendsWithin90Days(wfgDividends, wfgScoreDate),
   );
   assertAlmostEquals(
-    GRQProjection.cumulativeDividendsAt(wfgDividends, dayNinety),
+    GRQProjection.sumDividendsToDate(wfgDividends, dayNinety),
     judged,
     1e-9,
     "At day 90 the chart credit equals the judged 90-day dividend total",
@@ -112,7 +112,7 @@ Deno.test("the day-91+ credit offsets the plotted ex-date price fall", () => {
   const preExReturn = GRQProjection.calculatePerformanceReturn(
     BUY_PRICE,
     PRE_EX_PRICE,
-    GRQProjection.cumulativeDividendsAt(
+    GRQProjection.sumDividendsToDate(
       SITC_DIVIDENDS,
       new Date(2026, 6, 31),
     ),
@@ -120,7 +120,7 @@ Deno.test("the day-91+ credit offsets the plotted ex-date price fall", () => {
   const postExReturn = GRQProjection.calculatePerformanceReturn(
     BUY_PRICE,
     POST_EX_PRICE,
-    GRQProjection.cumulativeDividendsAt(SITC_DIVIDENDS, DAY_122),
+    GRQProjection.sumDividendsToDate(SITC_DIVIDENDS, DAY_122),
   )!;
   assertAlmostEquals(
     postExReturn,
@@ -143,36 +143,36 @@ Deno.test("the day-91+ credit offsets the plotted ex-date price fall", () => {
   );
 });
 
-Deno.test("cumulativeDividendsAt returns 0 for missing, empty or unusable input", () => {
-  assertEquals(GRQProjection.cumulativeDividendsAt([], DAY_180), 0);
-  assertEquals(GRQProjection.cumulativeDividendsAt(undefined, DAY_180), 0);
+Deno.test("sumDividendsToDate returns 0 for missing, empty or unusable input", () => {
+  assertEquals(GRQProjection.sumDividendsToDate([], DAY_180), 0);
+  assertEquals(GRQProjection.sumDividendsToDate(undefined, DAY_180), 0);
   assertEquals(
-    GRQProjection.cumulativeDividendsAt(SITC_DIVIDENDS, new Date("nonsense")),
+    GRQProjection.sumDividendsToDate(SITC_DIVIDENDS, new Date("nonsense")),
     0,
     "An unparseable point date credits nothing rather than throwing",
   );
 });
 
-Deno.test("cumulativeDividendsAt accumulates several dividends in ex-date order", () => {
+Deno.test("sumDividendsToDate accumulates several dividends in ex-date order", () => {
   const staggered: Dividend[] = [
     { exDivDate: new Date(2026, 4, 15), amount: 0.13 }, // day 42.
     { exDivDate: new Date(2026, 7, 3), amount: 1.0 }, // day 122.
     { exDivDate: new Date(2026, 8, 15), amount: 0.13 }, // day 165.
   ];
   assertAlmostEquals(
-    GRQProjection.cumulativeDividendsAt(staggered, DAY_90),
+    GRQProjection.sumDividendsToDate(staggered, DAY_90),
     0.13,
     1e-9,
     "Only the day-42 payment is ex by day 90",
   );
   assertAlmostEquals(
-    GRQProjection.cumulativeDividendsAt(staggered, DAY_122),
+    GRQProjection.sumDividendsToDate(staggered, DAY_122),
     1.13,
     1e-9,
     "The special adds to the running total on its ex-date",
   );
   assertAlmostEquals(
-    GRQProjection.cumulativeDividendsAt(staggered, DAY_180),
+    GRQProjection.sumDividendsToDate(staggered, DAY_180),
     1.26,
     1e-9,
     "All three are credited by the 180-day edge",

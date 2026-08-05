@@ -14,7 +14,7 @@ window but capped the offsetting credit at day 90, so a large distribution
 inside the 180-day view read as an uncompensated crash. NYSE:SITC's US$1.00
 special — ex 2026-08-03, roughly 23% of a ~US$4.30 share — is the reported case.
 
-The fix adds one shared kernel, `GRQProjection.cumulativeDividendsAt(dividends,
+The fix adds one shared kernel, `GRQProjection.sumDividendsToDate(dividends,
 pointDate)`, which sums the cash already ex on or before a plotted point, and
 routes the chart series through it:
 
@@ -75,7 +75,7 @@ gone and the day-165 ex-date is marked, not punished.
 flowchart LR
     D[Dividend ex-date] --> Q{On or before day 90?}
     Q -->|Yes| J["90-day judgement<br/>filterDividendsWithin90Days<br/>(unchanged)"]
-    Q -->|Yes| C["Chart line<br/>cumulativeDividendsAt"]
+    Q -->|Yes| C["Chart line<br/>sumDividendsToDate"]
     Q -->|"No — day 91-180"| C
     Q -->|"No — day 91-180"| X["Not judged<br/>90-day metric unchanged"]
     C --> P["Total-return series<br/>offsets the ex-date price fall"]
@@ -87,19 +87,19 @@ New `tests/dividend_window_180_test.ts` — six tests driving the real shipped
 kernel with the SITC figures (score date 2026-04-03, buy US$5.39, last pre-ex
 mid US$4.2875, US$1.00 ex on day 122):
 
-- `cumulativeDividendsAt credits a dividend going ex between day 91 and day 180`
+- `sumDividendsToDate credits a dividend going ex between day 91 and day 180`
   — happy path: US$1.00 credited at day 122 and at the 180-day edge.
-- `cumulativeDividendsAt withholds the credit before the ex-date` — nothing is
+- `sumDividendsToDate withholds the credit before the ex-date` — nothing is
   credited on 31 July, while the entitlement still travels with the share.
-- `cumulativeDividendsAt leaves the 90-day judgement window untouched` —
+- `sumDividendsToDate leaves the 90-day judgement window untouched` —
   regression guard: at day 90 the display kernel equals the judged 90-day total
   (WFG's real schedule, US$0.455).
 - `the day-91+ credit offsets the plotted ex-date price fall` — the fix's
   purpose: the total-return line is flat across the ex-date, and the old
   uncredited line understated it by the full 18.6% dividend yield.
-- `cumulativeDividendsAt returns 0 for missing, empty or unusable input` — error
+- `sumDividendsToDate returns 0 for missing, empty or unusable input` — error
   path, including an unparseable point date (returns 0 rather than throwing).
-- `cumulativeDividendsAt accumulates several dividends in ex-date order` — edge
+- `sumDividendsToDate accumulates several dividends in ex-date order` — edge
   case: three staggered payments across days 42, 122 and 165.
 
 No existing test was modified or removed. Full suite: **1433 passed, 1 failed**
