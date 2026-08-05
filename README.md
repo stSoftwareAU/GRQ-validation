@@ -416,6 +416,38 @@ cargo build --release
 ./target/release/grq-validation --docs-path docs --date 2025-01-15
 ```
 
+#### Stale-binary rebuild check
+
+`run.sh` rebuilds whenever the compiled binary is out of step with the source it
+was built from. It asks the binary for its `--version` and compares that with
+`[package].version` in `Cargo.toml` (`scripts/needs_rebuild.sh`), rebuilding on a
+mismatch, on a missing binary, or when the binary cannot answer `--version` at
+all. An unreadable manifest is a fault, not a rebuild trigger: the run stops
+non-zero rather than silently reusing whatever is on disk.
+
+The version this compares against moves on every merged change: the Version Bump
+workflow increments `[package].version` (patch) on each pull request unless the
+branch already bumped it, and refreshes `Cargo.lock` to match
+(`scripts/version-increment.sh`). The earlier check diffed `HEAD~1..HEAD` for
+changes under `src/`, so a pull landing several commits at once reused a stale
+binary whenever the newest commit happened to touch neither `src/` nor
+`Cargo.toml` — which is how a deployed scorer kept running a binary that
+predated the `--market-data-path` flag and failed every cycle
+(issues #816, #818).
+
+```mermaid
+flowchart TD
+    A[run.sh] --> B{Binary present?}
+    B -- No --> R[cargo build --release]
+    B -- Yes --> C{"Binary answers --version?"}
+    C -- No --> R
+    C -- Yes --> D{"Binary version == Cargo.toml [package].version?"}
+    D -- No --> R
+    D -- Yes --> E[Reuse existing binary]
+    R --> F[Run the validation program]
+    E --> F
+```
+
 #### Non-destructive market-data writes
 
 Regenerating a date's market-data CSV is **non-destructive**: the generator
