@@ -464,6 +464,17 @@ deterministically — issue #281):
   reload without the param returns to the saved window (180 on every form factor
   by default, issue #711); an absent or invalid value falls back to the saved
   choice, then the device default.
+
+  The actuals line is a **total** return, so it credits the dividends gone ex on
+  or before each plotted point — over the **visible** window, not a fixed 90
+  days (issue #817). A 180-day chart therefore credits a dividend that goes ex
+  between day 91 and day 180 on the day it goes ex, instead of drawing its
+  ex-date price fall as an uncredited cliff. NYSE:SITC's US$1.00 special
+  dividend (ex 3 August 2026, ~23% of a ~US$4.30 share) is the worked example:
+  predictions dated day 91–180 before that date read ~17 pp too low without the
+  credit. Points on or before day 90 are unchanged, and the **judged** figures —
+  Gain/Loss, Judgement, the tables and their workings — stay capped at the fixed
+  90-day window (issue #717 precedent), so this is display-only.
 - `?stars=0|1|2|3|4|5` — pre-select the shared minimum-star filter for that page
   load on **both** the portfolio and Trend views (issue #666). `0` means **All**
   (filter off); `1`–`5` keep only holdings whose average rating meets that whole

@@ -2196,16 +2196,29 @@ class GRQValidator {
                         return { datasets };
                     }
                     const buyPrice = buyPriceObj.price;
-                    const stockDividends = this.dividendData?.[stock.stock] || [];
-                    const exDivDates = stockDividends.map((d) => d.exDivDate.getTime());
+                    // Dividends inside the VISIBLE window (issue #817): the line
+                    // is a TOTAL return, so each point carries the cash gone ex
+                    // by its date. Filtering at a fixed 90 days left the
+                    // 180-day view plotting a day-91-to-180 ex-date price fall
+                    // — SITC's US$1.00 special dividend — with no credit.
+                    const stockDividends = this.getDividendsWithinChartWindow(
+                        stock.stock,
+                    );
                     filteredMarketData.forEach((point) => {
                         const adjustedPrice = this.adjustHistoricalPriceToCurrent(
                             (point.high + point.low) / 2,
                             stock.stock,
                             point.date,
                         );
-                        let yValue = ((adjustedPrice - buyPrice) / buyPrice) * 100;
-                        if (isNaN(yValue) || yValue === null) return; // skip invalid
+                        const yValue = GRQProjection.calculatePerformanceReturn(
+                            buyPrice,
+                            adjustedPrice,
+                            GRQProjection.sumDividendsToDate(
+                                stockDividends,
+                                point.date,
+                            ),
+                        );
+                        if (yValue === null || isNaN(yValue)) return; // skip invalid
                         const dataPoint = {
                             x: new Date(point.date.getTime()),
                             y: yValue,
@@ -2821,8 +2834,10 @@ class GRQValidator {
         }
         
         const scoreDate = this.getScoreDate(this.selectedFile);
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
+        // Dividend markers span the VISIBLE chart window, matching the credit
+        // the series now carries past day 90 (issue #817).
+        const windowEndDate = new Date(
+            scoreDate.getTime() + (this.chartWindowDays() * 24 * 60 * 60 * 1000),
         );
         const portfolioData = [];
 
@@ -2897,16 +2912,17 @@ class GRQValidator {
                                 dataPoint.date,
                             );
 
-                        // Add dividend return up to this date (but only count dividends within 90 days)
-                        const dividends = this.getDividendsWithin90Days(
+                        // Credit the dividends gone ex by this date, taken from
+                        // the VISIBLE chart window (issue #817) rather than a
+                        // fixed 90 days — otherwise the 180-day view plots a
+                        // day-91-to-180 ex-date price fall with no offsetting
+                        // credit. Points on or before day 90 are unaffected.
+                        const dividends = this.getDividendsWithinChartWindow(
                             stock.stock,
                         );
-                        const dividendsUpToDate = dividends.filter((d) =>
-                            d.exDivDate <= date
-                        );
-                        const totalDividends = dividendsUpToDate.reduce(
-                            (sum, div) => sum + div.amount,
-                            0,
+                        const totalDividends = GRQProjection.sumDividendsToDate(
+                            dividends,
+                            date,
                         );
 
                         // Total return (price + dividends) via the shared
@@ -2945,8 +2961,8 @@ class GRQValidator {
                     Object.entries(this.dividendData).forEach(
                         ([stock, dividends]) => {
                             dividends.forEach((d) => {
-                                // Only count dividends within 90 days
-                                if (d.exDivDate <= ninetyDayDate) {
+                                // Only mark dividends inside the visible window
+                                if (d.exDivDate <= windowEndDate) {
                                     const dDateOnly = new Date(
                                         d.exDivDate.getFullYear(),
                                         d.exDivDate.getMonth(),
@@ -3656,6 +3672,33 @@ class GRQValidator {
         const dividends = this.dividendData?.[stockSymbol] || [];
         const scoreDate = this.getScoreDate(this.selectedFile);
         return GRQProjection.filterDividendsWithin90Days(dividends, scoreDate);
+    }
+
+    // Dividends inside the VISIBLE chart window, for the chart series only
+    // (issue #817). The 90-day filter above still governs every judged figure
+    // (Gain/Loss, Judgement, the tables and their workings), but a 180-day chart
+    // that filtered at 90 days plotted the ex-date price fall of a day-91-to-180
+    // dividend with no offsetting credit — SITC's US$1.00 special dividend
+    // (ex 2026-08-03) read ~17 pp too low on every prediction dated day 91-180
+    // before it.
+    getDividendsWithinChartWindow(stockSymbol) {
+        const dividends = this.dividendData?.[stockSymbol] || [];
+        const scoreDate = this.getScoreDate(this.selectedFile);
+        return GRQProjection.filterDividendsWithinDays(
+            dividends,
+            scoreDate,
+            this.chartWindowDays(),
+        );
+    }
+
+    // The resolved visible chart window in days (90 or 180) — the same window
+    // prepareChartData plots, so the dividend credit and the price series cover
+    // one period (issue #817).
+    chartWindowDays() {
+        return GRQProjection.deviceWindowDays(
+            this.isMobileDevice(),
+            this.currentWindowDays(),
+        );
     }
 
     getNinetyDayPrice(stockSymbol) {

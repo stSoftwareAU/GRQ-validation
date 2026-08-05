@@ -454,23 +454,42 @@ function calculateIncludedPortfolioDividendYield(stocks) {
     return sum / includedYields.length;
 }
 
+// Dividends whose ex-dividend date falls on or before `days` after the score
+// date (window end inclusive). The 90-day judgement metric passes 90; the chart
+// passes the VISIBLE window so a 180-day view credits dividends gone ex between
+// day 91 and day 180 instead of plotting their ex-date price fall uncredited
+// (issue #817). Pure given the dividend list, score date and window length.
+function filterDividendsWithinDays(dividends, scoreDate, days) {
+    const windowEnd = new Date(
+        scoreDate.getTime() + (days * 24 * 60 * 60 * 1000),
+    );
+    return (dividends || []).filter((dividend) =>
+        dividend.exDivDate <= windowEnd
+    );
+}
+
 // Dividends whose ex-dividend date falls on or before the 90-day validation
 // window measured from the score date. Pure given the dividend list and score
 // date; the dashboard's GRQValidator looks the list up per stock and delegates
 // here so production and tests share one window filter (issue #145).
 function filterDividendsWithin90Days(dividends, scoreDate) {
-    const ninetyDayDate = new Date(
-        scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-    );
-    return (dividends || []).filter((dividend) =>
-        dividend.exDivDate <= ninetyDayDate
-    );
+    return filterDividendsWithinDays(dividends, scoreDate, 90);
 }
 
 // Sum the cash amount of a dividend list. Returns 0 for an empty or missing
 // list, mirroring the dashboard's per-stock dividend-return summation.
 function sumDividends(dividends) {
     return (dividends || []).reduce((sum, div) => sum + div.amount, 0);
+}
+
+// Cash received by a plotted chart point: the dividends gone ex on or before
+// that point's date (inclusive). Callers pass a list already trimmed to the
+// visible window, so each point carries only the dividends actually in hand by
+// then and the series steps up on the ex-date (issue #817).
+function sumDividendsToDate(dividends, date) {
+    return sumDividends(
+        (dividends || []).filter((dividend) => dividend.exDivDate <= date),
+    );
 }
 
 // Build the weekly trend-data series for a hybrid projection chart.
@@ -1538,8 +1557,10 @@ globalThis.GRQProjection = {
     calculateIncludedPortfolioPerformance,
     dividendReturnPercent,
     calculateIncludedPortfolioDividendYield,
+    filterDividendsWithinDays,
     filterDividendsWithin90Days,
     sumDividends,
+    sumDividendsToDate,
     buildHybridProjectionData,
     formatCurrency,
     computeSplitAdjustment,
