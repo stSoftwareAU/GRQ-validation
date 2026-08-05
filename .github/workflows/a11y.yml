@@ -84,7 +84,7 @@ jobs:
           # runs pa11y-ci on an unsupported interpreter. lts/* keeps the gate on
           # a maintained runtime, matching markdown-lint.yml (Issue #171).
           node-version: "lts/*"
-      # denoland/setup-deno@v2.0.4 — needed to run the in-repo Deno static server
+      # denoland/setup-deno@v2.0.5 — needed to run the in-repo Deno static server
       # below. Pinned to a 40-character commit SHA per the supply-chain rule,
       # matching markdown-lint.yml (Issue #532).
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
