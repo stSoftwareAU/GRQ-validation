@@ -154,24 +154,45 @@ export function violations(evaluations: Evaluation[]): Evaluation[] {
   );
 }
 
-/** Parse a Cargo.lock into a name -> version map. */
-export function parseCargoLock(text: string): Map<string, string> {
-  const map = new Map<string, string>();
+export interface LockPackage {
+  name: string;
+  version: string;
+  /** Cargo `source` (registry/git URI), or null for workspace-local crates. */
+  source: string | null;
+}
+
+/** Parse a Cargo.lock into its package entries. */
+export function parseCargoLockPackages(text: string): LockPackage[] {
+  const packages: LockPackage[] = [];
   // Split on the package table header; each chunk holds one package's keys.
   for (const chunk of text.split(/\[\[package\]\]/)) {
     const name = chunk.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
     const version = chunk.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
-    if (name && version) map.set(name, version);
+    const source = chunk.match(/^\s*source\s*=\s*"([^"]+)"/m)?.[1] ?? null;
+    if (name && version) packages.push({ name, version, source });
   }
-  return map;
+  return packages;
 }
 
-/** Crates added or upgraded between two Cargo.lock revisions. */
+/** Parse a Cargo.lock into a name -> version map. */
+export function parseCargoLock(text: string): Map<string, string> {
+  return new Map(parseCargoLockPackages(text).map((p) => [p.name, p.version]));
+}
+
+/**
+ * Crates added or upgraded between two Cargo.lock revisions.
+ *
+ * Packages with no `source` are workspace-local (this repo's own crate and any
+ * path dependency), not upstream releases (Issue #822). Their versions are set
+ * by our own release automation and have no crates.io publish time, so
+ * including them would fail the gate closed on every version bump. Only
+ * sourced (registry/git) packages are real supply-chain surface.
+ */
 export function diffCargoLock(oldText: string, newText: string): Bump[] {
   const before = parseCargoLock(oldText);
-  const after = parseCargoLock(newText);
   const bumps: Bump[] = [];
-  for (const [name, version] of after) {
+  for (const { name, version, source } of parseCargoLockPackages(newText)) {
+    if (source === null) continue;
     if (before.get(name) !== version) {
       bumps.push({ ecosystem: "cargo", name, version, publishedAt: null });
     }
