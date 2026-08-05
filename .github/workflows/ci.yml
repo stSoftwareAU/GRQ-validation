@@ -39,7 +39,7 @@ jobs:
       docs-changed: ${{ steps.filter.outputs.docs }}
     steps:
     - name: Checkout code
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         fetch-depth: 0  # Fetch full history for proper diffs
@@ -92,7 +92,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         # The test job only builds and runs quality checks; it never pushes back
@@ -149,6 +149,7 @@ jobs:
       # compile and run an arbitrary newest cargo-tarpaulin dependency tree
       # on each run (Issue #124).
       run: |
+        set -euo pipefail
         cargo install cargo-tarpaulin --locked --version 0.35.4
         cargo tarpaulin --out Xml --output-dir coverage
       continue-on-error: true
@@ -172,7 +173,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         # Issue #730: build only compiles/uploads artifacts — it never pushes
@@ -257,7 +258,7 @@ jobs:
       actions: write
     steps:
     - name: Checkout code
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         # deploy-pages only reads ./docs to build the Pages artifact; it never
