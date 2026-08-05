@@ -192,6 +192,42 @@ When the guard trips it names both newest dates and the gap, e.g.
 `benchmark indices are stale: newest index date 2026-06-08 lags the newest
 actuals date 2026-06-18 by 7 trading days (tolerance is 3 trading days)`.
 
+### Promotion guard: no score date without market data (issue #821)
+
+The scorer once promoted `docs/scores/2026/July/05.tsv` and `06.tsv` for two
+dates on which it had fetched no market data. The sibling `05.csv`/`06.csv` were
+never written, the half-populated dates reached `main`, and from then on the
+data-presence gate (`tests/market_data_presence_test.ts`) failed on **every**
+PR's CI run for reasons unrelated to the PR under review.
+
+`scripts/check_score_data_pairing.ts` is the stable entry point the scorer
+invokes immediately **before** its daily commit, alongside
+`deno task refresh-indices`:
+
+```bash
+deno task check-score-data --date 2026-08-05   # the date being promoted
+deno task check-score-data                     # sweep every committed date
+```
+
+Its contract is the mirror image of the refresh-indices wrapper. That wrapper
+must never block the commit; this guard exists to block it. It exits non-zero
+and names every offending path whenever a prediction TSV has no sibling
+market-data CSV carrying rows beyond the header, so the job **refuses to
+promote** a date it cannot pair rather than committing a half-populated one. It
+never passes vacuously either: an empty score tree, a requested date whose TSV
+was never written, and a malformed `--date` all fail loud.
+
+```mermaid
+flowchart TD
+    W[Scorer writes docs/scores/YYYY/Month/DD.tsv + DD.csv] --> G{deno task check-score-data --date}
+    G -->|paired: exit 0| C[Commit the day's scores]
+    G -->|missing or header-only CSV: exit 1| R[Refuse — nothing committed, fault named on stderr]
+    C --> CI[CI data-presence gate stays green]
+```
+
+The CI gate is unchanged and remains the backstop; the guard simply stops a bad
+date reaching `main` in the first place.
+
 ## Calculation notes
 
 These durable calculation rules were previously kept as ad-hoc logs under
