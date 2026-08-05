@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # actions/checkout@v6.0.2
+      # actions/checkout@v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       # rhysd/actionlint 1.7.9 official image, entrypoint `actionlint`, pinned
       # to an immutable sha256 digest (Issue #72). The image bundles shellcheck

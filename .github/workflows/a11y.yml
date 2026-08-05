@@ -41,7 +41,7 @@ jobs:
     outputs:
       docs-changed: ${{ steps.filter.outputs.docs }}
     steps:
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           # The pa11y job only reads the tree (serves docs/, runs pa11y-ci); it
@@ -84,7 +84,7 @@ jobs:
           # runs pa11y-ci on an unsupported interpreter. lts/* keeps the gate on
           # a maintained runtime, matching markdown-lint.yml (Issue #171).
           node-version: "lts/*"
-      # denoland/setup-deno@v2 — needed to run the in-repo Deno static server
+      # denoland/setup-deno@v2.0.5 — needed to run the in-repo Deno static server
       # below. Pinned to a 40-character commit SHA per the supply-chain rule,
       # matching markdown-lint.yml (Issue #532).
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed

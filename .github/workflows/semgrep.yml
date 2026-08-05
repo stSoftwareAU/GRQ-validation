@@ -38,7 +38,7 @@ jobs:
       # resolve with `docker buildx imagetools inspect semgrep/semgrep:latest`.
       image: semgrep/semgrep@sha256:f4791a54c891eabe1188248135574e6e03dfc31dfd3f3b747c7bec7079bfed1b
     steps:
-      # actions/checkout@v4.2.2
+      # actions/checkout@v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           # The semgrep job only reads the repo to scan it — it never pushes
