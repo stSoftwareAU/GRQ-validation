@@ -35,6 +35,8 @@ node_modules/
 !.gitignore
 !.github/
 !.github/**
+!.cargo/
+!.cargo/**
 !.gitattributes
 !.markdownlint-cli2.jsonc
 
