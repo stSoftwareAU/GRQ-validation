@@ -435,6 +435,13 @@ cd GRQ-validation
 cargo build --release
 ```
 
+Release builds use fat LTO, a single codegen unit, and
+`-C target-cpu=native` (via `.cargo/config.toml`) so the artefact is tuned for
+the host that compiles and runs it — the fleet pattern for this scorer
+(issue #827). Prefer `cargo build` (dev) for day-to-day iteration: that profile
+keeps `opt-level = 0` and incremental compilation, and emits line-tables-only
+debug info so panic locations stay useful without the full DWARF cost.
+
 ### Usage
 
 ```bash
@@ -907,8 +914,10 @@ GRQ-validation/
 ├── .github/workflows/      # GitHub Actions workflows
 ├── run.sh                  # Build-and-run wrapper for the CLI
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
-└── Cargo.toml              # Rust dependencies and crate metadata
+├── .cargo/config.toml      # Host rustflags (-C target-cpu=native; Issue #827)
+└── Cargo.toml              # Rust deps, crate metadata, and build profiles
 ```
+
 
 ## Development
 
@@ -924,12 +933,21 @@ cargo clippy --all-targets --all-features -- -D warnings
 # Run tests
 cargo test
 
-# Build release
+# Fast local rebuilds (line-tables-only debug; Issue #827)
+cargo build
+
+# Fully optimised host binary (fat LTO + target-cpu=native; Issue #827)
 cargo build --release
 
 # Run the full quality gate (mirrors CI)
 ./quality.sh
 ```
+
+`Cargo.toml` sets `[profile.dev] debug = "line-tables-only"` and
+`[profile.release]` to `opt-level = 3`, `lto = "fat"`, `codegen-units = 1`.
+`.cargo/config.toml` adds `-C target-cpu=native` for non-wasm32 targets. An
+exported `RUSTFLAGS` **replaces** those config rustflags rather than appending
+to them, so leave `RUSTFLAGS` unset unless you intend to override.
 
 ### Testing
 

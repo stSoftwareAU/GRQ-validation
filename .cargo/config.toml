@@ -1,0 +1,7 @@
+# Same-host release binaries (Issue #827 / VibeCoding#4159): the scorer is
+# built with `cargo build --release` on the machine that runs it. Never set
+# this for published crates or wasm32 — a native-tuned binary faults with
+# illegal instruction on a CPU that lacks the instructions it was compiled for.
+# Note: an exported RUSTFLAGS replaces these rustflags entirely.
+[target.'cfg(not(target_arch = "wasm32"))']
+rustflags = ["-C", "target-cpu=native"]
