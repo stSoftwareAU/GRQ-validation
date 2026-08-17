@@ -35,4 +35,16 @@ tempfile = "3.8"
 
 [[bin]]
 name = "grq-validation"
-path = "src/main.rs" 
+path = "src/main.rs"
+
+# Fleet build policy (Issue #827 / VibeCoding#4159):
+# - Dev: compile as fast as possible (line tables keep panic file:line).
+# - Release: fully optimise; compile time is irrelevant on the host that runs it.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+

@@ -19,6 +19,11 @@ cd GRQ-validation
 cargo build --release
 ```
 
+Build profiles follow the fleet policy (Issue #827): `cargo build` favours
+compile speed (`debug = "line-tables-only"`); `cargo build --release` favours
+the artefact (`opt-level = 3`, fat LTO, one codegen unit, plus
+`-C target-cpu=native` from `.cargo/config.toml` for same-host binaries).
+
 ## Configuring the data roots
 
 The processor reads share prices and dividend history from two directories
@@ -49,7 +54,10 @@ can construct or substitute your own tree and reproduce a run.
 ## Building and running
 
 ```bash
-# Build the release binary
+# Fast local rebuilds during development
+cargo build
+
+# Fully optimised release binary (what run.sh / CI use)
 cargo build --release
 
 # Process recent score files (within 180 days)
