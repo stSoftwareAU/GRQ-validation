@@ -35,6 +35,29 @@ All three share the same score/buy date (`2026-03-11`) and a raw buy midpoint of
 The test also injects a duplicate of the 10:1 row in memory to demonstrate the
 literal no-de-duplication defect (factor compounds 10 → 100).
 
+## CISS reverse-split fixtures (issue #828)
+
+Frozen extracts of the committed `NASDAQ:CISS` (C3is Inc) market data, consumed
+by `tests/ciss_reverse_split_test.ts`. They lock in both sides of the
+reverse-split guard after the reported ~-99% loss on the 2026-02-18 score page
+was verified as genuine dilution, not a split artefact.
+
+| Fixture                        | Source                             | Splits after the score date     | Cumulative factor | Reliable |
+| ------------------------------ | ---------------------------------- | ------------------------------- | ----------------- | -------- |
+| `ciss_reverse_split_feb18.csv` | `docs/scores/2026/February/18.csv` | 1-for-7 (2026-04-27)            | 0.1429            | yes      |
+| `ciss_reverse_split_jan23.csv` | `docs/scores/2026/January/23.csv`  | 1-for-20 (2026-01-26) + 1-for-7 | 0.00714           | no       |
+
+- **`ciss_reverse_split_feb18.csv`** — the single 1-for-7 event clears every
+  threshold (magnitude 7 ≤ the 10:1 cap; observed price ratio 0.140 vs the 0.143
+  coefficient; 0.1429 ≥ the 1/50 floor), so the factor is applied: buy midpoint
+  1.58995 restates to 11.12965 against a post-split 0.07705, a genuine ~-99.3%
+  loss, and CISS is counted normally.
+- **`ciss_reverse_split_jan23.csv`** — the extra 1-for-20 event has magnitude 20
+  (> the 10:1 cap) and drags the cumulative factor to 0.00714 (< the 1/50
+  floor), so the series is flagged unreliable, no factor is applied, and CISS is
+  excluded from the stats with strikethrough — the designed issue #293
+  behaviour.
+
 ## Dividend-basis diagnostic root (issue #805)
 
 `dividend_basis/` is a self-contained, committed stand-in for the two roots
