@@ -2256,16 +2256,44 @@ class GRQValidator {
                     const cleanAfter90 = after90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
                     console.log(`prepareChartData - ${stock.stock} cleanBefore90 points:`, cleanBefore90.length);
                     console.log(`prepareChartData - ${stock.stock} cleanAfter90 points:`, cleanAfter90.length);
-                    if (cleanBefore90.length > 0) {
+                    // Stop the actuals at a split that cannot be reconciled
+                    // (issue #831). Beyond such a split the quotes sit on a
+                    // price basis the buy price cannot be restated onto, so
+                    // plotting them draws a pure artefact — the ~400% MVIS
+                    // jump. Cut the line there and flag the break instead.
+                    const splitCheck = GRQProjection.computeSplitAdjustment(
+                        marketData,
+                        scoreDate,
+                    );
+                    const before90Cut = GRQProjection
+                        .truncateActualsAtUnreconciledSplit(
+                            cleanBefore90,
+                            splitCheck.unreconciledDate,
+                        );
+                    const after90Cut = GRQProjection
+                        .truncateActualsAtUnreconciledSplit(
+                            cleanAfter90,
+                            splitCheck.unreconciledDate,
+                        );
+                    const plottedBefore90 = before90Cut.points;
+                    const plottedAfter90 = after90Cut.points;
+                    const showActualsTail = GRQProjection
+                        .windowShowsActualsAfter90(isMobile, windowDays);
+                    // Anchor the flag on the last point actually DRAWN: the tail
+                    // marker only counts when the tail is on screen.
+                    const unreconciledSplitMarker =
+                        (showActualsTail ? after90Cut.marker : null) ||
+                        before90Cut.marker;
+                    if (plottedBefore90.length > 0) {
                         datasets.push({
                             label: "Actual",
-                            data: cleanBefore90,
+                            data: plottedBefore90,
                             borderColor: "rgba(102, 126, 234, 1)",
                             backgroundColor: "rgba(102, 126, 234, 0.1)",
                             borderWidth: 3,
                             fill: false,
-                            pointRadius: cleanBefore90.map((point) => point.dividend ? 8 : 3),
-                            pointBackgroundColor: cleanBefore90.map((point) =>
+                            pointRadius: plottedBefore90.map((point) => point.dividend ? 8 : 3),
+                            pointBackgroundColor: plottedBefore90.map((point) =>
                                 point.dividend ? "rgba(0, 123, 255, 1)" : "rgba(102, 126, 234, 1)"
                             ),
                         });
@@ -2274,10 +2302,10 @@ class GRQValidator {
                     // visible window runs past day 90, on EITHER device (issue
                     // #496): the old `!isMobile` guard dropped it on the mobile
                     // 180-day view, breaking parity with desktop.
-                    if (cleanAfter90.length > 0 && GRQProjection.windowShowsActualsAfter90(isMobile, windowDays)) {
+                    if (plottedAfter90.length > 0 && showActualsTail) {
                         // Share the day-90 boundary point so the grey tail
                         // connects to the blue line — no gap (issue #592).
-                        const bridgedAfter90 = GRQProjection.bridgeActualsAfter90(cleanBefore90, cleanAfter90);
+                        const bridgedAfter90 = GRQProjection.bridgeActualsAfter90(plottedBefore90, plottedAfter90);
                         datasets.push({
                             label: "Actual (After 90 Days)",
                             data: bridgedAfter90,
@@ -2289,6 +2317,21 @@ class GRQValidator {
                             pointBackgroundColor: bridgedAfter90.map((point) =>
                                 point.dividend ? "rgba(108, 117, 125, 0.8)" : "rgba(108, 117, 125, 0.5)"
                             ),
+                        });
+                    }
+                    // Visible flag on the last trustworthy point, so a stopped
+                    // line reads as "unreconciled split", not "data ran out".
+                    if (unreconciledSplitMarker) {
+                        datasets.push({
+                            label: "Unreconciled Split (line stops)",
+                            data: [unreconciledSplitMarker],
+                            borderColor: "rgba(220, 53, 69, 1)",
+                            backgroundColor: "rgba(220, 53, 69, 1)",
+                            borderWidth: 0,
+                            fill: false,
+                            pointRadius: 9,
+                            pointStyle: "triangle",
+                            showLine: false,
                         });
                     }
                     // Add target dot for single stock view

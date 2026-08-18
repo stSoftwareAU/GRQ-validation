@@ -12,10 +12,12 @@
 //   - 2026-02-18: one 1-for-7 reverse split passes every plausibility check, so
 //     the series is reliable, the buy price is restated onto the post-split
 //     basis, and CISS is counted normally with its real ~-99.3% loss.
-//   - 2026-01-23: an additional 1-for-20 reverse split (2026-01-26) exceeds the
-//     10:1 single-event cap and drives the cumulative factor below the 1/50
-//     floor, so the series is flagged unreliable, no factor is applied, and CISS
-//     is excluded from the stats (struck through).
+//   - 2026-01-23: an additional 1-for-20 reverse split (2026-01-26) drives the
+//     cumulative factor below the 1/50 floor, so the series is flagged
+//     unreliable, no factor is applied, and CISS is excluded from the stats
+//     (struck through). The 1-for-20 event is itself above the 10:1 single-event
+//     cap; since #831 that cap alone no longer condemns it (its price move
+//     confirms it) — the cumulative floor is what rejects this series.
 // Thresholds: README _Split-reconciliation thresholds_.
 import {
   assert,
@@ -176,7 +178,7 @@ Deno.test("CISS 2026-01-23 - implausible 1-for-20 split flags the series unrelia
   assertEquals(
     split.reliable,
     false,
-    "magnitude 20 exceeds the 10:1 cap, so the series cannot be trusted",
+    "the cumulative factor breaches the 1/50 floor, so the series cannot be trusted",
   );
   assertEquals(
     GRQProjection.getSplitAdjustment(data, scoreDate),

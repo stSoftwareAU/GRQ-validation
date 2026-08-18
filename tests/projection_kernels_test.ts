@@ -38,7 +38,14 @@ const g = globalThis as unknown as {
     computeSplitAdjustment: (
       marketData: MarketDataPoint[] | undefined,
       historicalDate: Date,
-    ) => { factor: number; reliable: boolean };
+    ) => { factor: number; reliable: boolean; unreconciledDate: Date | null };
+    truncateActualsAtUnreconciledSplit: (
+      points: { x: Date; y: number }[] | undefined,
+      unreconciledDate: Date | null,
+    ) => {
+      points: { x: Date; y: number }[];
+      marker: { x: Date; y: number } | null;
+    };
     adjustHistoricalPriceToCurrent: (
       price: number,
       marketData: MarketDataPoint[] | undefined,
@@ -251,14 +258,63 @@ Deno.test("computeSplitAdjustment: distinct splits beyond the window compound", 
   assertEquals(r.reliable, true);
 });
 
-Deno.test("computeSplitAdjustment: implausible coefficient -> unreliable", () => {
-  // A 50:1 coefficient is above the plausible 10:1 ceiling.
+// Business-logic change (issue #831): the 10:1 magnitude cap alone no longer
+// condemns a series. A single event above the cap is trusted when the observed
+// pre/post price move CONFIRMS the coefficient within RECONCILE_TOLERANCE, and
+// is still rejected when it does not. This test previously paired a 50:1
+// coefficient with a matching ~50-fold price drop and asserted "unreliable";
+// that combination is now the trusted case (covered by the test below), so the
+// fixture here is a 50:1 coefficient whose price move does NOT confirm it.
+Deno.test("computeSplitAdjustment: implausible coefficient with no confirming price move -> unreliable", () => {
+  // A 50:1 coefficient is above the plausible 10:1 ceiling and the price only
+  // fell ~5-fold, so nothing corroborates it.
   const md = [
     makePoint(new Date(2025, 0, 1), 100, 98, 1.0),
-    makePoint(new Date(2025, 0, 10), 2, 1.9, 50.0),
+    makePoint(new Date(2025, 0, 10), 20, 19, 50.0),
   ];
   const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
   assertEquals(r.reliable, false);
+  assertEquals(
+    r.unreconciledDate?.getTime(),
+    new Date(2025, 0, 10).getTime(),
+    "the unreconciled split date is surfaced so the chart can stop there",
+  );
+});
+
+Deno.test("computeSplitAdjustment: large split confirmed by the price move -> reliable (issue #831)", () => {
+  // A 1-for-15 reverse split (coefficient 1/15) has magnitude 15, above the
+  // 10:1 cap, but the price rose ~15-fold on the same day: the cross-check
+  // confirms the coefficient, so the split is genuine market data and trusted.
+  const md = [
+    makePoint(new Date(2025, 0, 1), 0.26, 0.24, 1.0),
+    makePoint(new Date(2025, 0, 10), 3.9, 3.6, 1 / 15),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertAlmostEquals(r.factor, 1 / 15, 1e-12);
+  assertEquals(r.reliable, true, "a confirmed large split is trusted");
+  assertEquals(r.unreconciledDate, null);
+  assertAlmostEquals(
+    GRQProjection.getSplitAdjustment(md, new Date(2025, 0, 1)),
+    1 / 15,
+    1e-12,
+    "the confirmed factor is applied, not suppressed to 1.0",
+  );
+});
+
+Deno.test("computeSplitAdjustment: large split with no price to cross-check -> unreliable (issue #831)", () => {
+  // The split is the FIRST point in the series, so there is no preceding price
+  // to corroborate the coefficient. Without confirmation an above-cap event
+  // stays untrusted — absence of a contradiction is not confirmation.
+  const md = [
+    makePoint(new Date(2025, 0, 10), 3.9, 3.6, 1 / 15),
+    makePoint(new Date(2025, 0, 20), 3.8, 3.5, 1.0),
+  ];
+  const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
+  assertEquals(r.reliable, false);
+  assertEquals(
+    r.unreconciledDate?.getTime(),
+    new Date(2025, 0, 10).getTime(),
+  );
 });
 
 Deno.test("computeSplitAdjustment: price-ratio mismatch -> unreliable", () => {
@@ -301,6 +357,74 @@ Deno.test("computeSplitAdjustment: invalid coefficient treated as no split", () 
   const r = GRQProjection.computeSplitAdjustment(md, new Date(2025, 0, 1));
   assertEquals(r.factor, 1.0);
   assertEquals(r.reliable, true);
+});
+
+// --- truncateActualsAtUnreconciledSplit (issue #831) ------------------------
+
+const actualsSeries = () => [
+  { x: new Date(2026, 6, 29), y: -68 },
+  { x: new Date(2026, 6, 30), y: -69 },
+  { x: new Date(2026, 7, 3), y: 400 }, // first point on the unreconciled split
+  { x: new Date(2026, 7, 4), y: 366 },
+];
+
+Deno.test("truncateActualsAtUnreconciledSplit stops the line at the split and flags it", () => {
+  const r = GRQProjection.truncateActualsAtUnreconciledSplit(
+    actualsSeries(),
+    new Date(2026, 7, 3),
+  );
+  assertEquals(
+    r.points.map((p) => p.y),
+    [-68, -69],
+    "points from the unreconciled split onward are dropped, not plotted raw",
+  );
+  assertEquals(
+    r.marker?.x.getTime(),
+    new Date(2026, 6, 30).getTime(),
+    "the flag anchors on the last trustworthy point",
+  );
+  assertEquals(r.marker?.y, -69);
+});
+
+Deno.test("truncateActualsAtUnreconciledSplit leaves a reconciled series untouched", () => {
+  const points = actualsSeries();
+  const r = GRQProjection.truncateActualsAtUnreconciledSplit(points, null);
+  assertEquals(r.points, points, "no cut when there is nothing unreconciled");
+  assertEquals(r.marker, null, "and nothing to flag");
+
+  // A split date after every plotted point drops nothing, so no flag either.
+  const later = GRQProjection.truncateActualsAtUnreconciledSplit(
+    points,
+    new Date(2026, 8, 1),
+  );
+  assertEquals(later.points.length, points.length);
+  assertEquals(later.marker, null);
+});
+
+Deno.test("truncateActualsAtUnreconciledSplit handles empty and pre-window series", () => {
+  const empty = GRQProjection.truncateActualsAtUnreconciledSplit(
+    [],
+    new Date(2026, 7, 3),
+  );
+  assertEquals(empty.points, []);
+  assertEquals(empty.marker, null);
+
+  // Every point falls on/after the split: nothing is trustworthy, so nothing is
+  // drawn and there is no point to anchor a flag on.
+  const allAfter = GRQProjection.truncateActualsAtUnreconciledSplit(
+    actualsSeries(),
+    new Date(2026, 6, 1),
+  );
+  assertEquals(allAfter.points, []);
+  assertEquals(allAfter.marker, null);
+
+  // A missing series is a safe no-op.
+  const missing = GRQProjection.truncateActualsAtUnreconciledSplit(
+    undefined,
+    new Date(2026, 7, 3),
+  );
+  assertEquals(missing.points, []);
+  assertEquals(missing.marker, null);
 });
 
 Deno.test("getSplitAdjustment suppresses an unreliable factor (no inflation)", () => {
