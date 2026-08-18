@@ -1708,6 +1708,20 @@ class GRQValidator {
         const chartTextColour = chartTheme.text;
         const chartGridColour = chartTheme.grid;
 
+        // Flag where an unreconciled split stopped the single-stock actuals
+        // line (issue #831), so a truncated line reads as a known data problem
+        // rather than a mysteriously short series. Null (no marker) whenever
+        // the split series reconciles or no single stock is selected.
+        const unreconciledSplitMarker = this.selectedStock
+            ? GRQProjection.unreconciledSplitAnnotation(
+                this.unreconciledSplitDate(
+                    this.selectedStock,
+                    this.getScoreDate(this.selectedFile),
+                ),
+                isMobile,
+            )
+            : null;
+
         // Debug logging
         console.log("updateChart - Bootstrap breakpoint:", breakpoint);
         console.log("updateChart - isMobile:", isMobile);
@@ -1955,6 +1969,11 @@ class GRQValidator {
                                     },
                                 },
                             },
+                            // Only present when a split could not be reconciled
+                            // (issue #831).
+                            ...(unreconciledSplitMarker
+                                ? { unreconciledSplit: unreconciledSplitMarker }
+                                : {}),
                         },
                     },
                 },
@@ -2185,7 +2204,16 @@ class GRQValidator {
                 console.log(`prepareChartData - ${stock.stock} market data points:`, marketData ? marketData.length : 0);
                 if (marketData && marketData.length > 0) {
                     const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
-                    const filteredMarketData = marketData.filter(point => point.date <= maxDate);
+                    // Stop the actuals at a split that cannot be reconciled
+                    // (issue #831). Beyond it the raw prices sit on a different
+                    // basis from the buy price, so plotting them draws a
+                    // fictitious cliff/jump; the chart flags the stop with the
+                    // GRQProjection.unreconciledSplitAnnotation marker.
+                    const filteredMarketData = GRQProjection
+                        .truncateAtUnreconciledSplit(
+                            marketData.filter((point) => point.date <= maxDate),
+                            this.unreconciledSplitDate(stock.stock, scoreDate),
+                        );
                     console.log(`prepareChartData - ${stock.stock} filtered market data points:`, filteredMarketData.length);
                     const before90Days = [];
                     const after90Days = [];
@@ -5020,6 +5048,18 @@ class GRQValidator {
         // Buy-price resolution (5-day forward search + split adjustment) lives
         // in the shared projection module (issue #100).
         return GRQProjection.getBuyPrice(
+            this.marketData[stockSymbol],
+            scoreDate,
+        );
+    }
+
+    // Date of the first split this stock's series cannot reconcile, or null
+    // when the series is trustworthy (issue #831). The chart stops the actuals
+    // there and flags it, instead of plotting raw prices across an unadjusted
+    // split.
+    unreconciledSplitDate(stockSymbol, scoreDate) {
+        if (!this.marketData) return null;
+        return GRQProjection.unreconciledSplitDate(
             this.marketData[stockSymbol],
             scoreDate,
         );
