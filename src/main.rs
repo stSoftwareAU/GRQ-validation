@@ -6,7 +6,7 @@ use grq_validation::utils::{
     build_score_file_path, create_dividend_csv_for_score_file,
     create_market_data_long_csv_for_score_file, derive_csv_output_path,
     ensure_market_data_repository_at, extract_ticker_codes_from_score_file,
-    is_market_data_csv_empty, read_index_json,
+    find_unpaired_prediction_dates, is_market_data_csv_empty, read_index_json,
 };
 use log::info;
 use std::path::Path;
@@ -423,6 +423,25 @@ fn main() -> Result<()> {
                 log::error!("Failed to read ticker codes from {score_file_path}: {e}");
             }
         }
+    }
+
+    // Every fault inside the loop above is logged and stepped over so one bad
+    // score file cannot abandon the rest of the run, and a score file the
+    // filter never selected is not visited at all. Either way the run could
+    // finish over a tree that has a prediction date with no market data — the
+    // state the CI data-presence gate and the promotion guard reject — and
+    // still report success, so the scorer committed it (issue #833). Absence of
+    // an explicit failure is not success: confirm the outcome and fail loud,
+    // naming every offender, when it is not what the gate demands.
+    let unpaired = find_unpaired_prediction_dates(&args.docs_path)?;
+    if !unpaired.is_empty() {
+        return Err(anyhow!(
+            "{} prediction date(s) have no market data after processing — \
+             the tree is in a state the data-presence gate rejects. Run with \
+             --regenerate-empty once the upstream data is available:\n  {}",
+            unpaired.len(),
+            unpaired.join("\n  ")
+        ));
     }
 
     info!("GRQ Validation processor completed successfully");

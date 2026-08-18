@@ -745,6 +745,98 @@ pub fn derive_csv_output_path(score_file_path: &str) -> String {
     score_file_path.replace(".tsv", ".csv")
 }
 
+/// Returns `true` when `path` names a day-numbered prediction TSV such as
+/// `07.tsv` or `7.tsv`. Sibling helper files (`07-analysis.csv`,
+/// `07-dividends.csv`) and any other TSV are not prediction files.
+fn is_prediction_score_file(path: &Path) -> bool {
+    if path.extension().and_then(|ext| ext.to_str()) != Some("tsv") {
+        return false;
+    }
+    match path.file_stem().and_then(|stem| stem.to_str()) {
+        Some(stem) => {
+            (1..=2).contains(&stem.len())
+                && stem.chars().all(|character| character.is_ascii_digit())
+        }
+        None => false,
+    }
+}
+
+/// Recursively collects prediction TSVs beneath `dir` into `found`.
+fn collect_prediction_score_files_into(dir: &Path, found: &mut Vec<String>) -> Result<()> {
+    let entries = std::fs::read_dir(dir)
+        .map_err(|error| anyhow!("Failed to read score directory {}: {error}", dir.display()))?;
+
+    for entry in entries {
+        let path = entry
+            .map_err(|error| anyhow!("Failed to read entry in {}: {error}", dir.display()))?
+            .path();
+        if path.is_dir() {
+            collect_prediction_score_files_into(&path, found)?;
+        } else if is_prediction_score_file(&path) {
+            found.push(path.to_string_lossy().into_owned());
+        }
+    }
+
+    Ok(())
+}
+
+/// Collects every day-numbered prediction TSV under `<docs_path>/scores`, e.g.
+/// `docs/scores/2026/July/19.tsv`. The result is sorted so reports are stable.
+///
+/// This mirrors the rule the CI data-presence gate and the promotion guard
+/// (`scripts/check_score_data_pairing.ts`) already apply, so all three agree on
+/// what counts as a committed prediction date.
+///
+/// # Errors
+///
+/// Returns an error if `<docs_path>/scores`, or any directory beneath it,
+/// cannot be read — an unreadable tree is a fault, never an empty result.
+pub fn collect_prediction_score_files(docs_path: &str) -> Result<Vec<String>> {
+    let scores_dir = Path::new(docs_path).join("scores");
+    let mut found = Vec::new();
+    collect_prediction_score_files_into(&scores_dir, &mut found)?;
+    found.sort();
+    Ok(found)
+}
+
+/// Returns every committed prediction date left without usable market data: a
+/// day-numbered score TSV whose sibling market-data CSV is missing or holds
+/// nothing beyond the header row. Each entry reads `<path> (missing)` or
+/// `<path> (header-only/empty)` so an operator can act on the report directly.
+///
+/// A processor run that leaves any of these behind has half-succeeded — the
+/// tree it produced fails the CI data-presence gate — so the caller must treat
+/// a non-empty result as a fault rather than logging it and exiting zero
+/// (issue #833).
+///
+/// # Errors
+///
+/// Returns an error if the score tree cannot be read, or if it holds no
+/// prediction files at all: an empty tree is a fault, never a vacuous pass.
+pub fn find_unpaired_prediction_dates(docs_path: &str) -> Result<Vec<String>> {
+    let score_files = collect_prediction_score_files(docs_path)?;
+    if score_files.is_empty() {
+        return Err(anyhow!(
+            "No prediction files found under {docs_path}/scores — \
+             refusing to report a vacuous pass"
+        ));
+    }
+
+    Ok(score_files
+        .iter()
+        .map(|score_file| derive_csv_output_path(score_file))
+        .filter(|csv_path| is_market_data_csv_empty(csv_path))
+        .map(|csv_path| {
+            let reason = if Path::new(&csv_path).exists() {
+                "header-only/empty"
+            } else {
+                "missing"
+            };
+            format!("{csv_path} ({reason})")
+        })
+        .collect())
+}
+
 /// Creates a CSV file with market data for the given symbols and date range
 /// The CSV file will be created in the same directory as the score file with the same base name
 ///
