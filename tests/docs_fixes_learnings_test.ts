@@ -23,8 +23,11 @@ Deno.test("README folds the annualised-performance calculation note", async () =
 Deno.test("README folds the split-reconciliation thresholds", async () => {
   const readme = await Deno.readTextFile(README);
   // The numeric plausibility thresholds that live in code as the single source
-  // of truth (from klac-split-distortion-investigation.md).
-  assertStringIncludes(readme, "1.0 ≤ c ≤ 10.0");
+  // of truth (from klac-split-distortion-investigation.md). Business-logic
+  // change (issue #831): the flat "1.0 ≤ c ≤ 10.0" rule became conditional —
+  // an event above 10:1 is trusted when the ±15% price cross-check confirms it
+  // — so the README now states the cap in that form.
+  assertStringIncludes(readme, "10:1");
   assertStringIncludes(readme, "5 trading days");
   assertStringIncludes(readme, "±15%");
 });
