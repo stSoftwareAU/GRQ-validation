@@ -734,6 +734,74 @@ function computeSplitAdjustment(marketData, historicalDate) {
     };
 }
 
+// Label on the chart marker that flags where an unreconciled split stopped the
+// actuals line (issue #831). Exported so the marker and any copy describing it
+// stay in step.
+const UNRECONCILED_SPLIT_LABEL = "Unreconciled split — actuals stop";
+
+// Date of the first split a series cannot reconcile, or null when it is
+// trustworthy (issue #831). Thin, null-safe wrapper over the single
+// correct-or-flag kernel so the dashboard never re-derives the rule.
+function unreconciledSplitDate(marketData, historicalDate) {
+    return computeSplitAdjustment(marketData, historicalDate).unreconciledDate;
+}
+
+// Drop every point from an unreconciled split onward (issue #831).
+//
+// Accepts both shapes the dashboard carries: raw market-data rows (`.date`) and
+// Chart.js points (`.x`). A null/invalid `unreconciledDate` means the series
+// reconciles, so the input is returned untouched; a non-array input is passed
+// straight back so a caller's missing series stays missing rather than becoming
+// a silently empty chart. A point with no usable date cannot be placed relative
+// to the split, so it is dropped rather than plotted across it. Never mutates
+// its input.
+function truncateAtUnreconciledSplit(points, unreconciledDate) {
+    if (!Array.isArray(points)) return points;
+    if (
+        !(unreconciledDate instanceof Date) ||
+        isNaN(unreconciledDate.getTime())
+    ) {
+        return points;
+    }
+    const cutoff = unreconciledDate.getTime();
+    return points.filter((p) => {
+        if (!p) return false;
+        const at = p.date instanceof Date ? p.date : p.x;
+        return at instanceof Date && !isNaN(at.getTime()) &&
+            at.getTime() < cutoff;
+    });
+}
+
+// Chart.js annotation marking where the actuals line stops (issue #831).
+// Returns null when there is nothing to flag, so a reconciled series draws no
+// marker at all.
+function unreconciledSplitAnnotation(unreconciledDate, isMobile) {
+    if (
+        !(unreconciledDate instanceof Date) ||
+        isNaN(unreconciledDate.getTime())
+    ) {
+        return null;
+    }
+    return {
+        type: "line",
+        xMin: unreconciledDate,
+        xMax: unreconciledDate,
+        borderColor: "rgba(220, 53, 69, 0.9)",
+        borderWidth: 2,
+        borderDash: [6, 4],
+        label: {
+            display: true,
+            content: UNRECONCILED_SPLIT_LABEL,
+            position: "start",
+            backgroundColor: "rgba(220, 53, 69, 0.85)",
+            color: "#ffffff",
+            font: {
+                size: isMobile ? 8 : 10,
+            },
+        },
+    };
+}
+
 // Stop a chart actuals series at an unreconciled split (issue #831).
 //
 // Every point from an unreconciled split onward is quoted on a price basis the
@@ -1646,6 +1714,10 @@ globalThis.GRQProjection = {
     formatCurrency,
     computeSplitAdjustment,
     truncateActualsAtUnreconciledSplit,
+    UNRECONCILED_SPLIT_LABEL,
+    unreconciledSplitDate,
+    truncateAtUnreconciledSplit,
+    unreconciledSplitAnnotation,
     getSplitAdjustment,
     adjustHistoricalPriceToCurrent,
     getBuyPrice,
