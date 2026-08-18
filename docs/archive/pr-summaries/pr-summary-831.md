@@ -51,7 +51,7 @@ the confirmed factor applied, both sides of the ratio sit on the post-split basi
 and the line stays continuous through a real ~−81.6% loss.
 
 Reconciliation flow after this change (also folded into the README's
-_Split-reconciliation thresholds_):
+*Split-reconciliation thresholds*):
 
 ```mermaid
 flowchart TD
@@ -125,7 +125,7 @@ unreliable — only the explanatory comments/assertion messages were corrected.
 
 ### Documentation
 
-- `README.md` — _Split-reconciliation thresholds_ rewritten for the confirmation
+- `README.md` — *Split-reconciliation thresholds* rewritten for the confirmation
   rule, the `unreconciledDate` / chart-stop behaviour, and the decision flowchart
   above.
 - `tests/fixtures/README.md` — new MVIS fixture documented; the CISS jan23 entry
