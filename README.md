@@ -258,15 +258,48 @@ formula, which matches how funds and data providers report annualised returns.
 90-day window is reconciled consistently (see _Split-Aware Returns_ above). An
 unreconcilable series is excluded rather than silently inflating a return:
 
-- A single `split_coefficient` is plausible only when `1.0 ≤ c ≤ 10.0`; a
-  coefficient `≤ 0` or `NaN` is treated as `1.0` (no adjustment).
+- Every split event is cross-checked against the observed pre/post price move:
+  `prev_mid / split_mid` must match the coefficient to within **±15%** (the same
+  test for a forward split, where the price falls, and a reverse split, where it
+  rises).
+- A single event is plausible on its own within `1.0 ≤ c ≤ 10.0` (and its
+  reverse-split mirror `0.1 ≤ c < 1.0`) — up to **10:1** in either direction. A
+  **larger** one is trusted only when that ±15% cross-check **confirms** it —
+  MicroVision's genuine 1-for-15 reverse split on 2026-08-03 reconciles, so it is
+  applied (issue #831). No confirming price move — including no neighbouring
+  price to compare against — means the event is rejected; absence of a
+  contradiction is not confirmation. A coefficient `≤ 0` or `NaN` is treated as
+  `1.0` (no adjustment).
 - Two split points within **5 trading days** are the **same** event recorded
   twice and are de-duplicated (real splits never recur within a week).
-- The cumulative factor over the window is capped at **50**; a larger factor
-  almost certainly means duplicated coefficients.
-- The cumulative factor must match the observed price drop to within **±15%**,
-  and the resulting 90-day return must fall within **−90% … +300%**; otherwise
-  the split is rejected (factor `1.0`) and the stock excluded.
+- The cumulative factor over the window is bounded to **1/50 … 50**; beyond that
+  it almost certainly means duplicated coefficients, and no single event can be
+  blamed, so the series stops being trustworthy at its FIRST split.
+- The resulting 90-day return must fall within **−90% … +300%**; otherwise the
+  split is rejected (factor `1.0`) and the stock excluded.
+
+When a series fails these checks, `computeSplitAdjustment` returns
+`reliable: false` **and** the `unreconciledDate` of the earliest offending
+split. The stock is excluded from every aggregate, and the single-stock chart
+**stops** its Actual line at that date and marks the break with a red
+"Unreconciled Split (line stops)" triangle — it never plots raw post-split
+prices against a pre-split buy price (issue #831).
+
+```mermaid
+flowchart TD
+    S[Split event after the buy date] --> D{Within 5 days<br/>of the last kept event?}
+    D -- yes --> DUP[De-duplicate: skip]
+    D -- no --> X{Price-move cross-check<br/>against the coefficient}
+    X -- contradicted --> U[Unreconciled]
+    X -- confirmed --> OK[Apply the factor]
+    X -- no neighbouring price --> M{Magnitude > 10:1?}
+    M -- yes --> U
+    M -- no --> OK
+    U --> C[Series unreliable:<br/>factor 1.0, stock excluded,<br/>chart line stops and is flagged]
+    OK --> B{Cumulative factor<br/>within 1/50 … 50?}
+    B -- no --> C
+    B -- yes --> T[Trusted adjustment]
+```
 
 ### Late-stage projection confidence
 

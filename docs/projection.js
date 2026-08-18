@@ -590,7 +590,11 @@ function formatCurrency(value) {
 // Trustworthy split-adjustment thresholds (issue #292, parent #272). Agreed in
 // the #291 investigation; documented under _Split-reconciliation thresholds_ in
 // the README (durable home after docs/fixes/ was pruned in #759).
-const MAX_PLAUSIBLE_COEFFICIENT = 10.0; // a single split of <= 10:1 is plausible
+// A single split of <= 10:1 is plausible on its own; a LARGER one needs the
+// observed pre/post price move to confirm it (issue #831) — MVIS's genuine
+// 1-for-15 reverse split is real market data, so the cap alone must not condemn
+// it.
+const MAX_PLAUSIBLE_COEFFICIENT = 10.0;
 const DUPLICATE_WINDOW_DAYS = 5; // splits within 5 days = the same event twice
 const MAX_CUMULATIVE_FACTOR = 50.0; // cumulative factor cap over the window
 const MIN_CUMULATIVE_FACTOR = 1.0 / MAX_CUMULATIVE_FACTOR; // reverse-split floor
@@ -606,21 +610,46 @@ function isSplitCoefficient(c) {
     return typeof c === "number" && isFinite(c) && c > 0 && c !== 1.0;
 }
 
+// Cross-check one split event against the observed pre/post price move: for a
+// forward split (c > 1) the price falls c-fold, for a reverse split (c < 1) it
+// rises 1/c-fold, so `prev_mid / split_mid` should match `c` either way.
+// Returns "confirmed", "contradicted", or "unavailable" when there is no usable
+// neighbouring price to compare (a missing previous row, or a non-positive /
+// non-finite midpoint). "unavailable" is NOT confirmation — an above-cap event
+// with nothing to corroborate it stays untrusted (issue #831).
+function crossCheckSplitEvent(prev, point, c) {
+    if (!prev) return "unavailable";
+    const prevMid = (prev.high + prev.low) / 2;
+    const splitMid = (point.high + point.low) / 2;
+    if (!isFinite(prevMid) || !isFinite(splitMid) || !(splitMid > 0)) {
+        return "unavailable";
+    }
+    const observedRatio = prevMid / splitMid;
+    return Math.abs(observedRatio / c - 1) <= RECONCILE_TOLERANCE
+        ? "confirmed"
+        : "contradicted";
+}
+
 // Compute the cumulative split adjustment from `historicalDate` to "now" AND
 // judge whether it can be trusted — the single "correct-or-flag" place (issue
 // #292). Pure: no DOM or class state. Returns `{ factor, reliable }` where:
 //   - `factor` is the de-duplicated, plausibility-checked cumulative factor
 //     (kept for diagnostics);
 //   - `reliable` is false when the series cannot be reconciled, so callers must
-//     NOT silently apply `factor` — treat an unreliable series as no split.
-// Rules: de-duplicate split events recorded within DUPLICATE_WINDOW_DAYS; flag
-// any single event whose effective ratio exceeds MAX_PLAUSIBLE_COEFFICIENT
-// (forward or reverse); bound the cumulative factor between MIN_CUMULATIVE_FACTOR
-// and MAX_CUMULATIVE_FACTOR; and cross-check each split against the observed
-// pre/post price move (forward or reverse).
+//     NOT silently apply `factor` — treat an unreliable series as no split;
+//   - `unreconciledDate` is the date of the earliest split that could not be
+//     reconciled (null when the series is reliable), so the chart can STOP the
+//     actuals line there and flag the break instead of silently plotting raw,
+//     unadjusted post-split prices (issue #831).
+// Rules: de-duplicate split events recorded within DUPLICATE_WINDOW_DAYS;
+// cross-check each split against the observed pre/post price move (forward or
+// reverse) within RECONCILE_TOLERANCE; flag any single event whose effective
+// ratio exceeds MAX_PLAUSIBLE_COEFFICIENT (forward or reverse) UNLESS that price
+// move confirms it; and bound the cumulative factor between
+// MIN_CUMULATIVE_FACTOR and MAX_CUMULATIVE_FACTOR.
 function computeSplitAdjustment(marketData, historicalDate) {
     if (!marketData || marketData.length === 0) {
-        return { factor: 1.0, reliable: true };
+        return { factor: 1.0, reliable: true, unreconciledDate: null };
     }
 
     // Sorted copy so "the price immediately before a split" is well-defined
@@ -633,6 +662,17 @@ function computeSplitAdjustment(marketData, historicalDate) {
     let factor = 1.0;
     let reliable = true;
     let lastEventTime = null; // ms of the last *kept* split, for de-duplication
+    let firstEventTime = null; // ms of the first *kept* split in the window
+    let unreconciledTime = null; // ms of the earliest split we cannot reconcile
+
+    // Mark the series unreliable from `time` onward, keeping the EARLIEST such
+    // split so the chart stops at the first point it can no longer trust.
+    const markUnreconciled = (time) => {
+        reliable = false;
+        if (unreconciledTime === null || time < unreconciledTime) {
+            unreconciledTime = time;
+        }
+    };
 
     for (let i = 0; i < sorted.length; i++) {
         const point = sorted[i];
@@ -654,37 +694,146 @@ function computeSplitAdjustment(marketData, historicalDate) {
             continue;
         }
         lastEventTime = point.date.getTime();
+        if (firstEventTime === null) firstEventTime = lastEventTime;
 
-        // Implausibly large single event (forward or reverse): cannot trust.
-        if (splitEventMagnitude(c) > MAX_PLAUSIBLE_COEFFICIENT) {
-            reliable = false;
+        // Price-ratio cross-check against the observed pre/post price move.
+        const verdict = crossCheckSplitEvent(sorted[i - 1], point, c);
+        if (verdict === "contradicted") {
+            markUnreconciled(lastEventTime);
         }
 
-        // Price-ratio cross-check: prev_mid / split_mid should match `c` for
-        // both forward splits (c > 1, price falls) and reverse splits (c < 1,
-        // price rises).
-        const prev = sorted[i - 1];
-        if (prev) {
-            const prevMid = (prev.high + prev.low) / 2;
-            const splitMid = (point.high + point.low) / 2;
-            if (isFinite(prevMid) && isFinite(splitMid) && splitMid > 0) {
-                const observedRatio = prevMid / splitMid;
-                if (Math.abs(observedRatio / c - 1) > RECONCILE_TOLERANCE) {
-                    reliable = false;
-                }
-            }
+        // An implausibly large single event (forward or reverse) is trusted
+        // only when the price move CONFIRMS it — a genuine 1-for-15 reverse
+        // split reconciles, an unsupported one does not (issue #831).
+        if (
+            splitEventMagnitude(c) > MAX_PLAUSIBLE_COEFFICIENT &&
+            verdict !== "confirmed"
+        ) {
+            markUnreconciled(lastEventTime);
         }
 
         factor *= c;
     }
 
     // Cumulative-factor plausibility bound (forward product too large, or reverse
-    // product too small).
+    // product too small). No single event can be blamed, so the series stops
+    // being trustworthy at its FIRST split.
     if (factor > MAX_CUMULATIVE_FACTOR || factor < MIN_CUMULATIVE_FACTOR) {
         reliable = false;
+        if (unreconciledTime === null && firstEventTime !== null) {
+            unreconciledTime = firstEventTime;
+        }
     }
 
-    return { factor, reliable };
+    return {
+        factor,
+        reliable,
+        unreconciledDate: unreconciledTime === null
+            ? null
+            : new Date(unreconciledTime),
+    };
+}
+
+// Label on the chart marker that flags where an unreconciled split stopped the
+// actuals line (issue #831). Exported so the marker and any copy describing it
+// stay in step.
+const UNRECONCILED_SPLIT_LABEL = "Unreconciled split — actuals stop";
+
+// Date of the first split a series cannot reconcile, or null when it is
+// trustworthy (issue #831). Thin, null-safe wrapper over the single
+// correct-or-flag kernel so the dashboard never re-derives the rule.
+function unreconciledSplitDate(marketData, historicalDate) {
+    return computeSplitAdjustment(marketData, historicalDate).unreconciledDate;
+}
+
+// Drop every point from an unreconciled split onward (issue #831).
+//
+// Accepts both shapes the dashboard carries: raw market-data rows (`.date`) and
+// Chart.js points (`.x`). A null/invalid `unreconciledDate` means the series
+// reconciles, so the input is returned untouched; a non-array input is passed
+// straight back so a caller's missing series stays missing rather than becoming
+// a silently empty chart. A point with no usable date cannot be placed relative
+// to the split, so it is dropped rather than plotted across it. Never mutates
+// its input.
+function truncateAtUnreconciledSplit(points, unreconciledDate) {
+    if (!Array.isArray(points)) return points;
+    if (
+        !(unreconciledDate instanceof Date) ||
+        isNaN(unreconciledDate.getTime())
+    ) {
+        return points;
+    }
+    const cutoff = unreconciledDate.getTime();
+    return points.filter((p) => {
+        if (!p) return false;
+        const at = p.date instanceof Date ? p.date : p.x;
+        return at instanceof Date && !isNaN(at.getTime()) &&
+            at.getTime() < cutoff;
+    });
+}
+
+// Chart.js annotation marking where the actuals line stops (issue #831).
+// Returns null when there is nothing to flag, so a reconciled series draws no
+// marker at all.
+function unreconciledSplitAnnotation(unreconciledDate, isMobile) {
+    if (
+        !(unreconciledDate instanceof Date) ||
+        isNaN(unreconciledDate.getTime())
+    ) {
+        return null;
+    }
+    return {
+        type: "line",
+        xMin: unreconciledDate,
+        xMax: unreconciledDate,
+        borderColor: "rgba(220, 53, 69, 0.9)",
+        borderWidth: 2,
+        borderDash: [6, 4],
+        label: {
+            display: true,
+            content: UNRECONCILED_SPLIT_LABEL,
+            position: "start",
+            backgroundColor: "rgba(220, 53, 69, 0.85)",
+            color: "#ffffff",
+            font: {
+                size: isMobile ? 8 : 10,
+            },
+        },
+    };
+}
+
+// Stop a chart actuals series at an unreconciled split (issue #831).
+//
+// Every point from an unreconciled split onward is quoted on a price basis the
+// buy price cannot be restated onto, so plotting it draws a cliff that is pure
+// artefact — the ~400% jump reported for MVIS. Dropping those points and
+// flagging the break makes the failure visible instead of silent.
+//
+// `points` are the `{ x: Date, y: number }` entries the chart consumes.
+// Returns `{ points, marker }`: `points` is the series to draw (unchanged when
+// there is nothing to cut) and `marker` is the last trustworthy point — the
+// anchor for the chart's visible flag — or null when nothing was dropped (or
+// nothing trustworthy remains to anchor on).
+function truncateActualsAtUnreconciledSplit(points, unreconciledDate) {
+    if (!Array.isArray(points)) return { points: [], marker: null };
+    if (
+        !(unreconciledDate instanceof Date) ||
+        isNaN(unreconciledDate.getTime())
+    ) {
+        return { points, marker: null };
+    }
+    const cutoff = unreconciledDate.getTime();
+    const kept = points.filter((p) =>
+        p && p.x instanceof Date && p.x.getTime() < cutoff
+    );
+    if (kept.length === points.length) return { points, marker: null };
+    const last = kept.length > 0 ? kept[kept.length - 1] : null;
+    return {
+        points: kept,
+        marker: last === null
+            ? null
+            : { x: new Date(last.x.getTime()), y: last.y },
+    };
 }
 
 // Cumulative split adjustment from a historical date to "now". Delegates to the
@@ -1564,6 +1713,11 @@ globalThis.GRQProjection = {
     buildHybridProjectionData,
     formatCurrency,
     computeSplitAdjustment,
+    truncateActualsAtUnreconciledSplit,
+    UNRECONCILED_SPLIT_LABEL,
+    unreconciledSplitDate,
+    truncateAtUnreconciledSplit,
+    unreconciledSplitAnnotation,
     getSplitAdjustment,
     adjustHistoricalPriceToCurrent,
     getBuyPrice,

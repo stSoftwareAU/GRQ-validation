@@ -98,6 +98,15 @@ and this project adheres to
 
 ### Fixed
 
+- Genuine splits larger than 10:1 are no longer rejected on magnitude alone.
+  A single event above the cap is trusted when the observed pre/post price move
+  confirms the coefficient within the existing ±15% tolerance, so MVIS's real
+  1-for-15 reverse split (2026-08-03) is applied instead of leaving raw
+  post-split prices plotted against a raw pre-split buy price — the ~+400% jump
+  on the 2026-02-19 chart. An outsized coefficient that no price move confirms
+  stays unreliable, and the single-stock chart now stops the actuals line at an
+  unreconciled split and flags it rather than plotting an incomparable basis
+  (Issue #831).
 - Stale-binary rebuild check in `run.sh`: it now compares the built binary's
   `--version` with `[package].version` in `Cargo.toml`
   (`scripts/needs_rebuild.sh`) and rebuilds on a mismatch, a missing binary, or

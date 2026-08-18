@@ -52,11 +52,32 @@ was verified as genuine dilution, not a split artefact.
   coefficient; 0.1429 ≥ the 1/50 floor), so the factor is applied: buy midpoint
   1.58995 restates to 11.12965 against a post-split 0.07705, a genuine ~-99.3%
   loss, and CISS is counted normally.
-- **`ciss_reverse_split_jan23.csv`** — the extra 1-for-20 event has magnitude 20
-  (> the 10:1 cap) and drags the cumulative factor to 0.00714 (< the 1/50
-  floor), so the series is flagged unreliable, no factor is applied, and CISS is
-  excluded from the stats with strikethrough — the designed issue #293
-  behaviour.
+- **`ciss_reverse_split_jan23.csv`** — the extra 1-for-20 event drags the
+  cumulative factor to 0.00714 (< the 1/50 floor), so the series is flagged
+  unreliable, no factor is applied, and CISS is excluded from the stats with
+  strikethrough — the designed issue #293 behaviour. Its magnitude (20) is above
+  the 10:1 single-event cap, but since issue #831 that cap alone no longer
+  condemns an event whose price move confirms it; here the cumulative floor is
+  what rejects the series.
+
+## MVIS reverse-split fixture (issue #831)
+
+`mvis_reverse_split_feb19.csv` is a frozen extract of the committed
+`NASDAQ:MVIS` (MicroVision) market data from `docs/scores/2026/February/19.csv`,
+consumed by `tests/mvis_reverse_split_test.ts`.
+
+| Fixture                        | Splits after the score date | Cumulative factor | Reliable |
+| ------------------------------ | --------------------------- | ----------------- | -------- |
+| `mvis_reverse_split_feb19.csv` | 1-for-15 (2026-08-03)       | 0.0667            | yes      |
+
+The 1-for-15 event has magnitude 15, above the 10:1 single-event cap, but the
+observed price move confirms it (0.25 pre-split midpoint / 3.92575 split-day
+midpoint = 0.0637 against the 0.0667 coefficient, ~4.5% apart, inside the ±15%
+tolerance), so since issue #831 the factor is applied: buy midpoint 0.78255
+restates to 11.73825 against a post-split 2.165 — a real ~-81.6% loss instead of
+the ~+400% chart jump reported in #831. The test also mutates the split-day rows
+back onto the pre-split basis to cover the unconfirmed case, where the actuals
+line stops at the split and is flagged.
 
 ## Dividend-basis diagnostic root (issue #805)
 
