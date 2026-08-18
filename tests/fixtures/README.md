@@ -68,7 +68,7 @@ consumed by `tests/mvis_reverse_split_test.ts`.
 
 | Fixture                        | Splits after the score date | Cumulative factor | Reliable |
 | ------------------------------ | --------------------------- | ----------------- | -------- |
-| `mvis_reverse_split_feb19.csv` | 1-for-15 (2026-08-03)        | 0.0667            | yes      |
+| `mvis_reverse_split_feb19.csv` | 1-for-15 (2026-08-03)       | 0.0667            | yes      |
 
 The 1-for-15 event has magnitude 15, above the 10:1 single-event cap, but the
 observed price move confirms it (0.25 pre-split midpoint / 3.92575 split-day
@@ -78,27 +78,6 @@ restates to 11.73825 against a post-split 2.165 — a real ~-81.6% loss instead 
 the ~+400% chart jump reported in #831. The test also mutates the split-day rows
 back onto the pre-split basis to cover the unconfirmed case, where the actuals
 line stops at the split and is flagged.
-
-## MVIS reverse-split fixture (issue #831)
-
-`mvis_reverse_split_feb19.csv` is a frozen extract of the committed
-`NASDAQ:MVIS` market data for the 2026-02-19 prediction (from
-`docs/scores/2026/February/19.csv`), consumed by
-`tests/mvis_reverse_split_test.ts`.
-
-| Split                | Coefficient | Observed price ratio        | Magnitude | Reliable |
-| -------------------- | ----------- | --------------------------- | --------- | -------- |
-| 1-for-15, 2026-08-03 | 0.0667      | 0.25 / 3.92575 = **0.0637** | 15        | yes      |
-
-The event is above the 10:1 single-event cap, so it used to be rejected on
-magnitude alone: no factor was applied and the raw post-split ~$3.90 prices were
-plotted against the raw ~$0.78 pre-split buy price, producing the reported
-~+400% jump. The observed price move confirms the coefficient inside the ±15%
-tolerance, so the split is now trusted: the buy midpoint 0.78255 restates to
-11.73825 and the split-day actual is a ~-66.6% loss, continuous with the ~-64%
-the day before. The test also mutates the fixture's post-split prices to remove
-that confirmation, proving an unconfirmed 1-for-15 still stops and flags the
-actuals line.
 
 ## Dividend-basis diagnostic root (issue #805)
 
