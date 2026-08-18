@@ -228,6 +228,37 @@ flowchart TD
 The CI gate is unchanged and remains the backstop; the guard simply stops a bad
 date reaching `main` in the first place.
 
+### Processor pairing gate: the run's exit code is honest (issue #833)
+
+The guard above only helps a job that calls it. On 2026-08-18 the promotion
+committed `docs/scores/2026/July/19.tsv` with no sibling `19.csv`, and the same
+CI gate went red on every PR again — because the processor that produces those
+CSVs had already reported success over the unpaired tree. Every fault inside its
+per-score-file loop was logged and stepped over so one bad file could not
+abandon the rest of the run, and a score entry the age filter never selected was
+not visited at all; either way `./run.sh` printed "Program completed
+successfully" and exited `0`.
+
+Absence of an explicit failure is not success. Before it reports completion, the
+processor now sweeps the committed score tree and applies the same rule as the
+CI gate and the promotion guard: any day-numbered `DD.tsv` whose sibling `DD.csv`
+is missing or header-only is a fault. It exits non-zero naming every offender —
+`docs/scores/2026/July/19.csv (missing)` — so the operator sees the gap on the
+run that caused it rather than on an unrelated PR's CI. An empty score tree
+fails loud too, so the sweep can never pass vacuously.
+
+```mermaid
+flowchart TD
+    R[./run.sh → grq-validation] --> L[Process each selected score file<br/>faults logged, loop continues]
+    L --> S{Sweep: every DD.tsv paired with a non-empty DD.csv?}
+    S -->|yes| OK[Exit 0 — 'completed successfully']
+    S -->|no| F[Exit non-zero, every offending path named on stderr]
+    F -.->|previously| Q[Exit 0 over a tree CI rejects]
+```
+
+The remedy is unchanged: `./run.sh --regenerate-empty` once the upstream market
+data is available.
+
 ## Calculation notes
 
 These durable calculation rules were previously kept as ad-hoc logs under
