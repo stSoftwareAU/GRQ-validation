@@ -43,26 +43,46 @@ const EY_STRONG_CUT = 0.06;
 // A price below $1 is delist risk.
 const DELIST_PRICE = 1;
 
+// Render a fraction as a percentage for the warning labels, rounded to one
+// decimal so binary floating point never leaks (0.02 * 100 is 2.0000000000000004).
+function percentText(fraction) {
+    return `${Math.round(fraction * 1000) / 10}%`;
+}
+
 // The warning vocabulary, in the order the spreadsheet renders it. Exposed as
 // structured data so a table cell and the accessible text can be rendered
-// independently — callers must never re-invent the emoji or the wording.
+// independently — callers must never re-invent the emoji or the wording. The
+// labels quote the constants above rather than repeating the numbers, so
+// tuning a threshold retunes its wording too.
 // Frozen so a consumer cannot mutate the shared entries it renders.
 const WARNINGS = Object.freeze({
-    DELIST: { emoji: "🚫", label: "Delisting risk: price below $1" },
+    DELIST: {
+        emoji: "🚫",
+        label: `Delisting risk: price below $${DELIST_PRICE}`,
+    },
     POOR_LIQUIDITY: {
         emoji: "🫗",
-        label: "Poor liquidity: under 50 parcels traded per day",
+        label: `Poor liquidity: under ${MIN_RED_LOTS} parcels traded per day`,
     },
     THIN_LIQUIDITY: {
         emoji: "🥃",
-        label: "Thin liquidity: under 200 parcels traded per day",
+        label: `Thin liquidity: under ${MIN_AMBER_LOTS} parcels traded per day`,
     },
     AT_HIGH: { emoji: "📈", label: "Near the 52-week high" },
     AT_LOW: { emoji: "📉", label: "Near the 52-week low" },
-    BIG_DROP: { emoji: "🪃", label: "Fell 10% or more over the last 5 days" },
+    BIG_DROP: {
+        emoji: "🪃",
+        label: `Fell ${percentText(Math.abs(DROP_CUT))} or more over the last 5 days`,
+    },
     NEGATIVE_EY: { emoji: "🔥", label: "Negative earnings yield (loss making)" },
-    WEAK_EY: { emoji: "🩸", label: "Weak earnings yield (under 2%)" },
-    STRONG_EY: { emoji: "💰", label: "Strong earnings yield (6% or better)" },
+    WEAK_EY: {
+        emoji: "🩸",
+        label: `Weak earnings yield (under ${percentText(EY_WEAK_CUT)})`,
+    },
+    STRONG_EY: {
+        emoji: "💰",
+        label: `Strong earnings yield (${percentText(EY_STRONG_CUT)} or better)`,
+    },
 });
 Object.values(WARNINGS).forEach(Object.freeze);
 

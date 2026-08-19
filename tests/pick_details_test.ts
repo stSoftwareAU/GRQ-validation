@@ -469,6 +469,28 @@ Deno.test("warnings carry a human-readable label alongside the emoji", () => {
   );
 });
 
+Deno.test("warning labels quote the thresholds they enforce", () => {
+  // Tuning a constant must retune its wording; a label may never drift from
+  // the number it describes.
+  const thin = pickTrafficLight(healthy({ lots: 120 })).warnings[0];
+  assert(
+    thin.label.includes(String(MIN_AMBER_LOTS)),
+    `thin-liquidity label should quote ${MIN_AMBER_LOTS}: ${thin.label}`,
+  );
+
+  const weak = pickTrafficLight(healthy({ earningsYield: 0.01 })).warnings[0];
+  assert(
+    weak.label.includes("2%"),
+    `weak-EY label should quote the 2% cut: ${weak.label}`,
+  );
+
+  const drop = pickTrafficLight(healthy({ fiveDayReturn: -0.5 })).warnings[0];
+  assert(
+    drop.label.includes("10%"),
+    `big-drop label should quote the 10% cut: ${drop.label}`,
+  );
+});
+
 // --- compact formatters ----------------------------------------------------
 
 Deno.test("formatCompactMoney formats whole dollars below $1k", () => {
