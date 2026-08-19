@@ -566,6 +566,15 @@ class GRQValidator {
         const lines = text.trim().split("\n");
         // Remove unused headers variable
 
+        // Optional numeric cell (issue #837): a blank, missing (older score
+        // files predate these columns) or non-numeric cell becomes null, never
+        // NaN, so downstream judgements get "unknown ⇒ don't judge".
+        const parseOptionalNumber = (value) => {
+            if (value === undefined || value.trim() === "") return null;
+            const parsed = parseFloat(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
         this.scoreData = lines.slice(1).map((line) => {
             const values = line.split("\t");
             return {
@@ -581,6 +590,8 @@ class GRQValidator {
                 intrinsicValuePerShareAdjusted: values[7]
                     ? parseFloat(values[7])
                     : null,
+                eps: parseOptionalNumber(values[8]),
+                analystTargetPrice: parseOptionalNumber(values[9]),
             };
         });
 
