@@ -98,6 +98,32 @@ function escape(value) {
     return helper(value);
 }
 
+// The date that closes the EARLIEST window the page's own series can offer:
+// the date of its `WEEKDAY_WINDOW`-th oldest row (or its last row when it holds
+// fewer). Used only as the last-resort as-of for the fallback ADV — see
+// `pickColumnValues`. Returns null when the series carries no usable date.
+function earliestWindowEnd(series) {
+    if (!Array.isArray(series) || series.length === 0) {
+        return null;
+    }
+    const times = series
+        .map((point) => {
+            if (!point || point.date === undefined || point.date === null) {
+                return NaN;
+            }
+            return point.date instanceof Date
+                ? point.date.getTime()
+                : new Date(point.date).getTime();
+        })
+        .filter((time) => Number.isFinite(time))
+        .sort((a, b) => a - b);
+    if (times.length === 0) {
+        return null;
+    }
+    const window = volumeHelper().WEEKDAY_WINDOW;
+    return new Date(times[Math.min(window, times.length) - 1]);
+}
+
 // A percentage with an explicit sign, to one decimal ("+8.1%", "-2.5%",
 // "0.0%"). Unknown renders as "" — the blank cell that reads as "we don't
 // know", never as a real number.
@@ -292,19 +318,41 @@ function pickColumnValues(input) {
 
     // ADV: the sidecar's trailing ten-weekday mean, else the same window
     // recomputed from the in-page CSV through the #576 single source of truth.
+    // `advSource` records which of the three it was, so the cell can say when
+    // the figure is an approximation rather than presenting all three alike.
     let adv = sidecar ? helper.toFiniteNumber(sidecar.advDollar10d) : null;
+    let advSource = adv === null ? null : "sidecar";
     if (adv === null) {
         const volume = volumeHelper();
-        const window = volume.buildTrailingVolumeWindow(
-            options.series,
-            options.scoreDate,
+        adv = volume.averageDollarVolume(
+            volume.buildTrailingVolumeWindow(options.series, options.scoreDate),
         );
-        adv = volume.averageDollarVolume(window);
+        advSource = adv === null ? null : "trailing";
+    }
+    if (adv === null) {
+        // The committed per-date CSV is score-date-FORWARD by design (it starts
+        // on the score date and only looks ahead), so on most dates it holds no
+        // row on or before the score date at all and the trailing window above
+        // is empty. Rather than leave the liquidity columns permanently blank
+        // until the sidecar backfill lands, fall back to the earliest window
+        // the page DOES have — the ten trading days immediately following the
+        // score date. Liquidity moves slowly, so it is a fair read, but it is
+        // NOT as at the score date: the cell says so in its title, and the
+        // sidecar supersedes it the moment one exists for the date.
+        const volume = volumeHelper();
+        const asOf = earliestWindowEnd(options.series);
+        if (asOf !== null) {
+            adv = volume.averageDollarVolume(
+                volume.buildTrailingVolumeWindow(options.series, asOf),
+            );
+            advSource = adv === null ? null : "forward";
+        }
     }
 
     const values = {
         price,
         adv,
+        advSource,
         lots: helper.lotsFromAdv(adv),
         fiveDayReturn: sidecar
             ? helper.fiveDayReturn(sidecar.closeScoreDate, sidecar.close5dPrior)
@@ -344,16 +392,24 @@ function trafficLightCell(values) {
 function pickDetailCells(values) {
     const row = values && typeof values === "object" ? values : {};
     const helper = pickDetails();
+    // An approximated ADV says so rather than passing itself off as the
+    // as-at-the-score-date figure.
+    const advTitle = row.advSource === "forward"
+        ? "Approximate: no pick-details sidecar for this date, so this is the " +
+            "mean over the ten trading days FOLLOWING the score date."
+        : "";
     const cells = [
-        ["pick-adv", helper.formatCompactMoney(row.adv)],
-        ["pick-lots", helper.formatCompactCount(row.lots)],
-        ["pick-five-day-return", formatSignedPercent(row.fiveDayReturn)],
-        ["pick-earnings-yield", formatSignedPercent(row.earningsYield)],
-        ["pick-52-week-position", formatRangePercent(row.position)],
+        ["pick-adv", helper.formatCompactMoney(row.adv), advTitle],
+        ["pick-lots", helper.formatCompactCount(row.lots), advTitle],
+        ["pick-five-day-return", formatSignedPercent(row.fiveDayReturn), ""],
+        ["pick-earnings-yield", formatSignedPercent(row.earningsYield), ""],
+        ["pick-52-week-position", formatRangePercent(row.position), ""],
     ];
     return cells
-        .map(([className, text]) =>
-            `<td class="${className}">${escape(text)}</td>`
+        .map(([className, text, title]) =>
+            `<td class="${className}"${
+                title ? ` title="${escape(title)}"` : ""
+            }>${escape(text)}</td>`
         )
         .join("");
 }

@@ -45,6 +45,7 @@ interface TrafficLight {
 interface PickValues {
   price: number | null;
   adv: number | null;
+  advSource: "sidecar" | "trailing" | "forward" | null;
   lots: number | null;
   fiveDayReturn: number | null;
   earningsYield: number | null;
@@ -377,6 +378,57 @@ Deno.test("partly populated: a known thin ADV still warns even though the range 
   const cell = trafficLightCell(values);
   assertStringIncludes(cell, "🔴");
   assertStringIncludes(cell, WARNINGS.POOR_LIQUIDITY.emoji);
+});
+
+Deno.test("partly populated: a score-date-forward CSV still yields an ADV, flagged as approximate", () => {
+  // The committed per-date CSV starts ON OR AFTER the score date, so on most
+  // dates nothing sits on or before it and the trailing window is empty. The
+  // columns must still populate — from the earliest window the page has — and
+  // must say the figure is not as at the score date.
+  const scoreDate = new Date("2026-07-19"); // a Sunday: no trading row
+  const series = Array.from({ length: 12 }, (_, day) => ({
+    date: new Date(2026, 6, 20 + day),
+    low: 100,
+    volume: 60000,
+  }));
+
+  const values = pickColumnValues({ sidecar: null, series, scoreDate, eps: 8 });
+
+  assertEquals(values.adv, 6000000);
+  assertEquals(values.advSource, "forward");
+  assertStringIncludes(pickDetailCells(values), "Approximate:");
+});
+
+Deno.test("partly populated: a usable trailing window is never labelled approximate", () => {
+  const values = pickColumnValues({
+    sidecar: null,
+    series: [{ date: new Date("2026-07-20"), low: 100, volume: 60000 }],
+    scoreDate: new Date("2026-07-20"),
+    eps: 8,
+  });
+
+  assertEquals(values.advSource, "trailing");
+  assert(
+    !pickDetailCells(values).includes("Approximate:"),
+    "an as-at-the-score-date ADV must not be flagged approximate",
+  );
+});
+
+Deno.test("the sidecar's ADV always wins over the in-page fallback", () => {
+  const values = pickColumnValues({
+    sidecar: {
+      week52Low: 50,
+      week52High: 150,
+      closeScoreDate: 100,
+      close5dPrior: 98,
+      advDollar10d: 8000000,
+    },
+    series: [{ date: new Date("2026-07-19"), low: 1, volume: 1 }],
+    scoreDate: new Date("2026-07-19"),
+  });
+
+  assertEquals(values.adv, 8000000);
+  assertEquals(values.advSource, "sidecar");
 });
 
 // ---------------------------------------------------------------------------
