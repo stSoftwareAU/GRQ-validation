@@ -3516,7 +3516,7 @@ class GRQValidator {
             // the static markup in docs/index.html.
             thead.innerHTML = `
           <th scope="col">Stock</th>
-          <th scope="col" title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data.">Pick</th>
+          <th scope="col" class="pick-light" title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data.">Pick</th>
           <th scope="col">Buy Price</th>
           <th scope="col">Stars</th>
           <th scope="col">90-Day Target</th>
