@@ -294,6 +294,24 @@ body.chart-popout-open {
   background: var(--grq-surface-alt, var(--light-color));
 }
 
+/* Pick-detail columns (issue #840). The traffic light is scanned straight down
+ * the column, so it never wraps; the five figures are numeric and read against
+ * a right edge. Colour is carried by the emoji itself, so nothing here depends
+ * on a theme variable. */
+.stock-table .pick-light {
+  white-space: nowrap;
+}
+
+.stock-table .pick-adv,
+.stock-table .pick-lots,
+.stock-table .pick-five-day-return,
+.stock-table .pick-earnings-yield,
+.stock-table .pick-52-week-position {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Performance indicators.
  *
  * Colour comes from theme-aware custom properties with a light-mode fallback,

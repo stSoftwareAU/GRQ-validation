@@ -10,6 +10,17 @@ and this project adheres to
 
 ### Added
 
+- Six pick-detail columns on the dashboard's aggregate stock table
+  (`docs/pick_columns.js`): the 🔴/🟠/🟢 pick traffic light beside **Stock**,
+  plus **ADV**, **Lots**, **5-Day Return**, **Earnings Yield** and **52-Week
+  Position** after the 90-day block, so a reviewer can see why a name might not
+  have been picked by hand. Every figure is as at the score date, never a live
+  quote. Values come from the `<DD>-picks.csv` sidecar, falling back to the
+  in-page CSV's volume window when no sidecar exists; a date with neither
+  renders blank cells and a neutral ⚪ "not enough data" light rather than a
+  misleading 🟢. Rendering only — nothing here reaches the inclusion predicate,
+  the displayed score or any portfolio aggregate (Issue #840).
+
 - Per-score-date pick-details sidecar `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`
   (`src/picks_sidecar.rs`), written beside the existing per-date CSVs with one
   row per ticker: `week52_low`, `week52_high`, `close_score_date`,

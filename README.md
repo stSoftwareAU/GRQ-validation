@@ -634,6 +634,51 @@ python3 -m http.server 8000
 
 Visit `http://localhost:8000` to access the dashboard.
 
+#### Pick-detail columns on the stock table (issue #840)
+
+The aggregate stock table carries six extra columns so a reviewer can answer
+_"is there a reason we didn't manually pick this stock?"_ without leaving the
+page — the same figures the picking spreadsheet shows:
+
+| Column                | Rendering                                                              |
+| --------------------- | ---------------------------------------------------------------------- |
+| **Pick**              | 🔴/🟠/🟢 plus the warning emojis (🚫 🫗 🥃 📈 📉 🪃 🔥 🩸 💰). Sits beside Stock so it is scannable straight down the column; the wording is in the cell's `title`. |
+| **ADV**               | Average daily dollar volume, compact (`$1.23M`).                        |
+| **Lots**              | `ADV ÷ $20,000` — how many parcels trade on an average day.             |
+| **5-Day Return**      | Signed percentage.                                                      |
+| **Earnings Yield**    | Signed percentage. A negative EPS is real and shows as negative.        |
+| **52-Week Position**  | Percentage of the 52-week range: `0.0%` at the low, `100.0%` at the high. |
+
+Four rules govern them:
+
+- **Every figure is as at the score date**, never a live quote — the same basis
+  as the rest of the 90-day validation view (see the `90-Day Actual` warning
+  above). The earnings yield is `eps ÷ score-date price`, not `eps ÷ 90-Day
+  Actual`.
+- **Rendering only.** These values never feed the inclusion predicate
+  (`GRQProjection.isStockIncluded` / `is_priceable`), the displayed score, the
+  star filter or any portfolio aggregate.
+  `tests/pick_columns_isolation_test.ts` pins that over a committed score date.
+- **Unknown degrades, it never breaks.** Older dates (2024) predate the `volume`
+  CSV column, the `eps` TSV column and the sidecar entirely: those cells render
+  **blank** and the light renders **⚪ — not enough data**, which is deliberately
+  neither 🟢 nor 🔴. An unknown value never manufactures a warning and never
+  suppresses one, so a known-thin ADV still shows 🔴 even when the 52-week range
+  is unknown.
+- **No maths is re-implemented.** Thresholds, the light and the warning
+  vocabulary come from `docs/pick_details.js` (issue #836); dollar ADV comes
+  from `averageDollarVolume` in `docs/volume_recommend.js` (the issue #576
+  single source of truth). `docs/pick_columns.js` only renders.
+
+```mermaid
+flowchart LR
+    A["&lt;DD&gt;-picks.csv sidecar<br/>(issue #838)"] --> D
+    B["&lt;DD&gt;.csv trailing window<br/>GRQVolume.buildTrailingVolumeWindow<br/>(fallback when no sidecar)"] --> D
+    C["&lt;DD&gt;.tsv eps<br/>(issue #837)"] --> D
+    D["docs/pick_columns.js<br/>pickColumnValues()"] --> E["docs/pick_details.js<br/>thresholds + traffic light"]
+    E --> F["6 table cells<br/>escaped via docs/escape.js"]
+```
+
 #### Deep-link URL parameters
 
 The dashboard reads ten optional query parameters so a specific view can be
