@@ -134,9 +134,7 @@ function declaration(body: string, property: string): string | null {
   const match = body.match(
     new RegExp(`(?:^|[;{\\s])${property}\\s*:([^;]*)`, "i"),
   );
-  return match === null
-    ? null
-    : match[1].replace(/!important/i, "").trim();
+  return match === null ? null : match[1].replace(/!important/i, "").trim();
 }
 
 /** Rules whose selector matches `predicate`, optionally restricted to rules
@@ -390,10 +388,12 @@ Deno.test("both header rows declare scope=col on every pick-detail column", () =
     }
   })();
 
-  for (const [where, html] of Object.entries({
-    "index.html static": staticThead,
-    "app.js aggregate": aggregateThead,
-  })) {
+  for (
+    const [where, html] of Object.entries({
+      "index.html static": staticThead,
+      "app.js aggregate": aggregateThead,
+    })
+  ) {
     for (const label of PICK_COLUMN_LABELS) {
       const cell = html.split(/<th[\s>]/).find((chunk) =>
         chunk.slice(0, chunk.indexOf(">")).length >= 0 &&
