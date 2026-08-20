@@ -10,6 +10,17 @@ and this project adheres to
 
 ### Added
 
+- Per-score-date pick-details sidecar `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`
+  (`src/picks_sidecar.rs`), written beside the existing per-date CSVs with one
+  row per ticker: `week52_low`, `week52_high`, `close_score_date`,
+  `close_5d_prior` (five **trading** rows back) and `adv_dollar_10d`, computed
+  from the market-data tree over `score_date - 365 days ..= score_date`. Raw
+  inputs only — thresholds and the traffic light stay in `docs/pick_details.js`
+  — and a value that cannot be computed is left **blank, never zero**.
+  `adv_dollar_10d` reuses the `averageDollarVolume` definition of
+  `docs/volume_recommend.js`, with `tests/fixtures/adv_dollar_10d_parity.json`
+  pinning the Rust and JavaScript sides to one window (Issue #838).
+
 - `scripts/version-increment.sh`, ported from NEAT-AI-scorer, and a Version Bump
   workflow step that increments `[package].version` (patch) on every pull
   request unless the branch already bumped it, refreshing `Cargo.lock` to match.
