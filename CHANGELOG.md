@@ -10,6 +10,23 @@ and this project adheres to
 
 ### Added
 
+- `--regenerate-picks`: a pass that rebuilds **only** the `<DD>-picks.csv`
+  sidecar for every date in `docs/scores/index.json` — including dates older
+  than the 180-day cut-off `--process-all` bypasses — so the dashboard's
+  pick-detail columns are populated for the historical dates it exists to
+  review. `--date` narrows it to one date. It reads share prices alone, so it
+  resolves the market-data root only; it is idempotent over unchanged upstream
+  data; an upstream gap leaves blank cells and a named skip instead of aborting
+  the run; and it prints an end-of-run summary of dates considered, sidecars
+  written and every skipped date with its reason. `src/picks_backfill.rs`,
+  tested by `tests/picks_backfill_test.rs` (Issue #839).
+
+- Committed pick-details sidecars for every historical score date, and a
+  `scripts/check_score_data_pairing.ts` guard that reports any prediction date
+  paired with market data but missing its `<DD>-picks.csv`, so a backfill that
+  was never run — or a later change that stops emitting sidecars — turns CI red
+  rather than silently blanking the dashboard columns (Issue #839).
+
 - Per-score-date pick-details sidecar `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`
   (`src/picks_sidecar.rs`), written beside the existing per-date CSVs with one
   row per ticker: `week52_low`, `week52_high`, `close_score_date`,
