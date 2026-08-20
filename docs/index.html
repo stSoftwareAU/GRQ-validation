@@ -365,7 +365,20 @@
                 <!-- Stock Table -->
                 <div class="card">
                   <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <!-- The 21-column table scrolls sideways rather than
+                         hiding columns on a phone (issue #842), so the
+                         scroller is a focusable, named region: a keyboard user
+                         tabs to it and pans with the arrow keys, and a screen
+                         reader announces what is being scrolled. Stock and the
+                         traffic light stay pinned to the left edge (see
+                         docs/styles.css). -->
+                    <div
+                      class="table-responsive"
+                      id="stockTableScroll"
+                      role="region"
+                      aria-label="Individual stock performance — scroll sideways for the remaining columns"
+                      tabindex="0"
+                    >
                       <table
                         class="table table-hover stock-table mb-0"
                         id="stockTable"
@@ -373,8 +386,13 @@
                         <thead>
                           <tr>
                             <th scope="col">Stock</th>
+                            <!-- `pick-light` also tags the HEADER (issue #842)
+                                 so the pinned-column rule covers it: the basic
+                                 (no-market-data) view has no Pick column, so
+                                 the rule can never key off a position. -->
                             <th
                               scope="col"
+                              class="pick-light"
                               title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data."
                             >Pick</th>
                             <th scope="col">Score</th>

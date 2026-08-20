@@ -700,6 +700,35 @@ emojis. Following the Low-volume legend pattern (issue #599) it renders **only**
 when at least one stock in the loaded report carries something to decode, so a
 clean report stays uncluttered.
 
+#### The widened table on a phone (issue #842)
+
+Twenty-one columns do not fit a 375px-wide screen, so the table **scrolls
+sideways with the Stock column and the traffic light pinned** to the left edge.
+No column is hidden: the previous mobile rule hid the third and sixth columns
+outright, which does not make a wide table responsive — it makes those cells
+unreachable on the one device where the reader cannot open a wider window.
+
+- **Pinned pair.** `#stockTable`'s first column (always Stock) is pinned by
+  position and given a fixed width, because the light's `left` offset must land
+  exactly on its right edge; the light is pinned by CLASS (`.pick-light`),
+  because the basic no-market-data view has no Pick column and its second column
+  must not be pinned. Both paint an opaque, theme-aware background, so the
+  scrolling columns pass underneath rather than through them.
+- **Keyboard-reachable scroller.** The wrapper is
+  `role="region" tabindex="0"` with an accessible name, so the table can be
+  panned with the arrow keys and is announced by a screen reader — a scroll
+  region that only answers to touch is an accessibility failure.
+- **Readable light.** The traffic-light column keeps a floor width so the lights
+  form a strip that can be scanned straight down, and the emoji is drawn above
+  body-text size (in root-relative `rem`, so the smaller mobile table font does
+  not shrink it) because 🔴 and 🟠 differ only in hue.
+- **Never colour alone.** The wording beside each light (issue #841) and the
+  legend below the table carry the meaning; the glyphs are `aria-hidden`.
+
+`pa11y` (`pa11yci.json`) audits the dashboard at a 390px viewport in **both**
+themes, and `tests/stock_table_responsive_layout_test.ts` pins the invariants
+above against the committed markup and stylesheet.
+
 #### Deep-link URL parameters
 
 The dashboard reads ten optional query parameters so a specific view can be
