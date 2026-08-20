@@ -373,6 +373,10 @@
                         <thead>
                           <tr>
                             <th scope="col">Stock</th>
+                            <th
+                              scope="col"
+                              title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data."
+                            >Pick</th>
                             <th scope="col">Score</th>
                             <th scope="col">Buy Price</th>
                             <th scope="col">Stars</th>
@@ -390,6 +394,29 @@
                             <th scope="col">Average Dividend (90-day)</th>
                             <th scope="col">Total Dividends (90-day)</th>
                             <th scope="col">Notes</th>
+                            <!-- Pick-detail columns (issue #840): the figures a
+                                 reviewer reads to answer "is there a reason we
+                                 didn't pick this?". All as at the score date. -->
+                            <th
+                              scope="col"
+                              title="Average daily dollar volume over the ten trading days to the score date."
+                            >ADV</th>
+                            <th
+                              scope="col"
+                              title="Average daily dollar volume divided by the $20,000 parcel size."
+                            >Lots</th>
+                            <th
+                              scope="col"
+                              title="Price change over the five trading days to the score date."
+                            >5-Day Return</th>
+                            <th
+                              scope="col"
+                              title="Earnings per share divided by the score-date price. Negative when the company is loss making."
+                            >Earnings Yield</th>
+                            <th
+                              scope="col"
+                              title="Where the score-date price sits in its 52-week range: 0% at the low, 100% at the high."
+                            >52-Week Position</th>
                           </tr>
                         </thead>
                         <tbody id="stockTableBody"></tbody>
@@ -532,6 +559,14 @@
     <!-- Shared low-volume/liquidity helper (issue #576) — must load before
          app.js, which excludes flagged names from the portfolio (issue #577) -->
     <script src="volume_recommend.js?v=1.1.97"></script>
+
+    <!-- Shared stock-pick metrics: lots, earnings yield, 5-day return, 52-week
+         position and the traffic light (issue #836) — before pick_columns.js -->
+    <script src="pick_details.js?v=1.1.97"></script>
+
+    <!-- Pick-detail table columns (issue #840) — needs escape.js,
+         volume_recommend.js and pick_details.js; must load before app.js -->
+    <script src="pick_columns.js?v=1.1.97"></script>
 
     <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->
     <script src="chart_window_settings.js?v=1.1.97"></script>
