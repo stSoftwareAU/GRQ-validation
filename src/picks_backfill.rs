@@ -242,7 +242,10 @@ mod tests {
         let summary = BackfillSummary {
             considered: vec!["2024-10-15".to_string(), "2024-10-16".to_string()],
             written: vec![written("2024-10-16")],
-            skipped: vec![skipped("2024-10-15", "no market data before the score date")],
+            skipped: vec![skipped(
+                "2024-10-15",
+                "no market data before the score date",
+            )],
         };
 
         let report = summary.render();
