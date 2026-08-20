@@ -823,7 +823,9 @@ class GRQValidator {
         if (load.state === "error") {
             this.pickDetailsError = load;
             console.error(
-                `Pick-details sidecar fault for ${picksFile} (${load.reason}):`,
+                "Pick-details sidecar fault:",
+                picksFile,
+                load.reason,
                 load.message,
             );
             return;
