@@ -442,6 +442,20 @@
                         portfolio and from every aggregate (equal-weight) figure.
                       </small>
                     </div>
+                    <!-- Pick-warning legend (issue #841): decode the traffic
+                         light and every warning emoji in the pick-detail
+                         columns. Hidden by default and filled by app.js only
+                         when at least one stock in the loaded report carries
+                         something to decode, following the Low-volume legend
+                         pattern (issue #599) so a clean report stays
+                         uncluttered. -->
+                    <div
+                      id="pickWarningsLegend"
+                      class="data-source-note text-muted mt-2 px-3 pb-2"
+                      style="display: none"
+                    >
+                      <small id="pickWarningsLegendBody"></small>
+                    </div>
                     <!-- Negative-score legend (issue #627): explain the badge so
                          excluded names predicted to fall are visible, not
                          silently dropped. Hidden by default and shown only when
@@ -564,8 +578,14 @@
          position and the traffic light (issue #836) — before pick_columns.js -->
     <script src="pick_details.js?v=1.1.97"></script>
 
+    <!-- "Show the working" popovers, accessible wording and the warning legend
+         for the pick-detail columns (issue #841) — needs pick_details.js and
+         must load before pick_columns.js, which renders its wording -->
+    <script src="pick_working.js?v=1.1.97"></script>
+
     <!-- Pick-detail table columns (issue #840) — needs escape.js,
-         volume_recommend.js and pick_details.js; must load before app.js -->
+         volume_recommend.js, pick_details.js and pick_working.js; must load
+         before app.js -->
     <script src="pick_columns.js?v=1.1.97"></script>
 
     <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->

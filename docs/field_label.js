@@ -38,6 +38,15 @@ const FIELD_LABELS = {
     "portfolio-dividends": "Dividends",
     "portfolio-return-above-cost-of-capital":
         "Portfolio Return above Cost of Capital",
+    // Pick-detail columns (issue #841). The labels are the column headers the
+    // table already shows (docs/pick_columns.js `PICK_COLUMN_LABELS`), pinned
+    // to them by tests/pick_popover_wiring_test.ts.
+    "pick-light": "Pick",
+    "pick-adv": "ADV",
+    "pick-lots": "Lots",
+    "pick-five-day-return": "5-Day Return",
+    "pick-earnings-yield": "Earnings Yield",
+    "pick-52-week-position": "52-Week Position",
 };
 
 // Friendly display label for a field id. Unknown ids fall back to the raw id so

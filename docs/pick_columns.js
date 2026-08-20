@@ -30,10 +30,6 @@
 // <script> (no module syntax) publishing on `globalThis.GRQPickColumns`, so the
 // browser dashboard and the Deno tests exercise the exact same code.
 
-// The neutral "not enough data" marker. Deliberately NEITHER 🟢 nor 🔴: an
-// unknown value must never read as healthy and must never read as a warning.
-const UNKNOWN_LIGHT = "⚪";
-
 // How many columns this module contributes: the light plus five figures.
 const PICK_COLUMN_COUNT = 6;
 
@@ -70,6 +66,20 @@ function pickDetails() {
     if (!helper) {
         throw new Error(
             "GRQPickDetails is not loaded — docs/pick_details.js must be " +
+                "loaded before docs/pick_columns.js",
+        );
+    }
+    return helper;
+}
+
+// The explanation module (issue #841): the "show the working" popover bodies,
+// the light vocabulary (including the neutral ⚪) and the accessible wording
+// behind each emoji. Owned there so a light is never described two ways.
+function pickWorking() {
+    const helper = globalThis.GRQPickWorking;
+    if (!helper) {
+        throw new Error(
+            "GRQPickWorking is not loaded — docs/pick_working.js must be " +
                 "loaded before docs/pick_columns.js",
         );
     }
@@ -278,7 +288,7 @@ function resolveTrafficLight(values) {
 
     const unknownLight = !known && !verdict.majorWarn && !verdict.minorWarn;
     return {
-        light: unknownLight ? UNKNOWN_LIGHT : verdict.light,
+        light: unknownLight ? pickWorking().UNKNOWN_LIGHT : verdict.light,
         warnings: verdict.warnings,
         majorWarn: verdict.majorWarn,
         minorWarn: verdict.minorWarn,
@@ -366,56 +376,111 @@ function pickColumnValues(input) {
             )
             : null,
     };
+    // The raw inputs behind each figure, kept so the "show the working" popover
+    // (issue #841) can print them — and so a BLANK cell can say WHY it is blank
+    // rather than opening an empty popover.
+    values.inputs = {
+        hasSidecar: sidecar !== null,
+        eps: helper.toFiniteNumber(options.eps),
+        week52Low: sidecar ? helper.toFiniteNumber(sidecar.week52Low) : null,
+        week52High: sidecar ? helper.toFiniteNumber(sidecar.week52High) : null,
+        closeScoreDate: sidecarClose,
+        close5dPrior: sidecar
+            ? helper.toFiniteNumber(sidecar.close5dPrior)
+            : null,
+    };
     values.trafficLight = resolveTrafficLight(values);
     return values;
 }
 
-// The traffic-light `<td>`: the light followed by every warning emoji, with the
-// full wording in the cell's title so the reason is never emoji-only.
-function trafficLightCell(values) {
+// The "show the working" popover attributes for one pick-detail cell (issue
+// #841). The `<td>` ITSELF is the trigger rather than a span inside it: an
+// unknown figure renders as a BLANK cell, and a zero-width span could never be
+// clicked, so the popover that explains why it is blank would be unreachable.
+// The attributes are the same ones every other `.clickable-value` on the
+// dashboard carries, so the shared popover lifecycle (docs/popover_cleanup.js,
+// docs/popover_dismiss.js) disposes and dismisses these with the rest.
+function triggerAttributes(field, label, stock) {
+    const safeStock = escape(
+        stock === undefined || stock === null ? "" : stock,
+    );
+    const title = safeStock === ""
+        ? escape(label)
+        : `${escape(label)} - ${safeStock}`;
+    return 'data-bs-toggle="popover" data-bs-trigger="click" ' +
+        `data-bs-content="" data-bs-title="${title}" data-field="${
+            escape(field)
+        }" data-stock="${safeStock}"`;
+}
+
+// The traffic-light `<td>`: the light followed by every warning emoji, plus a
+// visually-hidden text equivalent so the meaning is never colour- or
+// glyph-only and survives with images disabled (issue #841). The emoji run is
+// `aria-hidden` because the wording beside it already says what it means.
+//
+// Deliberately NO `title` attribute: Bootstrap 5.1 promotes a trigger's `title`
+// to `data-bs-original-title` and renders it as the popover HEADING, which
+// would leave these cells headed by a warning summary while every other value
+// on the dashboard reads "Field - Stock". The wording lives in the accessible
+// text and in the popover body instead.
+function trafficLightCell(values, stock) {
+    const fields = pickWorking().PICK_FIELDS;
     const verdict = (values && values.trafficLight) ||
         resolveTrafficLight(values || {});
     const warnings = Array.isArray(verdict.warnings) ? verdict.warnings : [];
     const emojis = verdict.light + warnings.map((w) => w.emoji).join("");
-    const title = warnings.length > 0
-        ? warnings.map((w) => w.label).join("; ")
-        : (verdict.known
-            ? "No pick warnings as at the score date"
-            : "Not enough data as at the score date to judge this pick");
-    return `<td class="pick-light" title="${escape(title)}">${
-        escape(emojis)
-    }</td>`;
+    return `<td class="pick-light clickable-value" ${
+        triggerAttributes(fields.LIGHT, PICK_COLUMN_LABELS[0], stock)
+    }><span aria-hidden="true">${escape(emojis)}</span><span ` +
+        `class="visually-hidden">${
+            escape(pickWorking().accessibleLightText(verdict))
+        }</span></td>`;
 }
 
 // The five figure `<td>`s, in header order. Every unknown renders as a blank
-// cell — never a zero, which would read as a real (and terrible) number.
-function pickDetailCells(values) {
+// cell — never a zero, which would read as a real (and terrible) number — and
+// every cell, blank or not, opens its own working popover: the working says
+// what window the figure came from, whether it is approximate, and why a blank
+// cell is blank (issue #841).
+function pickDetailCells(values, stock) {
     const row = values && typeof values === "object" ? values : {};
     const helper = pickDetails();
-    // An approximated ADV says so rather than passing itself off as the
-    // as-at-the-score-date figure.
-    const advTitle = row.advSource === "forward"
-        ? "Approximate: no pick-details sidecar for this date, so this is the " +
-            "mean over the ten trading days FOLLOWING the score date."
-        : "";
+    const fields = pickWorking().PICK_FIELDS;
     const cells = [
-        ["pick-adv", helper.formatCompactMoney(row.adv), advTitle],
-        ["pick-lots", helper.formatCompactCount(row.lots), advTitle],
-        ["pick-five-day-return", formatSignedPercent(row.fiveDayReturn), ""],
-        ["pick-earnings-yield", formatSignedPercent(row.earningsYield), ""],
-        ["pick-52-week-position", formatRangePercent(row.position), ""],
+        [fields.ADV, "pick-adv", helper.formatCompactMoney(row.adv)],
+        [fields.LOTS, "pick-lots", helper.formatCompactCount(row.lots)],
+        [
+            fields.FIVE_DAY_RETURN,
+            "pick-five-day-return",
+            formatSignedPercent(row.fiveDayReturn),
+        ],
+        [
+            fields.EARNINGS_YIELD,
+            "pick-earnings-yield",
+            formatSignedPercent(row.earningsYield),
+        ],
+        [
+            fields.POSITION,
+            "pick-52-week-position",
+            formatRangePercent(row.position),
+        ],
     ];
     return cells
-        .map(([className, text, title]) =>
-            `<td class="${className}"${
-                title ? ` title="${escape(title)}"` : ""
+        .map(([field, className, text], index) =>
+            `<td class="${className} clickable-value" ${
+                triggerAttributes(field, PICK_COLUMN_LABELS[index + 1], stock)
             }>${escape(text)}</td>`
         )
         .join("");
 }
 
 globalThis.GRQPickColumns = {
-    UNKNOWN_LIGHT,
+    // Re-exported from docs/pick_working.js, which owns the light vocabulary
+    // (issue #841), so the neutral marker has exactly one definition. A getter
+    // keeps the resolution lazy, matching the rest of this module.
+    get UNKNOWN_LIGHT() {
+        return pickWorking().UNKNOWN_LIGHT;
+    },
     PICK_COLUMN_COUNT,
     PICK_COLUMN_LABELS,
     formatSignedPercent,

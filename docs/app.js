@@ -42,6 +42,10 @@ class GRQValidator {
         this.selectedStock = null; // Track selected stock for single view
         this.chart = null;
         this.costOfCapital = 10; // 10% annual cost of capital
+        // Pick-detail values by ticker for the CURRENT render (issue #841):
+        // what the "show the working" popovers explain and what the warning
+        // legend is gated on. Rebuilt on every render, never carried over.
+        this.pickValues = {};
 
         this.initializeEventListeners();
         this.loadIndex();
@@ -3530,6 +3534,10 @@ class GRQValidator {
 
             let totalPerformance = 0;
             let validStocks = 0;
+            // Start this render's pick-detail values from empty so a stock that
+            // has dropped out of the report can never explain itself with the
+            // previous render's figures (issue #841).
+            this.pickValues = {};
 
             stocksToShow.forEach((stock) => {
                 const row = document.createElement("tr");
@@ -3602,9 +3610,13 @@ class GRQValidator {
                     eps: stock.eps,
                     buyPrice,
                 });
+                // Kept for this render so the "show the working" popovers
+                // (issue #841) can print the very figures the cells show, and
+                // so the warning legend knows whether anything needs decoding.
+                this.pickValues[stock.stock] = pickValues;
                 row.innerHTML = `
             <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}${negativeScoreBadge}</td>
-            ${GRQPickColumns.trafficLightCell(pickValues)}
+            ${GRQPickColumns.trafficLightCell(pickValues, stock.stock)}
             <td>
                 <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
                     data-field="buy-price" data-stock="${safeStock}"
@@ -3638,7 +3650,7 @@ class GRQValidator {
                     this.getJudgementClass(judgement)
                 }">${judgement}</span></span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${safeStock}" data-field="dividend-info" data-stock="${safeStock}">${dividendInfo}</span></td>
-            ${GRQPickColumns.pickDetailCells(pickValues)}
+            ${GRQPickColumns.pickDetailCells(pickValues, stock.stock)}
           `;
                 // Strike out excluded stocks (issue #290): a stock dropped from
                 // every portfolio calculation (per the shared inclusion
@@ -3770,6 +3782,7 @@ class GRQValidator {
         // Call out any low-volume name with the conditional legend (issue #599).
         this.updateLowVolumeLegend();
         this.updateNegativeScoreLegend();
+        this.updatePickWarningsLegend();
     }
 
     updateBasicStockTable() {
@@ -3850,6 +3863,10 @@ class GRQValidator {
         // the legend if a prior market-data render had shown it (issue #599).
         this.updateLowVolumeLegend();
         this.updateNegativeScoreLegend();
+        // The basic view renders no pick columns at all, so drop the previous
+        // render's values and hide the warning legend with them (issue #841).
+        this.pickValues = {};
+        this.updatePickWarningsLegend();
     }
 
     getDividendsWithin90Days(stockSymbol) {
@@ -4405,6 +4422,26 @@ class GRQValidator {
             GRQProjection.shouldShowLowVolumeLegend(flags) ? "" : "none";
     }
 
+    // Show the pick-warning legend only when at least one stock in the loaded
+    // report actually carries something to decode — a warning emoji, or a light
+    // that is not the plain 🟢 (issue #841). A clean report stays uncluttered,
+    // mirroring the low-volume legend's "only when it applies" rule (#599).
+    // The legend's contents come from the shared vocabulary (GRQPickWorking),
+    // so a retuned threshold or a renamed warning updates the legend with it.
+    updatePickWarningsLegend() {
+        const legend = document.getElementById("pickWarningsLegend");
+        if (!legend) {
+            return;
+        }
+        const rows = Object.values(this.pickValues || {});
+        const show = GRQPickWorking.hasAnyWarning(rows);
+        const body = document.getElementById("pickWarningsLegendBody");
+        if (body) {
+            body.innerHTML = show ? GRQPickWorking.legendHtml() : "";
+        }
+        legend.style.display = show ? "" : "none";
+    }
+
     isStockLowVolume(stockSymbol, scoreDate) {
         const series = this.marketData ? this.marketData[stockSymbol] : null;
         if (!series) {
@@ -4690,6 +4727,21 @@ class GRQValidator {
         const header = globalThis.GRQFieldLabel
             ? globalThis.GRQFieldLabel.workingHeader(stockSymbol, field, scoreDateISO)
             : `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${scoreDateISO}\n\n`;
+
+        // Pick-detail columns (issue #841): every one of the six values
+        // explains itself from the SAME row the cell was rendered from, so the
+        // popover can never drift from the number on screen. The shared helper
+        // owns the wording, including why a blank cell is blank.
+        if (GRQPickWorking.isPickField(field)) {
+            return header + GRQPickWorking.working({
+                field,
+                values: this.pickValues ? this.pickValues[stockSymbol] : null,
+                context: {
+                    scoreDateISO,
+                    weekdayWindow: GRQVolume.WEEKDAY_WINDOW,
+                },
+            });
+        }
 
         switch (field) {
             case "buy-price":

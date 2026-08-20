@@ -642,7 +642,7 @@ page — the same figures the picking spreadsheet shows:
 
 | Column                | Rendering                                                              |
 | --------------------- | ---------------------------------------------------------------------- |
-| **Pick**              | 🔴/🟠/🟢 plus the warning emojis (🚫 🫗 🥃 📈 📉 🪃 🔥 🩸 💰). Sits beside Stock so it is scannable straight down the column; the wording is in the cell's `title`. |
+| **Pick**              | 🔴/🟠/🟢 plus the warning emojis (🚫 🫗 🥃 📈 📉 🪃 🔥 🩸 💰). Sits beside Stock so it is scannable straight down the column; the wording sits in visually-hidden text beside the glyphs, so the meaning survives with colour and images disabled. |
 | **ADV**               | Average daily dollar volume, compact (`$1.23M`).                        |
 | **Lots**              | `ADV ÷ $20,000` — how many parcels trade on an average day.             |
 | **5-Day Return**      | Signed percentage.                                                      |
@@ -677,7 +677,28 @@ flowchart LR
     C["&lt;DD&gt;.tsv eps<br/>(issue #837)"] --> D
     D["docs/pick_columns.js<br/>pickColumnValues()"] --> E["docs/pick_details.js<br/>thresholds + traffic light"]
     E --> F["6 table cells<br/>escaped via docs/escape.js"]
+    F --> G["docs/pick_working.js<br/>popover working, accessible text, legend<br/>(issue #841)"]
 ```
+
+Each of the six cells **shows its working** (issue #841), the same way every
+other value on the dashboard does: click it and a popover gives the inputs, the
+formula and the result — `$8.00M ÷ $20,000 = 400 lots` and the band that falls
+in, the ADV window and whether it came from the sidecar or the in-page CSV
+fallback, `eps ÷ score-date price` with both inputs, the 52-week high and low
+behind the position, both closes behind the 5-day return, and — for the traffic
+light — every warning that fired with the threshold it tests, the value that met
+it, and whether it turned the light red or amber. A **blank** cell opens a
+popover too, saying _why_ it is blank (no sidecar for this date, a pre-`eps`
+score file) rather than an empty body. The wording comes from
+`docs/pick_working.js`, which quotes the shared thresholds rather than restating
+them, and the popovers use the dashboard's existing lifecycle helpers
+(`docs/popover_cleanup.js`, `docs/popover_dismiss.js`), so switching score dates
+leaves no orphaned tip.
+
+Below the table a **legend** decodes the four lights and all nine warning
+emojis. Following the Low-volume legend pattern (issue #599) it renders **only**
+when at least one stock in the loaded report carries something to decode, so a
+clean report stays uncluttered.
 
 #### Deep-link URL parameters
 

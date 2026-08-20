@@ -29,6 +29,9 @@ const CORE_ASSETS = [
   // table columns that render them (issue #840). app.js calls both at render
   // time, so they must ship in the same all-or-nothing shell update.
   "./pick_details.js",
+  // "Show the working" popovers and the warning legend for those columns
+  // (issue #841).
+  "./pick_working.js",
   "./pick_columns.js",
   "./chart_window_settings.js",
   "./color_key.js",
