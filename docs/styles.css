@@ -302,6 +302,20 @@ body.chart-popout-open {
   white-space: nowrap;
 }
 
+/* Pick-warning legend below the table (issue #841): a compact list decoding
+ * the traffic light and every warning emoji. The emoji column is fixed so the
+ * wording lines up, and the wording — not the glyph — carries the meaning. */
+.pick-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.15rem 1rem;
+}
+
+.pick-legend-emoji {
+  display: inline-block;
+  min-width: 1.5rem;
+}
+
 .stock-table .pick-adv,
 .stock-table .pick-lots,
 .stock-table .pick-five-day-return,

@@ -20,6 +20,9 @@ import { assert, assertStringIncludes } from "@std/assert";
 import "../docs/escape.js";
 import "../docs/volume_recommend.js";
 import "../docs/pick_details.js";
+// The pick columns now render "show the working" popovers and the accessible
+// text behind each emoji, which live in docs/pick_working.js (issue #841).
+import "../docs/pick_working.js";
 import "../docs/pick_columns.js";
 
 const INDEX_HTML = await Deno.readTextFile("docs/index.html");

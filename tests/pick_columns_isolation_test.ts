@@ -19,6 +19,9 @@ import "../docs/volume_recommend.js";
 import "../docs/trend_series.js";
 import "../docs/trend_predictions.js";
 import "../docs/pick_details.js";
+// The pick columns now render "show the working" popovers and the accessible
+// text behind each emoji, which live in docs/pick_working.js (issue #841).
+import "../docs/pick_working.js";
 import "../docs/pick_columns.js";
 
 interface ResolvedStock {

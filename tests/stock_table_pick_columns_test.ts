@@ -27,6 +27,9 @@ import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import "../docs/escape.js";
 import "../docs/volume_recommend.js";
 import "../docs/pick_details.js";
+// The pick columns now render "show the working" popovers and the accessible
+// text behind each emoji, which live in docs/pick_working.js (issue #841).
+import "../docs/pick_working.js";
 import "../docs/pick_columns.js";
 
 interface PickWarning {
@@ -109,6 +112,17 @@ const { MIN_RED_LOTS, MIN_AMBER_LOTS, PARCEL_DOLLARS, WARNINGS } =
 /** Split a run of markup into its top-level `<td>` cells. */
 function tdCells(html: string): string[] {
   return html.split(/<td[\s>]/).slice(1);
+}
+
+/** The ADV "show the working" popover body for a row (issue #841). */
+function advWorking(values: PickValues): string {
+  return (globalThis as unknown as {
+    GRQPickWorking: { working: (input: Record<string, unknown>) => string };
+  }).GRQPickWorking.working({
+    field: "pick-adv",
+    values,
+    context: { scoreDateISO: "2026-07-19", weekdayWindow: 10 },
+  });
 }
 
 /** The visible text of the nth `<td>` in a cell run. */
@@ -396,7 +410,14 @@ Deno.test("partly populated: a score-date-forward CSV still yields an ADV, flagg
 
   assertEquals(values.adv, 6000000);
   assertEquals(values.advSource, "forward");
-  assertStringIncludes(pickDetailCells(values), "Approximate:");
+  // The "this is not as at the score date" caveat moved from the cell's title
+  // attribute into the ADV working popover (issue #841): Bootstrap promotes a
+  // trigger's `title` to the popover HEADING, so the caveat is stated in the
+  // body instead, where it can spell out which window was used.
+  assertStringIncludes(
+    advWorking(values),
+    "APPROXIMATE",
+  );
 });
 
 Deno.test("partly populated: a usable trailing window is never labelled approximate", () => {
@@ -409,7 +430,7 @@ Deno.test("partly populated: a usable trailing window is never labelled approxim
 
   assertEquals(values.advSource, "trailing");
   assert(
-    !pickDetailCells(values).includes("Approximate:"),
+    !advWorking(values).includes("APPROXIMATE"),
     "an as-at-the-score-date ADV must not be flagged approximate",
   );
 });
