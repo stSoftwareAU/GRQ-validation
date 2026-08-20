@@ -10,6 +10,20 @@ and this project adheres to
 
 ### Added
 
+- Documentation for the pick-detail columns: a README _Features_ entry covering
+  every threshold (the `$20,000` parcel, the `50`/`200` lot floors, the `$1`
+  delisting price, the `0.85`/`0.15` 52-week cut-offs, the `-10%` five-day drop
+  and the `2%`/`6%` earnings-yield bands), the full 🔴 🟠 🟢 ⚪ 🚫 🫗 🥃 📈 📉
+  🪃 🔥 🩸 💰 marker key, the as-at-the-score-date caveat and the "unknown ⇒
+  blank, never a warning" rule; the `<date>-picks.csv` sidecar's place beside
+  `<date>.csv`, `<date>-analysis.csv` and `<date>-dividends.csv`; and the
+  backfill command with the two data roots it needs (README and CONTRIBUTING).
+  `tests/pick_details_documentation_test.ts` reads each documented threshold,
+  emoji, sidecar column and CLI flag out of `docs/pick_details.js`,
+  `docs/pick_working.js`, `src/picks_sidecar.rs` and `src/main.rs`, so a
+  retuned constant or a renamed flag fails the gate instead of silently
+  leaving stale prose (Issue #843).
+
 - "Show the working" popovers, accessible wording and a warning legend for the
   pick-detail columns (`docs/pick_working.js`). Each of the six cells is now a
   `.clickable-value` popover trigger: the popover gives the inputs, the formula

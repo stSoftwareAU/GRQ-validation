@@ -82,6 +82,57 @@ GitHub Pages.
   detail view shows a **Low volume — not recommended** badge), partial
   illiquidity proportionally down-weights, and unknown volume leaves the score
   unchanged.
+- **Pick-Detail Columns** — the aggregate stock table shows the same figures the
+  user reads off their picking spreadsheet, so a reviewer can answer _"is there
+  a reason we didn't manually pick this stock?"_ without leaving the page
+  (issues #836, #840): a traffic light beside **Stock**, then **ADV**, **Lots**,
+  **5-Day Return**, **Earnings Yield** and **52-Week Position**. The thresholds
+  are the user's own, adopted verbatim from that spreadsheet. A parcel is
+  `$20,000`, so **Lots** is `ADV ÷ $20,000` — how many such parcels trade on an
+  average day; under `50 lots` (so a dollar ADV below roughly $1M) is a major
+  warning and under `200 lots` (below roughly $4M) a minor one. A price under
+  `$1` is delisting risk. A 52-week position at or above `0.85` is "at the
+  high", at or below `0.15` "at the low". A 5-day return of `-10%` or worse is a
+  big drop. An earnings yield (`eps ÷ score-date price`) under `2%` is weak, and
+  one at or above `6%` is strong — strong enough to excuse sitting at the high
+  or the low. The light is **🔴** when any major warning fires, **🟠** when only
+  a minor one does, **🟢** when none does, and **⚪** when there is not enough
+  data to judge — deliberately neither green nor red:
+
+  | Marker | Meaning                                          |
+  | ------ | ------------------------------------------------ |
+  | 🔴     | At least one major warning                        |
+  | 🟠     | At least one minor warning, and no major warning  |
+  | 🟢     | No warnings — nothing about this pick stands out  |
+  | ⚪     | Not enough data as at the score date to judge     |
+  | 🚫     | Delisting risk: price below `$1` (major)          |
+  | 🫗     | Poor liquidity: under `50` parcels a day (major)  |
+  | 🥃     | Thin liquidity: under `200` parcels a day (minor) |
+  | 📈     | Near the 52-week high (minor unless the yield is strong) |
+  | 📉     | Near the 52-week low (minor unless the yield is strong)  |
+  | 🪃     | Fell `10%` or more over the last 5 days (minor)   |
+  | 🔥     | Negative earnings yield — loss making (major)     |
+  | 🩸     | Weak earnings yield, under `2%` (major)           |
+  | 💰     | Strong earnings yield, `6%` or better             |
+
+  Three rules keep the feature honest:
+
+  - **One place per number.** Every threshold above lives in
+    `docs/pick_details.js` (issue #836) — the single source of truth for the
+    lots maths, the warning vocabulary and the light — and dollar ADV stays
+    owned by `averageDollarVolume` in `docs/volume_recommend.js` (issue #576).
+    Neither is redefined anywhere else; the table cells, the popovers and the
+    accessible text all read the shared values.
+  - **As at the score date, not live.** Every figure is computed from the
+    prices as at the score date, exactly like the rest of this 90-day
+    validation view — the earnings yield divides by the score-date price, never
+    by the "90-Day Actual" (see the standing warning at the top of this file).
+  - **Unknown ⇒ blank, never a warning.** Older dates predate the `volume` CSV
+    column, the `eps` TSV column and the `<date>-picks.csv` sidecar. Those cells
+    render **blank** and the light renders ⚪, because an absent value must
+    never manufacture a warning, never suppress one, and never be read as
+    healthy.
+
 - **Dividend Tracking** — calculate dividend income and total returns. The
   **90-day judgement** metric credits dividends going ex inside
   `[score date, day 90]` and stays capped there (issue #717 precedent). The
@@ -584,6 +635,17 @@ file backwards by a year of rows per ticker, the processor writes a per-score-da
 sidecar beside it: `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`, one row per
 ticker.
 
+It sits alongside the other files a processed score date owns, in the same
+directory:
+
+| File               | Contents                                                                |
+| ------------------ | ----------------------------------------------------------------------- |
+| `<DD>.tsv`         | The scores themselves, as published by the scorer (including `eps`).     |
+| `<DD>.csv`         | Market data from the score date **forward**, over a 180-day window.      |
+| `<DD>-analysis.csv`| Per-stock performance calculated from `<DD>.csv`.                        |
+| `<DD>-dividends.csv`| Dividends going ex inside the same forward window.                      |
+| `<DD>-picks.csv`   | The pick details **as at** the score date, needing history from before it.|
+
 | Column             | Meaning                                                                |
 | ------------------ | ---------------------------------------------------------------------- |
 | `ticker`           | Full code from the score TSV, e.g. `NYSE:SEM`.                          |
@@ -622,6 +684,38 @@ flowchart LR
     D --> F
     E --> F
 ```
+
+#### Backfilling the pick-details sidecar
+
+A score date only gets a sidecar when the processor runs over it, so historical
+dates need a backfill before their pick-detail columns show anything. The
+sidecar is written as part of processing a date, which makes the backfill the
+ordinary full pass — every date in `docs/scores/index.json`, including those
+older than the usual 180-day window:
+
+```bash
+# Every historical date: rewrites each date's market-data CSV, sidecar,
+# dividend CSV and analysis.
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" \
+    --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH" \
+    --process-all
+
+# Or one date at a time, to check a single sidecar before committing the rest.
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" \
+    --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH" \
+    --date 2025-01-15
+```
+
+Both data roots are required: the sidecar's 52-week range, prior close and
+dollar ADV all come from the market-data tree, and the same pass also rewrites
+the dividend CSV. See _Required data roots_ below for the layout each expects.
+`./run.sh --process-all` runs the same pass with the build step and the
+environment variables wired up. The generated sidecars are committed like the
+other per-date CSVs, and a date whose upstream history is missing is skipped
+with a warning rather than aborting the run. A sidecar-only pass, which would
+rewrite nothing else, is tracked separately in issue #839.
 
 ### Web Interface
 
