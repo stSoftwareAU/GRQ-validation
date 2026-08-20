@@ -348,6 +348,23 @@ fn main() -> Result<()> {
                     }
                 }
 
+                // Create the pick-details sidecar (issue #838): the as-at-the-
+                // score-date figures the main CSV cannot carry because they
+                // need history from BEFORE the score date.
+                match grq_validation::picks_sidecar::create_picks_sidecar_csv_for_score_file(
+                    &roots.market,
+                    &score_file_path,
+                    &ticker_codes,
+                    &score_entry.date,
+                ) {
+                    Ok(output_path) => {
+                        info!("Successfully created pick-details sidecar: {output_path}");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create pick-details sidecar: {e}");
+                    }
+                }
+
                 // Create dividend CSV file
                 match create_dividend_csv_for_score_file(
                     &roots.dividends,

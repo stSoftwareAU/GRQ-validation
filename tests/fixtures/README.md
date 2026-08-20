@@ -96,3 +96,21 @@ dividend-history tree nor write permission:
 0.25, windowed 0 → **+0.25 pp**); `NYSE:Q` pays quarterly with one realised
 in-window dividend (flat 0.25, windowed 0.25 → **0 pp**). Both buy at a midpoint
 of 100, so the report's mean difference is **+0.125 pp** over 2 rows.
+
+## Dollar-ADV parity window (issue #838)
+
+`adv_dollar_10d_parity.json` is the single window both sides of the dollar-ADV
+definition are pinned to: the Rust pick-details sidecar
+(`tests/picks_sidecar_test.rs`, via `src/picks_sidecar.rs`) and the frontend
+`averageDollarVolume` helper (`tests/adv_dollar_volume_parity_test.ts`, over
+`docs/volume_recommend.js` — the issue #576 single source of truth). If either
+definition drifts, one of those two tests fails.
+
+The fixture holds twelve weekday rows ending on the score date `2026-03-13`:
+
+- the two oldest rows sit **outside** the trailing ten weekdays and carry
+  deliberately huge volume, so a window-trimming mistake blows the mean up;
+- `2026-03-04` has **zero volume**, so both sides must skip an unusable day and
+  divide by the nine usable days rather than counting it as a `0`;
+- usable dollar volume sums to 4,752,000 over those 9 days — a mean of exactly
+  **528,000**, recorded as `expected_adv_dollar_10d`.

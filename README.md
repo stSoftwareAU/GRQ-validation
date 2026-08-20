@@ -575,6 +575,54 @@ flowchart TD
     E -- no --> G[Write header-only placeholder; return error]
 ```
 
+#### Pick-details sidecar (`<DD>-picks.csv`, issue #838)
+
+Three of the pick details the dashboard shows are **as at the score date** and
+so need price history from _before_ it, which `<DD>.csv` — deliberately a
+score-date-forward, 180-day window — does not carry. Rather than widening that
+file backwards by a year of rows per ticker, the processor writes a per-score-date
+sidecar beside it: `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`, one row per
+ticker.
+
+| Column             | Meaning                                                                |
+| ------------------ | ---------------------------------------------------------------------- |
+| `ticker`           | Full code from the score TSV, e.g. `NYSE:SEM`.                          |
+| `week52_low`       | Lowest daily low over `score_date - 365 days ..= score_date`.            |
+| `week52_high`      | Highest daily high over the same window.                                |
+| `close_score_date` | Close of the latest trading row on or before the score date.            |
+| `close_5d_prior`   | Close **five trading rows** back — not five calendar days.              |
+| `adv_dollar_10d`   | Mean of `volume × low` over the trailing ten weekday rows.              |
+
+- **Raw inputs only.** No thresholds, lots or traffic light: those live in
+  `docs/pick_details.js` so they stay tunable in one place.
+- **Blank, never zero**, for a value that cannot be computed (symbol missing
+  upstream, fewer than six rows for `close_5d_prior`, fewer than ten for
+  `adv_dollar_10d`). A blank cell means "unknown"; a `0` would read as a real,
+  terrible number and wrongly turn a traffic light red.
+- `adv_dollar_10d` reuses — never re-invents — the dollar-ADV definition of
+  `averageDollarVolume` in `docs/volume_recommend.js` (the issue #576 single
+  source of truth). `tests/fixtures/adv_dollar_10d_parity.json` pins both sides
+  to one window, asserted from Rust
+  (`tests/picks_sidecar_test.rs`) and from JavaScript
+  (`tests/adv_dollar_volume_parity_test.ts`), so neither definition can drift
+  silently.
+- The same non-destructive posture as the market-data CSV above: the sidecar is
+  buffered in memory and only replaces the file when the run has rows, so an
+  upstream outage never truncates a populated sidecar (issue #687 class). A
+  ticker whose upstream JSON is missing is skipped with a warning instead of
+  failing the run.
+
+```mermaid
+flowchart LR
+    A["score TSV tickers"] --> B["market data JSON<br/>score_date − 365d ..= score_date"]
+    B --> C["52-week low/high"]
+    B --> D["close on score date<br/>+ close 5 TRADING rows back"]
+    B --> E["dollar ADV over<br/>trailing 10 weekdays"]
+    C --> F["&lt;DD&gt;-picks.csv"]
+    D --> F
+    E --> F
+```
+
 ### Web Interface
 
 ```bash
@@ -940,6 +988,7 @@ GRQ-validation/
 │   ├── main.rs             # CLI entry point
 │   ├── lib.rs              # Library interface
 │   ├── models.rs           # Data structures
+│   ├── picks_sidecar.rs    # <DD>-picks.csv writer (52-week range, ADV)
 │   └── utils.rs            # Utility functions
 ├── docs/                   # Static dashboard (published via GitHub Pages)
 │   ├── index.html          # Main dashboard
@@ -1040,9 +1089,9 @@ machine, never skips for a missing data tree, and leaves `git status` clean
 (Issue #804).
 
 `scripts/check_hermetic_tests.sh` — run by `quality.sh` and by the CI Rust job —
-is the gate: it runs the four market-data/dividend integration tests with both
-root variables unset and fails if any of them skips, if `tests/` names a private
-data tree, or if the run dirties the working tree.
+is the gate: it runs the five market-data/dividend/pick-details integration
+tests with both root variables unset and fails if any of them skips, if `tests/`
+names a private data tree, or if the run dirties the working tree.
 
 ```mermaid
 flowchart LR
