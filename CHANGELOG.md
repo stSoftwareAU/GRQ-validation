@@ -95,6 +95,16 @@ and this project adheres to
 
 ### Changed
 
+- The widened 21-column stock table is now usable on a phone: it scrolls
+  sideways with **Stock** and the **Pick** traffic light pinned to the left
+  edge, instead of hiding the third and sixth columns below 768px — hidden
+  columns are unreachable cells, not a responsive layout. The scroller is a
+  keyboard-reachable, labelled region (`role="region"`, `tabindex="0"`,
+  `aria-label`, visible focus ring), the pinned cells paint an opaque
+  theme-aware background that clears WCAG 2 AA in both themes, and the
+  traffic-light column keeps a floor width with the emoji drawn above body-text
+  size so 🔴 and 🟠 are distinguishable without zooming. The committed PWA
+  screenshots were refreshed to match (Issue #842).
 - The dividend-basis diagnostic no longer defaults its dividend-history root to
   a private sibling checkout. `computeDividendBasisDiagnostic` takes the root as
   a **required** parameter, and `deno task diagnose-dividend-basis` resolves it
