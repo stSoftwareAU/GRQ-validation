@@ -2,7 +2,6 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use grq_validation::data_roots::DataRoots;
-use grq_validation::picks_backfill::backfill_picks_sidecars;
 use grq_validation::utils::{
     build_score_file_path, create_dividend_csv_for_score_file,
     create_market_data_long_csv_for_score_file, derive_csv_output_path,
@@ -39,8 +38,7 @@ struct Args {
     #[arg(long)]
     regenerate_empty: bool,
 
-    /// Rebuild only the `<date>-picks.csv` sidecar, for every date in the index
-    /// (or for `--date` alone); nothing else is regenerated
+    /// Rewrite only the pick-details sidecars, for every date in the index (or just --date)
     #[arg(long)]
     regenerate_picks: bool,
 
@@ -66,34 +64,6 @@ fn main() -> Result<()> {
     info!("Starting GRQ Validation processor");
     info!("Docs path: {}", args.docs_path);
 
-    // The pick-details backfill (issue #839) rebuilds only `<date>-picks.csv`,
-    // across every date in the index — including the ones far older than the
-    // 180-day cut-off the other modes apply. It reads market data alone, so it
-    // resolves that root only rather than failing an operator for a dividend
-    // root it would never open.
-    if args.regenerate_picks {
-        let market_root = DataRoots::resolve_market(args.market_data_path.as_deref())?;
-        info!("Market data root: {}", market_root.display());
-        ensure_market_data_repository_at(&market_root)?;
-
-        let summary = backfill_picks_sidecars(&market_root, &args.docs_path, args.date.as_deref())?;
-        println!("{}", summary.render());
-
-        // Absence of an explicit failure is not success: a run that wrote no
-        // sidecar at all points at a misconfigured root or docs path, so it
-        // exits non-zero rather than reporting a clean, empty backfill.
-        if summary.written.is_empty() {
-            return Err(anyhow!(
-                "Pick-details backfill wrote no sidecars for {} considered date(s) — \
-                 is {} available and up to date?",
-                summary.considered.len(),
-                market_root.display()
-            ));
-        }
-
-        return Ok(());
-    }
-
     // Resolve and validate both caller-supplied data roots before any work
     // begins, so a misconfigured host fails loudly at start-up with one message
     // listing every unusable root — never per-ticker deep in a run (issue #803).
@@ -103,6 +73,22 @@ fn main() -> Result<()> {
     )?;
     info!("Market data root: {}", roots.market.display());
     info!("Dividend data root: {}", roots.dividends.display());
+
+    // Backfill the pick-details sidecars (issue #839). This runs ahead of every
+    // other mode so `--regenerate-picks --date YYYY-MM-DD` backfills that one
+    // date rather than recomputing its performance, and it deliberately ignores
+    // the 180-day cutoff: the dashboard's whole point is reviewing past picks.
+    if args.regenerate_picks {
+        ensure_market_data_repository_at(&roots.market)?;
+        let summary = grq_validation::picks_backfill::backfill_picks_sidecars(
+            &roots.market,
+            &args.docs_path,
+            args.date.as_deref(),
+        )?;
+        println!("{}", summary.render());
+        summary.ensure_progress()?;
+        return Ok(());
+    }
 
     // Process a specific date if provided
     if let Some(date) = args.date {

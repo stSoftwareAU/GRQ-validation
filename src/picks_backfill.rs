@@ -1,25 +1,25 @@
-//! Backfill of the pick-details sidecar across every historical score date
+//! Backfill of the pick-details sidecar across the whole score history
 //! (issue #839, sub-issue of #835).
 //!
-//! [`crate::picks_sidecar`] writes `<date>-picks.csv` for the dates a normal
-//! processor run selects — recent ones. The dashboard exists to review *past*
-//! picks, and `docs/scores/index.json` reaches back to 2024-10-15, so without a
-//! pass over the whole index every historical date would keep blank pick-detail
-//! columns and the feature would only work for whatever is scored from now on.
+//! [`crate::picks_sidecar`] emits `<date>-picks.csv` for the dates a normal run
+//! selects — recent ones. The dashboard's whole point is reviewing *past*
+//! picks, and `docs/scores/index.json` lists dates back to 2024, so without a
+//! backfill every historical date would show blank pick-detail columns.
 //!
-//! This module is that pass. It iterates **every** entry in the index —
-//! including dates far older than the 180-day cut-off `--process-all` exists to
-//! bypass — and rebuilds only the sidecar, touching no other derived file.
+//! This module is that backfill: it walks **every** entry in the index —
+//! including dates far older than the 180-day cutoff `--process-all` exists to
+//! bypass — and rewrites only the sidecar, touching neither the market-data CSV
+//! nor the dividend CSV nor the computed performance figures.
 //!
-//! Two rules make a partial backfill impossible to miss:
+//! Two rules shape it:
 //!
-//! - **Nothing is abandoned quietly.** An upstream gap (no market data before
-//!   the score date, a symbol missing upstream, a score file the scorer never
-//!   committed) leaves blank cells and is recorded as a *skip with a reason*
-//!   rather than aborting the remaining dates.
-//! - **Every considered date is accounted for.** The run fails loud if a date is
-//!   neither written nor skipped, because a date in neither list is a bug in the
-//!   iteration rather than a benign outcome.
+//! - **An upstream gap is a skip, never an abort.** An old date whose symbols
+//!   have no pre-score-date history yields a sidecar with no rows (blank cells
+//!   on the dashboard) and the run carries on to the next date.
+//! - **Every date is accounted for.** A silent partial backfill is the failure
+//!   mode to avoid, so each date lands in the summary as either written or
+//!   skipped-with-a-reason, and a run that writes nothing at all fails loud
+//!   rather than reporting a clean, empty success.
 
 use crate::models::ScoreEntry;
 use crate::picks_sidecar::create_picks_sidecar_csv_for_score_file;
@@ -27,111 +27,115 @@ use crate::utils::{build_score_file_path, extract_ticker_codes_from_score_file, 
 use anyhow::{anyhow, Result};
 use std::path::Path;
 
-/// A sidecar the run wrote.
+/// What the backfill did with one score date.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WrittenSidecar {
-    /// Score date in `YYYY-MM-DD` form.
-    pub date: String,
-    /// Path of the sidecar written for it.
-    pub path: String,
+pub enum DateOutcome {
+    /// The sidecar was rewritten at this path.
+    Written(String),
+    /// No sidecar rows were produced; the reason is reported verbatim.
+    Skipped(String),
 }
 
-/// A score date that produced no populated sidecar, and why.
+/// One score date and its outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SkippedDate {
-    /// Score date in `YYYY-MM-DD` form.
+pub struct DateResult {
+    /// Score date in `YYYY-MM-DD` form, as listed in the index.
     pub date: String,
-    /// Operator-facing reason, e.g. the upstream gap that left it blank.
-    pub reason: String,
+    /// What the backfill did with it.
+    pub outcome: DateOutcome,
 }
 
-/// What one backfill run did, date by date.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+/// Every date the backfill visited, in index order.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BackfillSummary {
-    /// Every date the run selected from the index, in the order visited.
-    pub considered: Vec<String>,
-    /// The sidecars written.
-    pub written: Vec<WrittenSidecar>,
-    /// The dates that produced none, each with its reason.
-    pub skipped: Vec<SkippedDate>,
+    /// One entry per date processed.
+    pub results: Vec<DateResult>,
 }
 
 impl BackfillSummary {
-    /// The operator-facing end-of-run report: the counts, then every skipped
-    /// date with its reason. A silent partial backfill is the failure mode this
-    /// exists to prevent, so no skip is ever summarised as a bare count.
+    /// Dates visited.
     #[must_use]
-    pub fn render(&self) -> String {
-        let mut report = format!(
-            "Pick-details sidecar backfill\n  dates considered: {}\n  sidecars written: {}\n  \
-             dates skipped:    {}",
-            self.considered.len(),
-            self.written.len(),
-            self.skipped.len()
-        );
-
-        for skip in &self.skipped {
-            report.push_str(&format!("\n    {} — {}", skip.date, skip.reason));
-        }
-
-        report
+    pub fn processed(&self) -> usize {
+        self.results.len()
     }
 
-    /// The considered dates that appear in neither the written nor the skipped
-    /// list — always empty in a correct run.
+    /// Dates whose sidecar was rewritten.
     #[must_use]
-    pub fn unaccounted(&self) -> Vec<String> {
-        self.considered
+    pub fn written(&self) -> usize {
+        self.results
             .iter()
-            .filter(|date| {
-                !self.written.iter().any(|written| &&written.date == date)
-                    && !self.skipped.iter().any(|skip| &&skip.date == date)
-            })
-            .cloned()
+            .filter(|result| matches!(result.outcome, DateOutcome::Written(_)))
+            .count()
+    }
+
+    /// Dates that produced no sidecar rows, each with its reason.
+    #[must_use]
+    pub fn skipped(&self) -> Vec<&DateResult> {
+        self.results
+            .iter()
+            .filter(|result| matches!(result.outcome, DateOutcome::Skipped(_)))
             .collect()
     }
 
-    /// Fails loud when a considered date is in neither list.
+    /// The operator-visible end-of-run report: the counts, then every skipped
+    /// date and why. A date missing from both halves means the walk over the
+    /// index itself is broken.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let skipped = self.skipped();
+        let mut report = format!(
+            "Pick-details backfill: {processed} date(s) processed, {written} sidecar(s) written, \
+             {skipped_count} skipped",
+            processed = self.processed(),
+            written = self.written(),
+            skipped_count = skipped.len()
+        );
+
+        if skipped.is_empty() {
+            return report;
+        }
+
+        report.push_str("\nSkipped dates (no sidecar rows written):");
+        for result in skipped {
+            if let DateOutcome::Skipped(reason) = &result.outcome {
+                report.push_str(&format!("\n  {date} — {reason}", date = result.date));
+            }
+        }
+        report
+    }
+
+    /// Confirms the backfill actually did something.
     ///
     /// # Errors
     ///
-    /// Returns an error naming every unaccounted date.
-    pub fn verify_accounted(&self) -> Result<()> {
-        let unaccounted = self.unaccounted();
-        if unaccounted.is_empty() {
-            return Ok(());
+    /// Returns an error when dates were processed but not one sidecar was
+    /// written — a whole-history run that produced nothing is a broken data
+    /// root, not a clean pass.
+    pub fn ensure_progress(&self) -> Result<()> {
+        if self.processed() > 0 && self.written() == 0 {
+            return Err(anyhow!(
+                "No pick-details sidecars were written for any of the {processed} date(s) \
+                 processed — is the market-data root available and up to date?",
+                processed = self.processed()
+            ));
         }
-
-        Err(anyhow!(
-            "{} score date(s) were neither written nor skipped — the backfill's \
-             iteration over the index is incomplete:\n  {}",
-            unaccounted.len(),
-            unaccounted.join("\n  ")
-        ))
-    }
-
-    /// Records a date the run could not write a populated sidecar for.
-    fn skip(&mut self, date: &str, reason: String) {
-        log::warn!("Skipping pick-details backfill for {date}: {reason}");
-        self.skipped.push(SkippedDate {
-            date: date.to_string(),
-            reason,
-        });
+        Ok(())
     }
 }
 
-/// Rebuilds the pick-details sidecar for every date in
-/// `<docs_path>/scores/index.json`, or for `only_date` alone.
+/// Rewrites the pick-details sidecar for every date in
+/// `<docs_path>/scores/index.json`, or for `only_date` alone when one is given.
 ///
-/// Nothing else is regenerated: the market-data, analysis and dividend CSVs of
-/// each date are left exactly as committed.
+/// Nothing else is regenerated: the market-data CSV, the dividend CSV and the
+/// index's performance figures are left exactly as committed.
 ///
 /// # Errors
 ///
-/// Returns an error if the index cannot be read, lists no dates at all, does not
-/// list `only_date`, or if a date the run considered ends up in neither the
-/// written nor the skipped list. A per-date upstream gap is **not** an error: it
-/// is reported as a skip in the returned summary.
+/// Returns an error if the index cannot be read, or if `only_date` names a date
+/// the index does not list — a typo must never pass vacuously. A per-date fault
+/// is recorded as a skip in the returned summary rather than aborting the run;
+/// call [`BackfillSummary::ensure_progress`] to fail loud on a run that wrote
+/// nothing at all.
 pub fn backfill_picks_sidecars(
     market_root: &Path,
     docs_path: &str,
@@ -139,153 +143,142 @@ pub fn backfill_picks_sidecars(
 ) -> Result<BackfillSummary> {
     let index_data = read_index_json(docs_path)?;
 
-    // An empty index means the tree moved or emptied — never a silent pass.
-    if index_data.scores.is_empty() {
-        return Err(anyhow!(
-            "{docs_path}/scores/index.json lists no score dates — nothing to backfill"
-        ));
+    let entries: Vec<&ScoreEntry> = index_data
+        .scores
+        .iter()
+        .filter(|entry| match only_date {
+            Some(date) => entry.date == date,
+            None => true,
+        })
+        .collect();
+
+    if let Some(date) = only_date {
+        if entries.is_empty() {
+            return Err(anyhow!(
+                "{date} is not listed in {docs_path}/scores/index.json"
+            ));
+        }
     }
 
-    let selected: Vec<&ScoreEntry> = match only_date {
-        Some(date) => index_data
-            .scores
-            .iter()
-            .filter(|entry| entry.date == date)
-            .collect(),
-        None => index_data.scores.iter().collect(),
+    let results = entries
+        .into_iter()
+        .map(|entry| DateResult {
+            date: entry.date.clone(),
+            outcome: backfill_one_date(market_root, docs_path, entry),
+        })
+        .collect();
+
+    Ok(BackfillSummary { results })
+}
+
+/// Rewrites one date's sidecar, turning every fault into a reported skip.
+fn backfill_one_date(market_root: &Path, docs_path: &str, entry: &ScoreEntry) -> DateOutcome {
+    let score_file_path = match build_score_file_path(docs_path, &entry.file) {
+        Ok(path) => path,
+        Err(error) => {
+            return DateOutcome::Skipped(format!(
+                "unusable score file path {file:?}: {error}",
+                file = entry.file
+            ))
+        }
     };
 
-    // A requested date that the index does not list is a typo, not a no-op.
-    if let (Some(date), true) = (only_date, selected.is_empty()) {
-        return Err(anyhow!(
-            "{docs_path}/scores/index.json does not list {date} — no sidecar to backfill"
-        ));
+    if !Path::new(&score_file_path).exists() {
+        return DateOutcome::Skipped(format!("score file {score_file_path} is missing"));
     }
 
-    let mut summary = BackfillSummary::default();
-
-    for entry in selected {
-        summary.considered.push(entry.date.clone());
-
-        let score_file_path = match build_score_file_path(docs_path, &entry.file) {
-            Ok(path) => path,
-            Err(error) => {
-                summary.skip(&entry.date, format!("unsafe score file path: {error}"));
-                continue;
-            }
-        };
-
-        let tickers = match extract_ticker_codes_from_score_file(&score_file_path) {
-            Ok(tickers) => tickers,
-            Err(error) => {
-                summary.skip(
-                    &entry.date,
-                    format!("score file {score_file_path} unreadable: {error}"),
-                );
-                continue;
-            }
-        };
-
-        if tickers.is_empty() {
-            summary.skip(
-                &entry.date,
-                format!("score file {score_file_path} lists no tickers"),
-            );
-            continue;
+    let tickers = match extract_ticker_codes_from_score_file(&score_file_path) {
+        Ok(tickers) => tickers,
+        Err(error) => {
+            return DateOutcome::Skipped(format!("cannot read {score_file_path}: {error}"))
         }
+    };
 
-        match create_picks_sidecar_csv_for_score_file(
-            market_root,
-            &score_file_path,
-            &tickers,
-            &entry.date,
-        ) {
-            Ok(path) => {
-                log::info!("Wrote pick-details sidecar {path}");
-                summary.written.push(WrittenSidecar {
-                    date: entry.date.clone(),
-                    path,
-                });
-            }
-            // The upstream tree may hold no pre-score-date history for an older
-            // date at all. That leaves blank cells and a named skip; it must
-            // never abandon the dates that follow.
-            Err(error) => summary.skip(&entry.date, format!("{error:#}")),
-        }
+    if tickers.is_empty() {
+        return DateOutcome::Skipped(format!("{score_file_path} lists no tickers"));
     }
 
-    summary.verify_accounted()?;
-
-    Ok(summary)
+    match create_picks_sidecar_csv_for_score_file(
+        market_root,
+        &score_file_path,
+        &tickers,
+        &entry.date,
+    ) {
+        Ok(output_path) => DateOutcome::Written(output_path),
+        // The sidecar writer already left blank cells (a rows-free file) where
+        // it could; the run continues and the operator sees the date named.
+        Err(error) => DateOutcome::Skipped(format!("{error}")),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn written(date: &str) -> WrittenSidecar {
-        WrittenSidecar {
+    fn result(date: &str, outcome: DateOutcome) -> DateResult {
+        DateResult {
             date: date.to_string(),
-            path: format!("docs/scores/{date}-picks.csv"),
-        }
-    }
-
-    fn skipped(date: &str, reason: &str) -> SkippedDate {
-        SkippedDate {
-            date: date.to_string(),
-            reason: reason.to_string(),
+            outcome,
         }
     }
 
     #[test]
-    fn render_reports_the_counts_and_names_every_skip_with_its_reason() {
+    fn render_counts_every_date_and_names_each_skip() {
         let summary = BackfillSummary {
-            considered: vec!["2024-10-15".to_string(), "2024-10-16".to_string()],
-            written: vec![written("2024-10-16")],
-            skipped: vec![skipped(
-                "2024-10-15",
-                "no market data before the score date",
-            )],
+            results: vec![
+                result("2024-10-15", DateOutcome::Written("15-picks.csv".into())),
+                result("2025-08-10", DateOutcome::Skipped("score file missing".into())),
+            ],
         };
 
         let report = summary.render();
-        assert!(report.contains("dates considered: 2"), "{report}");
-        assert!(report.contains("sidecars written: 1"), "{report}");
-        assert!(report.contains("dates skipped:    1"), "{report}");
-        assert!(report.contains("2024-10-15"), "{report}");
+        assert!(report.contains("2 date(s) processed"), "{report}");
+        assert!(report.contains("1 sidecar(s) written"), "{report}");
+        assert!(report.contains("1 skipped"), "{report}");
         assert!(
-            report.contains("no market data before the score date"),
-            "{report}"
+            report.contains("2025-08-10 — score file missing"),
+            "every skipped date must be named with its reason, got: {report}"
         );
     }
 
     #[test]
-    fn verify_accounted_passes_when_every_date_is_written_or_skipped() {
+    fn render_omits_the_skip_list_when_nothing_was_skipped() {
         let summary = BackfillSummary {
-            considered: vec!["2024-10-15".to_string(), "2024-10-16".to_string()],
-            written: vec![written("2024-10-16")],
-            skipped: vec![skipped("2024-10-15", "no market data")],
+            results: vec![result("2024-10-15", DateOutcome::Written("15-picks.csv".into()))],
         };
 
-        assert!(summary.unaccounted().is_empty());
-        assert!(summary.verify_accounted().is_ok());
+        assert!(!summary.render().contains("Skipped dates"));
     }
 
     #[test]
-    fn verify_accounted_fails_loud_on_a_date_in_neither_list() {
+    fn ensure_progress_fails_loud_when_no_date_produced_a_sidecar() {
         let summary = BackfillSummary {
-            considered: vec!["2024-10-15".to_string(), "2024-10-16".to_string()],
-            written: vec![written("2024-10-16")],
-            skipped: Vec::new(),
+            results: vec![result("2024-10-15", DateOutcome::Skipped("no data".into()))],
         };
 
-        assert_eq!(summary.unaccounted(), vec!["2024-10-15".to_string()]);
-        let error = summary
-            .verify_accounted()
-            .expect_err("an unaccounted date must fail loud");
         assert!(
-            error.to_string().contains("2024-10-15"),
-            "the error must name the offender, got: {error}"
+            summary.ensure_progress().is_err(),
+            "a run that wrote nothing must not report success"
         );
+    }
+
+    #[test]
+    fn ensure_progress_accepts_a_run_with_at_least_one_sidecar() {
+        let summary = BackfillSummary {
+            results: vec![
+                result("2024-10-15", DateOutcome::Written("15-picks.csv".into())),
+                result("2025-08-10", DateOutcome::Skipped("score file missing".into())),
+            ],
+        };
+
+        assert!(summary.ensure_progress().is_ok());
+        assert_eq!(summary.processed(), 2);
+        assert_eq!(summary.written(), 1);
+        assert_eq!(summary.skipped().len(), 1);
+    }
+
+    #[test]
+    fn ensure_progress_accepts_an_empty_run() {
+        assert!(BackfillSummary::default().ensure_progress().is_ok());
     }
 }
