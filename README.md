@@ -268,11 +268,19 @@ promote** a date it cannot pair rather than committing a half-populated one. It
 never passes vacuously either: an empty score tree, a requested date whose TSV
 was never written, and a malformed `--date` all fail loud.
 
+Since issue #839 the same guard covers the pick-details sidecar: a date whose
+market data is paired but which ships no `<DD>-picks.csv` is an offender too.
+That is what stops the historical backfill silently
+regressing — a header-only sidecar is accepted, because an older
+date with no pre-score-date history upstream legitimately backfills to blank
+cells, but an absent one means the date was never covered.
+
 ```mermaid
 flowchart TD
-    W[Scorer writes docs/scores/YYYY/Month/DD.tsv + DD.csv] --> G{deno task check-score-data --date}
+    W[Scorer writes docs/scores/YYYY/Month/DD.tsv + DD.csv + DD-picks.csv] --> G{deno task check-score-data --date}
     G -->|paired: exit 0| C[Commit the day's scores]
     G -->|missing or header-only CSV: exit 1| R[Refuse — nothing committed, fault named on stderr]
+    G -->|missing DD-picks.csv: exit 1| R
     C --> CI[CI data-presence gate stays green]
 ```
 
@@ -572,6 +580,10 @@ debug info so panic locations stay useful without the full DWARF cost.
 
 # Process a specific date
 ./target/release/grq-validation --docs-path docs --date 2025-01-15
+
+# Backfill the pick-details sidecar for every date in docs/scores/index.json
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks
 ```
 
 #### Stale-binary rebuild check
@@ -689,33 +701,80 @@ flowchart LR
 
 A score date only gets a sidecar when the processor runs over it, so historical
 dates need a backfill before their pick-detail columns show anything. The
-sidecar is written as part of processing a date, which makes the backfill the
-ordinary full pass — every date in `docs/scores/index.json`, including those
-older than the usual 180-day window:
+dashboard exists to review **past** picks, and `docs/scores/index.json` reaches
+back to 2024-10-15, so a sidecar written only for new runs would leave every
+historical date blank — exactly where the feature matters most.
+
+`--regenerate-picks` (issue #839) is the sidecar-only pass that fills them:
 
 ```bash
-# Every historical date: rewrites each date's market-data CSV, sidecar,
-# dividend CSV and analysis.
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks
+
+# One date only — the existing --date flag selects it
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks --date 2024-10-15
+```
+
+- It iterates **every** entry in `docs/scores/index.json`, including dates far
+  older than the 180-day cut-off `--process-all` exists to bypass, and rebuilds
+  **only** the sidecar — each date's `<DD>.csv`, `<DD>-analysis.csv` and
+  `<DD>-dividends.csv` are left exactly as committed.
+- It reads share prices only, so it resolves the market-data root alone: no
+  dividend root is required for a run that never opens one.
+- **Idempotent.** The sidecar is derived from committed upstream data with no
+  timestamps and a fixed row order, so a second run over unchanged data
+  reproduces byte-identical files and leaves `git status` clean.
+- **Upstream gaps never abort it.** A date with no pre-score-date history at all
+  — or whose score TSV the scorer never committed — leaves blank cells and is
+  named, with its reason, in the end-of-run summary:
+
+  ```text
+  Pick-details sidecar backfill
+    dates considered: 390
+    sidecars written: 380
+    dates skipped:    10
+      2025-08-10 — score file docs/scores/2025/August/10.tsv unreadable: …
+  ```
+
+- Every considered date appears in exactly one of the two lists. A date in
+  neither is a bug in the iteration, not a benign outcome, so the run fails loud
+  naming it — and a run that writes no sidecar at all (a misconfigured root or
+  docs path) exits non-zero rather than reporting a clean, empty backfill.
+
+```mermaid
+flowchart TD
+    I[docs/scores/index.json<br/>every date, no age cut-off] --> D{Score TSV readable<br/>with tickers?}
+    D -- no --> S["skip: named with a reason"]
+    D -- yes --> M{Any market data in<br/>score_date − 365d ..= score_date?}
+    M -- no --> B["blank cells: header-only sidecar<br/>+ skip named with a reason"]
+    M -- yes --> W["write &lt;DD&gt;-picks.csv"]
+    W --> R[End-of-run summary:<br/>considered / written / skipped]
+    S --> R
+    B --> R
+    R --> A{Every considered date accounted for<br/>and at least one sidecar written?}
+    A -- yes --> OK[Exit 0]
+    A -- no --> F[Exit non-zero, offenders named]
+```
+
+The full pass rewrites the sidecar too, alongside every other per-date file, and
+needs both data roots because it also rebuilds the dividend CSV:
+
+```bash
 ./target/release/grq-validation --docs-path docs \
     --market-data-path "$GRQ_MARKET_DATA_PATH" \
     --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH" \
     --process-all
-
-# Or one date at a time, to check a single sidecar before committing the rest.
-./target/release/grq-validation --docs-path docs \
-    --market-data-path "$GRQ_MARKET_DATA_PATH" \
-    --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH" \
-    --date 2025-01-15
 ```
 
-Both data roots are required: the sidecar's 52-week range, prior close and
-dollar ADV all come from the market-data tree, and the same pass also rewrites
-the dividend CSV. See _Required data roots_ below for the layout each expects.
-`./run.sh --process-all` runs the same pass with the build step and the
-environment variables wired up. The generated sidecars are committed like the
-other per-date CSVs, and a date whose upstream history is missing is skipped
-with a warning rather than aborting the run. A sidecar-only pass, which would
-rewrite nothing else, is tracked separately in issue #839.
+See _Required data roots_ below for the layout each expects. `./run.sh
+--process-all` runs that pass with the build step and the environment variables
+wired up.
+
+The committed sidecars are then guarded by the promotion check above: a
+prediction date paired with market data but missing its `<DD>-picks.csv` is
+reported, so a backfill that was never run — or a later change that stops
+emitting sidecars — turns CI red instead of quietly blanking the dashboard.
 
 ### Web Interface
 
@@ -1177,6 +1236,7 @@ GRQ-validation/
 │   ├── main.rs             # CLI entry point
 │   ├── lib.rs              # Library interface
 │   ├── models.rs           # Data structures
+│   ├── picks_backfill.rs   # <DD>-picks.csv backfill across every indexed date
 │   ├── picks_sidecar.rs    # <DD>-picks.csv writer (52-week range, ADV)
 │   └── utils.rs            # Utility functions
 ├── docs/                   # Static dashboard (published via GitHub Pages)
@@ -1493,6 +1553,8 @@ flowchart LR
 - `--dividend-data-path` — dividend-data root; overrides
   `GRQ_DIVIDEND_DATA_PATH`.
 - `--process-all` — process every score file, not just recent ones.
+- `--regenerate-picks` — rebuild only the `<DD>-picks.csv` sidecar, for every
+  date in `docs/scores/index.json` (or, with `--date`, for one of them).
 - `--calculate-performance` — calculate performance metrics for score files.
 - `--date` — process a specific date in `YYYY-MM-DD` format.
 - `--verbose` — enable verbose logging.

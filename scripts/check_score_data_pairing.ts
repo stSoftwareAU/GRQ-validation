@@ -23,6 +23,11 @@
 // committing a date it cannot pair. Absence of an offender is not enough on its
 // own: an empty score tree, a missing prediction file for a requested date, and
 // a malformed --date all fail loud too.
+//
+// Since issue #839 the same rule covers the pick-details sidecar: a paired date
+// with no committed <date>-picks.csv is an offender too, so a backfill that was
+// never run — or a later change that stops emitting sidecars — turns this check
+// red instead of quietly blanking the dashboard's pick-detail columns.
 
 const DEFAULT_SCORES_DIR = "docs/scores";
 
@@ -65,6 +70,15 @@ export function isMarketDataCsvEmpty(content: string | null): boolean {
 /** Maps a prediction TSV path to its sibling market-data CSV path. */
 export function siblingCsv(tsvPath: string): string {
   return tsvPath.replace(/\.tsv$/, ".csv");
+}
+
+/**
+ * Maps a prediction TSV path to its pick-details sidecar path (issue #839).
+ * The sidecar carries the as-at-the-score-date figures — 52-week range,
+ * five-day-prior close, trailing dollar ADV — the dashboard's pick details read.
+ */
+export function siblingPicksCsv(tsvPath: string): string {
+  return tsvPath.replace(/\.tsv$/, "-picks.csv");
 }
 
 /**
@@ -169,13 +183,26 @@ export async function checkScoreDataPairing(
       offenders.push(
         content === null ? `${csv} (missing)` : `${csv} (header-only/empty)`,
       );
+      // The sidecar check below would only restate the same upstream gap.
+      continue;
+    }
+
+    // The pick-details sidecar must exist for every paired date (issue #839).
+    // A header-only sidecar is legitimate — an older date with no
+    // pre-score-date history upstream backfills to blank cells — but an absent
+    // one means the backfill never covered the date, or a later change stopped
+    // emitting it, and the dashboard's pick-detail columns would go blank.
+    const picks = siblingPicksCsv(tsv);
+    if (await readFile(picks) === null) {
+      offenders.push(`${picks} (missing)`);
     }
   }
 
   if (offenders.length > 0) {
     log(
       "check_score_data_pairing: REFUSING to promote — the following " +
-        "prediction dates have no market data:\n  " + offenders.join("\n  "),
+        "prediction dates are missing market data or their pick-details " +
+        "sidecar:\n  " + offenders.join("\n  "),
     );
     return 1;
   }
