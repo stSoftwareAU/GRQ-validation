@@ -1,10 +1,15 @@
 // Tests for the aggregate-dashboard totals-row column alignment (issue #406).
 //
-// The aggregate market view renders 9 column headers (`<th>`) and a footer
-// "totals" row of `<td>` cells. A pre-existing bug emitted 10 totals cells, so
-// every portfolio total rendered one column too far right (Portfolio Target
-// landed under Current Price, Average Gain/Loss under Return above Cost of
-// Capital) and the 10th cell had no matching header.
+// The aggregate market view renders a fixed set of column headers (`<th>`) and
+// a footer "totals" row of `<td>` cells. A pre-existing bug emitted one totals
+// cell too many, so every portfolio total rendered one column too far right
+// (Portfolio Target landed under Current Price, Average Gain/Loss under Return
+// above Cost of Capital) and the extra cell had no matching header.
+//
+// Issue #840 widened the view from 9 to 15 columns (the pick traffic light plus
+// ADV, Lots, 5-Day Return, Earnings Yield and 52-Week Position), so the
+// expected count below moved with it — the 1:1 alignment invariant these tests
+// exist to protect is unchanged.
 //
 // These tests parse the ACTUAL shipped markup from docs/app.js — the
 // aggregate-view `thead.innerHTML` template and the `totalsRow.innerHTML`
@@ -66,7 +71,7 @@ Deno.test("aggregate totals row has exactly as many cells as headers", async () 
   const headerCount = cells(headerHtml, "th").length;
   const totalsCount = cells(totalsHtml, "td").length;
 
-  assertEquals(headerCount, 9, "aggregate view must have 9 column headers");
+  assertEquals(headerCount, 15, "aggregate view must have 15 column headers");
   assertEquals(
     totalsCount,
     headerCount,

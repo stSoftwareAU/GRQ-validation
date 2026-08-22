@@ -25,6 +25,14 @@ const CORE_ASSETS = [
   "./projection.js",
   // Shared low-volume/liquidity helper (issue #576/#577).
   "./volume_recommend.js",
+  // Shared stock-pick metrics (issue #836) and the dashboard's pick-detail
+  // table columns that render them (issue #840). app.js calls both at render
+  // time, so they must ship in the same all-or-nothing shell update.
+  "./pick_details.js",
+  // "Show the working" popovers and the warning legend for those columns
+  // (issue #841).
+  "./pick_working.js",
+  "./pick_columns.js",
   "./chart_window_settings.js",
   "./color_key.js",
   "./series_label_colour.js",

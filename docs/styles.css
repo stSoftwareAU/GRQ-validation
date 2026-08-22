@@ -294,6 +294,59 @@ body.chart-popout-open {
   background: var(--grq-surface-alt, var(--light-color));
 }
 
+/* The widened table scrolls sideways, so its wrapper is a focusable region
+ * (issue #842): a keyboard user tabs to it and pans with the arrow keys. A
+ * focusable element needs a visible focus indicator, and the browser default
+ * outline is easy to lose against the card, so paint an explicit one. */
+.table-responsive:focus-visible {
+  outline: 2px solid var(--grq-link, var(--primary-color));
+  outline-offset: 2px;
+}
+
+/* Pick-detail columns (issue #840). The traffic light is scanned straight down
+ * the column, so it never wraps; the five figures are numeric and read against
+ * a right edge. Colour is carried by the emoji itself, so nothing here depends
+ * on a theme variable. */
+.stock-table .pick-light {
+  white-space: nowrap;
+  /* A floor width keeps the lights in a vertical strip that can be scanned
+     straight down, however many warning emoji trail them (issue #842). */
+  min-width: 3rem;
+}
+
+/* 🔴 and 🟠 differ only in hue: at body-text size on a phone they are hard to
+ * tell apart, so the glyph is drawn above the surrounding text size. rem is
+ * root-relative, so the mobile table's smaller font does not shrink it. The
+ * header keeps the header's own type size — only the cells carry emoji. */
+.stock-table td.pick-light {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+/* Pick-warning legend below the table (issue #841): a compact list decoding
+ * the traffic light and every warning emoji. The emoji column is fixed so the
+ * wording lines up, and the wording — not the glyph — carries the meaning. */
+.pick-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.15rem 1rem;
+}
+
+.pick-legend-emoji {
+  display: inline-block;
+  min-width: 1.5rem;
+}
+
+.stock-table .pick-adv,
+.stock-table .pick-lots,
+.stock-table .pick-five-day-return,
+.stock-table .pick-earnings-yield,
+.stock-table .pick-52-week-position {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Performance indicators.
  *
  * Colour comes from theme-aware custom properties with a light-mode fallback,
@@ -667,15 +720,56 @@ body.chart-popout-open {
     padding: 0.25rem 0.5rem;
   }
 
-  /* Hide less important columns on mobile */
-  .table th:nth-child(3),
-  .table td:nth-child(3) {
-    display: none;
+  /* Pinned Stock + Pick columns (issue #842).
+   *
+   * These two rules replace the former `display: none` hiding of the third and
+   * sixth columns. Hiding a column does not make a 21-column table responsive:
+   * it makes those cells UNREACHABLE, on the one device where the reader cannot
+   * fall back to a wider window. The table scrolls sideways instead, with the
+   * identity column and the traffic light pinned to the left edge so a row is
+   * always identifiable and the lights stay scannable straight down.
+   *
+   * The Stock column is keyed by position (it is the first column in all three
+   * header layouts) and given a width the layout cannot renegotiate, because
+   * the light's `left` offset must land exactly on its right edge. The light is
+   * keyed by CLASS: the basic (no-market-data) view has no Pick column, so its
+   * second column must not be pinned. */
+  #stockTable th:first-child,
+  #stockTable td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: 6.5rem;
+    min-width: 6.5rem;
+    max-width: 6.5rem;
+    white-space: normal;
+    /* A ticker is one unbreakable token ("NASDAQ:MGRC"), so it needs both a
+       break of last resort — an overflowing ticker would otherwise slide out
+       from under the pinned cell and over the scrolling columns — and a size
+       that keeps the common ticker on ONE line inside the pinned width. */
+    overflow-wrap: anywhere;
+    font-size: 0.7rem;
+    background: var(--grq-surface, #fff);
+    color: var(--grq-text, #212529);
   }
 
-  .table th:nth-child(6),
-  .table td:nth-child(6) {
-    display: none;
+  #stockTable th.pick-light,
+  #stockTable td.pick-light {
+    position: sticky;
+    left: 6.5rem;
+    z-index: 2;
+    background: var(--grq-surface, #fff);
+    color: var(--grq-text, #212529);
+    /* Marks where the pinned pair ends and the scrolling columns begin. */
+    box-shadow: 1px 0 0 var(--grq-border, #dee2e6);
+  }
+
+  /* Header cells sit above the scrolling body cells and keep the header's own
+     surface, so the pinned pair still reads as part of the header row. */
+  #stockTable thead th:first-child,
+  #stockTable thead th.pick-light {
+    z-index: 3;
+    background: var(--grq-surface-alt, var(--light-color));
   }
 }
 

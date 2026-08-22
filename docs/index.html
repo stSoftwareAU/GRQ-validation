@@ -365,7 +365,20 @@
                 <!-- Stock Table -->
                 <div class="card">
                   <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <!-- The 21-column table scrolls sideways rather than
+                         hiding columns on a phone (issue #842), so the
+                         scroller is a focusable, named region: a keyboard user
+                         tabs to it and pans with the arrow keys, and a screen
+                         reader announces what is being scrolled. Stock and the
+                         traffic light stay pinned to the left edge (see
+                         docs/styles.css). -->
+                    <div
+                      class="table-responsive"
+                      id="stockTableScroll"
+                      role="region"
+                      aria-label="Individual stock performance — scroll sideways for the remaining columns"
+                      tabindex="0"
+                    >
                       <table
                         class="table table-hover stock-table mb-0"
                         id="stockTable"
@@ -373,6 +386,15 @@
                         <thead>
                           <tr>
                             <th scope="col">Stock</th>
+                            <!-- `pick-light` also tags the HEADER (issue #842)
+                                 so the pinned-column rule covers it: the basic
+                                 (no-market-data) view has no Pick column, so
+                                 the rule can never key off a position. -->
+                            <th
+                              scope="col"
+                              class="pick-light"
+                              title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data."
+                            >Pick</th>
                             <th scope="col">Score</th>
                             <th scope="col">Buy Price</th>
                             <th scope="col">Stars</th>
@@ -390,6 +412,29 @@
                             <th scope="col">Average Dividend (90-day)</th>
                             <th scope="col">Total Dividends (90-day)</th>
                             <th scope="col">Notes</th>
+                            <!-- Pick-detail columns (issue #840): the figures a
+                                 reviewer reads to answer "is there a reason we
+                                 didn't pick this?". All as at the score date. -->
+                            <th
+                              scope="col"
+                              title="Average daily dollar volume over the ten trading days to the score date."
+                            >ADV</th>
+                            <th
+                              scope="col"
+                              title="Average daily dollar volume divided by the $20,000 parcel size."
+                            >Lots</th>
+                            <th
+                              scope="col"
+                              title="Price change over the five trading days to the score date."
+                            >5-Day Return</th>
+                            <th
+                              scope="col"
+                              title="Earnings per share divided by the score-date price. Negative when the company is loss making."
+                            >Earnings Yield</th>
+                            <th
+                              scope="col"
+                              title="Where the score-date price sits in its 52-week range: 0% at the low, 100% at the high."
+                            >52-Week Position</th>
                           </tr>
                         </thead>
                         <tbody id="stockTableBody"></tbody>
@@ -414,6 +459,20 @@
                         $10,000 trade budget, so the stock is excluded from the
                         portfolio and from every aggregate (equal-weight) figure.
                       </small>
+                    </div>
+                    <!-- Pick-warning legend (issue #841): decode the traffic
+                         light and every warning emoji in the pick-detail
+                         columns. Hidden by default and filled by app.js only
+                         when at least one stock in the loaded report carries
+                         something to decode, following the Low-volume legend
+                         pattern (issue #599) so a clean report stays
+                         uncluttered. -->
+                    <div
+                      id="pickWarningsLegend"
+                      class="data-source-note text-muted mt-2 px-3 pb-2"
+                      style="display: none"
+                    >
+                      <small id="pickWarningsLegendBody"></small>
                     </div>
                     <!-- Negative-score legend (issue #627): explain the badge so
                          excluded names predicted to fall are visible, not
@@ -532,6 +591,20 @@
     <!-- Shared low-volume/liquidity helper (issue #576) — must load before
          app.js, which excludes flagged names from the portfolio (issue #577) -->
     <script src="volume_recommend.js?v=1.1.97"></script>
+
+    <!-- Shared stock-pick metrics: lots, earnings yield, 5-day return, 52-week
+         position and the traffic light (issue #836) — before pick_columns.js -->
+    <script src="pick_details.js?v=1.1.97"></script>
+
+    <!-- "Show the working" popovers, accessible wording and the warning legend
+         for the pick-detail columns (issue #841) — needs pick_details.js and
+         must load before pick_columns.js, which renders its wording -->
+    <script src="pick_working.js?v=1.1.97"></script>
+
+    <!-- Pick-detail table columns (issue #840) — needs escape.js,
+         volume_recommend.js, pick_details.js and pick_working.js; must load
+         before app.js -->
+    <script src="pick_columns.js?v=1.1.97"></script>
 
     <!-- Per-device mobile chart-window choice (90/180) persistence (issue #447) -->
     <script src="chart_window_settings.js?v=1.1.97"></script>
