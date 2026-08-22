@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{NaiveDate, Utc};
 use clap::Parser;
 use grq_validation::data_roots::DataRoots;
+use grq_validation::picks_backfill::backfill_picks_sidecars;
 use grq_validation::utils::{
     build_score_file_path, create_dividend_csv_for_score_file,
     create_market_data_long_csv_for_score_file, derive_csv_output_path,
@@ -38,6 +39,11 @@ struct Args {
     #[arg(long)]
     regenerate_empty: bool,
 
+    /// Rebuild only the `<date>-picks.csv` sidecar, for every date in the index
+    /// (or for `--date` alone); nothing else is regenerated
+    #[arg(long)]
+    regenerate_picks: bool,
+
     /// Calculate performance metrics for score files
     #[arg(long)]
     calculate_performance: bool,
@@ -59,6 +65,34 @@ fn main() -> Result<()> {
 
     info!("Starting GRQ Validation processor");
     info!("Docs path: {}", args.docs_path);
+
+    // The pick-details backfill (issue #839) rebuilds only `<date>-picks.csv`,
+    // across every date in the index — including the ones far older than the
+    // 180-day cut-off the other modes apply. It reads market data alone, so it
+    // resolves that root only rather than failing an operator for a dividend
+    // root it would never open.
+    if args.regenerate_picks {
+        let market_root = DataRoots::resolve_market(args.market_data_path.as_deref())?;
+        info!("Market data root: {}", market_root.display());
+        ensure_market_data_repository_at(&market_root)?;
+
+        let summary = backfill_picks_sidecars(&market_root, &args.docs_path, args.date.as_deref())?;
+        println!("{}", summary.render());
+
+        // Absence of an explicit failure is not success: a run that wrote no
+        // sidecar at all points at a misconfigured root or docs path, so it
+        // exits non-zero rather than reporting a clean, empty backfill.
+        if summary.written.is_empty() {
+            return Err(anyhow!(
+                "Pick-details backfill wrote no sidecars for {} considered date(s) — \
+                 is {} available and up to date?",
+                summary.considered.len(),
+                market_root.display()
+            ));
+        }
+
+        return Ok(());
+    }
 
     // Resolve and validate both caller-supplied data roots before any work
     // begins, so a misconfigured host fails loudly at start-up with one message
@@ -345,6 +379,23 @@ fn main() -> Result<()> {
                     }
                     Err(e) => {
                         log::error!("Failed to create market data CSV: {e}");
+                    }
+                }
+
+                // Create the pick-details sidecar (issue #838): the as-at-the-
+                // score-date figures the main CSV cannot carry because they
+                // need history from BEFORE the score date.
+                match grq_validation::picks_sidecar::create_picks_sidecar_csv_for_score_file(
+                    &roots.market,
+                    &score_file_path,
+                    &ticker_codes,
+                    &score_entry.date,
+                ) {
+                    Ok(output_path) => {
+                        info!("Successfully created pick-details sidecar: {output_path}");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create pick-details sidecar: {e}");
                     }
                 }
 

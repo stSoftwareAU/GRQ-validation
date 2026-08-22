@@ -41,6 +41,18 @@ impl DataRoots {
             (market, dividends) => Err(combined_error([market.err(), dividends.err()])),
         }
     }
+
+    /// Resolves the market-data root alone, for the entry points that read no
+    /// dividend history at all — the pick-details backfill (issue #839).
+    /// Demanding a dividend root such a run would never open would fail an
+    /// operator for a configuration the work does not need.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the root is unset, blank, or not a directory.
+    pub fn resolve_market(market_flag: Option<&str>) -> Result<PathBuf> {
+        resolve_root(MARKET_DATA_ROOT_ENV, "market-data", market_flag)
+    }
 }
 
 /// Resolves a single root: the flag wins over the environment variable, and the

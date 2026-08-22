@@ -42,6 +42,10 @@ class GRQValidator {
         this.selectedStock = null; // Track selected stock for single view
         this.chart = null;
         this.costOfCapital = 10; // 10% annual cost of capital
+        // Pick-detail values by ticker for the CURRENT render (issue #841):
+        // what the "show the working" popovers explain and what the warning
+        // legend is gated on. Rebuilt on every render, never carried over.
+        this.pickValues = {};
 
         this.initializeEventListeners();
         this.loadIndex();
@@ -566,6 +570,15 @@ class GRQValidator {
         const lines = text.trim().split("\n");
         // Remove unused headers variable
 
+        // Optional numeric cell (issue #837): a blank, missing (older score
+        // files predate these columns) or non-numeric cell becomes null, never
+        // NaN, so downstream judgements get "unknown ⇒ don't judge".
+        const parseOptionalNumber = (value) => {
+            if (value === undefined || value.trim() === "") return null;
+            const parsed = parseFloat(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
         this.scoreData = lines.slice(1).map((line) => {
             const values = line.split("\t");
             return {
@@ -581,6 +594,8 @@ class GRQValidator {
                 intrinsicValuePerShareAdjusted: values[7]
                     ? parseFloat(values[7])
                     : null,
+                eps: parseOptionalNumber(values[8]),
+                analystTargetPrice: parseOptionalNumber(values[9]),
             };
         });
 
@@ -595,6 +610,10 @@ class GRQValidator {
         // surfaces a loud, distinct error instead of the soft "Limited data
         // mode" placeholder.
         this.marketDataError = null;
+        // Reset the pick-details sidecar too (issue #840) so a date without one
+        // can never render the previous date's pick columns.
+        this.pickDetails = {};
+        this.pickDetailsError = null;
         console.log('Loading market data from:', csvFile);
         console.log('Selected file:', this.selectedFile);
         console.log('CSV file path:', `scores/${csvFile}`);
@@ -750,6 +769,11 @@ class GRQValidator {
 
             // Load dividend data
             await this.loadDividendData();
+
+            // Load the pick-details sidecar alongside the market CSV
+            // (issue #840). Deliberately AFTER the market data so a date
+            // without a sidecar still renders every existing column.
+            await this.loadPickDetails();
         } catch (error) {
             console.warn(
                 "No market data available yet:",
@@ -764,6 +788,62 @@ class GRQValidator {
                     "). This is a data fault.",
             };
         }
+    }
+
+    // Load the per-score-date pick-details sidecar `<date>-picks.csv`
+    // (issue #838) that backs the dashboard's pick columns (issue #840).
+    //
+    // A MISSING sidecar degrades, it does not break: older dates predate the
+    // file entirely, so the pick columns render blank and the traffic light
+    // renders unknown while every existing column is untouched. A sidecar that
+    // IS there but cannot be used is a genuine data fault and is reported
+    // loudly on the console rather than reconciled as "no picks" — it still
+    // never blanks the rest of the dashboard, which does not depend on it.
+    async loadPickDetails() {
+        const picksFile = this.selectedFile.replace(".tsv", "-picks.csv");
+        this.pickDetails = {};
+        this.pickDetailsError = null;
+
+        let load;
+        try {
+            const timestamp = new Date().getTime();
+            const response = await fetch(`scores/${picksFile}?t=${timestamp}`);
+            load = GRQPickColumns.classifyPicksLoad({
+                ok: response.ok,
+                status: response.status,
+                text: response.ok ? await response.text() : "",
+            });
+        } catch (error) {
+            load = {
+                state: "error",
+                reason: "fetch-error",
+                message: "Pick-details sidecar could not be fetched (" +
+                    error.message + "). This is a data fault.",
+                rows: {},
+            };
+        }
+
+        this.pickDetails = load.rows;
+        if (load.state === "error") {
+            this.pickDetailsError = load;
+            console.error(
+                "Pick-details sidecar fault:",
+                picksFile,
+                load.reason,
+                load.message,
+            );
+            return;
+        }
+        if (load.state === "absent") {
+            console.log(
+                `No pick-details sidecar at scores/${picksFile} — the pick columns render blank for this date.`,
+            );
+            return;
+        }
+        console.log(
+            "Pick details loaded for stocks:",
+            Object.keys(this.pickDetails).length,
+        );
     }
 
     async loadAnalysisData() {
@@ -3429,8 +3509,14 @@ class GRQValidator {
             const thead = document.querySelector(
                 "#stockTable thead tr",
             );
+            // Pick-detail columns (issue #840): the traffic light sits beside
+            // Stock so it is scannable straight down the column; the five
+            // figures trail the existing 90-day block so no existing column
+            // moves relative to its neighbours. The same six headers appear in
+            // the static markup in docs/index.html.
             thead.innerHTML = `
           <th scope="col">Stock</th>
+          <th scope="col" class="pick-light" title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data.">Pick</th>
           <th scope="col">Buy Price</th>
           <th scope="col">Stars</th>
           <th scope="col">90-Day Target</th>
@@ -3439,10 +3525,19 @@ class GRQValidator {
           <th scope="col" title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
           <th scope="col">Status/Projection</th>
           <th scope="col">Dividends</th>
+          <th scope="col" title="Average daily dollar volume over the ten trading days to the score date.">ADV</th>
+          <th scope="col" title="Average daily dollar volume divided by the $20,000 parcel size.">Lots</th>
+          <th scope="col" title="Price change over the five trading days to the score date.">5-Day Return</th>
+          <th scope="col" title="Earnings per share divided by the score-date price. Negative when the company is loss making.">Earnings Yield</th>
+          <th scope="col" title="Where the score-date price sits in its 52-week range: 0% at the low, 100% at the high.">52-Week Position</th>
         `;
 
             let totalPerformance = 0;
             let validStocks = 0;
+            // Start this render's pick-detail values from empty so a stock that
+            // has dropped out of the report can never explain itself with the
+            // previous render's figures (issue #841).
+            this.pickValues = {};
 
             stocksToShow.forEach((stock) => {
                 const row = document.createElement("tr");
@@ -3501,8 +3596,27 @@ class GRQValidator {
                 const negativeScoreBadge = negativeScore
                     ? ` ${GRQProjection.lowVolumeBadge("Negative score", "Negative score — the model predicts a fall, so we hold cash; excluded from the portfolio and all aggregate figures (issue #627)")}`
                     : "";
+                // Pick-detail columns (issue #840). RENDERING ONLY: these
+                // values never feed the inclusion predicate, the displayed
+                // score or any aggregate — they exist so a reviewer can see
+                // why a name might not have been picked by hand. Every figure
+                // is as at the SCORE DATE, never a live quote.
+                const pickValues = GRQPickColumns.pickColumnValues({
+                    sidecar: this.pickDetails
+                        ? this.pickDetails[stock.stock]
+                        : null,
+                    series: marketData,
+                    scoreDate,
+                    eps: stock.eps,
+                    buyPrice,
+                });
+                // Kept for this render so the "show the working" popovers
+                // (issue #841) can print the very figures the cells show, and
+                // so the warning legend knows whether anything needs decoding.
+                this.pickValues[stock.stock] = pickValues;
                 row.innerHTML = `
             <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}${negativeScoreBadge}</td>
+            ${GRQPickColumns.trafficLightCell(pickValues, stock.stock)}
             <td>
                 <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
                     data-field="buy-price" data-stock="${safeStock}"
@@ -3536,6 +3650,7 @@ class GRQValidator {
                     this.getJudgementClass(judgement)
                 }">${judgement}</span></span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${safeStock}" data-field="dividend-info" data-stock="${safeStock}">${dividendInfo}</span></td>
+            ${GRQPickColumns.pickDetailCells(pickValues, stock.stock)}
           `;
                 // Strike out excluded stocks (issue #290): a stock dropped from
                 // every portfolio calculation (per the shared inclusion
@@ -3581,13 +3696,20 @@ class GRQValidator {
 
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
-            // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
-            // headers (issue #406). Column map: 1 Stock, 2 Buy Price, 3 Stars,
-            // 4 90-Day Target (Portfolio Target %), 5 90-Day Actual,
-            // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
-            // 8 Status/Projection, 9 Dividends.
+            // Totals row: exactly 15 cells aligned 1:1 with the 15
+            // aggregate-view headers (issue #406, widened by #840). Column map:
+            // 1 Stock, 2 Pick, 3 Buy Price, 4 Stars,
+            // 5 90-Day Target (Portfolio Target %), 6 90-Day Actual,
+            // 7 Gain/Loss (Average Gain/Loss %), 8 Return above Cost of Capital,
+            // 9 Status/Projection, 10 Dividends, 11 ADV, 12 Lots,
+            // 13 5-Day Return, 14 Earnings Yield, 15 52-Week Position.
+            //
+            // The pick-detail columns are per-stock review aids, not portfolio
+            // figures, so they carry no total — a "-" here is the honest cell,
+            // not a suppressed number.
             totalsRow.innerHTML = `
           <td>Days Elapsed: ${actualDaysElapsed}</td>
+          <td>-</td>
           <td>-</td>
           <td>-</td>
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
@@ -3608,6 +3730,11 @@ class GRQValidator {
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends" data-field="portfolio-dividends" data-stock="">${
                 portfolioDividendYield.toFixed(2)
             }%</span></td>
+          <td>-</td>
+          <td>-</td>
+          <td>-</td>
+          <td>-</td>
+          <td>-</td>
         `;
 
             tbody.appendChild(totalsRow);
@@ -3655,6 +3782,7 @@ class GRQValidator {
         // Call out any low-volume name with the conditional legend (issue #599).
         this.updateLowVolumeLegend();
         this.updateNegativeScoreLegend();
+        this.updatePickWarningsLegend();
     }
 
     updateBasicStockTable() {
@@ -3735,6 +3863,10 @@ class GRQValidator {
         // the legend if a prior market-data render had shown it (issue #599).
         this.updateLowVolumeLegend();
         this.updateNegativeScoreLegend();
+        // The basic view renders no pick columns at all, so drop the previous
+        // render's values and hide the warning legend with them (issue #841).
+        this.pickValues = {};
+        this.updatePickWarningsLegend();
     }
 
     getDividendsWithin90Days(stockSymbol) {
@@ -4290,6 +4422,26 @@ class GRQValidator {
             GRQProjection.shouldShowLowVolumeLegend(flags) ? "" : "none";
     }
 
+    // Show the pick-warning legend only when at least one stock in the loaded
+    // report actually carries something to decode — a warning emoji, or a light
+    // that is not the plain 🟢 (issue #841). A clean report stays uncluttered,
+    // mirroring the low-volume legend's "only when it applies" rule (#599).
+    // The legend's contents come from the shared vocabulary (GRQPickWorking),
+    // so a retuned threshold or a renamed warning updates the legend with it.
+    updatePickWarningsLegend() {
+        const legend = document.getElementById("pickWarningsLegend");
+        if (!legend) {
+            return;
+        }
+        const rows = Object.values(this.pickValues || {});
+        const show = GRQPickWorking.hasAnyWarning(rows);
+        const body = document.getElementById("pickWarningsLegendBody");
+        if (body) {
+            body.innerHTML = show ? GRQPickWorking.legendHtml() : "";
+        }
+        legend.style.display = show ? "" : "none";
+    }
+
     isStockLowVolume(stockSymbol, scoreDate) {
         const series = this.marketData ? this.marketData[stockSymbol] : null;
         if (!series) {
@@ -4575,6 +4727,21 @@ class GRQValidator {
         const header = globalThis.GRQFieldLabel
             ? globalThis.GRQFieldLabel.workingHeader(stockSymbol, field, scoreDateISO)
             : `Stock: ${stockSymbol} | Field: ${field} | Score Date: ${scoreDateISO}\n\n`;
+
+        // Pick-detail columns (issue #841): every one of the six values
+        // explains itself from the SAME row the cell was rendered from, so the
+        // popover can never drift from the number on screen. The shared helper
+        // owns the wording, including why a blank cell is blank.
+        if (GRQPickWorking.isPickField(field)) {
+            return header + GRQPickWorking.working({
+                field,
+                values: this.pickValues ? this.pickValues[stockSymbol] : null,
+                context: {
+                    scoreDateISO,
+                    weekdayWindow: GRQVolume.WEEKDAY_WINDOW,
+                },
+            });
+        }
 
         switch (field) {
             case "buy-price":

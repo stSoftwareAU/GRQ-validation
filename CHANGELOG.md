@@ -10,6 +10,72 @@ and this project adheres to
 
 ### Added
 
+- Documentation for the pick-detail columns: a README _Features_ entry covering
+  every threshold (the `$20,000` parcel, the `50`/`200` lot floors, the `$1`
+  delisting price, the `0.85`/`0.15` 52-week cut-offs, the `-10%` five-day drop
+  and the `2%`/`6%` earnings-yield bands), the full 🔴 🟠 🟢 ⚪ 🚫 🫗 🥃 📈 📉
+  🪃 🔥 🩸 💰 marker key, the as-at-the-score-date caveat and the "unknown ⇒
+  blank, never a warning" rule; the `<date>-picks.csv` sidecar's place beside
+  `<date>.csv`, `<date>-analysis.csv` and `<date>-dividends.csv`; and the
+  backfill command with the two data roots it needs (README and CONTRIBUTING).
+  `tests/pick_details_documentation_test.ts` reads each documented threshold,
+  emoji, sidecar column and CLI flag out of `docs/pick_details.js`,
+  `docs/pick_working.js`, `src/picks_sidecar.rs` and `src/main.rs`, so a
+  retuned constant or a renamed flag fails the gate instead of silently
+  leaving stale prose (Issue #843).
+
+- "Show the working" popovers, accessible wording and a warning legend for the
+  pick-detail columns (`docs/pick_working.js`). Each of the six cells is now a
+  `.clickable-value` popover trigger: the popover gives the inputs, the formula
+  and the result (`$8.00M ÷ $20,000 = 400 lots`, `eps ÷ score-date price`, the
+  ADV window and whether it came from the sidecar or the in-page fallback), and
+  the traffic-light popover names every warning that fired with the threshold it
+  tests, the value that met it and whether it turned the light red or amber. A
+  blank cell explains **why** it is blank instead of opening an empty body. The
+  emoji run carries a visually-hidden text equivalent, so the meaning survives
+  with colour and images disabled, and a legend below the table decodes the four
+  lights and all nine warnings — shown only when at least one stock in the
+  loaded report carries something to decode (Issue #841).
+
+- Six pick-detail columns on the dashboard's aggregate stock table
+  (`docs/pick_columns.js`): the 🔴/🟠/🟢 pick traffic light beside **Stock**,
+  plus **ADV**, **Lots**, **5-Day Return**, **Earnings Yield** and **52-Week
+  Position** after the 90-day block, so a reviewer can see why a name might not
+  have been picked by hand. Every figure is as at the score date, never a live
+  quote. Values come from the `<DD>-picks.csv` sidecar, falling back to the
+  in-page CSV's volume window when no sidecar exists; a date with neither
+  renders blank cells and a neutral ⚪ "not enough data" light rather than a
+  misleading 🟢. Rendering only — nothing here reaches the inclusion predicate,
+  the displayed score or any portfolio aggregate (Issue #840).
+
+- `--regenerate-picks`: a pass that rebuilds **only** the `<DD>-picks.csv`
+  sidecar for every date in `docs/scores/index.json` — including dates older
+  than the 180-day cut-off `--process-all` bypasses — so the dashboard's
+  pick-detail columns are populated for the historical dates it exists to
+  review. `--date` narrows it to one date. It reads share prices alone, so it
+  resolves the market-data root only; it is idempotent over unchanged upstream
+  data; an upstream gap leaves blank cells and a named skip instead of aborting
+  the run; and it prints an end-of-run summary of dates considered, sidecars
+  written and every skipped date with its reason. `src/picks_backfill.rs`,
+  tested by `tests/picks_backfill_test.rs` (Issue #839).
+
+- Committed pick-details sidecars for every historical score date, and a
+  `scripts/check_score_data_pairing.ts` guard that reports any prediction date
+  paired with market data but missing its `<DD>-picks.csv`, so a backfill that
+  was never run — or a later change that stops emitting sidecars — turns CI red
+  rather than silently blanking the dashboard columns (Issue #839).
+
+- Per-score-date pick-details sidecar `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`
+  (`src/picks_sidecar.rs`), written beside the existing per-date CSVs with one
+  row per ticker: `week52_low`, `week52_high`, `close_score_date`,
+  `close_5d_prior` (five **trading** rows back) and `adv_dollar_10d`, computed
+  from the market-data tree over `score_date - 365 days ..= score_date`. Raw
+  inputs only — thresholds and the traffic light stay in `docs/pick_details.js`
+  — and a value that cannot be computed is left **blank, never zero**.
+  `adv_dollar_10d` reuses the `averageDollarVolume` definition of
+  `docs/volume_recommend.js`, with `tests/fixtures/adv_dollar_10d_parity.json`
+  pinning the Rust and JavaScript sides to one window (Issue #838).
+
 - `scripts/version-increment.sh`, ported from NEAT-AI-scorer, and a Version Bump
   workflow step that increments `[package].version` (patch) on every pull
   request unless the branch already bumped it, refreshing `Cargo.lock` to match.
@@ -60,6 +126,16 @@ and this project adheres to
 
 ### Changed
 
+- The widened 21-column stock table is now usable on a phone: it scrolls
+  sideways with **Stock** and the **Pick** traffic light pinned to the left
+  edge, instead of hiding the third and sixth columns below 768px — hidden
+  columns are unreachable cells, not a responsive layout. The scroller is a
+  keyboard-reachable, labelled region (`role="region"`, `tabindex="0"`,
+  `aria-label`, visible focus ring), the pinned cells paint an opaque
+  theme-aware background that clears WCAG 2 AA in both themes, and the
+  traffic-light column keeps a floor width with the emoji drawn above body-text
+  size so 🔴 and 🟠 are distinguishable without zooming. The committed PWA
+  screenshots were refreshed to match (Issue #842).
 - The dividend-basis diagnostic no longer defaults its dividend-history root to
   a private sibling checkout. `computeDividendBasisDiagnostic` takes the root as
   a **required** parameter, and `deno task diagnose-dividend-basis` resolves it

@@ -1084,7 +1084,7 @@ pub fn create_market_data_long_csv(
 ///
 /// Returns an error if the temporary file cannot be created/written or the
 /// rename over `path` fails.
-fn write_atomically(path: &str, bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_atomically(path: &str, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
 
     let tmp_path = format!("{path}.tmp");

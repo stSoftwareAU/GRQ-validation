@@ -73,6 +73,12 @@ cargo build --release
     --date 2025-01-15
 ```
 
+Processing a date also writes its pick-details sidecar
+(`docs/scores/<YYYY>/<Month>/<DD>-picks.csv`), so `--process-all` is what
+backfills the sidecar across history. Both data roots must be set for it: the
+sidecar's 52-week range, prior close and dollar ADV come from the market-data
+tree. See the README's _Backfilling the pick-details sidecar_ section.
+
 ## Testing
 
 ```bash

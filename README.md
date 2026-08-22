@@ -82,6 +82,57 @@ GitHub Pages.
   detail view shows a **Low volume — not recommended** badge), partial
   illiquidity proportionally down-weights, and unknown volume leaves the score
   unchanged.
+- **Pick-Detail Columns** — the aggregate stock table shows the same figures the
+  user reads off their picking spreadsheet, so a reviewer can answer _"is there
+  a reason we didn't manually pick this stock?"_ without leaving the page
+  (issues #836, #840): a traffic light beside **Stock**, then **ADV**, **Lots**,
+  **5-Day Return**, **Earnings Yield** and **52-Week Position**. The thresholds
+  are the user's own, adopted verbatim from that spreadsheet. A parcel is
+  `$20,000`, so **Lots** is `ADV ÷ $20,000` — how many such parcels trade on an
+  average day; under `50 lots` (so a dollar ADV below roughly $1M) is a major
+  warning and under `200 lots` (below roughly $4M) a minor one. A price under
+  `$1` is delisting risk. A 52-week position at or above `0.85` is "at the
+  high", at or below `0.15` "at the low". A 5-day return of `-10%` or worse is a
+  big drop. An earnings yield (`eps ÷ score-date price`) under `2%` is weak, and
+  one at or above `6%` is strong — strong enough to excuse sitting at the high
+  or the low. The light is **🔴** when any major warning fires, **🟠** when only
+  a minor one does, **🟢** when none does, and **⚪** when there is not enough
+  data to judge — deliberately neither green nor red:
+
+  | Marker | Meaning                                          |
+  | ------ | ------------------------------------------------ |
+  | 🔴     | At least one major warning                        |
+  | 🟠     | At least one minor warning, and no major warning  |
+  | 🟢     | No warnings — nothing about this pick stands out  |
+  | ⚪     | Not enough data as at the score date to judge     |
+  | 🚫     | Delisting risk: price below `$1` (major)          |
+  | 🫗     | Poor liquidity: under `50` parcels a day (major)  |
+  | 🥃     | Thin liquidity: under `200` parcels a day (minor) |
+  | 📈     | Near the 52-week high (minor unless the yield is strong) |
+  | 📉     | Near the 52-week low (minor unless the yield is strong)  |
+  | 🪃     | Fell `10%` or more over the last 5 days (minor)   |
+  | 🔥     | Negative earnings yield — loss making (major)     |
+  | 🩸     | Weak earnings yield, under `2%` (major)           |
+  | 💰     | Strong earnings yield, `6%` or better             |
+
+  Three rules keep the feature honest:
+
+  - **One place per number.** Every threshold above lives in
+    `docs/pick_details.js` (issue #836) — the single source of truth for the
+    lots maths, the warning vocabulary and the light — and dollar ADV stays
+    owned by `averageDollarVolume` in `docs/volume_recommend.js` (issue #576).
+    Neither is redefined anywhere else; the table cells, the popovers and the
+    accessible text all read the shared values.
+  - **As at the score date, not live.** Every figure is computed from the
+    prices as at the score date, exactly like the rest of this 90-day
+    validation view — the earnings yield divides by the score-date price, never
+    by the "90-Day Actual" (see the standing warning at the top of this file).
+  - **Unknown ⇒ blank, never a warning.** Older dates predate the `volume` CSV
+    column, the `eps` TSV column and the `<date>-picks.csv` sidecar. Those cells
+    render **blank** and the light renders ⚪, because an absent value must
+    never manufacture a warning, never suppress one, and never be read as
+    healthy.
+
 - **Dividend Tracking** — calculate dividend income and total returns. The
   **90-day judgement** metric credits dividends going ex inside
   `[score date, day 90]` and stays capped there (issue #717 precedent). The
@@ -217,11 +268,19 @@ promote** a date it cannot pair rather than committing a half-populated one. It
 never passes vacuously either: an empty score tree, a requested date whose TSV
 was never written, and a malformed `--date` all fail loud.
 
+Since issue #839 the same guard covers the pick-details sidecar: a date whose
+market data is paired but which ships no `<DD>-picks.csv` is an offender too.
+That is what stops the historical backfill silently
+regressing — a header-only sidecar is accepted, because an older
+date with no pre-score-date history upstream legitimately backfills to blank
+cells, but an absent one means the date was never covered.
+
 ```mermaid
 flowchart TD
-    W[Scorer writes docs/scores/YYYY/Month/DD.tsv + DD.csv] --> G{deno task check-score-data --date}
+    W[Scorer writes docs/scores/YYYY/Month/DD.tsv + DD.csv + DD-picks.csv] --> G{deno task check-score-data --date}
     G -->|paired: exit 0| C[Commit the day's scores]
     G -->|missing or header-only CSV: exit 1| R[Refuse — nothing committed, fault named on stderr]
+    G -->|missing DD-picks.csv: exit 1| R
     C --> CI[CI data-presence gate stays green]
 ```
 
@@ -521,6 +580,10 @@ debug info so panic locations stay useful without the full DWARF cost.
 
 # Process a specific date
 ./target/release/grq-validation --docs-path docs --date 2025-01-15
+
+# Backfill the pick-details sidecar for every date in docs/scores/index.json
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks
 ```
 
 #### Stale-binary rebuild check
@@ -575,6 +638,144 @@ flowchart TD
     E -- no --> G[Write header-only placeholder; return error]
 ```
 
+#### Pick-details sidecar (`<DD>-picks.csv`, issue #838)
+
+Three of the pick details the dashboard shows are **as at the score date** and
+so need price history from _before_ it, which `<DD>.csv` — deliberately a
+score-date-forward, 180-day window — does not carry. Rather than widening that
+file backwards by a year of rows per ticker, the processor writes a per-score-date
+sidecar beside it: `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`, one row per
+ticker.
+
+It sits alongside the other files a processed score date owns, in the same
+directory:
+
+| File               | Contents                                                                |
+| ------------------ | ----------------------------------------------------------------------- |
+| `<DD>.tsv`         | The scores themselves, as published by the scorer (including `eps`).     |
+| `<DD>.csv`         | Market data from the score date **forward**, over a 180-day window.      |
+| `<DD>-analysis.csv`| Per-stock performance calculated from `<DD>.csv`.                        |
+| `<DD>-dividends.csv`| Dividends going ex inside the same forward window.                      |
+| `<DD>-picks.csv`   | The pick details **as at** the score date, needing history from before it.|
+
+| Column             | Meaning                                                                |
+| ------------------ | ---------------------------------------------------------------------- |
+| `ticker`           | Full code from the score TSV, e.g. `NYSE:SEM`.                          |
+| `week52_low`       | Lowest daily low over `score_date - 365 days ..= score_date`.            |
+| `week52_high`      | Highest daily high over the same window.                                |
+| `close_score_date` | Close of the latest trading row on or before the score date.            |
+| `close_5d_prior`   | Close **five trading rows** back — not five calendar days.              |
+| `adv_dollar_10d`   | Mean of `volume × low` over the trailing ten weekday rows.              |
+
+- **Raw inputs only.** No thresholds, lots or traffic light: those live in
+  `docs/pick_details.js` so they stay tunable in one place.
+- **Blank, never zero**, for a value that cannot be computed (symbol missing
+  upstream, fewer than six rows for `close_5d_prior`, fewer than ten for
+  `adv_dollar_10d`). A blank cell means "unknown"; a `0` would read as a real,
+  terrible number and wrongly turn a traffic light red.
+- `adv_dollar_10d` reuses — never re-invents — the dollar-ADV definition of
+  `averageDollarVolume` in `docs/volume_recommend.js` (the issue #576 single
+  source of truth). `tests/fixtures/adv_dollar_10d_parity.json` pins both sides
+  to one window, asserted from Rust
+  (`tests/picks_sidecar_test.rs`) and from JavaScript
+  (`tests/adv_dollar_volume_parity_test.ts`), so neither definition can drift
+  silently.
+- The same non-destructive posture as the market-data CSV above: the sidecar is
+  buffered in memory and only replaces the file when the run has rows, so an
+  upstream outage never truncates a populated sidecar (issue #687 class). A
+  ticker whose upstream JSON is missing is skipped with a warning instead of
+  failing the run.
+
+```mermaid
+flowchart LR
+    A["score TSV tickers"] --> B["market data JSON<br/>score_date − 365d ..= score_date"]
+    B --> C["52-week low/high"]
+    B --> D["close on score date<br/>+ close 5 TRADING rows back"]
+    B --> E["dollar ADV over<br/>trailing 10 weekdays"]
+    C --> F["&lt;DD&gt;-picks.csv"]
+    D --> F
+    E --> F
+```
+
+#### Backfilling the pick-details sidecar
+
+A score date only gets a sidecar when the processor runs over it, so historical
+dates need a backfill before their pick-detail columns show anything. The
+dashboard exists to review **past** picks, and `docs/scores/index.json` reaches
+back to 2024-10-15, so a sidecar written only for new runs would leave every
+historical date blank — exactly where the feature matters most.
+
+`--regenerate-picks` (issue #839) is the sidecar-only pass that fills them:
+
+```bash
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks
+
+# One date only — the existing --date flag selects it
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks --date 2024-10-15
+```
+
+- It iterates **every** entry in `docs/scores/index.json`, including dates far
+  older than the 180-day cut-off `--process-all` exists to bypass, and rebuilds
+  **only** the sidecar — each date's `<DD>.csv`, `<DD>-analysis.csv` and
+  `<DD>-dividends.csv` are left exactly as committed.
+- It reads share prices only, so it resolves the market-data root alone: no
+  dividend root is required for a run that never opens one.
+- **Idempotent.** The sidecar is derived from committed upstream data with no
+  timestamps and a fixed row order, so a second run over unchanged data
+  reproduces byte-identical files and leaves `git status` clean.
+- **Upstream gaps never abort it.** A date with no pre-score-date history at all
+  — or whose score TSV the scorer never committed — leaves blank cells and is
+  named, with its reason, in the end-of-run summary:
+
+  ```text
+  Pick-details sidecar backfill
+    dates considered: 390
+    sidecars written: 380
+    dates skipped:    10
+      2025-08-10 — score file docs/scores/2025/August/10.tsv unreadable: …
+  ```
+
+- Every considered date appears in exactly one of the two lists. A date in
+  neither is a bug in the iteration, not a benign outcome, so the run fails loud
+  naming it — and a run that writes no sidecar at all (a misconfigured root or
+  docs path) exits non-zero rather than reporting a clean, empty backfill.
+
+```mermaid
+flowchart TD
+    I[docs/scores/index.json<br/>every date, no age cut-off] --> D{Score TSV readable<br/>with tickers?}
+    D -- no --> S["skip: named with a reason"]
+    D -- yes --> M{Any market data in<br/>score_date − 365d ..= score_date?}
+    M -- no --> B["blank cells: header-only sidecar<br/>+ skip named with a reason"]
+    M -- yes --> W["write &lt;DD&gt;-picks.csv"]
+    W --> R[End-of-run summary:<br/>considered / written / skipped]
+    S --> R
+    B --> R
+    R --> A{Every considered date accounted for<br/>and at least one sidecar written?}
+    A -- yes --> OK[Exit 0]
+    A -- no --> F[Exit non-zero, offenders named]
+```
+
+The full pass rewrites the sidecar too, alongside every other per-date file, and
+needs both data roots because it also rebuilds the dividend CSV:
+
+```bash
+./target/release/grq-validation --docs-path docs \
+    --market-data-path "$GRQ_MARKET_DATA_PATH" \
+    --dividend-data-path "$GRQ_DIVIDEND_DATA_PATH" \
+    --process-all
+```
+
+See _Required data roots_ below for the layout each expects. `./run.sh
+--process-all` runs that pass with the build step and the environment variables
+wired up.
+
+The committed sidecars are then guarded by the promotion check above: a
+prediction date paired with market data but missing its `<DD>-picks.csv` is
+reported, so a backfill that was never run — or a later change that stops
+emitting sidecars — turns CI red instead of quietly blanking the dashboard.
+
 ### Web Interface
 
 ```bash
@@ -585,6 +786,101 @@ python3 -m http.server 8000
 ```
 
 Visit `http://localhost:8000` to access the dashboard.
+
+#### Pick-detail columns on the stock table (issue #840)
+
+The aggregate stock table carries six extra columns so a reviewer can answer
+_"is there a reason we didn't manually pick this stock?"_ without leaving the
+page — the same figures the picking spreadsheet shows:
+
+| Column                | Rendering                                                              |
+| --------------------- | ---------------------------------------------------------------------- |
+| **Pick**              | 🔴/🟠/🟢 plus the warning emojis (🚫 🫗 🥃 📈 📉 🪃 🔥 🩸 💰). Sits beside Stock so it is scannable straight down the column; the wording sits in visually-hidden text beside the glyphs, so the meaning survives with colour and images disabled. |
+| **ADV**               | Average daily dollar volume, compact (`$1.23M`).                        |
+| **Lots**              | `ADV ÷ $20,000` — how many parcels trade on an average day.             |
+| **5-Day Return**      | Signed percentage.                                                      |
+| **Earnings Yield**    | Signed percentage. A negative EPS is real and shows as negative.        |
+| **52-Week Position**  | Percentage of the 52-week range: `0.0%` at the low, `100.0%` at the high. |
+
+Four rules govern them:
+
+- **Every figure is as at the score date**, never a live quote — the same basis
+  as the rest of the 90-day validation view (see the `90-Day Actual` warning
+  above). The earnings yield is `eps ÷ score-date price`, not `eps ÷ 90-Day
+  Actual`.
+- **Rendering only.** These values never feed the inclusion predicate
+  (`GRQProjection.isStockIncluded` / `is_priceable`), the displayed score, the
+  star filter or any portfolio aggregate.
+  `tests/pick_columns_isolation_test.ts` pins that over a committed score date.
+- **Unknown degrades, it never breaks.** Older dates (2024) predate the `volume`
+  CSV column, the `eps` TSV column and the sidecar entirely: those cells render
+  **blank** and the light renders **⚪ — not enough data**, which is deliberately
+  neither 🟢 nor 🔴. An unknown value never manufactures a warning and never
+  suppresses one, so a known-thin ADV still shows 🔴 even when the 52-week range
+  is unknown.
+- **No maths is re-implemented.** Thresholds, the light and the warning
+  vocabulary come from `docs/pick_details.js` (issue #836); dollar ADV comes
+  from `averageDollarVolume` in `docs/volume_recommend.js` (the issue #576
+  single source of truth). `docs/pick_columns.js` only renders.
+
+```mermaid
+flowchart LR
+    A["&lt;DD&gt;-picks.csv sidecar<br/>(issue #838)"] --> D
+    B["&lt;DD&gt;.csv trailing window<br/>GRQVolume.buildTrailingVolumeWindow<br/>(fallback when no sidecar)"] --> D
+    C["&lt;DD&gt;.tsv eps<br/>(issue #837)"] --> D
+    D["docs/pick_columns.js<br/>pickColumnValues()"] --> E["docs/pick_details.js<br/>thresholds + traffic light"]
+    E --> F["6 table cells<br/>escaped via docs/escape.js"]
+    F --> G["docs/pick_working.js<br/>popover working, accessible text, legend<br/>(issue #841)"]
+```
+
+Each of the six cells **shows its working** (issue #841), the same way every
+other value on the dashboard does: click it and a popover gives the inputs, the
+formula and the result — `$8.00M ÷ $20,000 = 400 lots` and the band that falls
+in, the ADV window and whether it came from the sidecar or the in-page CSV
+fallback, `eps ÷ score-date price` with both inputs, the 52-week high and low
+behind the position, both closes behind the 5-day return, and — for the traffic
+light — every warning that fired with the threshold it tests, the value that met
+it, and whether it turned the light red or amber. A **blank** cell opens a
+popover too, saying _why_ it is blank (no sidecar for this date, a pre-`eps`
+score file) rather than an empty body. The wording comes from
+`docs/pick_working.js`, which quotes the shared thresholds rather than restating
+them, and the popovers use the dashboard's existing lifecycle helpers
+(`docs/popover_cleanup.js`, `docs/popover_dismiss.js`), so switching score dates
+leaves no orphaned tip.
+
+Below the table a **legend** decodes the four lights and all nine warning
+emojis. Following the Low-volume legend pattern (issue #599) it renders **only**
+when at least one stock in the loaded report carries something to decode, so a
+clean report stays uncluttered.
+
+#### The widened table on a phone (issue #842)
+
+Twenty-one columns do not fit a 375px-wide screen, so the table **scrolls
+sideways with the Stock column and the traffic light pinned** to the left edge.
+No column is hidden: the previous mobile rule hid the third and sixth columns
+outright, which does not make a wide table responsive — it makes those cells
+unreachable on the one device where the reader cannot open a wider window.
+
+- **Pinned pair.** `#stockTable`'s first column (always Stock) is pinned by
+  position and given a fixed width, because the light's `left` offset must land
+  exactly on its right edge; the light is pinned by CLASS (`.pick-light`),
+  because the basic no-market-data view has no Pick column and its second column
+  must not be pinned. Both paint an opaque, theme-aware background, so the
+  scrolling columns pass underneath rather than through them.
+- **Keyboard-reachable scroller.** The wrapper is
+  `role="region" tabindex="0"` with an accessible name, so the table can be
+  panned with the arrow keys and is announced by a screen reader — a scroll
+  region that only answers to touch is an accessibility failure.
+- **Readable light.** The traffic-light column keeps a floor width so the lights
+  form a strip that can be scanned straight down, and the emoji is drawn above
+  body-text size (in root-relative `rem`, so the smaller mobile table font does
+  not shrink it) because 🔴 and 🟠 differ only in hue.
+- **Never colour alone.** The wording beside each light (issue #841) and the
+  legend below the table carry the meaning; the glyphs are `aria-hidden`.
+
+`pa11y` (`pa11yci.json`) audits the dashboard at a 390px viewport in **both**
+themes, and `tests/stock_table_responsive_layout_test.ts` pins the invariants
+above against the committed markup and stylesheet.
 
 #### Deep-link URL parameters
 
@@ -940,6 +1236,8 @@ GRQ-validation/
 │   ├── main.rs             # CLI entry point
 │   ├── lib.rs              # Library interface
 │   ├── models.rs           # Data structures
+│   ├── picks_backfill.rs   # <DD>-picks.csv backfill across every indexed date
+│   ├── picks_sidecar.rs    # <DD>-picks.csv writer (52-week range, ADV)
 │   └── utils.rs            # Utility functions
 ├── docs/                   # Static dashboard (published via GitHub Pages)
 │   ├── index.html          # Main dashboard
@@ -1040,9 +1338,9 @@ machine, never skips for a missing data tree, and leaves `git status` clean
 (Issue #804).
 
 `scripts/check_hermetic_tests.sh` — run by `quality.sh` and by the CI Rust job —
-is the gate: it runs the four market-data/dividend integration tests with both
-root variables unset and fails if any of them skips, if `tests/` names a private
-data tree, or if the run dirties the working tree.
+is the gate: it runs the five market-data/dividend/pick-details integration
+tests with both root variables unset and fails if any of them skips, if `tests/`
+names a private data tree, or if the run dirties the working tree.
 
 ```mermaid
 flowchart LR
@@ -1255,6 +1553,8 @@ flowchart LR
 - `--dividend-data-path` — dividend-data root; overrides
   `GRQ_DIVIDEND_DATA_PATH`.
 - `--process-all` — process every score file, not just recent ones.
+- `--regenerate-picks` — rebuild only the `<DD>-picks.csv` sidecar, for every
+  date in `docs/scores/index.json` (or, with `--date`, for one of them).
 - `--calculate-performance` — calculate performance metrics for score files.
 - `--date` — process a specific date in `YYYY-MM-DD` format.
 - `--verbose` — enable verbose logging.

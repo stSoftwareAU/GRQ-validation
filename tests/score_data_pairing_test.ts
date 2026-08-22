@@ -14,11 +14,18 @@ import {
   isMarketDataCsvEmpty,
   parseArgs,
   predictionTsvPath,
+  siblingPicksCsv,
 } from "../scripts/check_score_data_pairing.ts";
 
 const HEADER = "date,ticker,high,low,open,close,split_coefficient,volume\n";
 const WITH_DATA = HEADER +
   "2026-07-06,NYSE:SLB,46.07,44.75,44.76,45.72,1.0,1\n";
+
+// The pick-details sidecar backfilled across every historical date (issue #839).
+const PICKS_HEADER =
+  "ticker,week52_low,week52_high,close_score_date,close_5d_prior,adv_dollar_10d\n";
+const PICKS_WITH_DATA = PICKS_HEADER +
+  "NYSE:SLB,38.10,58.42,45.72,44.90,4230000.00\n";
 
 /** Builds a reader over an in-memory tree: absent keys read as missing. */
 function readerFor(files: Record<string, string>) {
@@ -63,6 +70,7 @@ Deno.test("checkScoreDataPairing: promotion proceeds when the date is paired", a
     readFile: readerFor({
       "docs/scores/2026/July/05.tsv": "ticker\tscore\nNYSE:SLB\t0.9\n",
       "docs/scores/2026/July/05.csv": WITH_DATA,
+      "docs/scores/2026/July/05-picks.csv": PICKS_WITH_DATA,
     }),
     log,
   });
@@ -78,8 +86,10 @@ Deno.test("checkScoreDataPairing: refuses to promote a date whose market-data CS
     dates: ["2026-07-05", "2026-07-06"],
     readFile: readerFor({
       "docs/scores/2026/July/05.tsv": "ticker\tscore\nNYSE:SLB\t0.9\n",
+      "docs/scores/2026/July/05-picks.csv": PICKS_WITH_DATA,
       "docs/scores/2026/July/06.tsv": "ticker\tscore\nNYSE:SLB\t0.9\n",
       "docs/scores/2026/July/06.csv": WITH_DATA,
+      "docs/scores/2026/July/06-picks.csv": PICKS_WITH_DATA,
     }),
     log,
   });
@@ -102,6 +112,7 @@ Deno.test("checkScoreDataPairing: refuses a header-only market-data CSV", async 
     readFile: readerFor({
       "docs/scores/2026/July/05.tsv": "ticker\tscore\nNYSE:SLB\t0.9\n",
       "docs/scores/2026/July/05.csv": HEADER,
+      "docs/scores/2026/July/05-picks.csv": PICKS_WITH_DATA,
     }),
     log,
   });
@@ -156,12 +167,60 @@ Deno.test("checkScoreDataPairing: with no dates it sweeps the whole committed tr
       "docs/scores/2026/July/05.tsv": "ticker\tscore\n",
       "docs/scores/2026/July/06.tsv": "ticker\tscore\n",
       "docs/scores/2026/July/06.csv": WITH_DATA,
+      "docs/scores/2026/July/06-picks.csv": PICKS_WITH_DATA,
     }),
     log,
   });
 
   assertEquals(code, 1);
   assertStringIncludes(lines.join("\n"), "docs/scores/2026/July/05.csv");
+});
+
+Deno.test("checkScoreDataPairing: reports a date whose pick-details sidecar was never backfilled", async () => {
+  // Issue #839: the guard that stops the historical backfill silently
+  // regressing — market data paired, but no <date>-picks.csv beside it.
+  const { lines, log } = collector();
+  const code = await checkScoreDataPairing({
+    scoresDir: "docs/scores",
+    dates: ["2026-07-05"],
+    readFile: readerFor({
+      "docs/scores/2026/July/05.tsv": "ticker\tscore\nNYSE:SLB\t0.9\n",
+      "docs/scores/2026/July/05.csv": WITH_DATA,
+    }),
+    log,
+  });
+
+  assertEquals(code, 1);
+  assertStringIncludes(
+    lines.join("\n"),
+    "docs/scores/2026/July/05-picks.csv (missing)",
+  );
+});
+
+Deno.test("checkScoreDataPairing: a header-only sidecar passes — an upstream gap is blanks, not a gap in the backfill", async () => {
+  // A score date with no pre-score-date market data upstream legitimately
+  // backfills to blank cells; only an absent sidecar means the backfill never
+  // covered the date.
+  const { log } = collector();
+  const code = await checkScoreDataPairing({
+    scoresDir: "docs/scores",
+    dates: ["2026-07-05"],
+    readFile: readerFor({
+      "docs/scores/2026/July/05.tsv": "ticker\tscore\nNYSE:SLB\t0.9\n",
+      "docs/scores/2026/July/05.csv": WITH_DATA,
+      "docs/scores/2026/July/05-picks.csv": PICKS_HEADER,
+    }),
+    log,
+  });
+
+  assertEquals(code, 0);
+});
+
+Deno.test("siblingPicksCsv: maps a prediction TSV to its pick-details sidecar", () => {
+  assertEquals(
+    siblingPicksCsv("docs/scores/2026/July/05.tsv"),
+    "docs/scores/2026/July/05-picks.csv",
+  );
 });
 
 Deno.test("checkScoreDataPairing: an empty score tree is a fault, not a pass", async () => {

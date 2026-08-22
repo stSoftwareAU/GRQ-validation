@@ -1,0 +1,111 @@
+{
+  "issue": 838,
+  "description": "Shared dollar-ADV parity fixture. The Rust pick-details sidecar writer (tests/picks_sidecar_test.rs) and the frontend averageDollarVolume helper (tests/adv_dollar_volume_parity_test.ts, over docs/volume_recommend.js) must both compute expected_adv_dollar_10d from these rows, so the two definitions cannot drift apart in silence.",
+  "symbol": "GRQVTEST838ADV",
+  "ticker": "NYSE:GRQVTEST838ADV",
+  "score_date": "2026-03-13",
+  "expected_adv_dollar_10d": 528000.0,
+  "notes": [
+    "The two oldest rows sit outside the trailing 10 weekdays and carry deliberately huge volume, so a window-trimming mistake on either side blows the mean up.",
+    "2026-03-04 has zero volume: both sides skip an unusable day and divide by the 9 usable days, never by 10.",
+    "Usable dollar volume sums to 4,752,000 over 9 days -> a mean of exactly 528,000."
+  ],
+  "rows": [
+    {
+      "date": "2026-02-26",
+      "open": "50.50",
+      "high": "51.00",
+      "low": "50.00",
+      "close": "50.75",
+      "volume": "1000000"
+    },
+    {
+      "date": "2026-02-27",
+      "open": "60.50",
+      "high": "61.00",
+      "low": "60.00",
+      "close": "60.75",
+      "volume": "900000"
+    },
+    {
+      "date": "2026-03-02",
+      "open": "10.20",
+      "high": "10.60",
+      "low": "10.00",
+      "close": "10.40",
+      "volume": "100000"
+    },
+    {
+      "date": "2026-03-03",
+      "open": "12.60",
+      "high": "12.90",
+      "low": "12.50",
+      "close": "12.70",
+      "volume": "80000"
+    },
+    {
+      "date": "2026-03-04",
+      "open": "9.10",
+      "high": "9.40",
+      "low": "9.00",
+      "close": "9.20",
+      "volume": "0"
+    },
+    {
+      "date": "2026-03-05",
+      "open": "11.10",
+      "high": "11.40",
+      "low": "11.00",
+      "close": "11.20",
+      "volume": "50000"
+    },
+    {
+      "date": "2026-03-06",
+      "open": "10.60",
+      "high": "10.90",
+      "low": "10.50",
+      "close": "10.70",
+      "volume": "40000"
+    },
+    {
+      "date": "2026-03-09",
+      "open": "10.35",
+      "high": "10.65",
+      "low": "10.25",
+      "close": "10.45",
+      "volume": "60000"
+    },
+    {
+      "date": "2026-03-10",
+      "open": "9.85",
+      "high": "10.15",
+      "low": "9.75",
+      "close": "9.95",
+      "volume": "20000"
+    },
+    {
+      "date": "2026-03-11",
+      "open": "10.20",
+      "high": "10.50",
+      "low": "10.10",
+      "close": "10.30",
+      "volume": "30000"
+    },
+    {
+      "date": "2026-03-12",
+      "open": "10.90",
+      "high": "11.20",
+      "low": "10.80",
+      "close": "11.00",
+      "volume": "25000"
+    },
+    {
+      "date": "2026-03-13",
+      "open": "11.50",
+      "high": "11.80",
+      "low": "11.40",
+      "close": "11.60",
+      "volume": "35000"
+    }
+  ]
+}

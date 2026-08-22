@@ -20,6 +20,8 @@ HERMETIC_TESTS=(
     create_market_data_long_csv_test
     market_data_tests
     dividend_tests
+    picks_sidecar_test
+    picks_backfill_test
 )
 
 # Private-tree checkout names and the base-path constants deleted in #802.
