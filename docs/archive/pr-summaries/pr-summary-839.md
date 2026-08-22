@@ -25,7 +25,11 @@ silently regressing later. Closes #839.
   date must appear in exactly one of the written/skipped lists — a date in
   neither fails the run loud — and a run that writes no sidecar at all exits
   non-zero rather than reporting a clean, empty backfill.
-- **379 sidecars committed** for the historical dates.
+- **380 sidecars committed** — one for every prediction date in the committed
+  score tree. 379 came from the whole-history pass; `2026-07-22` was promoted
+  from `main` afterwards and was backfilled with
+  `--regenerate-picks --date 2026-07-22`, which is precisely the gap the new
+  pairing check reported.
 - **`scripts/check_score_data_pairing.ts`** now reports a prediction date paired
   with market data but missing its `<DD>-picks.csv`, so a backfill that was never
   run — or a later change that stops emitting sidecars — turns `./quality.sh` and
@@ -56,14 +60,41 @@ The ten skipped dates are index entries the scorer never wrote a score TSV for
 (`2025/August/10.tsv` … `19.tsv` are absent from the tree); they are named
 individually so a partial backfill cannot hide behind a count.
 
+**The single-date form, run for `2026-07-22`** (promoted from `main` after the
+whole-history pass, so it shipped a score TSV and market-data CSV with no
+sidecar):
+
+```text
+$ ./target/release/grq-validation --docs-path docs \
+      --market-data-path "$GRQ_MARKET_DATA_PATH" \
+      --regenerate-picks --date 2026-07-22
+Pick-details sidecar backfill
+  dates considered: 1
+  sidecars written: 1
+  dates skipped:    0
+```
+
 **Idempotency** — a second run over unchanged upstream data left the working
-tree clean:
+tree clean, and the `2026-07-22` sidecar was byte-identical between the two
+runs (`cmp` over the first and second outputs):
 
 ```text
 $ ./target/release/grq-validation --docs-path docs \
       --market-data-path "$GRQ_MARKET_DATA_PATH" --regenerate-picks
 $ git status --porcelain
 (no output)
+```
+
+**The guard, before and after that single-date backfill:**
+
+```text
+$ deno task check-score-data          # before
+check_score_data_pairing: REFUSING to promote — the following prediction dates
+are missing market data or their pick-details sidecar:
+  docs/scores/2026/July/22-picks.csv (missing)
+
+$ deno task check-score-data          # after
+check_score_data_pairing: market data paired for 380 committed prediction dates
 ```
 
 **A backfilled sidecar** (`docs/scores/2024/October/15-picks.csv`, the oldest
@@ -90,29 +121,15 @@ flowchart TD
     G -- no --> F[CI red, offending paths named]
 ```
 
-### Pre-existing quality-gate failure (issue #847, not caused by this change)
+### Quality gate
 
-`./quality.sh` still fails on two Deno tests —
-`tests/market_data_presence_test.ts` and the "committed tree passes the guard"
-case in `tests/score_data_pairing_test.ts` — because
-`docs/scores/2026/July/21.csv` is missing from the committed tree: the daily
-promotion committed `21.tsv` with no sibling market data. That is
-[#847](https://github.com/stSoftwareAU/GRQ-validation/issues/847), already open,
-and it reproduces on this branch **with this PR's changes stashed**:
-
-```text
-$ git stash -u && deno test --allow-read --allow-env \
-      tests/market_data_presence_test.ts tests/score_data_pairing_test.ts
-FAILED | 19 passed | 2 failed
-  data-presence gate: every committed prediction date has a non-empty sibling market-data CSV
-  checkScoreDataPairing: the committed tree passes the guard
-```
-
-Both failures name `docs/scores/2026/July/21.csv (missing)` only — no
-pick-details sidecar is reported as missing. Fixing it needs the market CSV for
-that date, which is #847's job, not this issue's. Every other check passes:
-1536 Deno tests, the full `cargo test` suite, `cargo clippy -D warnings`,
-`cargo fmt --check` and `./scripts/check_hermetic_tests.sh`.
+`./quality.sh` passes cleanly on this branch: `cargo fmt --check`,
+`cargo clippy -D warnings` (all targets and tests), the full `cargo test` suite,
+`./scripts/check_hermetic_tests.sh`, the release build, 1623 Deno tests,
+`deno lint` and `deno check`. The `2026-07-21` market-CSV failure noted on an
+earlier attempt (issue #847) no longer reproduces — `main` has since committed
+`docs/scores/2026/July/21.csv`, and this branch is merged up to
+`milestone/835-show-stock-pick-details-adv-lots-earnings-yiel`.
 
 ## Test Plan
 
