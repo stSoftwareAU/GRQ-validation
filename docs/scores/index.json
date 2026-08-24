@@ -3886,7 +3886,7 @@
       "day": "24",
       "file": "2026/July/24.tsv",
       "date": "2026-07-24",
-      "performance_90_day": 2.4563612406496014,
+      "performance_90_day": 2.456361240649602,
       "performance_annualized": 37.2386851846366,
       "total_stocks": 100
     },
@@ -3895,7 +3895,10 @@
       "month": "July",
       "day": "25",
       "file": "2026/July/25.tsv",
-      "date": "2026-07-25"
+      "date": "2026-07-25",
+      "performance_90_day": 2.2738039864383275,
+      "performance_annualized": 35.547265705257544,
+      "total_stocks": 100
     }
   ]
 }
