@@ -126,6 +126,16 @@ and this project adheres to
 
 ### Changed
 
+- The six pick-detail columns (Issue #840) move off the dashboard's aggregate
+  stock table onto the single-stock view (`?stock=…`) only. They crowded the
+  portfolio figures out of a phone screen and are a per-stock review aid, not a
+  portfolio figure, so the aggregate table (and the totals row, back from 15 to
+  9 cells) now carries none of them. `docs/pick_columns.js` builds the header
+  and body row for the single-stock table (`pickDetailHeaderRow()`,
+  `pickDetailRowCells()`) so the two rows can never fall out of alignment, and
+  the pick-warning legend follows the columns — visible only on the
+  single-stock view. Display-only: the maths, the inclusion predicate and the
+  `<DD>-picks.csv` sidecar load are unchanged (Issue #855).
 - The widened 21-column stock table is now usable on a phone: it scrolls
   sideways with **Stock** and the **Pick** traffic light pinned to the left
   edge, instead of hiding the third and sixth columns below 768px — hidden

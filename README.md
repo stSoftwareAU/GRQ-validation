@@ -82,10 +82,11 @@ GitHub Pages.
   detail view shows a **Low volume — not recommended** badge), partial
   illiquidity proportionally down-weights, and unknown volume leaves the score
   unchanged.
-- **Pick-Detail Columns** — the aggregate stock table shows the same figures the
-  user reads off their picking spreadsheet, so a reviewer can answer _"is there
-  a reason we didn't manually pick this stock?"_ without leaving the page
-  (issues #836, #840): a traffic light beside **Stock**, then **ADV**, **Lots**,
+- **Pick-Detail Columns** — the single-stock view (`?stock=…`) shows the same
+  figures the user reads off their picking spreadsheet, so a reviewer can answer
+  _"is there a reason we didn't manually pick this stock?"_ without leaving the
+  page (issues #836, #840, #855): a traffic light beside **Stock**, then
+  **ADV**, **Lots**,
   **5-Day Return**, **Earnings Yield** and **52-Week Position**. The thresholds
   are the user's own, adopted verbatim from that spreadsheet. A parcel is
   `$20,000`, so **Lots** is `ADV ÷ $20,000` — how many such parcels trade on an
@@ -787,15 +788,22 @@ python3 -m http.server 8000
 
 Visit `http://localhost:8000` to access the dashboard.
 
-#### Pick-detail columns on the stock table (issue #840)
+#### Pick-detail columns on the single-stock view (issues #840, #855)
 
-The aggregate stock table carries six extra columns so a reviewer can answer
-_"is there a reason we didn't manually pick this stock?"_ without leaving the
-page — the same figures the picking spreadsheet shows:
+Drill into one stock (click its ticker, or open `?stock=NASDAQ:MGRC`) and a
+seven-column table sits below the detail card: the stock, then six columns that
+answer _"is there a reason we didn't manually pick this stock?"_ without leaving
+the page — the same figures the picking spreadsheet shows.
+
+They render **only** on that view. They started on the aggregate table (#840),
+where they crowded the portfolio figures off a phone screen; since issue #855
+the aggregate table carries none of them, because they are a per-stock review
+aid rather than a portfolio figure. The pick-warning legend follows the columns,
+so it too appears on the single-stock view only.
 
 | Column                | Rendering                                                              |
 | --------------------- | ---------------------------------------------------------------------- |
-| **Pick**              | 🔴/🟠/🟢 plus the warning emojis (🚫 🫗 🥃 📈 📉 🪃 🔥 🩸 💰). Sits beside Stock so it is scannable straight down the column; the wording sits in visually-hidden text beside the glyphs, so the meaning survives with colour and images disabled. |
+| **Pick**              | 🔴/🟠/🟢 plus the warning emojis (🚫 🫗 🥃 📈 📉 🪃 🔥 🩸 💰). Sits beside Stock, pinned there on a phone; the wording sits in visually-hidden text beside the glyphs, so the meaning survives with colour and images disabled. |
 | **ADV**               | Average daily dollar volume, compact (`$1.23M`).                        |
 | **Lots**              | `ADV ÷ $20,000` — how many parcels trade on an average day.             |
 | **5-Day Return**      | Signed percentage.                                                      |
@@ -822,6 +830,17 @@ Four rules govern them:
   vocabulary come from `docs/pick_details.js` (issue #836); dollar ADV comes
   from `averageDollarVolume` in `docs/volume_recommend.js` (the issue #576
   single source of truth). `docs/pick_columns.js` only renders.
+
+Which view renders what (issue #855):
+
+```mermaid
+flowchart TD
+    A["updateStockTable()"] --> B{"?stock=… selected?"}
+    B -- yes --> C["Detail card<br/>+ pick-detail table<br/>Stock · Pick · ADV · Lots ·<br/>5-Day Return · Earnings Yield ·<br/>52-Week Position"]
+    C --> D["Pick-warning legend<br/>(when this stock has something to decode)"]
+    B -- no --> E["Aggregate table<br/>9 portfolio columns + totals row<br/>no pick columns"]
+    E --> F["Legend hidden<br/>(pickValues is empty)"]
+```
 
 ```mermaid
 flowchart LR

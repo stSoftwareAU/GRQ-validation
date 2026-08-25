@@ -4,17 +4,18 @@
 // file owns the wiring the behaviour depends on, which lives in committed
 // markup rather than in a callable function:
 //
-//   - the six column headers exist in BOTH header rows (the static markup in
-//     docs/index.html and the aggregate-view rebuild in docs/app.js) and are
-//     labelled identically, so the two can never describe different columns;
 //   - docs/index.html loads docs/pick_details.js and docs/pick_columns.js
 //     BEFORE docs/app.js, which calls `GRQPickColumns` at render time;
 //   - the service worker precaches both modules in the same all-or-nothing
 //     shell update as app.js, so a fresh app.js is never cached beside a
 //     missing GRQPickColumns.
 //
-// The label list comes from the real shipped module, so a rename there fails
-// here rather than silently drifting from the markup.
+// CHANGED BY ISSUE #855: this file used to assert that BOTH aggregate header
+// rows carried all six pick-detail columns. They no longer do — the columns
+// render on the single-stock view only, from one header row built by
+// `GRQPickColumns.pickDetailHeaderRow()`. That placement, and the aggregate
+// table's freedom from these columns, is owned by
+// `tests/pick_columns_single_stock_view_test.ts`.
 
 import { assert, assertStringIncludes } from "@std/assert";
 import "../docs/escape.js";
@@ -26,60 +27,7 @@ import "../docs/pick_working.js";
 import "../docs/pick_columns.js";
 
 const INDEX_HTML = await Deno.readTextFile("docs/index.html");
-const APP_JS = await Deno.readTextFile("docs/app.js");
 const SW_JS = await Deno.readTextFile("docs/sw.js");
-
-const { PICK_COLUMN_LABELS } = (globalThis as unknown as {
-  GRQPickColumns: { PICK_COLUMN_LABELS: string[] };
-}).GRQPickColumns;
-
-/** The static #stockTable `<thead>` from docs/index.html. */
-function staticThead(): string {
-  const tableStart = INDEX_HTML.indexOf('id="stockTable"');
-  assert(tableStart !== -1, "could not find #stockTable in index.html");
-  const start = INDEX_HTML.indexOf("<thead", tableStart);
-  const end = INDEX_HTML.indexOf("</thead>", start);
-  assert(start !== -1 && end !== -1, "could not find #stockTable <thead>");
-  return INDEX_HTML.slice(start, end);
-}
-
-/** The aggregate-view `thead.innerHTML` template from docs/app.js. */
-function aggregateThead(): string {
-  const marker = "thead.innerHTML = `";
-  let from = 0;
-  while (true) {
-    const start = APP_JS.indexOf(marker, from);
-    assert(start !== -1, "could not find the aggregate-view thead template");
-    const bodyStart = start + marker.length;
-    const end = APP_JS.indexOf("`", bodyStart);
-    assert(end !== -1, "unterminated template literal");
-    const body = APP_JS.slice(bodyStart, end);
-    if (
-      ["Buy Price", "Stars", "Gain/Loss", "Dividends"].every((m) =>
-        body.includes(m)
-      )
-    ) {
-      return body;
-    }
-    from = end + 1;
-  }
-}
-
-Deno.test("both #stockTable header rows carry every pick-detail column", () => {
-  const rows = {
-    "index.html static": staticThead(),
-    "app.js aggregate": aggregateThead(),
-  };
-  for (const [where, html] of Object.entries(rows)) {
-    for (const label of PICK_COLUMN_LABELS) {
-      assertStringIncludes(
-        html,
-        `>${label}</th>`,
-        `${where} thead is missing the ${label} column`,
-      );
-    }
-  }
-});
 
 Deno.test("index.html loads the pick modules before app.js", () => {
   // app.js itself is injected by dashboard_boot.js (issue #189, so the page can

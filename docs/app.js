@@ -3245,7 +3245,11 @@ class GRQValidator {
             );
 
         if (this.selectedStock) {
-            // Single stock view - show as card instead of table
+            // Single stock view - a detail card above the pick-detail table.
+            // Start from an empty pick-value set so a stock that is no longer
+            // on screen can never explain itself through this render's cells,
+            // or leave the warning legend up behind it (issues #841, #855).
+            this.pickValues = {};
             const stock = stocksToShow[0];
             if (stock) {
                 const performance = this.calculateStockPerformance(stock);
@@ -3284,11 +3288,14 @@ class GRQValidator {
                     scoreDate,
                 );
 
-                // Hide the table and show card
+                // The table stays on screen in this view (issue #855): it is
+                // where the six pick-detail columns now live, rendered below
+                // the detail card. See the pick-detail row built at the end of
+                // this branch.
                 const tableContainer = document.querySelector(
                     ".table-responsive",
                 );
-                tableContainer.style.display = "none";
+                tableContainer.style.display = "block";
 
                 // Create or update stock detail card
                 let stockCard = document.getElementById(
@@ -3489,6 +3496,40 @@ class GRQValidator {
               ${this.getYahooFinanceLinkHtml(stock.stock)}
             </div>
           `;
+
+                // The six pick-detail columns (issue #840) render HERE and
+                // nowhere else since issue #855: they answer "is there a reason
+                // we didn't pick THIS stock?", so they belong beside the one
+                // stock being reviewed, not spread across an aggregate table
+                // that a phone cannot fit.
+                //
+                // RENDERING ONLY: no value below feeds the inclusion predicate,
+                // the displayed score or any aggregate — and every figure is as
+                // at the SCORE DATE, never a live quote.
+                const pickValues = GRQPickColumns.pickColumnValues({
+                    sidecar: this.pickDetails
+                        ? this.pickDetails[stock.stock]
+                        : null,
+                    series: this.marketData
+                        ? this.marketData[stock.stock]
+                        : null,
+                    scoreDate,
+                    eps: stock.eps,
+                    buyPrice,
+                });
+                // Kept for this render so the "show the working" popovers
+                // (issue #841) can print the very figures the cells show, and
+                // so the warning legend knows whether anything needs decoding.
+                this.pickValues[stock.stock] = pickValues;
+
+                const thead = document.querySelector("#stockTable thead tr");
+                thead.innerHTML = GRQPickColumns.pickDetailHeaderRow();
+                const pickRow = document.createElement("tr");
+                pickRow.innerHTML = GRQPickColumns.pickDetailRowCells(
+                    pickValues,
+                    stock.stock,
+                );
+                tbody.appendChild(pickRow);
             }
         } else {
             // Aggregate view - show table
@@ -3509,14 +3550,12 @@ class GRQValidator {
             const thead = document.querySelector(
                 "#stockTable thead tr",
             );
-            // Pick-detail columns (issue #840): the traffic light sits beside
-            // Stock so it is scannable straight down the column; the five
-            // figures trail the existing 90-day block so no existing column
-            // moves relative to its neighbours. The same six headers appear in
-            // the static markup in docs/index.html.
+            // The six pick-detail columns (issue #840) are deliberately ABSENT
+            // here: they are a per-stock review aid, and on the aggregate table
+            // they crowded out the portfolio figures — unusable on a phone. They
+            // render on the single-stock view instead (issue #855).
             thead.innerHTML = `
           <th scope="col">Stock</th>
-          <th scope="col" class="pick-light" title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data.">Pick</th>
           <th scope="col">Buy Price</th>
           <th scope="col">Stars</th>
           <th scope="col">90-Day Target</th>
@@ -3525,18 +3564,13 @@ class GRQValidator {
           <th scope="col" title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}</th>
           <th scope="col">Status/Projection</th>
           <th scope="col">Dividends</th>
-          <th scope="col" title="Average daily dollar volume over the ten trading days to the score date.">ADV</th>
-          <th scope="col" title="Average daily dollar volume divided by the $20,000 parcel size.">Lots</th>
-          <th scope="col" title="Price change over the five trading days to the score date.">5-Day Return</th>
-          <th scope="col" title="Earnings per share divided by the score-date price. Negative when the company is loss making.">Earnings Yield</th>
-          <th scope="col" title="Where the score-date price sits in its 52-week range: 0% at the low, 100% at the high.">52-Week Position</th>
         `;
 
             let totalPerformance = 0;
             let validStocks = 0;
-            // Start this render's pick-detail values from empty so a stock that
-            // has dropped out of the report can never explain itself with the
-            // previous render's figures (issue #841).
+            // The aggregate view renders no pick cells, so it holds no
+            // pick-detail values — which also hides the warning legend that
+            // decodes them (issue #855).
             this.pickValues = {};
 
             stocksToShow.forEach((stock) => {
@@ -3596,27 +3630,8 @@ class GRQValidator {
                 const negativeScoreBadge = negativeScore
                     ? ` ${GRQProjection.lowVolumeBadge("Negative score", "Negative score — the model predicts a fall, so we hold cash; excluded from the portfolio and all aggregate figures (issue #627)")}`
                     : "";
-                // Pick-detail columns (issue #840). RENDERING ONLY: these
-                // values never feed the inclusion predicate, the displayed
-                // score or any aggregate — they exist so a reviewer can see
-                // why a name might not have been picked by hand. Every figure
-                // is as at the SCORE DATE, never a live quote.
-                const pickValues = GRQPickColumns.pickColumnValues({
-                    sidecar: this.pickDetails
-                        ? this.pickDetails[stock.stock]
-                        : null,
-                    series: marketData,
-                    scoreDate,
-                    eps: stock.eps,
-                    buyPrice,
-                });
-                // Kept for this render so the "show the working" popovers
-                // (issue #841) can print the very figures the cells show, and
-                // so the warning legend knows whether anything needs decoding.
-                this.pickValues[stock.stock] = pickValues;
                 row.innerHTML = `
             <td class="clickable-stock" data-stock="${safeStock}">${safeStock}${lowVolumeBadge}${negativeScoreBadge}</td>
-            ${GRQPickColumns.trafficLightCell(pickValues, stock.stock)}
             <td>
                 <span class="clickable-value ${buyPrice === null ? 'price-error' : ''}" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Buy Price - ${safeStock}"
                     data-field="buy-price" data-stock="${safeStock}"
@@ -3650,7 +3665,6 @@ class GRQValidator {
                     this.getJudgementClass(judgement)
                 }">${judgement}</span></span></td>
             <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends - ${safeStock}" data-field="dividend-info" data-stock="${safeStock}">${dividendInfo}</span></td>
-            ${GRQPickColumns.pickDetailCells(pickValues, stock.stock)}
           `;
                 // Strike out excluded stocks (issue #290): a stock dropped from
                 // every portfolio calculation (per the shared inclusion
@@ -3696,20 +3710,15 @@ class GRQValidator {
 
             const totalsRow = document.createElement("tr");
             totalsRow.classList.add("table-info", "fw-bold");
-            // Totals row: exactly 15 cells aligned 1:1 with the 15
-            // aggregate-view headers (issue #406, widened by #840). Column map:
-            // 1 Stock, 2 Pick, 3 Buy Price, 4 Stars,
-            // 5 90-Day Target (Portfolio Target %), 6 90-Day Actual,
-            // 7 Gain/Loss (Average Gain/Loss %), 8 Return above Cost of Capital,
-            // 9 Status/Projection, 10 Dividends, 11 ADV, 12 Lots,
-            // 13 5-Day Return, 14 Earnings Yield, 15 52-Week Position.
-            //
-            // The pick-detail columns are per-stock review aids, not portfolio
-            // figures, so they carry no total — a "-" here is the honest cell,
-            // not a suppressed number.
+            // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
+            // headers (issue #406; widened by #840 and narrowed back by #855
+            // when the pick-detail columns moved to the single-stock view).
+            // Column map: 1 Stock, 2 Buy Price, 3 Stars,
+            // 4 90-Day Target (Portfolio Target %), 5 90-Day Actual,
+            // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
+            // 8 Status/Projection, 9 Dividends.
             totalsRow.innerHTML = `
           <td>Days Elapsed: ${actualDaysElapsed}</td>
-          <td>-</td>
           <td>-</td>
           <td>-</td>
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
@@ -3730,11 +3739,6 @@ class GRQValidator {
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Dividends" data-field="portfolio-dividends" data-stock="">${
                 portfolioDividendYield.toFixed(2)
             }%</span></td>
-          <td>-</td>
-          <td>-</td>
-          <td>-</td>
-          <td>-</td>
-          <td>-</td>
         `;
 
             tbody.appendChild(totalsRow);

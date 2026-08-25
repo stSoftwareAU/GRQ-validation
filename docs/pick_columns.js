@@ -1,5 +1,5 @@
-// Pick-detail COLUMNS for the dashboard's main stock table (issue #840,
-// sub-issue of #835).
+// Pick-detail COLUMNS for the dashboard's SINGLE-STOCK view (issue #840,
+// sub-issue of #835; moved off the aggregate table by issue #855).
 //
 // While reviewing a score the user wants to answer "is there a reason we didn't
 // manually pick this stock?" without leaving the page — the same figures their
@@ -7,6 +7,10 @@
 // extra table cells that answer it: the traffic light, dollar ADV, tradeable
 // lots, the 5-day return, the earnings yield and the position in the 52-week
 // range.
+//
+// They are a per-stock review aid, not a portfolio figure, so they render only
+// when ONE stock is selected (`?stock=…`). On the aggregate table they crowded
+// out the portfolio columns, especially on a phone (issue #855).
 //
 // STRICT DIVISION OF LABOUR — this module owns RENDERING ONLY:
 //   - every threshold, the light and the warning vocabulary come from
@@ -44,11 +48,7 @@ const SIDECAR_FIELDS = {
     advDollar10d: "adv_dollar_10d",
 };
 
-// The column labels, in render order. The header cells themselves are literal
-// markup in BOTH docs/index.html (static) and the runtime rebuild in
-// docs/app.js; this list is what
-// `tests/stock_table_pick_columns_markup_test.ts` pins them to, so the two
-// header rows can never describe different columns.
+// The column labels, in render order.
 const PICK_COLUMN_LABELS = [
     "Pick",
     "ADV",
@@ -56,6 +56,22 @@ const PICK_COLUMN_LABELS = [
     "5-Day Return",
     "Earnings Yield",
     "52-Week Position",
+];
+
+// The `title` tooltip for each column, in the same render order. Since issue
+// #855 the header cells are BUILT here (see `pickHeaderCells`) rather than
+// restated as literal markup in docs/index.html and docs/app.js, so a label and
+// its explanation have exactly one definition.
+const PICK_COLUMN_TITLES = [
+    "Pick traffic light as at the score date: red major warning, amber minor " +
+    "warning, green clear, white not enough data.",
+    "Average daily dollar volume over the ten trading days to the score date.",
+    "Average daily dollar volume divided by the $20,000 parcel size.",
+    "Price change over the five trading days to the score date.",
+    "Earnings per share divided by the score-date price. Negative when the " +
+    "company is loss making.",
+    "Where the score-date price sits in its 52-week range: 0% at the low, " +
+    "100% at the high.",
 ];
 
 // Resolve the shared helpers lazily so script load order cannot break this
@@ -474,6 +490,42 @@ function pickDetailCells(values, stock) {
         .join("");
 }
 
+// The six pick-detail `<th>`s, in render order (issue #855). These columns live
+// on the SINGLE-STOCK view only, so this is their one and only header markup —
+// the aggregate table carries none of them.
+//
+// `pick-light` tags the HEADER as well as the cell so the pinned-column rule in
+// docs/styles.css covers both (issue #842); the light is keyed by CLASS, never
+// by position, because not every header layout has a Pick column.
+function pickHeaderCells() {
+    return PICK_COLUMN_LABELS
+        .map((label, index) => {
+            const className = index === 0 ? ' class="pick-light"' : "";
+            return `<th scope="col"${className} title="${
+                escape(PICK_COLUMN_TITLES[index])
+            }">${escape(label)}</th>`;
+        })
+        .join("");
+}
+
+// The whole single-stock pick-detail header row: the identity column the pinned
+// -column rule keys off by position (issue #842), then the six pick columns.
+function pickDetailHeaderRow() {
+    return '<th scope="col">Stock</th>' + pickHeaderCells();
+}
+
+// The matching body row for one stock: the identity cell, the traffic light and
+// the five figures, in header order. The cell count matches
+// `pickDetailHeaderRow()` exactly, so the row can never slide out of alignment
+// with its headers.
+function pickDetailRowCells(values, stock) {
+    const safeStock = escape(
+        stock === undefined || stock === null ? "" : stock,
+    );
+    return `<td>${safeStock}</td>` + trafficLightCell(values, stock) +
+        pickDetailCells(values, stock);
+}
+
 globalThis.GRQPickColumns = {
     // Re-exported from docs/pick_working.js, which owns the light vocabulary
     // (issue #841), so the neutral marker has exactly one definition. A getter
@@ -483,6 +535,10 @@ globalThis.GRQPickColumns = {
     },
     PICK_COLUMN_COUNT,
     PICK_COLUMN_LABELS,
+    PICK_COLUMN_TITLES,
+    pickHeaderCells,
+    pickDetailHeaderRow,
+    pickDetailRowCells,
     formatSignedPercent,
     formatRangePercent,
     classifyPicksLoad,
