@@ -365,11 +365,12 @@
                 <!-- Stock Table -->
                 <div class="card">
                   <div class="card-body p-0">
-                    <!-- The 21-column table scrolls sideways rather than
-                         hiding columns on a phone (issue #842), so the
-                         scroller is a focusable, named region: a keyboard user
-                         tabs to it and pans with the arrow keys, and a screen
-                         reader announces what is being scrolled. Stock and the
+                    <!-- The table scrolls sideways rather than hiding columns
+                         on a phone (issue #842), so the scroller is a
+                         focusable, named region: a keyboard user tabs to it and
+                         pans with the arrow keys, and a screen reader announces
+                         what is being scrolled. Stock and — on the single-stock
+                         view, the only place it appears since issue #855 — the
                          traffic light stay pinned to the left edge (see
                          docs/styles.css). -->
                     <div
@@ -386,15 +387,6 @@
                         <thead>
                           <tr>
                             <th scope="col">Stock</th>
-                            <!-- `pick-light` also tags the HEADER (issue #842)
-                                 so the pinned-column rule covers it: the basic
-                                 (no-market-data) view has no Pick column, so
-                                 the rule can never key off a position. -->
-                            <th
-                              scope="col"
-                              class="pick-light"
-                              title="Pick traffic light as at the score date: red major warning, amber minor warning, green clear, white not enough data."
-                            >Pick</th>
                             <th scope="col">Score</th>
                             <th scope="col">Buy Price</th>
                             <th scope="col">Stars</th>
@@ -412,29 +404,11 @@
                             <th scope="col">Average Dividend (90-day)</th>
                             <th scope="col">Total Dividends (90-day)</th>
                             <th scope="col">Notes</th>
-                            <!-- Pick-detail columns (issue #840): the figures a
-                                 reviewer reads to answer "is there a reason we
-                                 didn't pick this?". All as at the score date. -->
-                            <th
-                              scope="col"
-                              title="Average daily dollar volume over the ten trading days to the score date."
-                            >ADV</th>
-                            <th
-                              scope="col"
-                              title="Average daily dollar volume divided by the $20,000 parcel size."
-                            >Lots</th>
-                            <th
-                              scope="col"
-                              title="Price change over the five trading days to the score date."
-                            >5-Day Return</th>
-                            <th
-                              scope="col"
-                              title="Earnings per share divided by the score-date price. Negative when the company is loss making."
-                            >Earnings Yield</th>
-                            <th
-                              scope="col"
-                              title="Where the score-date price sits in its 52-week range: 0% at the low, 100% at the high."
-                            >52-Week Position</th>
+                            <!-- The six pick-detail columns (issue #840) are NOT
+                                 here: since issue #855 they render on the
+                                 single-stock view only, where docs/app.js
+                                 rebuilds this header row from
+                                 GRQPickColumns.pickDetailHeaderRow(). -->
                           </tr>
                         </thead>
                         <tbody id="stockTableBody"></tbody>
@@ -463,9 +437,10 @@
                     <!-- Pick-warning legend (issue #841): decode the traffic
                          light and every warning emoji in the pick-detail
                          columns. Hidden by default and filled by app.js only
-                         when at least one stock in the loaded report carries
-                         something to decode, following the Low-volume legend
-                         pattern (issue #599) so a clean report stays
+                         when the pick columns are on screen — i.e. the
+                         single-stock view (issue #855) — and the selected stock
+                         carries something to decode, following the Low-volume
+                         legend pattern (issue #599) so a clean report stays
                          uncluttered. -->
                     <div
                       id="pickWarningsLegend"
