@@ -3,13 +3,19 @@
 //
 // #840 took the main table from 15 columns to 21. Six extra columns is not a
 // free change: on a phone the table becomes a horizontal-scroll maze, and the
-// whole point of the traffic light is that the user can glance DOWN the column
-// and see which names are red.
+// whole point of the traffic light is that the user can read it without
+// zooming or panning.
 //
 // The chosen approach (stated in the PR): keep ONE table and scroll it
 // sideways, but pin the Stock column and the traffic light so they are always
 // on screen while the detail columns scroll past, and make that scroll region a
 // keyboard-reachable, labelled region so it is not touch-only.
+//
+// Issue #855 narrowed the aggregate table back to 15 columns by moving the six
+// pick-detail columns to the single-stock view. The scroller, the pinned pair
+// and the "nothing is hidden on a phone" rule all still apply — they now cover
+// BOTH tables, including the `.stock-detail-view` rules that used to be exempt
+// because that view hid its table outright.
 //
 // These assertions parse the REAL committed markup and stylesheet and call the
 // REAL shipped render helper, so a regression in either fails here:
@@ -22,7 +28,8 @@
 //   - the pinned cells paint an opaque, theme-aware background whose text
 //     clears WCAG 2 AA in BOTH themes (a transparent pinned cell would show the
 //     scrolling columns through it);
-//   - the six pick-detail headers declare `scope="col"` in both header rows.
+//   - the six pick-detail headers declare `scope="col"` in the single header
+//     row that renders them.
 
 import { assert, assertStringIncludes } from "@std/assert";
 import "../docs/escape.js";
@@ -34,7 +41,6 @@ import "../docs/series_label_colour.js";
 
 const INDEX_HTML = await Deno.readTextFile("docs/index.html");
 const STYLES_CSS = await Deno.readTextFile("docs/styles.css");
-const APP_JS = await Deno.readTextFile("docs/app.js");
 
 interface Rgb {
   r: number;
@@ -45,6 +51,7 @@ interface Rgb {
 const g = globalThis as unknown as {
   GRQPickColumns: {
     PICK_COLUMN_LABELS: string[];
+    pickDetailHeaderRow: () => string;
     trafficLightCell: (values: unknown, stock: string) => string;
   };
   GRQSeriesLabelColour: {
@@ -242,14 +249,11 @@ Deno.test("no table column is hidden at a narrow viewport", () => {
   // responsive — it makes those cells unreachable, on the one device where the
   // user cannot fall back to a wider window.
   //
-  // `.stock-detail-view` rules are excluded: that class is applied to the
-  // wrapper only in the single-stock view, which HIDES the table outright and
-  // renders #stockDetailCard instead (docs/app.js), so those rules can never
-  // hide a visible cell.
+  // `.stock-detail-view` rules are covered too since issue #855: that view no
+  // longer hides the table behind #stockDetailCard — it renders the seven
+  // pick-detail columns, so a `display: none` there hides a real figure.
   const hidden = rulesMatching(
-    (selector) =>
-      /(?:th|td):nth-child/.test(selector) &&
-      !selector.includes("stock-detail-view"),
+    (selector) => /(?:th|td):nth-child/.test(selector),
     { phoneOnly: true },
   ).filter((rule) => declaration(rule.body, "display") === "none");
   assert(
@@ -367,71 +371,38 @@ Deno.test("the traffic light reserves a consistent width and a readable emoji", 
   );
 });
 
-Deno.test("both header rows declare scope=col on every pick-detail column", () => {
-  const { PICK_COLUMN_LABELS } = g.GRQPickColumns;
-  const staticThead = (() => {
-    const table = INDEX_HTML.indexOf('id="stockTable"');
-    const start = INDEX_HTML.indexOf("<thead", table);
-    return INDEX_HTML.slice(start, INDEX_HTML.indexOf("</thead>", start));
-  })();
-  const aggregateThead = (() => {
-    const marker = "thead.innerHTML = `";
-    let from = 0;
-    while (true) {
-      const start = APP_JS.indexOf(marker, from);
-      assert(start !== -1, "could not find the aggregate-view thead template");
-      const bodyStart = start + marker.length;
-      const end = APP_JS.indexOf("`", bodyStart);
-      const body = APP_JS.slice(bodyStart, end);
-      if (body.includes("Gain/Loss") && body.includes("Dividends")) return body;
-      from = end + 1;
-    }
-  })();
-
-  for (
-    const [where, html] of Object.entries({
-      "index.html static": staticThead,
-      "app.js aggregate": aggregateThead,
-    })
-  ) {
-    for (const label of PICK_COLUMN_LABELS) {
-      const cell = html.split(/<th[\s>]/).find((chunk) =>
-        chunk.slice(0, chunk.indexOf(">")).length >= 0 &&
-        chunk.includes(`>${label}</th>`)
-      );
-      assert(cell !== undefined, `${where}: no <th> for ${label}`);
-      const attrs = cell.slice(0, cell.indexOf(">"));
-      assert(
-        /\bscope\s*=\s*"col"/.test(attrs),
-        `${where}: the ${label} header lacks scope="col"`,
-      );
-    }
+Deno.test("the single-stock header row declares scope=col on every pick column", () => {
+  // Since issue #855 the pick columns have exactly ONE header row, built by the
+  // shipped helper for the single-stock view, so this reads the real render
+  // output rather than two copies of the markup.
+  const { PICK_COLUMN_LABELS, pickDetailHeaderRow } = g.GRQPickColumns;
+  const html = pickDetailHeaderRow();
+  for (const label of PICK_COLUMN_LABELS) {
+    const cell = html.split(/<th[\s>]/).find((chunk) =>
+      chunk.includes(`>${label}</th>`)
+    );
+    assert(cell !== undefined, `no <th> for ${label}`);
+    assert(
+      /\bscope\s*=\s*"col"/.test(cell.slice(0, cell.indexOf(">"))),
+      `the ${label} header lacks scope="col"`,
+    );
   }
 });
 
 Deno.test("the Pick header is tagged so it can be pinned beside Stock", () => {
-  // The traffic light is the SECOND column in the static markup and in the
-  // aggregate rebuild, but the basic (no-market-data) view has no Pick column
-  // at all — so the pinned rule keys off a class, never a position.
-  const pickHeaders = [
-    ["index.html", INDEX_HTML],
-    ["app.js", APP_JS],
-  ] as const;
-  for (const [where, source] of pickHeaders) {
-    const cells = source.split(/<th[\s>]/).filter((chunk) =>
-      chunk.includes(">Pick</th>")
-    );
-    assert(cells.length > 0, `${where}: no Pick header found`);
-    for (const cell of cells) {
-      const attrs = cell.slice(0, cell.indexOf(">"));
-      assertStringIncludes(
-        attrs,
-        "pick-light",
-        `${where}: the Pick header must carry the pick-light class so the ` +
-          "pinned-column rule covers the header as well as the cells",
-      );
-    }
-  }
+  // The traffic light is the SECOND column of the single-stock header row, but
+  // the aggregate and basic views have no Pick column at all — so the pinned
+  // rule keys off a class, never a position.
+  const cells = g.GRQPickColumns.pickDetailHeaderRow()
+    .split(/<th[\s>]/)
+    .filter((chunk) => chunk.includes(">Pick</th>"));
+  assert(cells.length === 1, "expected exactly one Pick header");
+  assertStringIncludes(
+    cells[0].slice(0, cells[0].indexOf(">")),
+    "pick-light",
+    "the Pick header must carry the pick-light class so the pinned-column " +
+      "rule covers the header as well as the cells",
+  );
 });
 
 Deno.test("the traffic-light cell keeps its class and its text equivalent", () => {

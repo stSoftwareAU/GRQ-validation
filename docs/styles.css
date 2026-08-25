@@ -908,7 +908,10 @@ body.chart-popout-open {
   }
 }
 
-/* Detailed stock view styles */
+/* Detailed stock view styles. Since issue #855 this table holds ONE row — the
+ * selected stock plus its six pick-detail columns — so every column is a short
+ * label or a number: nothing here needs a prose column, and nothing may be
+ * hidden, because a hidden cell is an unreachable figure. */
 .stock-detail-view .table-responsive {
   overflow-x: auto;
   max-width: 100%;
@@ -923,13 +926,6 @@ body.chart-popout-open {
 .stock-detail-view .table th:first-child,
 .stock-detail-view .table td:first-child {
   min-width: 120px;
-}
-
-.stock-detail-view .table th:last-child,
-.stock-detail-view .table td:last-child {
-  white-space: normal;
-  min-width: 200px;
-  max-width: 300px;
 }
 
 /* Intrinsic value styling */
@@ -959,23 +955,12 @@ body.chart-popout-open {
     padding: 0.3rem 0.2rem;
   }
 
-  .stock-detail-view .table th:last-child,
-  .stock-detail-view .table td:last-child {
-    min-width: 150px;
-    max-width: 200px;
-  }
-
-  /* Hide some columns on mobile for detailed view */
-  .stock-detail-view .table th:nth-child(4),
-  .stock-detail-view .table td:nth-child(4),
-  .stock-detail-view .table th:nth-child(5),
-  .stock-detail-view .table td:nth-child(5),
-  .stock-detail-view .table th:nth-child(7),
-  .stock-detail-view .table td:nth-child(7),
-  .stock-detail-view .table th:nth-child(8),
-  .stock-detail-view .table td:nth-child(8) {
-    display: none;
-  }
+  /* No column is hidden here. The detail view used to hide four of them on a
+     phone, which was survivable while it rendered a 21-column report; it now
+     renders the seven pick-detail columns, and hiding any of them would make
+     the figure unreachable on the one device with no wider window to fall back
+     on. The table scrolls sideways instead, with Stock and the traffic light
+     pinned (issue #842). */
 
   /* Mobile adjustments for stock detail card */
   #stockDetailCard .card-body {

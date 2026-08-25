@@ -7,9 +7,10 @@
 // above Cost of Capital) and the extra cell had no matching header.
 //
 // Issue #840 widened the view from 9 to 15 columns (the pick traffic light plus
-// ADV, Lots, 5-Day Return, Earnings Yield and 52-Week Position), so the
-// expected count below moved with it — the 1:1 alignment invariant these tests
-// exist to protect is unchanged.
+// ADV, Lots, 5-Day Return, Earnings Yield and 52-Week Position); issue #855
+// moved those six to the single-stock view, narrowing it back to 9. The
+// expected count below moved with each change — the 1:1 alignment invariant
+// these tests exist to protect is unchanged.
 //
 // These tests parse the ACTUAL shipped markup from docs/app.js — the
 // aggregate-view `thead.innerHTML` template and the `totalsRow.innerHTML`
@@ -71,7 +72,7 @@ Deno.test("aggregate totals row has exactly as many cells as headers", async () 
   const headerCount = cells(headerHtml, "th").length;
   const totalsCount = cells(totalsHtml, "td").length;
 
-  assertEquals(headerCount, 15, "aggregate view must have 15 column headers");
+  assertEquals(headerCount, 9, "aggregate view must have 9 column headers");
   assertEquals(
     totalsCount,
     headerCount,

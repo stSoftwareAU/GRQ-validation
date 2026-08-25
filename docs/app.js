@@ -3245,7 +3245,11 @@ class GRQValidator {
             );
 
         if (this.selectedStock) {
-            // Single stock view - show as card instead of table
+            // Single stock view - a detail card above the pick-detail table.
+            // Start from an empty pick-value set so a stock that is no longer
+            // on screen can never explain itself through this render's cells,
+            // or leave the warning legend up behind it (issues #841, #855).
+            this.pickValues = {};
             const stock = stocksToShow[0];
             if (stock) {
                 const performance = this.calculateStockPerformance(stock);
@@ -3284,9 +3288,10 @@ class GRQValidator {
                     scoreDate,
                 );
 
-                // The table stays on screen in this view (issue #855) and
-                // carries the six pick-detail columns, rendered below the detail
-                // card; see the pick-detail row built at the end of this branch.
+                // The table stays on screen in this view (issue #855): it is
+                // where the six pick-detail columns now live, rendered below
+                // the detail card. See the pick-detail row built at the end of
+                // this branch.
                 const tableContainer = document.querySelector(
                     ".table-responsive",
                 );
@@ -3491,6 +3496,40 @@ class GRQValidator {
               ${this.getYahooFinanceLinkHtml(stock.stock)}
             </div>
           `;
+
+                // The six pick-detail columns (issue #840) render HERE and
+                // nowhere else since issue #855: they answer "is there a reason
+                // we didn't pick THIS stock?", so they belong beside the one
+                // stock being reviewed, not spread across an aggregate table
+                // that a phone cannot fit.
+                //
+                // RENDERING ONLY: no value below feeds the inclusion predicate,
+                // the displayed score or any aggregate — and every figure is as
+                // at the SCORE DATE, never a live quote.
+                const pickValues = GRQPickColumns.pickColumnValues({
+                    sidecar: this.pickDetails
+                        ? this.pickDetails[stock.stock]
+                        : null,
+                    series: this.marketData
+                        ? this.marketData[stock.stock]
+                        : null,
+                    scoreDate,
+                    eps: stock.eps,
+                    buyPrice,
+                });
+                // Kept for this render so the "show the working" popovers
+                // (issue #841) can print the very figures the cells show, and
+                // so the warning legend knows whether anything needs decoding.
+                this.pickValues[stock.stock] = pickValues;
+
+                const thead = document.querySelector("#stockTable thead tr");
+                thead.innerHTML = GRQPickColumns.pickDetailHeaderRow();
+                const pickRow = document.createElement("tr");
+                pickRow.innerHTML = GRQPickColumns.pickDetailRowCells(
+                    pickValues,
+                    stock.stock,
+                );
+                tbody.appendChild(pickRow);
             }
         } else {
             // Aggregate view - show table
