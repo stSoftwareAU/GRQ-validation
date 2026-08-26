@@ -389,7 +389,10 @@
                             <th scope="col">Stock</th>
                             <th scope="col">Score</th>
                             <th scope="col">Buy Price</th>
-                            <th scope="col">Stars</th>
+                            <!-- The Stars column is marked so the stylesheet can
+                                 keep its glyph run on one line and hide the
+                                 whole column on a phone (issue #858). -->
+                            <th scope="col" class="stars-column">Stars</th>
                             <th scope="col">90-Day Target</th>
                             <th scope="col">90-Day Actual</th>
                             <th scope="col">Gain/Loss (%)</th>

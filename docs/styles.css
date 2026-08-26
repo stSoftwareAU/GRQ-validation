@@ -303,6 +303,16 @@ body.chart-popout-open {
   outline-offset: 2px;
 }
 
+/* Stars column (issue #858). The rating is a leading freshness icon followed by
+ * up to five moon glyphs — one indivisible run, so the cell must never break it
+ * into a vertical stack that stretches the whole row several lines tall. The
+ * column is keyed by CLASS, not position: it sits third in the aggregate header
+ * and fourth in the static markup, and the basic (no-market-data) view has no
+ * Stars column at all. */
+.stock-table .stars-column {
+  white-space: nowrap;
+}
+
 /* Pick-detail columns (issue #840). The traffic light is scanned straight down
  * the column, so it never wraps; the five figures are numeric and read against
  * a right edge. Colour is carried by the emoji itself, so nothing here depends
@@ -770,6 +780,23 @@ body.chart-popout-open {
   #stockTable thead th.pick-light {
     z-index: 3;
     background: var(--grq-surface-alt, var(--light-color));
+  }
+}
+
+/* Stars on a phone (issue #858).
+ *
+ * The one deliberate exception to "no column is hidden on a phone" (issue
+ * #842). A rating is up to six glyphs wide and cannot be abbreviated, shrunk or
+ * clipped without becoming unreadable, and `nowrap` alone just widens an already
+ * over-wide table. Below the mobile breakpoint the column is dropped entirely —
+ * header and cells together, so every column to its right keeps its alignment.
+ *
+ * Nothing is lost: the full rating, freshness icon included, still renders in
+ * the stock detail view, whose own wrapping was fixed in issue #383. */
+@media (max-width: 767.98px) {
+  #stockTable th.stars-column,
+  #stockTable td.stars-column {
+    display: none;
   }
 }
 
