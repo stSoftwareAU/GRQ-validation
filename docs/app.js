@@ -3557,7 +3557,7 @@ class GRQValidator {
             thead.innerHTML = `
           <th scope="col">Stock</th>
           <th scope="col">Buy Price</th>
-          <th scope="col">Stars</th>
+          <th scope="col" class="stars-column">Stars</th>
           <th scope="col">90-Day Target</th>
           <th scope="col">90-Day Actual</th>
           <th scope="col">Gain/Loss (%)</th>
@@ -3637,7 +3637,7 @@ class GRQValidator {
                     data-field="buy-price" data-stock="${safeStock}"
                 >${this.formatCurrency(buyPrice)}</span>
             </td>
-            <td>
+            <td class="stars-column">
                 <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Stars - ${safeStock}" data-field="stars" data-stock="${safeStock}">${this.getFreshnessIndicator(stock.stock) ? `${this.getFreshnessIndicator(stock.stock)} ` : ""}${this.getStarRatingDisplay(stock.stock)}</span>
             </td>
             <td>
@@ -3713,6 +3713,9 @@ class GRQValidator {
             // Totals row: exactly 9 cells aligned 1:1 with the 9 aggregate-view
             // headers (issue #406; widened by #840 and narrowed back by #855
             // when the pick-detail columns moved to the single-stock view).
+            // The Stars placeholder carries `stars-column` so it disappears
+            // with its header and cells on a phone (issue #858) — a totals row
+            // one cell wider than the visible header would shift every total.
             // Column map: 1 Stock, 2 Buy Price, 3 Stars,
             // 4 90-Day Target (Portfolio Target %), 5 90-Day Actual,
             // 6 Gain/Loss (Average Gain/Loss %), 7 Return above Cost of Capital,
@@ -3720,7 +3723,7 @@ class GRQValidator {
             totalsRow.innerHTML = `
           <td>Days Elapsed: ${actualDaysElapsed}</td>
           <td>-</td>
-          <td>-</td>
+          <td class="stars-column">-</td>
           <td><span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="Portfolio Target" data-field="portfolio-target" data-stock="">${
                 portfolioTarget.toFixed(1)
             }%</span></td>

@@ -876,9 +876,10 @@ clean report stays uncluttered.
 
 Twenty-one columns do not fit a 375px-wide screen, so the table **scrolls
 sideways with the Stock column and the traffic light pinned** to the left edge.
-No column is hidden: the previous mobile rule hid the third and sixth columns
-outright, which does not make a wide table responsive — it makes those cells
-unreachable on the one device where the reader cannot open a wider window.
+No column is hidden — with the single exception of Stars (issue #858, below):
+the previous mobile rule hid the third and sixth columns outright, which does
+not make a wide table responsive — it makes those cells unreachable on the one
+device where the reader cannot open a wider window.
 
 - **Pinned pair.** `#stockTable`'s first column (always Stock) is pinned by
   position and given a fixed width, because the light's `left` offset must land
@@ -896,10 +897,22 @@ unreachable on the one device where the reader cannot open a wider window.
   not shrink it) because 🔴 and 🟠 differ only in hue.
 - **Never colour alone.** The wording beside each light (issue #841) and the
   legend below the table carry the meaning; the glyphs are `aria-hidden`.
+- **Stars is the one hidden column (issue #858).** The Stars cell is a leading
+  freshness icon plus up to five moon glyphs — one indivisible run that was
+  wrapping into a vertical stack and making every row several lines tall. The
+  cell now carries `white-space: nowrap` at every width, and below the phone
+  breakpoint (`max-width: 767.98px`, the cut-off used throughout
+  `docs/styles.css`) the whole column — header **and** cells — is hidden rather
+  than clipped or shrunk. It is keyed by CLASS (`.stars-column`), not position,
+  because the column sits at a different index in each header layout and the
+  basic no-market-data view has none. Nothing is lost: the full rating,
+  freshness icon included, still renders in the stock detail view, whose own
+  wrapping was fixed in issue #383.
 
 `pa11y` (`pa11yci.json`) audits the dashboard at a 390px viewport in **both**
-themes, and `tests/stock_table_responsive_layout_test.ts` pins the invariants
-above against the committed markup and stylesheet.
+themes, and `tests/stock_table_responsive_layout_test.ts` plus
+`tests/stock_table_stars_column_test.ts` pin the invariants above against the
+committed markup and stylesheet.
 
 #### Deep-link URL parameters
 

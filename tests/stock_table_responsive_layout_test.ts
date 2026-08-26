@@ -17,11 +17,16 @@
 // BOTH tables, including the `.stock-detail-view` rules that used to be exempt
 // because that view hid its table outright.
 //
+// Issue #858 carved out the single exception to that rule: the Stars column is
+// hidden below the phone breakpoint, because its glyph run cannot be shrunk and
+// the same rating is still reachable in the stock detail view. The assertion
+// below was narrowed to that one column and still fails for any other.
+//
 // These assertions parse the REAL committed markup and stylesheet and call the
 // REAL shipped render helper, so a regression in either fails here:
 //   - the scroll region keeps `tabindex`, `role` and an accessible name;
-//   - no stock-table column is hidden at a narrow viewport (a `display: none`
-//     column is an unreachable cell, not a responsive layout);
+//   - no stock-table column except Stars is hidden at a narrow viewport (a
+//     `display: none` column is an unreachable cell, not a responsive layout);
 //   - the Stock and Pick columns are pinned inside the phone media query;
 //   - the traffic-light column reserves a consistent width and renders the
 //     emoji large enough to tell 🔴 from 🟠 without zooming;
@@ -153,7 +158,9 @@ function rulesMatching(
   return RULES.filter((rule) => {
     if (!predicate(rule.selector)) return false;
     if (!options.phoneOnly) return true;
-    const match = rule.media.match(/max-width:\s*(\d+)px/);
+    // Decimal breakpoints count: the stylesheet uses both `768px` and the
+    // Bootstrap-style `767.98px` for the same phone cut-off.
+    const match = rule.media.match(/max-width:\s*([\d.]+)px/);
     return match !== null && Number(match[1]) >= 375;
   });
 }
@@ -244,7 +251,7 @@ Deno.test("the focused scroll region shows a visible focus indicator", () => {
   );
 });
 
-Deno.test("no table column is hidden at a narrow viewport", () => {
+Deno.test("no table column except Stars is hidden at a narrow viewport", () => {
   // Hiding a column with `display: none` does not make a wide table
   // responsive — it makes those cells unreachable, on the one device where the
   // user cannot fall back to a wider window.
@@ -252,13 +259,25 @@ Deno.test("no table column is hidden at a narrow viewport", () => {
   // `.stock-detail-view` rules are covered too since issue #855: that view no
   // longer hides the table behind #stockDetailCard — it renders the seven
   // pick-detail columns, so a `display: none` there hides a real figure.
+  //
+  // Stars is the ONE documented exception (issue #858). Its cell is a leading
+  // freshness icon plus up to five moon glyphs — a run that cannot be
+  // abbreviated or shrunk, and which wrapped into a vertical stack that made
+  // every row several lines tall. Unlike every other column it loses nothing by
+  // going: the full rating still renders in the stock detail view (issue #383).
+  // The exemption is deliberately keyed to that one column, so any OTHER
+  // hidden column still fails here.
   const hidden = rulesMatching(
-    (selector) => /(?:th|td):nth-child/.test(selector),
+    (selector) =>
+      /(?:th|td):nth-child/.test(selector) ||
+      /(?:#stockTable|\.stock-table|\.table)\s+[^,]*(?:th|td)\b/.test(selector),
     { phoneOnly: true },
-  ).filter((rule) => declaration(rule.body, "display") === "none");
+  )
+    .filter((rule) => declaration(rule.body, "display") === "none")
+    .filter((rule) => !/\bstars-column\b/.test(rule.selector));
   assert(
     hidden.length === 0,
-    `no column may be hidden on a phone — found: ${
+    `no column except Stars may be hidden on a phone — found: ${
       hidden.map((rule) => rule.selector).join(", ")
     }`,
   );
