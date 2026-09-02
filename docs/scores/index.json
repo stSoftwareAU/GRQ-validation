@@ -3956,8 +3956,8 @@
       "day": "02",
       "file": "2026/August/02.tsv",
       "date": "2026-08-02",
-      "performance_90_day": -0.9354974193694575,
-      "performance_annualized": -10.812822589563599,
+      "performance_90_day": -0.9354974193694576,
+      "performance_annualized": -10.8128225895636,
       "total_stocks": 100
     },
     {
@@ -3965,7 +3965,10 @@
       "month": "August",
       "day": "03",
       "file": "2026/August/03.tsv",
-      "date": "2026-08-03"
+      "date": "2026-08-03",
+      "performance_90_day": -0.06552251462891652,
+      "performance_annualized": -0.8221172331383753,
+      "total_stocks": 100
     }
   ]
 }
