@@ -305,7 +305,7 @@ jobs:
       id: deployment
       continue-on-error: true
       # actions/deploy-pages@v4.0.5
-      uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
+      uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
       with:
         artifact_name: github-pages-${{ github.run_attempt }}
 
@@ -320,6 +320,6 @@ jobs:
       id: deployment_retry
       if: steps.deployment.outcome == 'failure'
       # actions/deploy-pages@v4.0.5
-      uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
+      uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
       with:
         artifact_name: github-pages-${{ github.run_attempt }}
