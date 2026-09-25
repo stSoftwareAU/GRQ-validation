@@ -13,7 +13,9 @@ name: Actionlint
 # rather than a mutable tag, matching the container pinning in semgrep.yml
 # (supply-chain hardening — Issue #72). Refresh the digest deliberately when
 # bumping the linter; resolve a new one with
-# `docker buildx imagetools inspect rhysd/actionlint:<version>`.
+# `docker buildx imagetools inspect rhysd/actionlint:<version>`. The pin keeps
+# the release tag beside the digest (`image:<X.Y.Z>@sha256:<digest>`) so
+# Dependabot's github-actions manager can track it (Issue #871).
 
 on:
   pull_request:
@@ -48,9 +50,11 @@ jobs:
           # GITHUB_TOKEN into .git/config where a later step could read it.
           persist-credentials: false
       # rhysd/actionlint 1.7.9 official image, entrypoint `actionlint`, pinned
-      # to an immutable sha256 digest (Issue #72). The image bundles shellcheck
-      # so `run:` blocks are linted too. `-color` keeps annotations readable.
+      # to an immutable sha256 digest (Issue #72). The `:1.7.9` tag beside the
+      # digest lets Dependabot track and bump the image (Issue #871). The image
+      # bundles shellcheck so `run:` blocks are linted too. `-color` keeps
+      # annotations readable.
       - name: Run actionlint
-        uses: docker://rhysd/actionlint@sha256:a0383f60d92601e2694e24b24d37df7b6a40bed7cedbc447611c50009bf02d94
+        uses: docker://rhysd/actionlint:1.7.9@sha256:a0383f60d92601e2694e24b24d37df7b6a40bed7cedbc447611c50009bf02d94
         with:
           args: -color

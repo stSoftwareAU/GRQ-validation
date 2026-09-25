@@ -13,7 +13,7 @@
 // actionlint, and pins its third-party image to an immutable sha256 digest
 // (supply-chain hardening, mirroring semgrep.yml — Issue #72).
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertMatch } from "@std/assert";
 import {
   assertPullRequestRunsOnMilestone,
   branchFilterMatches,
@@ -144,6 +144,26 @@ Deno.test("actionlint checkout does not persist credentials", async () => {
       checkout.with?.["persist-credentials"],
       false,
       "checkout must set persist-credentials: false",
+    );
+  }
+});
+
+// Issue #871: a bare `image@sha256:<digest>` pin is immutable but untrackable —
+// Dependabot's github-actions manager keys a bump off the tag beside the
+// digest. The image must be pinned as `image:<X.Y.Z>@sha256:<digest>`.
+Deno.test("actionlint docker image pin carries a release tag beside its digest", async () => {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const images = workflowSteps(doc, "actionlint")
+    .map((step) => step.uses)
+    .filter((uses): uses is string =>
+      typeof uses === "string" && uses.startsWith("docker://")
+    );
+  assert(images.length > 0, "actionlint job must use a docker image action");
+  for (const image of images) {
+    assertMatch(
+      image,
+      /^docker:\/\/[a-z0-9._/-]+:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/,
+      `docker image must be pinned as image:<X.Y.Z>@sha256:<digest>: ${image}`,
     );
   }
 });
