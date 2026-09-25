@@ -18,3 +18,5 @@ sets `persist-credentials: false`. It failed before the fix and passes after it.
   `tests/actionlint_workflow_test.ts`.
 - `deno test -A tests/actionlint_workflow_test.ts`: 11 passed.
 - `./quality.sh` run after the final edit.
+- `Cargo.lock`: the quality gate's routine dependency update bumped `cc`
+  from 1.5.0 to 1.5.1, and that bump is carried in this PR.
