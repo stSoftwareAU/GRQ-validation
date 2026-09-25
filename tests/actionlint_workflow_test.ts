@@ -16,7 +16,9 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   assertPullRequestRunsOnMilestone,
+  branchFilterMatches,
   loadWorkflow,
+  triggerBranches,
   workflowSteps,
   workflowTriggers,
 } from "./workflow_assertions.ts";
@@ -38,6 +40,28 @@ Deno.test("actionlint workflow triggers on pull_request", async () => {
   const on = workflowTriggers(doc);
   assert(on, "workflow must declare an 'on' trigger");
   assert("pull_request" in on, "must trigger on pull_request");
+});
+
+// Issue #866: a lint/checker gates the PR, so it must not re-run on push to
+// the default branch — that duplicates the run that already gated the PR.
+// A `push:` trigger may remain only if its branch filter excludes main/master.
+Deno.test("actionlint workflow does not trigger on push to the default branch", async () => {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const pushBranches = triggerBranches(doc, "push");
+  if (pushBranches === null) return; // No push trigger at all — compliant.
+  for (const branch of ["main", "master"]) {
+    assert(
+      !branchFilterMatches(pushBranches, branch),
+      `push trigger must not reach the default branch "${branch}"`,
+    );
+  }
+});
+
+Deno.test("actionlint workflow allows manual workflow_dispatch", async () => {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const on = workflowTriggers(doc);
+  assert(on, "workflow must declare an 'on' trigger");
+  assert("workflow_dispatch" in on, "must allow manual workflow_dispatch");
 });
 
 // Issue #788: milestone sub-issue PRs target a shared `milestone/<slug>`
