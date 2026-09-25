@@ -129,3 +129,21 @@ Deno.test("actionlint workflow pins every action to an immutable ref", async () 
     assert(pinned, `action not pinned to an immutable ref: ${line}`);
   }
 });
+
+// Issue #867: the actionlint job only reads the tree to lint it — it never
+// pushes back or fetches a private submodule — so the checkout must not
+// persist GITHUB_TOKEN into .git/config where a later step could read it.
+Deno.test("actionlint checkout does not persist credentials", async () => {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const checkouts = workflowSteps(doc, "actionlint").filter((step) =>
+    typeof step.uses === "string" && step.uses.startsWith("actions/checkout@")
+  );
+  assert(checkouts.length > 0, "actionlint job must have a checkout step");
+  for (const checkout of checkouts) {
+    assertEquals(
+      checkout.with?.["persist-credentials"],
+      false,
+      "checkout must set persist-credentials: false",
+    );
+  }
+});
