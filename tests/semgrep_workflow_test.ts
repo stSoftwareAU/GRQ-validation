@@ -6,7 +6,7 @@
 // `semgrep ci`, and pins third-party actions to 40-character commit SHAs
 // to satisfy the supply-chain rule.
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertMatch } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 import {
   assertActionsPinnedToSha,
@@ -101,6 +101,28 @@ Deno.test("Semgrep workflow pins the container image to a sha256 digest", async 
   assert(
     /@sha256:[0-9a-f]{64}$/.test(containerImage),
     `container image must be pinned to a sha256 digest: ${containerImage}`,
+  );
+});
+
+// Issue #872: a bare `image@sha256:` digest gives Dependabot's github-actions
+// manager no tag to resolve a bump from, so the pin must be `image:X.Y.Z@sha256:`.
+Deno.test("Semgrep container image pin carries a release tag beside its digest", async () => {
+  const text = await Deno.readTextFile(WORKFLOW_PATH);
+  const doc = parseYaml(text) as { jobs: Record<string, unknown> };
+  const job = doc.jobs.semgrep as {
+    container?: { image?: string } | string;
+  };
+  const containerImage = typeof job.container === "string"
+    ? job.container
+    : job.container?.image;
+  assert(
+    typeof containerImage === "string",
+    "semgrep job must declare a container image",
+  );
+  assertMatch(
+    containerImage,
+    /^semgrep\/semgrep:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/,
+    "container image must be pinned as semgrep/semgrep:<X.Y.Z>@sha256:<digest>",
   );
 });
 
