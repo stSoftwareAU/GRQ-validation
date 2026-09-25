@@ -11,6 +11,8 @@ name: Semgrep
 # Third-party actions are pinned to 40-character commit SHAs and the
 # third-party container image is pinned to an immutable sha256 digest to
 # satisfy the supply-chain rule (Issue #1756 / #72 / dep-bump guidelines).
+# The image pin keeps its release tag beside the digest so Dependabot can
+# track it (Issue #872).
 
 on:
   pull_request:
@@ -33,10 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      # semgrep/semgrep:latest — third-party image pinned to an immutable
-      # digest (Issue #72). Refresh deliberately when bumping the scanner;
-      # resolve with `docker buildx imagetools inspect semgrep/semgrep:latest`.
-      image: semgrep/semgrep@sha256:f4791a54c891eabe1188248135574e6e03dfc31dfd3f3b747c7bec7079bfed1b
+      # semgrep/semgrep 1.165.0 — third-party image pinned to an immutable
+      # digest (Issue #72), with the release tag beside it so Dependabot can
+      # track and propose bumps (Issue #872).
+      image: semgrep/semgrep:1.165.0@sha256:f4791a54c891eabe1188248135574e6e03dfc31dfd3f3b747c7bec7079bfed1b
     steps:
       # actions/checkout@v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
