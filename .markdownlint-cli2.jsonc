@@ -44,6 +44,8 @@
     "node_modules",
     "target",
     ".coverage",
+    // Locally generated code-index output (untracked); not authored markdown.
+    "graft",
     "docs/pr-summary-*.md"
   ]
 }
