@@ -20,6 +20,7 @@ import { parse as parseYaml } from "@std/yaml";
 
 export interface WorkflowStep {
   name?: string;
+  if?: string;
   run?: string;
   uses?: string;
   with?: Record<string, unknown>;
@@ -27,6 +28,7 @@ export interface WorkflowStep {
 }
 
 export interface WorkflowJob {
+  if?: string;
   "runs-on"?: string;
   "timeout-minutes"?: number;
   container?: { image?: string } | string;
