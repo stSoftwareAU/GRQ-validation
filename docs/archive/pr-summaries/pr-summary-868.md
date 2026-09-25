@@ -21,6 +21,7 @@ stSoftwareAU/VibeCoder and GRQ-FX-validation.
 - The job-level Dependabot skip from Issue #219 is removed. Dependabot PRs are
   now scanned by the fallback rather than skipped. The #219 test is replaced by
   one asserting the job is not skipped.
+- The checkout sets `persist-credentials: false`, since the job never pushes.
 
 ```mermaid
 flowchart LR
@@ -46,10 +47,11 @@ change and pass after it:
   env-sourced commit range.
 - The fallback runs in strict mode.
 - The version is pinned and the checksum is verified before the scan.
+- The checkout does not persist credentials.
 - Every action is SHA-pinned.
 
 ## Test Plan
 
-- [x] `deno test --allow-read tests/gitleaks_workflow_test.ts` (14 passed)
+- [x] `deno test --allow-read tests/gitleaks_workflow_test.ts` (15 passed)
 - [x] `actionlint .github/workflows/gitleaks.yml` is clean
-- [x] `./quality.sh` passes (1651 passed, 0 failed)
+- [x] `./quality.sh` passes (1652 passed, 0 failed)

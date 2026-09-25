@@ -176,3 +176,11 @@ Deno.test("Gitleaks workflow pins every action to a commit SHA", async () => {
   const { text } = await loadWorkflow(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
 });
+
+// The job never pushes, so GITHUB_TOKEN must not be written to .git/config.
+Deno.test("Gitleaks checkout does not persist credentials", async () => {
+  const steps = await gitleaksSteps();
+  const checkout = steps.find((s) => s.uses?.startsWith("actions/checkout@"));
+  assert(checkout, "gitleaks job must check out the repository");
+  assertEquals(checkout.with?.["persist-credentials"], false);
+});
