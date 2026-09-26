@@ -142,6 +142,40 @@ redirect stdin to avoid hangs: `./quality.sh < /dev/null`.
 6. **Open a pull request** with a clear description of what changed and why,
    referencing any related issue.
 
+### Which PR checks run
+
+Issue #885 made some PR gates run only when a pull request touches the files
+they check. No workflow-level `paths:` filter is used, because a filtered-out
+workflow never reports and leaves a required check pending. Instead each gated
+workflow has a `changes` job that diffs the PR against its base, a gated job
+that runs only when `changes` reports a match, and an always-run `*-result` job.
+The `*-result` job passes when the gated job succeeded or was skipped and fails
+on any other outcome.
+
+```mermaid
+flowchart LR
+  PR[pull_request] --> C[changes: git diff base...head]
+  C -->|changed=true| J[gated job runs]
+  C -->|changed=false| S[gated job skipped]
+  J --> R[*-result: always runs]
+  S --> R
+  R -->|success or skipped| OK[check passes]
+  R -->|failure or cancelled| FAIL[check fails]
+```
+
+| Workflow            | Runs when the PR touches                                   |
+| ------------------- | ---------------------------------------------------------- |
+| `actionlint`        | `.github/workflows/`                                       |
+| `cargo-audit`       | `Cargo.toml`, `Cargo.lock` or its own workflow             |
+| `dependency-review` | Cargo, Deno or npm manifests/lockfiles, or any workflow    |
+| `markdown-lint`     | any `*.md`, `.markdownlint-cli2.jsonc` or its own workflow |
+
+Scheduled and manually dispatched runs have no diff base, so they always run in
+full. `gitleaks`, `semgrep` and `deno-quality` deliberately run on every PR.
+Secret and SAST scanners must see every change. The Deno suite reads most of the
+tree (`docs/`, `src/`, the workflows and the top-level docs), so a path scope
+would silently skip tests that guard those files.
+
 ## Branch protection, review, and commit signing
 
 The repository's governance posture for the default branch (`main`) is recorded
@@ -186,12 +220,12 @@ supply-chain attack shape they defend against.
 - **Australian English** — use Australian spelling in code, comments, and
   documentation (e.g. colour, behaviour, organisation, favour, centre).
 - **Keep the changelog current** — record notable changes in `CHANGELOG.md`
-  under the `[Unreleased]` heading, and move them under a versioned heading
-  when the `Cargo.toml` version is bumped.
-- **Security** — see [SECURITY.md](SECURITY.md) for disclosure and the
-  emergency dependency-bump procedure.
+  under the `[Unreleased]` heading, and move them under a versioned heading when
+  the `Cargo.toml` version is bumped.
+- **Security** — see [SECURITY.md](SECURITY.md) for disclosure and the emergency
+  dependency-bump procedure.
 
 ## Licence
 
-By contributing, you agree that your contributions are licensed under the
-Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
+By contributing, you agree that your contributions are licensed under the Apache
+License, Version 2.0. See [LICENSE](LICENSE) for the full text.

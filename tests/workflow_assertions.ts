@@ -19,6 +19,7 @@ import { assert } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 
 export interface WorkflowStep {
+  id?: string;
   name?: string;
   if?: string;
   run?: string;
@@ -29,6 +30,8 @@ export interface WorkflowStep {
 
 export interface WorkflowJob {
   if?: string;
+  needs?: string | string[];
+  outputs?: Record<string, string>;
   "runs-on"?: string;
   "timeout-minutes"?: number;
   container?: { image?: string } | string;
