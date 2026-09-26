@@ -2,7 +2,7 @@
 //! safely inside the scores root, and writing performance metrics back.
 
 use crate::market_data::{derive_csv_output_path, read_market_data_from_csv};
-use crate::models::IndexData;
+use crate::models::{IndexData, PortfolioPerformance};
 use crate::performance::{calculate_hybrid_projection, calculate_portfolio_performance};
 use crate::utils::read_tsv_score_file;
 use anyhow::{anyhow, Result};
@@ -184,6 +184,33 @@ pub fn update_index_with_performance(dividend_root: &Path, docs_path: &str) -> R
     Ok(())
 }
 
+/// Records `performance` against the index entry for `date` and writes
+/// `<docs_path>/scores/index.json` back.
+///
+/// # Errors
+///
+/// Returns an error if the index cannot be read or written, or if no entry
+/// matches `date` (the index is then left untouched).
+pub fn write_score_performance(
+    docs_path: &str,
+    date: &str,
+    performance: &PortfolioPerformance,
+) -> Result<()> {
+    let mut index_data = read_index_json(docs_path)?;
+    let entry = index_data
+        .scores
+        .iter_mut()
+        .find(|entry| entry.date == date)
+        .ok_or_else(|| anyhow!("no index.json entry for score date {date}"))?;
+    entry.performance_90_day = Some(performance.performance_90_day);
+    entry.performance_annualized = Some(performance.performance_annualized);
+    entry.total_stocks = Some(performance.total_stocks);
+
+    let index_path = Path::new(docs_path).join("scores").join("index.json");
+    std::fs::write(index_path, serde_json::to_string_pretty(&index_data)?)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +245,101 @@ mod tests {
     fn test_build_score_file_path_rejects_empty() {
         assert!(build_score_file_path("docs", "").is_err());
         assert!(build_score_file_path("docs", "   ").is_err());
+    }
+
+    /// Writes a two-entry index under `<tmp>/scores/index.json`.
+    fn seed_index(docs: &Path) {
+        let scores = docs.join("scores");
+        std::fs::create_dir_all(&scores).unwrap();
+        let json = r#"{"scores":[
+            {"year":"2025","month":"June","day":"20","file":"2025/June/20.tsv","date":"2025-06-20"},
+            {"year":"2025","month":"June","day":"21","file":"2025/June/21.tsv","date":"2025-06-21",
+             "performance_90_day":1.5,"performance_annualized":6.0,"total_stocks":3}
+        ]}"#;
+        std::fs::write(scores.join("index.json"), json).unwrap();
+    }
+
+    fn sample_performance(date: &str) -> PortfolioPerformance {
+        PortfolioPerformance {
+            score_date: date.to_string(),
+            total_stocks: 7,
+            performance_90_day: 12.25,
+            performance_annualized: 55.5,
+            individual_performances: Vec::new(),
+            excluded_tickers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_write_score_performance_updates_matching_entry_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_index(tmp.path());
+        let docs = tmp.path().to_str().unwrap();
+
+        write_score_performance(docs, "2025-06-20", &sample_performance("2025-06-20")).unwrap();
+
+        let index = read_index_json(docs).unwrap();
+        let updated = index
+            .scores
+            .iter()
+            .find(|s| s.date == "2025-06-20")
+            .unwrap();
+        assert_eq!(updated.performance_90_day, Some(12.25));
+        assert_eq!(updated.performance_annualized, Some(55.5));
+        assert_eq!(updated.total_stocks, Some(7));
+
+        // The neighbouring entry keeps its existing figures.
+        let other = index
+            .scores
+            .iter()
+            .find(|s| s.date == "2025-06-21")
+            .unwrap();
+        assert_eq!(other.performance_90_day, Some(1.5));
+        assert_eq!(other.performance_annualized, Some(6.0));
+        assert_eq!(other.total_stocks, Some(3));
+    }
+
+    #[test]
+    fn test_write_score_performance_overwrites_existing_figures() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_index(tmp.path());
+        let docs = tmp.path().to_str().unwrap();
+
+        write_score_performance(docs, "2025-06-21", &sample_performance("2025-06-21")).unwrap();
+
+        let index = read_index_json(docs).unwrap();
+        let updated = index
+            .scores
+            .iter()
+            .find(|s| s.date == "2025-06-21")
+            .unwrap();
+        assert_eq!(updated.performance_90_day, Some(12.25));
+        assert_eq!(updated.total_stocks, Some(7));
+    }
+
+    #[test]
+    fn test_write_score_performance_unknown_date_fails_loud_and_leaves_index() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_index(tmp.path());
+        let docs = tmp.path().to_str().unwrap();
+        let index_path = tmp.path().join("scores").join("index.json");
+        let before = std::fs::read_to_string(&index_path).unwrap();
+
+        let err = write_score_performance(docs, "1999-01-01", &sample_performance("1999-01-01"))
+            .unwrap_err();
+        assert!(err.to_string().contains("1999-01-01"), "got: {err}");
+
+        assert_eq!(std::fs::read_to_string(&index_path).unwrap(), before);
+    }
+
+    #[test]
+    fn test_write_score_performance_missing_index_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let docs = tmp.path().to_str().unwrap();
+
+        assert!(
+            write_score_performance(docs, "2025-06-20", &sample_performance("2025-06-20")).is_err()
+        );
     }
 
     #[test]

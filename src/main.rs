@@ -8,9 +8,9 @@ use grq_validation::utils::{
     create_market_data_long_csv_for_score_file, derive_csv_output_path,
     ensure_market_data_repository_at, extract_ticker_codes_from_score_file,
     find_unpaired_prediction_dates, is_market_data_csv_empty, read_index_json,
+    write_score_performance,
 };
 use log::info;
-use std::path::Path;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -184,21 +184,7 @@ fn main() -> Result<()> {
                 );
             }
 
-            // Update the index.json with this performance data
-            let mut index_data = grq_validation::utils::read_index_json(&args.docs_path)?;
-            for score_entry in &mut index_data.scores {
-                if score_entry.date == date {
-                    score_entry.performance_90_day = Some(performance.performance_90_day);
-                    score_entry.performance_annualized = Some(performance.performance_annualized);
-                    score_entry.total_stocks = Some(performance.total_stocks);
-                    break;
-                }
-            }
-
-            // Write updated index back to file
-            let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
-            let json_content = serde_json::to_string_pretty(&index_data)?;
-            std::fs::write(index_path, json_content)?;
+            write_score_performance(&args.docs_path, &date, &performance)?;
             println!("\nUpdated index.json with performance data for {date}");
         } else {
             // Use hybrid projection for dates less than 90 days old. Each step
@@ -249,21 +235,7 @@ fn main() -> Result<()> {
                 );
             }
 
-            // Update the index.json with this projection data
-            let mut index_data = grq_validation::utils::read_index_json(&args.docs_path)?;
-            for score_entry in &mut index_data.scores {
-                if score_entry.date == date {
-                    score_entry.performance_90_day = Some(performance.performance_90_day);
-                    score_entry.performance_annualized = Some(performance.performance_annualized);
-                    score_entry.total_stocks = Some(performance.total_stocks);
-                    break;
-                }
-            }
-
-            // Write updated index back to file
-            let index_path = Path::new(&args.docs_path).join("scores").join("index.json");
-            let json_content = serde_json::to_string_pretty(&index_data)?;
-            std::fs::write(index_path, json_content)?;
+            write_score_performance(&args.docs_path, &date, &performance)?;
             println!("\nUpdated index.json with projection data for {date}");
         }
 
@@ -437,25 +409,7 @@ fn main() -> Result<()> {
                             );
                         }
 
-                        // Update the index.json with this performance data
-                        let mut index_data =
-                            grq_validation::utils::read_index_json(&args.docs_path)?;
-                        for score_entry_update in &mut index_data.scores {
-                            if score_entry_update.date == score_entry.date {
-                                score_entry_update.performance_90_day =
-                                    Some(performance.performance_90_day);
-                                score_entry_update.performance_annualized =
-                                    Some(performance.performance_annualized);
-                                score_entry_update.total_stocks = Some(performance.total_stocks);
-                                break;
-                            }
-                        }
-
-                        // Write updated index back to file
-                        let index_path =
-                            Path::new(&args.docs_path).join("scores").join("index.json");
-                        let json_content = serde_json::to_string_pretty(&index_data)?;
-                        std::fs::write(index_path, json_content)?;
+                        write_score_performance(&args.docs_path, &score_entry.date, &performance)?;
                         info!(
                             "Updated index.json with performance data for {}",
                             score_entry.date
