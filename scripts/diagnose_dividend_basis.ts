@@ -6,7 +6,7 @@
 //     `core.yearOfDividends / 4`, into the total-return training label for EVERY
 //     stock, whether or not a dividend actually falls in the forward window.
 //   - The dashboard/validation side credits only the ACTUAL ex-dividends inside
-//     the 90-day window (GRQ-validation/src/utils.rs
+//     the 90-day window (GRQ-validation/src/dividends.rs
 //     `calculate_dividends_for_period`, mirrored by the shipped JS kernels
 //     `filterDividendsWithin90Days` + `sumDividends`).
 //
