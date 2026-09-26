@@ -28,8 +28,13 @@ flowchart LR
 
 ## Evidence
 
-This is a backend/CLI change with no visual surface. New unit tests in
-`src/index.rs` cover it:
+The dashboard reads `docs/scores/index.json`, the file
+`write_score_performance` writes. Served locally from `127.0.0.1` on this
+branch, it still loads and charts the index entries:
+
+![Dashboard rendering from index.json after the change](docs/evidence/issue-883-after.png)
+
+New unit tests in `src/index.rs` cover the extracted function:
 
 - `test_write_score_performance_updates_matching_entry_only`: the matching
   entry gets all three figures, and the neighbouring entry is untouched.
