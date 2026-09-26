@@ -46,6 +46,8 @@ class GRQValidator {
         // what the "show the working" popovers explain and what the warning
         // legend is gated on. Rebuilt on every render, never carried over.
         this.pickValues = {};
+        // DOM-free calculation half (issue #881): reads the data above live.
+        this.calc = new GRQPortfolioCalc.PortfolioCalculator(this);
 
         this.initializeEventListeners();
         this.loadIndex();
@@ -729,7 +731,7 @@ class GRQValidator {
                 }
 
                 // Set market data dates to noon to avoid timezone issues
-                const marketDate = this.setDateToMidnight(new Date(date));
+                const marketDate = this.calc.setDateToMidnight(new Date(date));
 
                 this.marketData[ticker].push({
                     date: marketDate,
@@ -848,7 +850,7 @@ class GRQValidator {
 
     async loadAnalysisData() {
         // Try to find analysis file for the current score date
-        const scoreDate = this.getScoreDate(this.selectedFile);
+        const scoreDate = this.calc.getScoreDate(this.selectedFile);
         const analysisDate = this.formatDateForAnalysisFile(scoreDate);
         
         // Look for analysis file in the same directory as the score file
@@ -1267,7 +1269,7 @@ class GRQValidator {
                 }
 
                 // Set dividend dates to noon to avoid timezone issues
-                const dividendDate = this.setDateToMidnight(new Date(exDivDate));
+                const dividendDate = this.calc.setDateToMidnight(new Date(exDivDate));
 
                 this.dividendData[ticker].push({
                     exDivDate: dividendDate,
@@ -1295,7 +1297,7 @@ class GRQValidator {
                 return;
             }
             
-            const scoreDate = this.getScoreDate(this.selectedFile);
+            const scoreDate = this.calc.getScoreDate(this.selectedFile);
             if (!scoreDate) {
                 console.warn('Could not determine score date for market index data');
                 return;
@@ -1429,7 +1431,7 @@ class GRQValidator {
         // date, in which case marketPerformanceData falls back to the full-period
         // figure rather than erroring.
         const windowEnd = GRQProjection.judgementWindowEnd(
-            this.getScoreDate(this.selectedFile),
+            this.calc.getScoreDate(this.selectedFile),
         );
         return GRQMarketIndex.marketPerformanceData(
             this.marketIndexData,
@@ -1444,7 +1446,7 @@ class GRQValidator {
     // data is available, so the caller renders no caption rather than erroring.
     getMarketComparisonAsOfDate() {
         const windowEnd = GRQProjection.judgementWindowEnd(
-            this.getScoreDate(this.selectedFile),
+            this.calc.getScoreDate(this.selectedFile),
         );
         if (!windowEnd || !this.marketIndexData) return null;
         for (const { key } of GRQMarketIndex.BENCHMARK_INDICES) {
@@ -1794,9 +1796,9 @@ class GRQValidator {
         // the split series reconciles or no single stock is selected.
         const unreconciledSplitMarker = this.selectedStock
             ? GRQProjection.unreconciledSplitAnnotation(
-                this.unreconciledSplitDate(
+                this.calc.unreconciledSplitDate(
                     this.selectedStock,
-                    this.getScoreDate(this.selectedFile),
+                    this.calc.getScoreDate(this.selectedFile),
                 ),
                 isMobile,
             )
@@ -1937,10 +1939,10 @@ class GRQValidator {
                         // (GRQProjection.singleStockAxisMax) so 180 spans the
                         // full 180 days — not the old hard-coded ~95-day cap —
                         // while the portfolio view keeps auto-fitting the data.
-                        min: this.selectedStock ? this.getScoreDate(this.selectedFile) : undefined,
+                        min: this.selectedStock ? this.calc.getScoreDate(this.selectedFile) : undefined,
                         max: this.selectedStock
                             ? GRQProjection.singleStockAxisMax(
-                                this.getScoreDate(this.selectedFile),
+                                this.calc.getScoreDate(this.selectedFile),
                                 isMobile,
                                 this.currentWindowDays(),
                             )
@@ -2007,8 +2009,8 @@ class GRQValidator {
                         annotations: {
                             line1: {
                                 type: "line",
-                                xMin: this.setDateToMidnight(this.getScoreDate(this.selectedFile)),
-                                xMax: this.setDateToMidnight(this.getScoreDate(this.selectedFile)),
+                                xMin: this.calc.setDateToMidnight(this.calc.getScoreDate(this.selectedFile)),
+                                xMax: this.calc.setDateToMidnight(this.calc.getScoreDate(this.selectedFile)),
                                 borderColor: "rgba(255, 193, 7, 0.8)",
                                 borderWidth: 2,
                                 label: {
@@ -2029,13 +2031,13 @@ class GRQValidator {
                             // Add 90-day target line
                             line3: {
                                 type: "line",
-                                xMin: this.setDateToMidnight(new Date(
-                                    this.getScoreDate(this.selectedFile)
+                                xMin: this.calc.setDateToMidnight(new Date(
+                                    this.calc.getScoreDate(this.selectedFile)
                                         .getTime() +
                                         (90 * 24 * 60 * 60 * 1000),
                                 )),
-                                xMax: this.setDateToMidnight(new Date(
-                                    this.getScoreDate(this.selectedFile)
+                                xMax: this.calc.setDateToMidnight(new Date(
+                                    this.calc.getScoreDate(this.selectedFile)
                                         .getTime() +
                                         (90 * 24 * 60 * 60 * 1000),
                                 )),
@@ -2242,7 +2244,7 @@ class GRQValidator {
         const windowDays = this.currentWindowDays();
         const maxDays = GRQProjection.deviceWindowDays(isMobile, windowDays);
         const maxDate = GRQProjection.deviceWindowEnd(
-            this.getScoreDate(this.selectedFile),
+            this.calc.getScoreDate(this.selectedFile),
             isMobile,
             windowDays,
         );
@@ -2254,9 +2256,9 @@ class GRQValidator {
         }
 
         const datasets = [];
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const daysElapsed = this.getDaysElapsed(scoreDate);
-        const ninetyDayDate = this.setDateToMidnight(new Date(
+        const scoreDate = this.calc.getScoreDate(this.selectedFile);
+        const daysElapsed = this.calc.getDaysElapsed(scoreDate);
+        const ninetyDayDate = this.calc.setDateToMidnight(new Date(
             scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
         ));
 
@@ -2283,7 +2285,7 @@ class GRQValidator {
                 const marketData = this.marketData[stock.stock];
                 console.log(`prepareChartData - ${stock.stock} market data points:`, marketData ? marketData.length : 0);
                 if (marketData && marketData.length > 0) {
-                    const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+                    const targetPercentage = this.calc.calculateTargetPercentage(stock, scoreDate);
                     // Stop the actuals at a split that cannot be reconciled
                     // (issue #831). Beyond it the raw prices sit on a different
                     // basis from the buy price, so plotting them draws a
@@ -2292,12 +2294,12 @@ class GRQValidator {
                     const filteredMarketData = GRQProjection
                         .truncateAtUnreconciledSplit(
                             marketData.filter((point) => point.date <= maxDate),
-                            this.unreconciledSplitDate(stock.stock, scoreDate),
+                            this.calc.unreconciledSplitDate(stock.stock, scoreDate),
                         );
                     console.log(`prepareChartData - ${stock.stock} filtered market data points:`, filteredMarketData.length);
                     const before90Days = [];
                     const after90Days = [];
-                    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                    const buyPriceObj = this.calc.getBuyPrice(stock.stock, scoreDate);
                     console.log(`prepareChartData - ${stock.stock} buy price:`, buyPriceObj);
                     if (!buyPriceObj || !buyPriceObj.price || buyPriceObj.price <= 0) {
                         console.warn(`No valid buy price for ${stock.stock}, skipping chart data`);
@@ -2309,11 +2311,11 @@ class GRQValidator {
                     // by its date. Filtering at a fixed 90 days left the
                     // 180-day view plotting a day-91-to-180 ex-date price fall
                     // — SITC's US$1.00 special dividend — with no credit.
-                    const stockDividends = this.getDividendsWithinChartWindow(
+                    const stockDividends = this.calc.getDividendsWithinChartWindow(
                         stock.stock,
                     );
                     filteredMarketData.forEach((point) => {
-                        const adjustedPrice = this.adjustHistoricalPriceToCurrent(
+                        const adjustedPrice = this.calc.adjustHistoricalPriceToCurrent(
                             (point.high + point.low) / 2,
                             stock.stock,
                             point.date,
@@ -2464,7 +2466,7 @@ class GRQValidator {
                     const latestMarketDate = marketData && marketData.length > 0 ? marketData[marketData.length - 1].date : new Date();
                     // ... existing code ...
                     // When calling calculateTrendLine, pass latestMarketDate as 'today'
-                    const trendLine = this.calculateTrendLine(stock, scoreDate, latestMarketDate);
+                    const trendLine = this.calc.calculateTrendLine(stock, scoreDate, latestMarketDate);
                     // Hide the projection trend line once the 90-day window has
                     // elapsed and the real actuals are in (issue #688) — it only
                     // estimates the outcome before it is known.
@@ -2498,7 +2500,7 @@ class GRQValidator {
                 console.log("prepareChartData - marketData stocks:", Object.keys(this.marketData));
             }
             
-            const portfolioData = this.calculatePortfolioData();
+            const portfolioData = this.calc.calculatePortfolioData();
             console.log("prepareChartData - portfolio data points:", portfolioData.length);
             const before90Days = [];
             const after90Days = [];
@@ -2546,7 +2548,7 @@ class GRQValidator {
                 });
             }
             // Add target dot for portfolio view
-            const portfolioTarget = this.calculatePortfolioTargetPercentage();
+            const portfolioTarget = this.calc.calculatePortfolioTargetPercentage();
             if (portfolioTarget !== null) {
                 datasets.push({
                     label: "Target",
@@ -2571,7 +2573,7 @@ class GRQValidator {
             const stock = this.scoreData.find((s) => s.stock === this.selectedStock);
             if (stock) {
                 console.log("Attempting to generate hybrid projection for:", this.selectedStock);
-                const hybridData = this.calculateHybridProjectionData(stock, scoreDate);
+                const hybridData = this.calc.calculateHybridProjectionData(stock, scoreDate);
                 console.log("Hybrid projection result:", hybridData);
 
                 // Hide the hybrid projection line (every variant) and its
@@ -2644,13 +2646,13 @@ class GRQValidator {
             }
         } else {
             // Portfolio view - use market data-based days elapsed
-            const marketDataDaysElapsed = this.getDaysElapsedFromMarketData(scoreDate);
+            const marketDataDaysElapsed = this.calc.getDaysElapsedFromMarketData(scoreDate);
             console.log("Portfolio view - market data days elapsed:", marketDataDaysElapsed);
             
             // Always show trend line if we have less than 90 days of market data
             if (marketDataDaysElapsed < 90) {
                 console.log("Attempting to generate portfolio trend line");
-                const portfolioTrendLine = this.calculatePortfolioTrendLine();
+                const portfolioTrendLine = this.calc.calculatePortfolioTrendLine();
                 if (portfolioTrendLine) {
                     console.log("Portfolio trend line result:", portfolioTrendLine);
                     // Create trend line data points - extend to exactly 90 days
@@ -2667,7 +2669,7 @@ class GRQValidator {
                     const lastPointDay = (lastPoint.x.getTime() - scoreDate.getTime()) / (24 * 60 * 60 * 1000);
                     if (lastPointDay !== 90) {
                         const predictedPerformance90 = Math.max(portfolioTrendLine.slope * 90 + portfolioTrendLine.intercept, -100);
-                        const trendDate = this.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
+                        const trendDate = this.calc.setDateToMidnight(new Date(scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000)));
                         trendData.push({
                             x: trendDate,
                             y: predictedPerformance90
@@ -2735,7 +2737,7 @@ class GRQValidator {
         }
 
         // Add cost of capital line (remove dots)
-        const costOfCapitalData = this.calculateCostOfCapitalData();
+        const costOfCapitalData = this.calc.calculateCostOfCapitalData();
         if (costOfCapitalData.length > 0) {
             datasets.push({
                 label: "Cost of Capital",
@@ -2753,7 +2755,7 @@ class GRQValidator {
         console.log('this.marketIndexData:', this.marketIndexData);
         
         if (this.marketIndexData) {
-            const scoreDate = this.getScoreDate(this.selectedFile);
+            const scoreDate = this.calc.getScoreDate(this.selectedFile);
             console.log('Score date for chart:', scoreDate.toISOString().split('T')[0]);
             
             // Add SP500 data
@@ -2902,7 +2904,7 @@ class GRQValidator {
         console.log("prepareBasicChartData called - creating basic chart with score data only");
         
         const datasets = [];
-        const scoreDate = this.getScoreDate(this.selectedFile);
+        const scoreDate = this.calc.getScoreDate(this.selectedFile);
         
         // Create a simple dataset showing just the score data
         if (this.selectedStock) {
@@ -2977,231 +2979,6 @@ class GRQValidator {
         return { datasets };
     }
 
-    calculatePortfolioData() {
-        console.log("calculatePortfolioData called");
-        console.log("calculatePortfolioData - marketData available:", !!this.marketData);
-        if (this.marketData) {
-            console.log("calculatePortfolioData - marketData stocks:", Object.keys(this.marketData));
-        }
-        
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        // Dividend markers span the VISIBLE chart window, matching the credit
-        // the series now carries past day 90 (issue #817).
-        const windowEndDate = new Date(
-            scoreDate.getTime() + (this.chartWindowDays() * 24 * 60 * 60 * 1000),
-        );
-        const portfolioData = [];
-
-        // Get all unique dates from market data (include all dates, not just 90 days)
-        const allDates = new Set();
-        if (this.marketData) {
-            this.scoreData.forEach((stock) => {
-                const marketData = this.marketData[stock.stock];
-                if (marketData) {
-                    marketData.forEach((point) => {
-                        // Include all dates, not just within 90 days
-                        allDates.add(point.date.getTime());
-                    });
-                }
-            });
-        } else {
-            console.log("calculatePortfolioData - no marketData available, cannot calculate portfolio performance");
-        }
-
-        // Add the score date to ensure we start at zero
-        allDates.add(scoreDate.getTime());
-
-        const sortedDates = Array.from(allDates).sort((a, b) => a - b);
-        console.log("calculatePortfolioData - unique dates found:", sortedDates.length);
-
-        // Simple debug: Check if dividend data is loaded
-        console.log("Dividend data loaded:", !!this.dividendData);
-        if (this.dividendData) {
-            console.log(
-                "Stocks with dividends:",
-                Object.keys(this.dividendData),
-            );
-        }
-
-        sortedDates.forEach((timestamp) => {
-            const date = new Date(timestamp);
-            let totalPerformance = 0;
-            let validStocks = 0;
-
-            this.scoreData.forEach((stock) => {
-                const marketData = this.marketData[stock.stock];
-                if (marketData) {
-                    const dataPoint = marketData.find(
-                        (point) => point.date.getTime() === timestamp,
-                    );
-
-                    // Calculate buy price using market data on score date
-                    const scoreDate = this.getScoreDate(this.selectedFile);
-                    // Exclude unpriceable stocks entirely (issue #289): a stock
-                    // with no usable buy/current price must not drag the
-                    // portfolio series (and the shared trend line) down or
-                    // inject NaN from a null buy price. The remaining included
-                    // stocks are re-weighted by averaging over validStocks.
-                    if (!this.isStockPriceable(stock.stock, scoreDate)) {
-                        return;
-                    }
-                    const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-                    const buyPrice = buyPriceObj ? buyPriceObj.price : null;
-                    const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
-                    const target = this.adjustHistoricalPriceToCurrent(
-                        stock.target,
-                        stock.stock,
-                        scoreDate,
-                    );
-
-                    if (dataPoint) {
-                        // Use split-adjusted price for current price calculation
-                        const currentPrice = this
-                            .adjustHistoricalPriceToCurrent(
-                                (dataPoint.high + dataPoint.low) / 2,
-                                stock.stock,
-                                dataPoint.date,
-                            );
-
-                        // Credit the dividends gone ex by this date, taken from
-                        // the VISIBLE chart window (issue #817) rather than a
-                        // fixed 90 days — otherwise the 180-day view plots a
-                        // day-91-to-180 ex-date price fall with no offsetting
-                        // credit. Points on or before day 90 are unaffected.
-                        const dividends = this.getDividendsWithinChartWindow(
-                            stock.stock,
-                        );
-                        const totalDividends = GRQProjection.sumDividendsToDate(
-                            dividends,
-                            date,
-                        );
-
-                        // Total return (price + dividends) via the shared
-                        // projection kernel (issue #424) so the chart, the
-                        // summary and the portfolio mean can never disagree.
-                        // Honour the helper's null guard (buyPrice <= 0) the
-                        // same way the summary path does.
-                        const totalReturn = GRQProjection
-                            .calculatePerformanceReturn(
-                                buyPrice,
-                                currentPrice,
-                                totalDividends,
-                            );
-
-                        if (totalReturn !== null) {
-                            totalPerformance += totalReturn;
-                            validStocks++;
-                        }
-                    } else if (timestamp === scoreDate.getTime()) {
-                        // For the score date, performance is 0%
-                        validStocks++;
-                        // totalPerformance remains 0
-                    }
-                }
-            });
-
-            if (validStocks > 0) {
-                const portfolioPoint = {
-                    x: new Date(date.getTime()), // Create clean Date object
-                    y: totalPerformance / validStocks,
-                };
-
-                // Check if this is an ex-dividend date for any stock
-                const dividendsOnDate = [];
-                if (this.dividendData) {
-                    Object.entries(this.dividendData).forEach(
-                        ([stock, dividends]) => {
-                            dividends.forEach((d) => {
-                                // Only mark dividends inside the visible window
-                                if (d.exDivDate <= windowEndDate) {
-                                    const dDateOnly = new Date(
-                                        d.exDivDate.getFullYear(),
-                                        d.exDivDate.getMonth(),
-                                        d.exDivDate.getDate(),
-                                    );
-                                    const pointDateOnly = new Date(
-                                        date.getFullYear(),
-                                        date.getMonth(),
-                                        date.getDate(),
-                                    );
-
-                                    if (
-                                        dDateOnly.getTime() ===
-                                            pointDateOnly.getTime()
-                                    ) {
-                                        dividendsOnDate.push(
-                                            `${stock}: $${d.amount.toFixed(2)}`,
-                                        );
-                                    }
-                                }
-                            });
-                        },
-                    );
-                }
-                if (dividendsOnDate.length > 0) {
-                    portfolioPoint.dividend = dividendsOnDate.join(", ");
-                    console.log(
-                        "Found ex-dividend date:",
-                        date.toDateString(),
-                        "with dividends:",
-                        dividendsOnDate,
-                    );
-                }
-
-                portfolioData.push(portfolioPoint);
-            }
-        });
-
-        console.log(
-            "Portfolio data points with dividends:",
-            portfolioData.filter((p) => p.dividend).length,
-        );
-
-        return portfolioData;
-    }
-
-    calculateCostOfCapitalData() {
-        const isMobile = this.isMobileDevice();
-
-        // Per-device visible window, shared with the chart and summary via the
-        // single source of truth (issue #367) — the user's per-device 90/180
-        // toggle choice (issue #449, #466): both default to 180 (issue #711).
-        const maxDays = GRQProjection.deviceWindowDays(isMobile, this.currentWindowDays());
-        const maxDate = new Date(
-            this.getScoreDate(this.selectedFile).getTime() + (maxDays * 24 * 60 * 60 * 1000)
-        );
-
-        const scoreDate = this.getScoreDate(this.selectedFile);
-
-        // Get all unique dates from market data (limited to the visible window).
-        const allDates = new Set();
-        this.scoreData.forEach((stock) => {
-            const marketData = this.marketData[stock.stock];
-            if (marketData) {
-                marketData.forEach((point) => {
-                    // Only include dates within the visible window.
-                    if (point.date <= maxDate) {
-                        allDates.add(point.date.getTime());
-                    }
-                });
-            }
-        });
-
-        const sortedDates = Array.from(allDates)
-            .sort((a, b) => a - b)
-            .map((timestamp) => new Date(timestamp));
-
-        // Accrue the hurdle to the end of the visible window with NO 90-day cap
-        // (issue #717): the chart line keeps rising (~4.9% at day 180 for
-        // 10%/yr) rather than running flat after day 90. The 90-day cap on the
-        // judgement metrics is intentional and lives elsewhere.
-        return GRQProjection.calculateCostOfCapitalSeries(
-            scoreDate,
-            sortedDates,
-            this.costOfCapital,
-        );
-    }
-
     getColor(index, alpha = 1) {
         const colors = [
             `rgba(220, 53, 69, ${alpha})`, // Red
@@ -3241,7 +3018,7 @@ class GRQValidator {
                 stock.stock === this.selectedStock
             )
             : this.scoreData.filter((stock) =>
-                this.meetsStarFilter(stock.stock)
+                this.calc.meetsStarFilter(stock.stock)
             );
 
         if (this.selectedStock) {
@@ -3252,12 +3029,12 @@ class GRQValidator {
             this.pickValues = {};
             const stock = stocksToShow[0];
             if (stock) {
-                const performance = this.calculateStockPerformance(stock);
-                const judgement = this.calculateJudgement(
+                const performance = this.calc.calculateStockPerformance(stock);
+                const judgement = this.calc.calculateJudgement(
                     stock,
                     performance,
                 );
-                const dividends = this.getDividendsWithin90Days(
+                const dividends = this.calc.getDividendsWithin90Days(
                     stock.stock,
                 );
                 const totalDividends = dividends.reduce(
@@ -3266,11 +3043,11 @@ class GRQValidator {
                 );
 
                 // Calculate buy price using market data on score date
-                const scoreDate = this.getScoreDate(this.selectedFile);
-                const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                const scoreDate = this.calc.getScoreDate(this.selectedFile);
+                const buyPriceObj = this.calc.getBuyPrice(stock.stock, scoreDate);
                 const buyPrice = buyPriceObj ? buyPriceObj.price : null;
                 const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
-                const target = this.adjustHistoricalPriceToCurrent(
+                const target = this.calc.adjustHistoricalPriceToCurrent(
                     stock.target,
                     stock.stock,
                     scoreDate,
@@ -3319,12 +3096,12 @@ class GRQValidator {
                 // surface as a strong recommendation. A flagged name carries a
                 // visible "Low volume — not recommended" badge alongside the
                 // suppressed (negative) score.
-                const cappedScore = this.volumeCappedScore(
+                const cappedScore = this.calc.volumeCappedScore(
                     stock.stock,
                     stock.score,
                     scoreDate,
                 );
-                const detailLowVolume = this.isStockLowVolume(
+                const detailLowVolume = this.calc.isStockLowVolume(
                     stock.stock,
                     scoreDate,
                 );
@@ -3398,7 +3175,7 @@ class GRQValidator {
                     <div class="col-6"><strong title="${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}">${RETURN_ABOVE_COST_OF_CAPITAL_LABEL}:</strong></div>
                     <div class="col-6">
                       <span class="clickable-value ${
-                    this.getPerformanceClass(this.calculateProgressVsCostOfCapitalValue(stock, performance))
+                    this.getPerformanceClass(this.calc.calculateProgressVsCostOfCapitalValue(stock, performance))
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} - ${safeStock}" data-field="progress-vs-cost" data-stock="${safeStock}">${
                     this.calculateProgressVsCostOfCapital(
                         stock,
@@ -3422,17 +3199,17 @@ class GRQValidator {
                     <div class="col-6"><strong>Intrinsic Value (Basic):</strong></div>
                     <div class="col-6">
                         <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                        data-bs-title="Intrinsic Value (Basic) - ${safeStock}" data-field="intrinsic-basic" data-stock="${safeStock}">${this.formatCurrency(this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareBasic, stock.stock, this.getScoreDate(this.selectedFile)))}</span></div>
+                        data-bs-title="Intrinsic Value (Basic) - ${safeStock}" data-field="intrinsic-basic" data-stock="${safeStock}">${this.formatCurrency(this.calc.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareBasic, stock.stock, this.calc.getScoreDate(this.selectedFile)))}</span></div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Intrinsic Value (Adjusted):</strong></div>
                     <div class="col-6">
                         <span class="clickable-value" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" 
-                        data-bs-title="Intrinsic Value (Adjusted) - ${safeStock}" data-field="intrinsic-adjusted" data-stock="${safeStock}">${this.formatCurrency(this.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareAdjusted, stock.stock, this.getScoreDate(this.selectedFile)))}</span></div>
+                        data-bs-title="Intrinsic Value (Adjusted) - ${safeStock}" data-field="intrinsic-adjusted" data-stock="${safeStock}">${this.formatCurrency(this.calc.adjustHistoricalPriceToCurrent(stock.intrinsicValuePerShareAdjusted, stock.stock, this.calc.getScoreDate(this.selectedFile)))}</span></div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Ex-Dividend Date:</strong></div>
-                    <div class="col-6">${this.getNextExDividendDate(stock.stock)}</div>
+                    <div class="col-6">${this.calc.getNextExDividendDate(stock.stock)}</div>
                   </div>
                   <div class="row mb-2">
                     <div class="col-6"><strong>Average Dividend (90-day):</strong></div>
@@ -3575,17 +3352,17 @@ class GRQValidator {
 
             stocksToShow.forEach((stock) => {
                 const row = document.createElement("tr");
-                const scoreDate = this.getScoreDate(this.selectedFile);
+                const scoreDate = this.calc.getScoreDate(this.selectedFile);
                 const ninetyDayDate = new Date(
                     scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
                 );
                 const marketData = this.marketData[stock.stock];
                 // Split-adjusted buy price and target
                 // buy price should be the (high + low) / 2 on the score date
-                const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
+                const buyPriceObj = this.calc.getBuyPrice(stock.stock, scoreDate);
                 const buyPrice = buyPriceObj ? buyPriceObj.price : null;
                 const buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
-                const target = this.adjustHistoricalPriceToCurrent(
+                const target = this.calc.adjustHistoricalPriceToCurrent(
                     stock.target,
                     stock.stock,
                     scoreDate,
@@ -3593,13 +3370,13 @@ class GRQValidator {
                 // 90-day validation price (already post-split, issue #539)
                 let currentPrice = this.getNinetyDayPrice(stock.stock);
                 // Gain/loss calculation (split-adjusted)
-                let performance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
-                const judgement = this.calculateJudgement(
+                let performance = this.calc.calculateStockPerformanceWithDilution(stock, scoreDate);
+                const judgement = this.calc.calculateJudgement(
                     stock,
                     performance,
                 );
                 // Get dividend information (only within 90 days)
-                const dividends = this.getDividendsWithin90Days(
+                const dividends = this.calc.getDividendsWithin90Days(
                     stock.stock,
                 );
                 const totalDividends = dividends.reduce(
@@ -3617,7 +3394,7 @@ class GRQValidator {
                 // Visible low-volume badge (issue #577): flagged names are
                 // excluded from the portfolio and every aggregate, so surface
                 // the reason rather than dropping them silently.
-                const lowVolume = this.isStockLowVolume(stock.stock, scoreDate);
+                const lowVolume = this.calc.isStockLowVolume(stock.stock, scoreDate);
                 const lowVolumeBadge = lowVolume
                     ? ` ${GRQProjection.lowVolumeBadge("Low volume", "Low volume — excluded from the portfolio and all aggregate figures (issue #577)")}`
                     : "";
@@ -3654,7 +3431,7 @@ class GRQValidator {
     performance !== null ? performance.toFixed(1) + "%" : "N/A"
 }</span></td>
             <td><span class="clickable-value ${
-                    this.getPerformanceClass(this.calculateProgressVsCostOfCapitalValue(stock, performance))
+                    this.getPerformanceClass(this.calc.calculateProgressVsCostOfCapitalValue(stock, performance))
                 }" data-bs-toggle="popover" data-bs-trigger="click" data-bs-content="" data-bs-title="${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} - ${safeStock}" data-field="progress-vs-cost" data-stock="${safeStock}">${
                     this.calculateProgressVsCostOfCapital(
                         stock,
@@ -3671,7 +3448,7 @@ class GRQValidator {
                 // predicate) gets the `excluded-stock` class so its row renders
                 // with a theme-safe line-through, signalling it is out of all
                 // calculations.
-                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                if (!this.calc.isStockPriceable(stock.stock, scoreDate)) {
                     row.classList.add("excluded-stock");
                 }
                 // Tag low-volume exclusions (issue #577) distinctly so the
@@ -3693,17 +3470,17 @@ class GRQValidator {
 
             // Add totals row for aggregate view
             const scoreFile = this.selectedFile;
-            const scoreDate = this.getScoreDate(scoreFile);
-            const marketDataDaysElapsed = this.getDaysElapsedFromMarketData(scoreDate);
+            const scoreDate = this.calc.getScoreDate(scoreFile);
+            const marketDataDaysElapsed = this.calc.getDaysElapsedFromMarketData(scoreDate);
             const portfolioPerformance90Day = this
-                .calculatePortfolioPerformance90Day();
+                .calc.calculatePortfolioPerformance90Day();
             const portfolioTarget = this
-                .calculatePortfolioTargetPercentage();
+                .calc.calculatePortfolioTargetPercentage();
             const portfolioReturnAboveCostOfCapital = this
-                .calculatePortfolioReturnAboveCostOfCapital();
+                .calc.calculatePortfolioReturnAboveCostOfCapital();
             // Equal-weighted dividend component of the Actual figure (issue #426).
             const portfolioDividendYield = this
-                .calculatePortfolioDividendYield();
+                .calc.calculatePortfolioDividendYield();
 
             // Use market data-based days elapsed (already capped at 90)
             const actualDaysElapsed = marketDataDaysElapsed;
@@ -3852,8 +3629,8 @@ class GRQValidator {
         // Add summary row
         const summaryRow = document.createElement("tr");
         summaryRow.classList.add("table-info", "fw-bold");
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const daysElapsed = this.getDaysElapsed(scoreDate);
+        const scoreDate = this.calc.getScoreDate(this.selectedFile);
+        const daysElapsed = this.calc.getDaysElapsed(scoreDate);
         summaryRow.innerHTML = `
             <td>Score Date: ${scoreDate.toISOString().split('T')[0]} (${daysElapsed} days ago)</td>
             <td>-</td>
@@ -3876,31 +3653,6 @@ class GRQValidator {
         this.updatePickWarningsLegend();
     }
 
-    getDividendsWithin90Days(stockSymbol) {
-        // Window filtering lives in the shared projection module (issue #145)
-        // so production and the Deno tests exercise the same kernel.
-        const dividends = this.dividendData?.[stockSymbol] || [];
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        return GRQProjection.filterDividendsWithin90Days(dividends, scoreDate);
-    }
-
-    // Dividends inside the VISIBLE chart window, for the chart series only
-    // (issue #817). The 90-day filter above still governs every judged figure
-    // (Gain/Loss, Judgement, the tables and their workings), but a 180-day chart
-    // that filtered at 90 days plotted the ex-date price fall of a day-91-to-180
-    // dividend with no offsetting credit — SITC's US$1.00 special dividend
-    // (ex 2026-08-03) read ~17 pp too low on every prediction dated day 91-180
-    // before it.
-    getDividendsWithinChartWindow(stockSymbol) {
-        const dividends = this.dividendData?.[stockSymbol] || [];
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        return GRQProjection.filterDividendsWithinDays(
-            dividends,
-            scoreDate,
-            this.chartWindowDays(),
-        );
-    }
-
     // The resolved visible chart window in days (90 or 180) — the same window
     // prepareChartData plots, so the dividend credit and the price series cover
     // one period (issue #817).
@@ -3918,7 +3670,7 @@ class GRQValidator {
         // falls between the horizon and the end of the data series.
         const price = GRQProjection.horizonPriceCurrentBasis(
             this.marketData[stockSymbol],
-            this.getScoreDate(this.selectedFile),
+            this.calc.getScoreDate(this.selectedFile),
         );
         if (price === null) return "N/A";
         // Route through the shared currency formatter (issue #276) so large
@@ -3929,57 +3681,8 @@ class GRQValidator {
     calculateProgressVsCostOfCapital(stock, performance) {
         if (performance === null) return "N/A";
 
-        const value = this.calculateProgressVsCostOfCapitalValue(stock, performance);
+        const value = this.calc.calculateProgressVsCostOfCapitalValue(stock, performance);
         return value.toFixed(1) + "%";
-    }
-
-    calculateProgressVsCostOfCapitalValue(stock, performance) {
-        if (performance === null) return null;
-
-        // Use market data-based days elapsed for cost of capital calculation to match working
-        const daysElapsed = this.getDaysElapsedFromMarketData(this.getScoreDate(this.selectedFile));
-
-        // Subtract the shared cost-of-capital hurdle (issue #407) so the
-        // per-stock column and the portfolio total use one hurdle definition.
-        return GRQProjection.returnAboveCostOfCapital(
-            performance,
-            this.costOfCapital,
-            daysElapsed,
-        );
-    }
-
-    // Portfolio Return above Cost of Capital = average Gain/Loss − shared hurdle
-    // (issue #407). Reuses the equal-weighted average Gain/Loss and the same
-    // single hurdle applied per-stock, so this total equals the mean of the
-    // per-stock "Return above Cost of Capital" values shown in that column.
-    calculatePortfolioReturnAboveCostOfCapital() {
-        const portfolioPerformance90Day = this
-            .calculatePortfolioPerformance90Day();
-        return this.calculateProgressVsCostOfCapitalValue(
-            null,
-            portfolioPerformance90Day,
-        );
-    }
-
-    calculateJudgement(stock, performance) {
-        if (performance === null) return "Pending";
-
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const daysElapsed = this.getDaysElapsed(scoreDate);
-        const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
-
-        // Before day 90 the judgement leans on the hybrid projection; gather it
-        // so the shared kernel (issue #100) can apply the decision thresholds.
-        const projection = daysElapsed < 90
-            ? this.calculateHybridProjection(stock, scoreDate)
-            : null;
-
-        return GRQProjection.computeJudgement({
-            performance,
-            daysElapsed,
-            targetPercentage,
-            projection,
-        });
     }
 
     getPerformanceClass(performance) {
@@ -4231,156 +3934,6 @@ class GRQValidator {
         document.getElementById("summary").style.display = "block";
     }
 
-    getScoreDate(scoreFile) {
-        // Extract date from filename like "2025/June/20.tsv"
-        const match = scoreFile.match(/(\d{4})\/(\w+)\/(\d+)\.tsv/);
-        if (match) {
-            const [, year, month, day] = match;
-            const monthIndex = new Date(`${month} 1, ${year}`)
-                .getMonth();
-            const date = new Date(parseInt(year), monthIndex, parseInt(day));
-            return this.setDateToMidnight(date);
-        }
-        throw new Error("Invalid score file: " + scoreFile);
-    }
-
-    // Helper function to set dates to midnight to avoid timezone issues
-    setDateToMidnight(date) {
-        // return date;
-        const newDate = new Date(date);
-        newDate.setHours(0, 0, 0, 0);
-        return newDate;
-    }
-
-    getDaysElapsed(scoreDate) {
-        // Delegate to the shared projection module (issue #80) so the browser
-        // and the Deno tests exercise identical maths.
-        return GRQProjection.getDaysElapsed(scoreDate, new Date());
-    }
-
-    // New method to calculate days elapsed based on actual market data availability
-    getDaysElapsedFromMarketData(scoreDate) {
-        if (!this.marketData || Object.keys(this.marketData).length === 0) {
-            // Fall back to calendar days if no market data
-            return this.getDaysElapsed(scoreDate);
-        }
-
-        // Find the latest market data date across all stocks
-        let latestMarketDate = scoreDate;
-        
-        this.scoreData.forEach((stock) => {
-            const marketData = this.marketData[stock.stock];
-            if (marketData && marketData.length > 0) {
-                const stockLatestDate = marketData[marketData.length - 1].date;
-                if (stockLatestDate > latestMarketDate) {
-                    latestMarketDate = stockLatestDate;
-                }
-            }
-        });
-
-        // Day-count maths (capped at 90) lives in the shared projection module
-        // (issue #100).
-        return GRQProjection.daysElapsedFromMarketData(
-            scoreDate,
-            latestMarketDate,
-        );
-    }
-
-    calculateStockPerformance(stock) {
-        const marketData = this.marketData[stock.stock];
-        if (!marketData || marketData.length === 0) return null;
-
-        const scoreDate = this.getScoreDate(this.selectedFile);
-
-        // Price at the 90-day validation horizon (issue #539) — the basis the
-        // whole tool compares against, never today's live price. Read on the
-        // buy price's CURRENT split basis (issue #569): when a reconcilable
-        // split falls between the horizon and the series end, the raw horizon
-        // midpoint sits on a different split basis than the restated buy price,
-        // inflating/deflating the return. horizonPriceCurrentBasis divides that
-        // post-horizon factor out so both prices share one basis.
-        const currentPrice = GRQProjection.horizonPriceCurrentBasis(
-            marketData,
-            scoreDate,
-        );
-        if (currentPrice === null) return null;
-
-        // Get the price on the score date as the buy price (adjusted to current price level)
-        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-        if (!buyPriceObj || !buyPriceObj.price || buyPriceObj.price <= 0) {
-            return null;
-        }
-        const buyPrice = buyPriceObj.price;
-
-        // Add dividend return within 90 days
-        const dividends = this.getDividendsWithin90Days(stock.stock);
-        const totalDividends = dividends.reduce(
-            (sum, div) => sum + div.amount,
-            0,
-        );
-
-        // Total return (price + dividends) via the shared projection module
-        // (issue #80) so production and tests share one implementation.
-        return GRQProjection.calculatePerformanceReturn(
-            buyPrice,
-            currentPrice,
-            totalDividends,
-        );
-    }
-
-    calculatePortfolioTargetPercentage() {
-        // Portfolio target = equal-weight mean of the included stocks' target
-        // percentages. The maths lives in the shared projection module
-        // (issue #429) so the dashboard chart and the trend view call ONE
-        // function. Build the per-stock inputs via the shared
-        // buildPortfolioTargetStocks() helper, then delegate; the shared helper
-        // applies the same inclusion gate (issue #289) and 20.0% fallback.
-        return GRQProjection.calculatePortfolioTargetPercentage(
-            this.buildPortfolioTargetStocks(),
-        );
-    }
-
-    // Build the per-stock {buyPrice, currentPrice, score, adjustedTarget, stock}
-    // inputs for the shared portfolio-target helpers (issue #429, #629). Single
-    // source of truth so the headline (calculatePortfolioTargetPercentage) and
-    // the "show the working" popover (calculatePortfolioTargetWorking) consume
-    // IDENTICAL inputs — the popover per-stock %, its Total and the headline
-    // reconcile by construction. The target is the split/dilution-adjusted value
-    // (current basis), never the raw `stock.target`.
-    buildPortfolioTargetStocks() {
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        // Apply the active minimum-star filter (issue #655) here too: the target
-        // dot recomputes over the SAME filtered subset as the table and the
-        // chart performance line. This path builds raw inputs for the shared
-        // projection kernel rather than going through isStockPriceable, so the
-        // star gate is applied explicitly. With the filter off every stock
-        // passes and the target is unchanged.
-        const includedStocks = this.scoreData.filter((stock) =>
-            this.meetsStarFilter(stock.stock)
-        );
-        return includedStocks.map((stock) => {
-            const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-            const hasTarget = stock.target !== null && !isNaN(stock.target);
-            return {
-                stock: stock.stock,
-                buyPrice: buyPriceObj ? buyPriceObj.price : null,
-                currentPrice: GRQProjection.currentPriceFromLatest(
-                    this.marketData[stock.stock],
-                ),
-                // Raw AI model score so the shared gate can drop negative-score
-                // names from the equal-weight target average (issue #627).
-                score: stock.score,
-                adjustedTarget: hasTarget
-                    ? this.adjustHistoricalPriceToCurrent(
-                        stock.target,
-                        stock.stock,
-                        scoreDate,
-                    )
-                    : null,
-            };
-        });
-    }
-
     // Whether a stock counts towards portfolio aggregates (issue #289): it must
     // have BOTH a usable buy price (on the score date) AND a usable current
     // price (latest market data). Delegates to the shared inclusion predicate
@@ -4403,9 +3956,9 @@ class GRQValidator {
         if (!legend) {
             return;
         }
-        const scoreDate = this.getScoreDate(this.selectedFile);
+        const scoreDate = this.calc.getScoreDate(this.selectedFile);
         const flags = (this.scoreData || []).map((stock) =>
-            this.isStockLowVolume(stock.stock, scoreDate)
+            this.calc.isStockLowVolume(stock.stock, scoreDate)
         );
         legend.style.display =
             GRQProjection.shouldShowLowVolumeLegend(flags) ? "" : "none";
@@ -4449,147 +4002,11 @@ class GRQValidator {
         legend.style.display = show ? "" : "none";
     }
 
-    isStockLowVolume(stockSymbol, scoreDate) {
-        const series = this.marketData ? this.marketData[stockSymbol] : null;
-        if (!series) {
-            return false;
-        }
-        const window = GRQVolume.buildTrailingVolumeWindow(series, scoreDate);
-        return GRQVolume.isLowVolume(window);
-    }
-
-    // Volume-capped prediction score (issue #578): folds low volume into the
-    // valuation so an illiquid name can never surface as a strong recommendation,
-    // mirroring GRQ training's Math.min(volumeRecommend, priceRecommend, 1). Falls
-    // back to the raw score when volume is unknown (no market data loaded, or a
-    // pre-volume-column CSV), matching the exclusion path's "insufficient data ⇒
-    // not flagged" rule. The shared #576 helper is the single source of truth.
-    volumeCappedScore(stockSymbol, baseScore, scoreDate) {
-        const series = this.marketData ? this.marketData[stockSymbol] : null;
-        if (!series) {
-            return baseScore;
-        }
-        const window = GRQVolume.buildTrailingVolumeWindow(series, scoreDate);
-        return GRQVolume.volumeCappedScore(baseScore, window);
-    }
-
-    isStockPriceable(stockSymbol, scoreDate) {
-        const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
-        const buyPrice = buyPriceObj ? buyPriceObj.price : null;
-        const currentPrice = GRQProjection.currentPriceFromLatest(
-            this.marketData[stockSymbol],
-        );
-        // Negative-score names are excluded too (issue #627): a raw AI model
-        // score <= 0 predicts a fall, so we would hold cash. Look the raw score
-        // up from the loaded score data and feed it through the same single
-        // inclusion gate; an unknown score never excludes.
-        const scoreRecord = (this.scoreData || []).find(
-            (s) => s.stock === stockSymbol,
-        );
-        const score = scoreRecord ? scoreRecord.score : null;
-        // Low-volume names are excluded from the portfolio and from EVERY
-        // aggregate (issue #577): this single gate feeds the chart Actual /
-        // "Actual (After 90 Days)" line, the totals row and the dividend
-        // figures, so an illiquid name neither helps nor hurts any of them.
-        return GRQProjection.isStockIncluded(
-            buyPrice,
-            currentPrice,
-            buyPriceObj ? buyPriceObj.reliable !== false : true,
-            this.isStockLowVolume(stockSymbol, scoreDate),
-            score,
-        ) && this.meetsStarFilter(stockSymbol);
-    }
-
-    // Whether a stock clears the active minimum-star filter (issue #655). The
-    // shared GRQStarFilter threshold (foundation #654) is 0 ("All"/off) or a
-    // whole star 1–5. With the filter off every stock passes, so this gate is a
-    // no-op and the portfolio view is byte-for-byte unchanged. When a threshold
-    // is active a stock passes only when its combined star rating
-    // (analysisData[ticker].avgStars, populated by loadAnalysisData) is at least
-    // the threshold; a missing entry or a null/undefined avgStars (no rating) is
-    // excluded. Folded into isStockPriceable so the SAME filtered set feeds the
-    // holdings table and every aggregate (chart line, target dot, trend line,
-    // totals row) — no divergence between the numbers and the table.
-    meetsStarFilter(stockSymbol) {
-        const minStars =
-            (typeof GRQStarFilter !== "undefined" &&
-                    typeof GRQStarFilter.getMinStars === "function")
-                ? GRQStarFilter.getMinStars()
-                : 0;
-        const analysis = this.analysisData
-            ? this.analysisData[stockSymbol]
-            : null;
-        const avgStars = analysis ? analysis.avgStars : null;
-        return GRQProjection.meetsStarThreshold(avgStars, minStars);
-    }
-
-    calculatePortfolioPerformance90Day() {
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
-
-        let totalPerformance = 0;
-        let validStocks = 0;
-
-        this.scoreData.forEach((stock) => {
-            // Exclude unpriceable stocks from the totals row (issue #289); the
-            // remaining included stocks are re-weighted by averaging over
-            // validStocks only.
-            if (!this.isStockPriceable(stock.stock, scoreDate)) {
-                return;
-            }
-            const marketData = this.marketData[stock.stock];
-            if (marketData) {
-                // Find the price at 90 days (or closest available date)
-                let ninetyDayData = null;
-
-                // First try to find exact 90-day date
-                ninetyDayData = marketData.find((point) => {
-                    const pointDate = new Date(
-                        point.date.getFullYear(),
-                        point.date.getMonth(),
-                        point.date.getDate(),
-                    );
-                    const targetDate = new Date(
-                        ninetyDayDate.getFullYear(),
-                        ninetyDayDate.getMonth(),
-                        ninetyDayDate.getDate(),
-                    );
-                    return pointDate.getTime() === targetDate.getTime();
-                });
-
-                // If not found, find the closest date within 90 days
-                if (!ninetyDayData) {
-                    const within90Days = marketData.filter((point) =>
-                        point.date <= ninetyDayDate
-                    );
-                    if (within90Days.length > 0) {
-                        // Get the latest data point within 90 days
-                        ninetyDayData = within90Days[within90Days.length - 1];
-                    }
-                }
-
-                if (ninetyDayData) {
-                    // Use centralized method for performance calculation
-                    const performance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
-                    
-                    if (performance !== null) {
-                        totalPerformance += performance;
-                        validStocks++;
-                    }
-                }
-            }
-        });
-
-        return validStocks > 0 ? totalPerformance / validStocks : 0;
-    }
-
     getWorking(field, stockSymbol, scoreData,result={rawValue:null,formattedValue:null}) {
         // Special handling for portfolio target - no specific stock needed
         if (field === "portfolio-target") {
             const portfolioTargetValue = this
-                .calculatePortfolioTargetPercentage();
+                .calc.calculatePortfolioTargetPercentage();
 
             // Reuse the shared per-stock working helper (issue #629). It consumes
             // the SAME split/dilution-adjusted inputs as the headline
@@ -4598,7 +4015,7 @@ class GRQValidator {
             // split-adjusted buy price — and the per-stock list, Total and the
             // headline reconcile by construction.
             const working = GRQProjection.calculatePortfolioTargetWorking(
-                this.buildPortfolioTargetStocks(),
+                this.calc.buildPortfolioTargetStocks(),
             );
             const targetDetails = working.details.map(
                 (d) => `${d.stock}: ${d.targetPercentage.toFixed(1)}%`,
@@ -4616,13 +4033,13 @@ class GRQValidator {
         // Special handling for the portfolio Return above Cost of Capital total
         // (issue #407) — no specific stock; mirrors the portfolio-target branch.
         if (field === "portfolio-return-above-cost-of-capital") {
-            const scoreDate = this.getScoreDate(this.selectedFile);
-            const daysElapsed = this.getDaysElapsedFromMarketData(scoreDate);
+            const scoreDate = this.calc.getScoreDate(this.selectedFile);
+            const daysElapsed = this.calc.getDaysElapsedFromMarketData(scoreDate);
             const hurdle = GRQProjection.costOfCapitalHurdle(
                 this.costOfCapital,
                 daysElapsed,
             );
-            const averageGainLoss = this.calculatePortfolioPerformance90Day();
+            const averageGainLoss = this.calc.calculatePortfolioPerformance90Day();
             const portfolioReturn = averageGainLoss - hurdle;
 
             // Per-stock Gain/Loss list, mirroring the exclusion applied in
@@ -4630,10 +4047,10 @@ class GRQValidator {
             // stocks appear (issue #289).
             const gainLossDetails = [];
             this.scoreData.forEach((stock) => {
-                if (!this.isStockPriceable(stock.stock, scoreDate)) {
+                if (!this.calc.isStockPriceable(stock.stock, scoreDate)) {
                     return;
                 }
-                const performance = this.calculateStockPerformanceWithDilution(
+                const performance = this.calc.calculateStockPerformanceWithDilution(
                     stock,
                     scoreDate,
                 );
@@ -4660,17 +4077,17 @@ class GRQValidator {
         // components so the working reconciles with the displayed Actual figure
         // and the chart's latest blue point.
         if (field === "portfolio-actual") {
-            const actualScoreDate = this.getScoreDate(this.selectedFile);
-            const actualValue = this.calculatePortfolioPerformance90Day();
+            const actualScoreDate = this.calc.getScoreDate(this.selectedFile);
+            const actualValue = this.calc.calculatePortfolioPerformance90Day();
             const lines = [];
             let priceSum = 0;
             let dividendSum = 0;
             let included = 0;
             this.scoreData.forEach((stock) => {
-                if (!this.isStockPriceable(stock.stock, actualScoreDate)) {
+                if (!this.calc.isStockPriceable(stock.stock, actualScoreDate)) {
                     return;
                 }
-                const b = this.getStockReturnBreakdown(stock, actualScoreDate);
+                const b = this.calc.getStockReturnBreakdown(stock, actualScoreDate);
                 if (b === null) return;
                 lines.push(
                     `${stock.stock}: price ${b.priceReturn.toFixed(1)}% + dividend ${
@@ -4699,15 +4116,15 @@ class GRQValidator {
         // stock's buy price, 90-day dividends and yield so the ABC-vs-XYZ ratio
         // is legible, and the total equals the dividend slice of Actual.
         if (field === "portfolio-dividends") {
-            const divScoreDate = this.getScoreDate(this.selectedFile);
-            const dividendValue = this.calculatePortfolioDividendYield();
+            const divScoreDate = this.calc.getScoreDate(this.selectedFile);
+            const dividendValue = this.calc.calculatePortfolioDividendYield();
             const lines = [];
             let included = 0;
             this.scoreData.forEach((stock) => {
-                if (!this.isStockPriceable(stock.stock, divScoreDate)) {
+                if (!this.calc.isStockPriceable(stock.stock, divScoreDate)) {
                     return;
                 }
-                const b = this.getStockReturnBreakdown(stock, divScoreDate);
+                const b = this.calc.getStockReturnBreakdown(stock, divScoreDate);
                 if (b === null) return;
                 lines.push(
                     `${stock.stock}: buy $${b.buyPrice.toFixed(2)}, dividends $${
@@ -4726,7 +4143,7 @@ class GRQValidator {
         const stock = scoreData.find((s) => s.stock === stockSymbol);
         if (!stock) return "Stock not found";
 
-        const scoreDate = this.getScoreDate(this.selectedFile);
+        const scoreDate = this.calc.getScoreDate(this.selectedFile);
         // Use the human-readable field label (issue #542) so the working header
         // reads e.g. "Field: 90-Day Actual" rather than the raw "current-price"
         // id, which was misleading (it is never today's live price — issue #539).
@@ -4752,7 +4169,7 @@ class GRQValidator {
 
         switch (field) {
             case "buy-price":
-                const buyPriceObj = this.getBuyPrice(stockSymbol, scoreDate);
+                const buyPriceObj = this.calc.getBuyPrice(stockSymbol, scoreDate);
                 let buyPrice = buyPriceObj ? buyPriceObj.price : null;
                 let buyPriceDateUsed = buyPriceObj ? buyPriceObj.dateUsed : null;
                 let buyPriceExplanation;
@@ -4767,7 +4184,7 @@ class GRQValidator {
                 }
 
                 const buyPriceSplitAdjustment = !buyPriceError ? this
-                    .getHistoricalToCurrentSplitAdjustment(
+                    .calc.getHistoricalToCurrentSplitAdjustment(
                         stockSymbol,
                         scoreDate,
                     ) : 1.0;
@@ -4791,12 +4208,12 @@ class GRQValidator {
                 }
             case "target":
                 const targetSplitAdjustment = this
-                    .getHistoricalToCurrentSplitAdjustment(
+                    .calc.getHistoricalToCurrentSplitAdjustment(
                         stockSymbol,
                         scoreDate,
                     );
                 const adjustedTarget = this
-                    .adjustHistoricalPriceToCurrent(
+                    .calc.adjustHistoricalPriceToCurrent(
                         stock.target,
                         stockSymbol,
                         scoreDate,
@@ -4813,11 +4230,11 @@ class GRQValidator {
                         `90-Day Target working:\n= Target price from score file\n= ${this.formatCurrency(stock.target)}\n= ${this.formatCurrency(adjustedTarget)}`;
                 }
             case "target-percentage":
-                const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
+                const targetPercentage = this.calc.calculateTargetPercentage(stock, scoreDate);
                 if (targetPercentage !== null) {
-                    const buyPrice = this.getBuyPrice(stockSymbol, scoreDate);
+                    const buyPrice = this.calc.getBuyPrice(stockSymbol, scoreDate);
                     if (buyPrice !== null) {
-                        const adjustedTarget = this.adjustHistoricalPriceToCurrent(
+                        const adjustedTarget = this.calc.adjustHistoricalPriceToCurrent(
                             stock.target,
                             stockSymbol,
                             scoreDate
@@ -4892,19 +4309,19 @@ class GRQValidator {
                         }`;
                 }
             case "gain-loss":
-                const gainLossPerformance = this.calculateStockPerformanceWithDilution(stock, scoreDate);
+                const gainLossPerformance = this.calc.calculateStockPerformanceWithDilution(stock, scoreDate);
                 if (gainLossPerformance === null) {
                     return header +
                         "Gain/Loss working:\nNo market data available";
                 }
                 
-                const gainLossBuyPrice = this.getBuyPrice(stockSymbol, scoreDate);
+                const gainLossBuyPrice = this.calc.getBuyPrice(stockSymbol, scoreDate);
                 if (gainLossBuyPrice === null) {
                     return header +
                         "Gain/Loss working:\nNo buy price available";
                 }
                 
-                const gainLossDividends = this.getDividendsWithin90Days(stockSymbol);
+                const gainLossDividends = this.calc.getDividendsWithin90Days(stockSymbol);
                 const gainLossTotalDividends = GRQProjection.sumDividends(gainLossDividends);
                 
                 // Get 90-Day Actual for display, on the buy price's current split
@@ -4918,7 +4335,7 @@ class GRQValidator {
                 );
 
                 // Get split adjustments for display
-                const gainLossBuyPriceSplitAdjustment = this.getHistoricalToCurrentSplitAdjustment(
+                const gainLossBuyPriceSplitAdjustment = this.calc.getHistoricalToCurrentSplitAdjustment(
                     stockSymbol,
                     scoreDate
                 );
@@ -4963,13 +4380,13 @@ class GRQValidator {
                 }
             case "progress-vs-cost":
                 const progressPerformance = this
-                    .calculateStockPerformance(stock);
+                    .calc.calculateStockPerformance(stock);
                 if (progressPerformance === null) {
                     return header +
                         `${RETURN_ABOVE_COST_OF_CAPITAL_DEFINITION}\n\n${RETURN_ABOVE_COST_OF_CAPITAL_LABEL} working:\nNo market data available`;
                 }
-                const daysElapsed = this.getDaysElapsed(
-                    this.getScoreDate(this.selectedFile),
+                const daysElapsed = this.calc.getDaysElapsed(
+                    this.calc.getScoreDate(this.selectedFile),
                 );
                 const costOfCapitalReturn = (this.costOfCapital / 365) *
                     daysElapsed;
@@ -4981,17 +4398,17 @@ class GRQValidator {
                     }%`;
             case "judgement":
                 const judgementPerformance = this
-                    .calculateStockPerformance(stock);
-                const judgement = this.calculateJudgement(
+                    .calc.calculateStockPerformance(stock);
+                const judgement = this.calc.calculateJudgement(
                     stock,
                     judgementPerformance,
                 );
-                const judgementScoreDate = this.getScoreDate(this.selectedFile);
-                const judgementDaysElapsed = this.getDaysElapsed(judgementScoreDate);
-                const judgementTargetPercentage = this.calculateTargetPercentage(stock, judgementScoreDate);
+                const judgementScoreDate = this.calc.getScoreDate(this.selectedFile);
+                const judgementDaysElapsed = this.calc.getDaysElapsed(judgementScoreDate);
+                const judgementTargetPercentage = this.calc.calculateTargetPercentage(stock, judgementScoreDate);
                 
                 if (judgementDaysElapsed < 90) {
-                    const hybridProjection = this.calculateHybridProjection(stock, judgementScoreDate);
+                    const hybridProjection = this.calc.calculateHybridProjection(stock, judgementScoreDate);
                     if (hybridProjection && hybridProjection.confidence > 0.2) {
                         return header +
                             `Judgement (90-day) working:\n= Days elapsed: ${judgementDaysElapsed}\n= Current performance: ${
@@ -5010,14 +4427,14 @@ class GRQValidator {
                         }\n= Target: ${judgementTargetPercentage !== null ? judgementTargetPercentage.toFixed(1) + "%" : "20% (default)"}\n= Final judgement: ${judgement}`;
                 }
             case "status-projection":
-                const statusPerformance = this.calculateStockPerformance(stock);
-                const statusJudgement = this.calculateJudgement(stock, statusPerformance);
-                const statusScoreDate = this.getScoreDate(this.selectedFile);
-                const statusDaysElapsed = this.getDaysElapsed(statusScoreDate);
-                const statusTargetPercentage = this.calculateTargetPercentage(stock, statusScoreDate);
+                const statusPerformance = this.calc.calculateStockPerformance(stock);
+                const statusJudgement = this.calc.calculateJudgement(stock, statusPerformance);
+                const statusScoreDate = this.calc.getScoreDate(this.selectedFile);
+                const statusDaysElapsed = this.calc.getDaysElapsed(statusScoreDate);
+                const statusTargetPercentage = this.calc.calculateTargetPercentage(stock, statusScoreDate);
                 
                 if (statusDaysElapsed < 90) {
-                    const hybridProjection = this.calculateHybridProjection(stock, statusScoreDate);
+                    const hybridProjection = this.calc.calculateHybridProjection(stock, statusScoreDate);
                     if (hybridProjection && hybridProjection.confidence > 0.2) {
                         return header +
                             `Status/Projection working:\n= Days elapsed: ${statusDaysElapsed}\n= Current performance: ${
@@ -5040,18 +4457,18 @@ class GRQValidator {
                     return "Intrinsic Value (Basic) working:\nNo data available";
                 }
                 const adjustedBasicValue = this
-                    .adjustHistoricalPriceToCurrent(
+                    .calc.adjustHistoricalPriceToCurrent(
                         stock.intrinsicValuePerShareBasic,
                         stock.stock,
-                        this.getScoreDate(this.selectedFile),
+                        this.calc.getScoreDate(this.selectedFile),
                     );
                 return header +
                     `Intrinsic Value (Basic) working:\n= Value from score file (adjusted for splits)\n= Original: $${
                         stock.intrinsicValuePerShareBasic.toFixed(2)
                     }\n= Split adjustment: ÷ ${
-                        this.getHistoricalToCurrentSplitAdjustment(
+                        this.calc.getHistoricalToCurrentSplitAdjustment(
                             stock.stock,
-                            this.getScoreDate(this.selectedFile),
+                            this.calc.getScoreDate(this.selectedFile),
                         ).toFixed(1)
                     }\n= Adjusted: $${adjustedBasicValue.toFixed(2)}`;
             case "intrinsic-adjusted":
@@ -5059,22 +4476,22 @@ class GRQValidator {
                     return "Intrinsic Value (Adjusted) working:\nNo data available";
                 }
                 const adjustedAdjustedValue = this
-                    .adjustHistoricalPriceToCurrent(
+                    .calc.adjustHistoricalPriceToCurrent(
                         stock.intrinsicValuePerShareAdjusted,
                         stock.stock,
-                        this.getScoreDate(this.selectedFile),
+                        this.calc.getScoreDate(this.selectedFile),
                     );
                 return header +
                     `Intrinsic Value (Adjusted) working:\n= Adjusted value from score file (adjusted for splits)\n= Original: $${
                         stock.intrinsicValuePerShareAdjusted.toFixed(2)
                     }\n= Split adjustment: ÷ ${
-                        this.getHistoricalToCurrentSplitAdjustment(
+                        this.calc.getHistoricalToCurrentSplitAdjustment(
                             stock.stock,
-                            this.getScoreDate(this.selectedFile),
+                            this.calc.getScoreDate(this.selectedFile),
                         ).toFixed(1)
                     }\n= Adjusted: $${adjustedAdjustedValue.toFixed(2)}`;
             case "avg-dividend":
-                const avgDividends = this.getDividendsWithin90Days(
+                const avgDividends = this.calc.getDividendsWithin90Days(
                     stockSymbol,
                 );
                 if (avgDividends.length === 0) {
@@ -5090,7 +4507,7 @@ class GRQValidator {
                         avgTotalDividends.toFixed(2)
                     } / ${avgDividends.length}\n= $${avgDividend.toFixed(4)}`;
             case "total-dividend":
-                const totalDivDividends = this.getDividendsWithin90Days(
+                const totalDivDividends = this.calc.getDividendsWithin90Days(
                     stockSymbol,
                 );
                 if (totalDivDividends.length === 0) {
@@ -5110,7 +4527,7 @@ class GRQValidator {
                         totalDivDividends.length > 1 ? "s" : ""
                     })`;
             case "dividend-info":
-                const divInfoDividends = this.getDividendsWithin90Days(
+                const divInfoDividends = this.calc.getDividendsWithin90Days(
                     stockSymbol,
                 );
                 if (divInfoDividends.length === 0) {
@@ -5194,51 +4611,6 @@ class GRQValidator {
         }
     }
 
-    getHistoricalToCurrentSplitAdjustment(
-        stockSymbol,
-        historicalDate,
-    ) {
-        // Split-adjustment maths lives in the shared projection module
-        // (issue #100).
-        return GRQProjection.getSplitAdjustment(
-            this.marketData[stockSymbol],
-            historicalDate,
-        );
-    }
-
-    adjustHistoricalPriceToCurrent(
-        price,
-        stockSymbol,
-        historicalDate,
-    ) {
-        return GRQProjection.adjustHistoricalPriceToCurrent(
-            price,
-            this.marketData[stockSymbol],
-            historicalDate,
-        );
-    }
-
-    getBuyPrice(stockSymbol, scoreDate) {
-        // Buy-price resolution (5-day forward search + split adjustment) lives
-        // in the shared projection module (issue #100).
-        return GRQProjection.getBuyPrice(
-            this.marketData[stockSymbol],
-            scoreDate,
-        );
-    }
-
-    // Date of the first split this stock's series cannot reconcile, or null
-    // when the series is trustworthy (issue #831). The chart stops the actuals
-    // there and flags it, instead of plotting raw prices across an unadjusted
-    // split.
-    unreconciledSplitDate(stockSymbol, scoreDate) {
-        if (!this.marketData) return null;
-        return GRQProjection.unreconciledSplitDate(
-            this.marketData[stockSymbol],
-            scoreDate,
-        );
-    }
-
     createChart() {
         const ctx = document
             .getElementById("performanceChart")
@@ -5250,327 +4622,6 @@ class GRQValidator {
             : "Portfolio Performance";
     }
 
-    // Centralized method to calculate target percentage with proper stock dilution handling
-    calculateTargetPercentage(stock, scoreDate) {
-        const buyPrice = this.getBuyPrice(stock.stock, scoreDate);
-        const adjustedTarget = this.adjustHistoricalPriceToCurrent(
-            stock.target,
-            stock.stock,
-            scoreDate
-        );
-
-        // Target-percentage maths lives in the shared projection module
-        // (issue #100).
-        return GRQProjection.calculateTargetPercentage(
-            buyPrice !== null ? buyPrice.price : null,
-            adjustedTarget,
-        );
-    }
-
-    // Decompose a stock's 90-day total return into its price and dividend
-    // components (issue #426). Single source of truth for both the totals-row
-    // Actual/Dividends figures and their "show-the-working" popovers, so a
-    // popover can never disagree with the plotted/summarised value. Returns null
-    // when the stock has no usable market data or buy price.
-    getStockReturnBreakdown(stock, scoreDate) {
-        const marketData = this.marketData[stock.stock];
-        if (!marketData || marketData.length === 0) return null;
-
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
-
-        // Find the last price within 90 days
-        const within90Days = marketData.filter((point) =>
-            point.date <= ninetyDayDate
-        );
-        if (within90Days.length === 0) return null;
-
-        // Read the horizon midpoint on the CURRENT (end-of-series) split basis
-        // that getBuyPrice uses for the buy price (issue #569). Reading it RAW
-        // while dividing by a current-basis buy price leaves a spurious split
-        // factor in the Actual whenever a reconcilable split falls between the
-        // 90-day horizon and the end of the data series; horizonPriceCurrentBasis
-        // divides that factor out so both prices share one basis.
-        const currentPrice = GRQProjection.horizonPriceCurrentBasis(
-            marketData,
-            scoreDate,
-        );
-
-        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-        if (buyPriceObj === null || !buyPriceObj.price || buyPriceObj.price <= 0) {
-            return null;
-        }
-        const buyPrice = buyPriceObj.price;
-
-        // Dividend cash within the 90-day window, then split into the
-        // price-return and dividend-return components via the shared helpers
-        // (issue #424) so production and tests share one implementation.
-        const dividends = this.getDividendsWithin90Days(stock.stock);
-        const totalDividends = GRQProjection.sumDividends(dividends);
-        const priceReturn = ((currentPrice - buyPrice) / buyPrice) * 100;
-        const dividendReturn = GRQProjection.dividendReturnPercent(
-            buyPrice,
-            totalDividends,
-        );
-        const totalReturn = GRQProjection.calculatePerformanceReturn(
-            buyPrice,
-            currentPrice,
-            totalDividends,
-        );
-
-        return {
-            buyPrice,
-            currentPrice,
-            totalDividends,
-            priceReturn,
-            dividendReturn,
-            totalReturn,
-        };
-    }
-
-    // Centralized method to calculate stock performance with proper dilution handling
-    calculateStockPerformanceWithDilution(stock, scoreDate) {
-        const breakdown = this.getStockReturnBreakdown(stock, scoreDate);
-        return breakdown === null ? null : breakdown.totalReturn;
-    }
-
-    // Equal-weighted dividend component of the Actual figure (issue #426): the
-    // mean of each included stock's dividend yield (dividends ÷ buy price). This
-    // is the dividend slice of calculatePortfolioPerformance90Day, so Actual =
-    // average price return + this value. Returns 0 when nothing is included,
-    // mirroring calculatePortfolioPerformance90Day's guard.
-    calculatePortfolioDividendYield() {
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        let totalYield = 0;
-        let validStocks = 0;
-
-        this.scoreData.forEach((stock) => {
-            if (!this.isStockPriceable(stock.stock, scoreDate)) {
-                return;
-            }
-            const breakdown = this.getStockReturnBreakdown(stock, scoreDate);
-            if (breakdown !== null) {
-                totalYield += breakdown.dividendReturn;
-                validStocks++;
-            }
-        });
-
-        return validStocks > 0 ? totalYield / validStocks : 0;
-    }
-
-    // Calculate linear regression for trend prediction
-    calculateTrendLine(stock, scoreDate, endDate) {
-        const marketData = this.marketData[stock.stock];
-        if (!marketData || marketData.length === 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: No market data available`);
-            return null;
-        }
-
-        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-
-        if (!buyPriceObj || buyPriceObj.price <= 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
-            return null;
-        }
-
-        console.log(`calculateTrendLine - ${stock.stock}: Buy price: $${buyPriceObj.price.toFixed(2)}`);
-
-        // Data-window / end-date selection lives in the shared projection module
-        // (issue #144) so production and the Deno tests exercise the same window:
-        // score date to the latest market-data date (not today) unless endDate set.
-        const dataPoints = GRQProjection.buildTrendLineDataPoints(
-            marketData,
-            scoreDate,
-            buyPriceObj.price,
-            this.getDividendsWithin90Days(stock.stock),
-            endDate,
-        );
-
-        console.log(`calculateTrendLine - ${stock.stock}: Data points collected: ${dataPoints.length}`);
-        if (dataPoints.length > 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: First data point:`, dataPoints[0]);
-            console.log(`calculateTrendLine - ${stock.stock}: Last data point:`, dataPoints[dataPoints.length - 1]);
-        }
-
-        // Need at least 3 data points for meaningful regression
-        if (dataPoints.length < 3) {
-            console.log(`calculateTrendLine - ${stock.stock}: Insufficient data points (${dataPoints.length} < 3)`);
-            return null;
-        }
-
-        // Linear-regression maths lives in the shared projection module
-        // (issue #100) so production and the Deno tests share one fit.
-        const trendLine = GRQProjection.computeTrendLine(dataPoints);
-
-        console.log(`calculateTrendLine - ${stock.stock}: Slope: ${trendLine.slope.toFixed(4)}, Intercept: ${trendLine.intercept}, R²: ${trendLine.rSquared.toFixed(4)}, Predicted 90-day: ${trendLine.predicted90DayPerformance.toFixed(1)}%`);
-
-        return trendLine;
-    }
-
-    // Calculate linear regression for portfolio trend prediction
-    calculatePortfolioTrendLine() {
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const scoreDateTimestamp = scoreDate.getTime();
-        // Use the latest market data date instead of today's date
-        const portfolioData = this.calculatePortfolioData();
-        const today = portfolioData && portfolioData.length > 0 ? portfolioData[portfolioData.length - 1].x : new Date();
-        // Get portfolio data points from score date to today (but only if we have at least 3 data points)
-        const dataPoints = [];
-        
-        console.log("Portfolio trend line - total portfolio data points:", portfolioData.length);
-        
-        portfolioData.forEach((point) => {
-            if (point.x >= scoreDate && point.x <= today) {
-                const daysSinceScore = (point.x.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24);
-                dataPoints.push({
-                    x: daysSinceScore,
-                    y: point.y
-                });
-            }
-        });
-
-        console.log("Portfolio trend line - filtered data points:", dataPoints.length);
-        if (dataPoints.length > 0) {
-            console.log("Portfolio trend line - first point:", dataPoints[0]);
-            console.log("Portfolio trend line - last point:", dataPoints[dataPoints.length - 1]);
-        }
-
-        // Need at least 3 data points for meaningful regression
-        if (dataPoints.length < 3) {
-            console.log("Portfolio trend line - insufficient data points:", dataPoints.length);
-            return null;
-        }
-
-        // Regression through the origin (issue #303). Day 0 = 0% by definition
-        // (portfolio performance is measured against the buy prices on the score
-        // date), so the line must pass through (0,0); the slope is the
-        // least-squares slope subject to that anchor, m = Σ(x·y) / Σ(x·x). This
-        // delegates to the single shared kernel in docs/projection.js so the
-        // portfolio and single-stock trend lines cannot drift apart (issue #273).
-        const trend = GRQProjection.computeTrendLine(dataPoints);
-        if (!trend) {
-            console.log("Portfolio trend line - regression returned null");
-            return null;
-        }
-
-        console.log("Portfolio trend line - slope:", trend.slope, "intercept:", trend.intercept, "R²:", trend.rSquared, "Predicted 90-day:", trend.predicted90DayPerformance);
-
-        return {
-            slope: trend.slope,
-            intercept: trend.intercept,
-            predicted90DayPerformance: trend.predicted90DayPerformance,
-            dataPoints,
-            rSquared: trend.rSquared
-        };
-    }
-
-    getNextExDividendDate(stockSymbol) {
-        const dividends = this.dividendData?.[stockSymbol] || [];
-        const scoreDate = this.getScoreDate(this.selectedFile);
-        const ninetyDayDate = new Date(
-            scoreDate.getTime() + (90 * 24 * 60 * 60 * 1000),
-        );
-
-        const nextExDividend = dividends.find((dividend) =>
-            dividend.exDivDate > scoreDate && dividend.exDivDate <= ninetyDayDate
-        );
-
-        if (nextExDividend) {
-            return nextExDividend.exDivDate.toISOString().split('T')[0];
-        } else {
-            return "N/A";
-        }
-    }
-
-    // Calculate hybrid projection for 90-day performance
-    calculateHybridProjection(stock, scoreDate) {
-        const marketData = this.marketData[stock.stock];
-        if (!marketData || marketData.length === 0) {
-            console.log(`calculateHybridProjection - ${stock.stock}: No market data available`);
-            return null;
-        }
-
-        const scoreDateTimestamp = scoreDate.getTime();
-        // Use the latest market data date instead of today's date
-        const latestMarketDate = marketData && marketData.length > 0 ? marketData[marketData.length - 1].date : new Date();
-        const daysElapsed = Math.floor((latestMarketDate.getTime() - scoreDateTimestamp) / (1000 * 60 * 60 * 24));
-        
-        console.log(`calculateHybridProjection - ${stock.stock}: Days elapsed: ${daysElapsed} (using latest market data date: ${latestMarketDate.toISOString().split('T')[0]})`);
-        
-        // Get buy price
-        const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-        if (!buyPriceObj || buyPriceObj.price <= 0) {
-            console.log(`calculateHybridProjection - ${stock.stock}: No valid buy price`);
-            return null;
-        }
-
-        // Calculate current performance
-        const currentPerformance = this.calculateStockPerformance(stock);
-        if (currentPerformance === null) {
-            console.log(`calculateHybridProjection - ${stock.stock}: Cannot calculate current performance`);
-            return null;
-        }
-
-        // Get target percentage
-        const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
-        
-        console.log(`calculateHybridProjection - ${stock.stock}: Current performance: ${currentPerformance.toFixed(1)}%, Target: ${targetPercentage ? targetPercentage.toFixed(1) : 'N/A'}%`);
-
-        // The dampened-trend horizons (under 60 days elapsed) need the
-        // regression line; the long-term trajectory derives its shape from the
-        // projection figures alone.
-        const trendLine = daysElapsed < 60
-            ? this.calculateTrendLine(stock, scoreDate)
-            : null;
-
-        // The hybrid decision tree lives in the shared projection module
-        // (issue #100) so production and the Deno tests share one kernel.
-        const { projected90DayPerformance, projectionMethod, confidence } =
-            GRQProjection.computeHybridProjection({
-                daysElapsed,
-                currentPerformance,
-                targetPercentage,
-                trendLine,
-            });
-
-        console.log(`calculateHybridProjection - ${stock.stock}: Final projection: ${projected90DayPerformance.toFixed(1)}% (method: ${projectionMethod}, confidence: ${confidence.toFixed(2)})`);
-
-        return {
-            projected90DayPerformance,
-            projectionMethod,
-            confidence,
-            daysElapsed,
-            currentPerformance,
-            targetPercentage
-        };
-    }
-
-    // Calculate hybrid projection data points for chart
-    calculateHybridProjectionData(stock, scoreDate) {
-        const projection = this.calculateHybridProjection(stock, scoreDate);
-        if (!projection) return null;
-
-        // The dampened-trend curve needs the regression line; the other
-        // methods derive their shape purely from the projection figures.
-        const trendLine = projection.projectionMethod === "dampened_trend"
-            ? this.calculateTrendLine(stock, scoreDate)
-            : null;
-
-        // Delegate the weekly trend-shape generation to the shared projection
-        // module (issue #80) so production and the Deno tests share one
-        // implementation.
-        const trendData = GRQProjection.buildHybridProjectionData(
-            projection,
-            scoreDate,
-            trendLine,
-        );
-
-        return {
-            data: trendData,
-            projection: projection
-        };
-    }
 }
 
 // Initialize the validator

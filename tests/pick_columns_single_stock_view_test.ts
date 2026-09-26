@@ -298,7 +298,9 @@ Deno.test("the aggregate and basic renders clear the pick values, hiding the leg
   })();
   const basic = (() => {
     const start = APP_JS.indexOf("updateBasicStockTable()");
-    const end = APP_JS.indexOf("getDividendsWithin90Days(", start);
+    // The method that follows updateBasicStockTable in app.js (its old
+    // neighbour, getDividendsWithin90Days, moved to portfolio_calc.js, #881).
+    const end = APP_JS.indexOf("chartWindowDays() {", start);
     assert(end !== -1, "could not find the end of updateBasicStockTable");
     return APP_JS.slice(start, end);
   })();

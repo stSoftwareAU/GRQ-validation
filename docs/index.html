@@ -570,6 +570,11 @@
          app.js, which excludes flagged names from the portfolio (issue #577) -->
     <script src="volume_recommend.js?v=1.1.107"></script>
 
+    <!-- DOM-free portfolio/per-stock calculations (issue #881) — after
+         projection.js and volume_recommend.js, before app.js, which builds its
+         `calc` from globalThis.GRQPortfolioCalc. -->
+    <script src="portfolio_calc.js?v=1.1.107"></script>
+
     <!-- Shared stock-pick metrics: lots, earnings yield, 5-day return, 52-week
          position and the traffic light (issue #836) — before pick_columns.js -->
     <script src="pick_details.js?v=1.1.107"></script>

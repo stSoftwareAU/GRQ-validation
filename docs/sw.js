@@ -25,6 +25,8 @@ const CORE_ASSETS = [
   "./projection.js",
   // Shared low-volume/liquidity helper (issue #576/#577).
   "./volume_recommend.js",
+  // DOM-free portfolio/per-stock calculations split out of app.js (issue #881).
+  "./portfolio_calc.js",
   // Shared stock-pick metrics (issue #836) and the dashboard's pick-detail
   // table columns that render them (issue #840). app.js calls both at render
   // time, so they must ship in the same all-or-nothing shell update.

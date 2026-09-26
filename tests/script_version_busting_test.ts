@@ -31,6 +31,7 @@ const APP_DEPENDENCY_SCRIPTS = [
   "escape.js",
   "projection.js",
   "volume_recommend.js",
+  "portfolio_calc.js",
   "chart_window_settings.js",
   "color_key.js",
   "series_label_colour.js",
