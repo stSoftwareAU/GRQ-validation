@@ -65,7 +65,7 @@ GitHub Pages.
   to the low-volume treatment (issue #627). The gate keys on the **raw** model
   score, not the volume-capped display score (#578), and is applied through the
   single inclusion predicate shared by the dashboard (`isStockIncluded` in
-  `docs/projection.js`) and the Rust backend (`is_priceable` in `src/utils.rs`),
+  `docs/projection.js`) and the Rust backend (`is_priceable` in `src/performance.rs`),
   so backend aggregates and the dashboard agree. The stock stays visible with a
   red **Negative score** badge (its explanatory legend below the table shown
   only when at least one stock is affected) rather than vanishing silently. An
@@ -339,12 +339,12 @@ annualised = ((1 + performance / 100) ^ (365.25 / days_elapsed) − 1) × 100
 prediction only a few days old annualises over those few days rather than a
 fixed 90-day window, which would badly understate an early-stage rate. A period
 return of exactly `0` (or zero days elapsed) annualises to `0`. Both
-`calculate_annualized_performance` (`src/utils.rs`) and the dashboard use this
+`calculate_annualized_performance` (`src/performance.rs`) and the dashboard use this
 formula, which matches how funds and data providers report annualised returns.
 
 ### Split-reconciliation thresholds
 
-`is_priceable` (backend, `src/utils.rs`) and `computeSplitAdjustment`
+`is_priceable` (backend, `src/performance.rs`) and `computeSplitAdjustment`
 (`docs/projection.js`) share one threshold set so a stock split inside the
 90-day window is reconciled consistently (see _Split-Aware Returns_ above). An
 unreconcilable series is excluded rather than silently inflating a return:
@@ -1267,10 +1267,16 @@ GRQ-validation/
 ├── src/                    # Rust source code
 │   ├── main.rs             # CLI entry point
 │   ├── lib.rs              # Library interface
+│   ├── data_roots.rs       # Market/dividend data roots (env vars, resolution)
+│   ├── dividends.rs        # Dividend paths, reading/filtering, dividend CSVs
+│   ├── index.rs            # docs/index.json score index and score-file paths
+│   ├── market_data.rs      # Market-data paths, reading/filtering, price CSVs
 │   ├── models.rs           # Data structures
+│   ├── performance.rs      # Priceability, annualisation, portfolio, projection
 │   ├── picks_backfill.rs   # <DD>-picks.csv backfill across every indexed date
 │   ├── picks_sidecar.rs    # <DD>-picks.csv writer (52-week range, ADV)
-│   └── utils.rs            # Utility functions
+│   ├── splits.rs           # Split-coefficient guard (correct-or-exclude)
+│   └── utils.rs            # Score-file helpers + re-exports of the above
 ├── docs/                   # Static dashboard (published via GitHub Pages)
 │   ├── index.html          # Main dashboard
 │   ├── trend.html          # Prediction Trend view (Actual vs Target over time)
@@ -1310,6 +1316,33 @@ GRQ-validation/
 ├── quality.sh              # Local quality gate (fmt, clippy, tests, deno)
 ├── .cargo/config.toml      # Host rustflags (-C target-cpu=native; Issue #827)
 └── Cargo.toml              # Rust deps, crate metadata, and build profiles
+```
+
+### Rust library modules (issue #882)
+
+Each module in `src/` owns one concern. `utils` keeps only the score-file
+helpers and re-exports the items that moved out of it, so existing
+`grq_validation::utils::…` call sites keep compiling. Arrows show which module
+calls which:
+
+```mermaid
+flowchart TD
+    main[main.rs CLI] --> index
+    main --> market_data
+    main --> dividends
+    main --> data_roots
+    index[index.rs<br/>score index] --> performance
+    index --> market_data
+    performance[performance.rs<br/>maths and projection] --> splits[splits.rs<br/>split guard]
+    performance --> dividends
+    performance --> market_data
+    dividends[dividends.rs<br/>dividend history] --> market_data
+    market_data[market_data.rs<br/>price history] --> data_roots[data_roots.rs<br/>data roots]
+    dividends --> data_roots
+    index --> utils[utils.rs<br/>score files + re-exports]
+    performance --> utils
+    market_data --> utils
+    dividends --> utils
 ```
 
 

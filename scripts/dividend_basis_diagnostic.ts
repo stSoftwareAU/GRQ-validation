@@ -8,7 +8,7 @@
 //     whether or not a dividend actually falls in the forward window.
 //   - The dashboard/validation side credits only the ACTUAL ex-dividends that
 //     fall inside the 90-day window
-//     (GRQ-validation/src/utils.rs `calculate_dividends_for_period`, mirrored on
+//     (GRQ-validation/src/dividends.rs `calculate_dividends_for_period`, mirrored on
 //     the JS side by `filterDividendsWithin90Days` + `sumDividends`).
 //
 // Splits the pure aggregation (testable with synthetic rows, no disk) from the

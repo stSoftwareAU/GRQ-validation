@@ -8,7 +8,7 @@
 // one of them. This gate iterates every committed docs/scores/**/DD.tsv and
 // asserts the sibling DD.csv exists AND carries data rows beyond the header,
 // mirroring the "> 1 non-blank line" rule encoded in
-// src/utils.rs::is_market_data_csv_empty.
+// src/market_data.rs::is_market_data_csv_empty.
 
 import { assert, assertEquals } from "@std/assert";
 // Single source of truth, shared with the promotion guard (issue #821): the
