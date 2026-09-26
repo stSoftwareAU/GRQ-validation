@@ -20,6 +20,8 @@ interface GatedWorkflow {
   file: string;
   job: string;
   aggregator: string;
+  /** Literal twin of the workflow's `PATHS_REGEX` (grep -E syntax). */
+  pathsRegex: RegExp;
   matches: string[];
   ignores: string[];
 }
@@ -29,6 +31,7 @@ const GATED: GatedWorkflow[] = [
     file: "actionlint.yml",
     job: "actionlint",
     aggregator: "actionlint-result",
+    pathsRegex: /^\.github\/workflows\//,
     matches: [".github/workflows/ci.yml", ".github/workflows/actionlint.yml"],
     ignores: ["README.md", "docs/app.js", "src/main.rs", ".github/CODEOWNERS"],
   },
@@ -36,6 +39,8 @@ const GATED: GatedWorkflow[] = [
     file: "cargo-audit.yml",
     job: "audit",
     aggregator: "cargo-audit-result",
+    pathsRegex:
+      /^(Cargo\.toml|Cargo\.lock|\.github\/workflows\/cargo-audit\.yml)$/,
     matches: ["Cargo.toml", "Cargo.lock", ".github/workflows/cargo-audit.yml"],
     ignores: ["src/main.rs", "docs/Cargo.lock", "README.md", "deno.lock"],
   },
@@ -43,6 +48,8 @@ const GATED: GatedWorkflow[] = [
     file: "dependency-review.yml",
     job: "dependency-review",
     aggregator: "dependency-review-result",
+    pathsRegex:
+      /^(Cargo\.toml|Cargo\.lock|deno\.jsonc?|deno\.lock|package(-lock)?\.json|\.github\/workflows\/.*)$/,
     matches: [
       "Cargo.lock",
       "Cargo.toml",
@@ -58,6 +65,8 @@ const GATED: GatedWorkflow[] = [
     file: "markdown-lint.yml",
     job: "markdownlint",
     aggregator: "markdownlint-result",
+    pathsRegex:
+      /(\.md$|^\.markdownlint-cli2\.jsonc$|^\.github\/workflows\/markdown-lint\.yml$)/,
     matches: [
       "README.md",
       "docs/archive/pr-summaries/pr-summary-885.md",
@@ -87,10 +96,13 @@ function filterStep(doc: Workflow, file: string) {
   return step;
 }
 
-function pathsRegex(doc: Workflow, file: string): RegExp {
-  const pattern = filterStep(doc, file).env?.PATHS_REGEX;
-  assert(pattern, `${file} filter step must set env.PATHS_REGEX`);
-  return new RegExp(pattern);
+// The workflow's PATHS_REGEX must equal the test's literal regex, so the
+// sample paths exercised against the literal prove the workflow's behaviour.
+function assertPathsRegex(doc: Workflow, wf: GatedWorkflow): RegExp {
+  const pattern = filterStep(doc, wf.file).env?.PATHS_REGEX;
+  assert(pattern, `${wf.file} filter step must set env.PATHS_REGEX`);
+  assertEquals(pattern, wf.pathsRegex.source.replaceAll("\\/", "/"));
+  return wf.pathsRegex;
 }
 
 for (const wf of GATED) {
@@ -167,7 +179,7 @@ for (const wf of GATED) {
 
   Deno.test(`${wf.file} - area regex selects the files this gate checks`, async () => {
     const { doc } = await loadWorkflow(path);
-    const re = pathsRegex(doc, wf.file);
+    const re = assertPathsRegex(doc, wf);
     for (const p of wf.matches) assert(re.test(p), `${p} should trigger`);
     for (const p of wf.ignores) assert(!re.test(p), `${p} should not trigger`);
   });

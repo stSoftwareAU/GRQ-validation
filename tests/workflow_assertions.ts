@@ -82,35 +82,71 @@ export function triggerBranches(
   return spec?.branches;
 }
 
+interface FilterToken {
+  /** A literal character, or `*` (no `/`) / `**` (anything) wildcards. */
+  kind: "literal" | "star" | "globstar";
+  char?: string;
+  /** `?` (zero or one) or `+` (one or more) applied to this element. */
+  quantifier?: "?" | "+";
+}
+
+function tokenizeFilterPattern(pattern: string): FilterToken[] {
+  const tokens: FilterToken[] = [];
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+    if (char === "*") {
+      const globstar = pattern[i + 1] === "*";
+      if (globstar) i++;
+      tokens.push({ kind: globstar ? "globstar" : "star" });
+    } else if ((char === "?" || char === "+") && tokens.length > 0) {
+      // Quantifiers apply to the preceding pattern element.
+      tokens[tokens.length - 1].quantifier = char;
+    } else {
+      tokens.push({ kind: "literal", char });
+    }
+  }
+  return tokens;
+}
+
+function tokenMatchesChar(token: FilterToken, char: string): boolean {
+  if (token.kind === "globstar") return true;
+  if (token.kind === "star") return char !== "/";
+  return token.char === char;
+}
+
+function matchTokens(
+  tokens: FilterToken[],
+  ti: number,
+  text: string,
+  si: number,
+): boolean {
+  if (ti === tokens.length) return si === text.length;
+  const token = tokens[ti];
+  const repeats = token.kind !== "literal" || token.quantifier === "+";
+  const min = token.kind !== "literal" || token.quantifier === "?" ? 0 : 1;
+  let count = 0;
+  let pos = si;
+  while (true) {
+    if (count >= min && matchTokens(tokens, ti + 1, text, pos)) return true;
+    if (pos >= text.length || !tokenMatchesChar(token, text[pos])) return false;
+    if (!repeats && count === 1) return false;
+    count++;
+    pos++;
+  }
+}
+
 /**
- * Translate one GitHub Actions filter pattern into a regular expression.
+ * True when `text` matches one GitHub Actions filter pattern.
  *
  * Follows the documented filter-pattern semantics: `*` matches any character
  * except `/`, `**` matches any character including `/`, `?` matches zero or
  * one of the preceding character, `+` matches one or more of the preceding
  * character, and every other character is literal. This is why `["*"]` does
- * *not* match a `milestone/<slug>` base branch (Issue #788).
+ * *not* match a `milestone/<slug>` base branch (Issue #788). Matching walks
+ * the pattern directly rather than compiling it into a regular expression.
  */
-function filterPatternToRegExp(pattern: string): RegExp {
-  let source = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const char = pattern[i];
-    if (char === "*") {
-      if (pattern[i + 1] === "*") {
-        source += ".*";
-        i++;
-      } else {
-        source += "[^/]*";
-      }
-    } else if (char === "?" || char === "+") {
-      // Quantifiers apply to the preceding pattern element, which the loop
-      // has already emitted — pass them through untouched.
-      source += char;
-    } else {
-      source += char.replace(/[.\\/^$|()[\]{}]/g, "\\$&");
-    }
-  }
-  return new RegExp(`^${source}$`);
+function filterPatternMatches(pattern: string, text: string): boolean {
+  return matchTokens(tokenizeFilterPattern(pattern), 0, text, 0);
 }
 
 /**
@@ -128,8 +164,8 @@ export function branchFilterMatches(
   const negative = branches.filter((p) => p.startsWith("!")).map((p) =>
     p.slice(1)
   );
-  if (negative.some((p) => filterPatternToRegExp(p).test(branch))) return false;
-  return positive.some((p) => filterPatternToRegExp(p).test(branch));
+  if (negative.some((p) => filterPatternMatches(p, branch))) return false;
+  return positive.some((p) => filterPatternMatches(p, branch));
 }
 
 /** Representative milestone integration branch used by the gate assertions. */
@@ -248,8 +284,23 @@ export function stepIndexUsing(
   );
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A `uses: <action>@<40-char-sha>` line, capturing the action reference. */
+const SHA_PINNED_USES_RE = /^\s*-?\s*uses:\s*([^\s@]+)@[0-9a-f]{40}/;
+
+/**
+ * The `vMAJOR` from the first `<actionPrefix>@vN` token in `line`, or `NaN`
+ * when none is present. Plain string search keeps the action name out of any
+ * regular expression source.
+ */
+function annotatedMajorIn(line: string, actionPrefix: string): number {
+  const needle = `${actionPrefix}@v`;
+  let at = line.indexOf(needle);
+  while (at !== -1) {
+    const digits = line.slice(at + needle.length).match(/^\d+/);
+    if (digits) return Number(digits[0]);
+    at = line.indexOf(needle, at + 1);
+  }
+  return NaN;
 }
 
 /**
@@ -269,13 +320,10 @@ export function annotatedActionMajors(
   text: string,
   actionPrefix: string,
 ): number[] {
-  const prefix = escapeRegExp(actionPrefix);
-  const usesRe = new RegExp(`^\\s*-?\\s*uses:\\s*${prefix}@[0-9a-f]{40}`);
-  const commentRe = new RegExp(`${prefix}@v(\\d+)`);
   const lines = text.split("\n");
   const majors: number[] = [];
   for (let i = 0; i < lines.length; i++) {
-    if (!usesRe.test(lines[i])) continue;
+    if (lines[i].match(SHA_PINNED_USES_RE)?.[1] !== actionPrefix) continue;
     // Walk up through the contiguous comment block above the pin (skipping a
     // blank gap), so a multi-line annotation is matched wherever the `@vN`
     // token sits within it.
@@ -283,11 +331,8 @@ export function annotatedActionMajors(
     while (j >= 0 && lines[j].trim() === "") j--;
     let major = NaN;
     while (j >= 0 && lines[j].trim().startsWith("#")) {
-      const match = lines[j].match(commentRe);
-      if (match) {
-        major = Number(match[1]);
-        break;
-      }
+      major = annotatedMajorIn(lines[j], actionPrefix);
+      if (!Number.isNaN(major)) break;
       j--;
     }
     majors.push(major);
