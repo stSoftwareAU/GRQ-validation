@@ -61,7 +61,7 @@ const FIX_NOTES = [...RETAINED_FIX_NOTES, ...PRUNED_FIX_NOTES];
 // Note (Issue #83): test_formula_verification.js used to live here, but it was
 // an assertion-free demo that re-implemented the annualised formula and always
 // printed success. It has been deleted — the formula's production home is the
-// Rust calculate_annualized_performance (WHAT-tested in src/utils.rs), so the
+// Rust calculate_annualized_performance (WHAT-tested in src/performance.rs), so the
 // demo verified nothing while duplicating the formula. See the deletion
 // regression test below.
 //
