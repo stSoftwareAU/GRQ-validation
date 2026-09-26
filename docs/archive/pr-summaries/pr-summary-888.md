@@ -12,7 +12,7 @@ On the untouched default branch, the only red check was `semgrep` (`p/default`).
 
 ```mermaid
 flowchart LR
-  A[github.base_ref] -->|env: BASE_REF| B["run: git fetch origin \"${BASE_REF}:${BASE_REF}\""]
+  A[github.base_ref] -->|env: BASE_REF| B["run: git fetch origin with quoted BASE_REF"]
 ```
 
 ## Evidence
