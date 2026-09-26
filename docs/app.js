@@ -631,7 +631,7 @@ class GRQValidator {
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
                     const attemptUrl = `${fullUrl}&attempt=${attempt}`;
-                    console.log(`Attempt ${attempt} to fetch market data from:`, attemptUrl);
+                    console.log("%s", `Attempt ${attempt} to fetch market data from:`, attemptUrl);
                     
                     response = await fetch(attemptUrl, {
                         method: 'GET',
@@ -642,21 +642,21 @@ class GRQValidator {
                     });
                     
                     if (!response.ok) {
-                        console.error(`Attempt ${attempt} failed to load market data file:`, response.status, response.statusText);
+                        console.error("%s", `Attempt ${attempt} failed to load market data file:`, response.status, response.statusText);
                         continue;
                     }
                     
                     text = await response.text();
-                    console.log(`Attempt ${attempt} successful, file size:`, text.length, 'characters');
+                    console.log("%s", `Attempt ${attempt} successful, file size:`, text.length, 'characters');
                     
                     // If we got a reasonable amount of data, break
                     if (text.length > 1000) {
                         break;
                     } else {
-                        console.warn(`Attempt ${attempt} returned suspiciously small file size:`, text.length);
+                        console.warn("%s", `Attempt ${attempt} returned suspiciously small file size:`, text.length);
                     }
                 } catch (fetchError) {
-                    console.error(`Attempt ${attempt} fetch error:`, fetchError);
+                    console.error("%s", `Attempt ${attempt} fetch error:`, fetchError);
                 }
             }
             
@@ -699,7 +699,7 @@ class GRQValidator {
 
             lines.slice(1).forEach((line, index) => {
                 if (index < 3) { // Debug first 3 lines
-                    console.log(`Processing line ${index + 1}:`, line);
+                    console.log("%s", `Processing line ${index + 1}:`, line);
                 }
                 const values = line.split(",");
                 const date = values[0];
@@ -1228,7 +1228,7 @@ class GRQValidator {
         }
         
         const analysis = this.analysisData[stockSymbol];
-        console.log(`Analysis data for ${stockSymbol}:`, analysis);
+        console.log("%s", `Analysis data for ${stockSymbol}:`, analysis);
         console.log(`Star display: ${this.getStarRatingDisplay(stockSymbol)}`);
     }
 
@@ -1726,7 +1726,7 @@ class GRQValidator {
         console.log("Chart data for rendering:", JSON.stringify(chartData, null, 2));
         console.log("Number of datasets:", chartData.datasets.length);
         chartData.datasets.forEach((dataset, index) => {
-            console.log(`Dataset ${index}:`, {
+            console.log("%s", `Dataset ${index}:`, {
                 label: dataset.label,
                 dataPoints: dataset.data.length,
                 firstPoint: dataset.data[0],
@@ -2281,7 +2281,7 @@ class GRQValidator {
             );
             if (stock) {
                 const marketData = this.marketData[stock.stock];
-                console.log(`prepareChartData - ${stock.stock} market data points:`, marketData ? marketData.length : 0);
+                console.log("%s", `prepareChartData - ${stock.stock} market data points:`, marketData ? marketData.length : 0);
                 if (marketData && marketData.length > 0) {
                     const targetPercentage = this.calculateTargetPercentage(stock, scoreDate);
                     // Stop the actuals at a split that cannot be reconciled
@@ -2294,11 +2294,11 @@ class GRQValidator {
                             marketData.filter((point) => point.date <= maxDate),
                             this.unreconciledSplitDate(stock.stock, scoreDate),
                         );
-                    console.log(`prepareChartData - ${stock.stock} filtered market data points:`, filteredMarketData.length);
+                    console.log("%s", `prepareChartData - ${stock.stock} filtered market data points:`, filteredMarketData.length);
                     const before90Days = [];
                     const after90Days = [];
                     const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
-                    console.log(`prepareChartData - ${stock.stock} buy price:`, buyPriceObj);
+                    console.log("%s", `prepareChartData - ${stock.stock} buy price:`, buyPriceObj);
                     if (!buyPriceObj || !buyPriceObj.price || buyPriceObj.price <= 0) {
                         console.warn(`No valid buy price for ${stock.stock}, skipping chart data`);
                         return { datasets };
@@ -2357,13 +2357,13 @@ class GRQValidator {
                             after90Days.push(dataPoint);
                         }
                     });
-                    console.log(`prepareChartData - ${stock.stock} before90Days points:`, before90Days.length);
-                    console.log(`prepareChartData - ${stock.stock} after90Days points:`, after90Days.length);
+                    console.log("%s", `prepareChartData - ${stock.stock} before90Days points:`, before90Days.length);
+                    console.log("%s", `prepareChartData - ${stock.stock} after90Days points:`, after90Days.length);
                     // Filter out any invalid y values (defensive)
                     const cleanBefore90 = before90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
                     const cleanAfter90 = after90Days.filter(p => typeof p.y === 'number' && !isNaN(p.y));
-                    console.log(`prepareChartData - ${stock.stock} cleanBefore90 points:`, cleanBefore90.length);
-                    console.log(`prepareChartData - ${stock.stock} cleanAfter90 points:`, cleanAfter90.length);
+                    console.log("%s", `prepareChartData - ${stock.stock} cleanBefore90 points:`, cleanBefore90.length);
+                    console.log("%s", `prepareChartData - ${stock.stock} cleanAfter90 points:`, cleanAfter90.length);
                     // Stop the actuals at a split that cannot be reconciled
                     // (issue #831). Beyond such a split the quotes sit on a
                     // price basis the buy price cannot be restated onto, so
@@ -2866,7 +2866,7 @@ class GRQValidator {
 
         console.log("prepareChartData - final datasets count:", datasets.length);
         datasets.forEach((dataset, index) => {
-            console.log(`prepareChartData - dataset ${index} (${dataset.label}):`, dataset.data.length, "points");
+            console.log("%s", `prepareChartData - dataset ${index} (${dataset.label}):`, dataset.data.length, "points");
         });
 
         // If no datasets were created (no market data), create a fallback chart
@@ -5370,7 +5370,7 @@ class GRQValidator {
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
 
         if (!buyPriceObj || buyPriceObj.price <= 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
             return null;
         }
 
@@ -5389,8 +5389,8 @@ class GRQValidator {
 
         console.log(`calculateTrendLine - ${stock.stock}: Data points collected: ${dataPoints.length}`);
         if (dataPoints.length > 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: First data point:`, dataPoints[0]);
-            console.log(`calculateTrendLine - ${stock.stock}: Last data point:`, dataPoints[dataPoints.length - 1]);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: First data point:`, dataPoints[0]);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: Last data point:`, dataPoints[dataPoints.length - 1]);
         }
 
         // Need at least 3 data points for meaningful regression
