@@ -12,6 +12,10 @@
 # they update immediately, mirroring the deno.json minimumDependencyAge
 # policy used for the Deno ecosystem.
 #
+# Semgrep's p/default rule wants `default-days: 7`; the `nosemgrep` markers
+# below keep the fleet's documented 24h (VIBE_BUMP_QUARANTINE_HOURS) policy,
+# matching deno.json's "P1D" (Issue #888).
+#
 # The `cooldown` keyword is an in-preview, non-native age gate; it is kept
 # here only as defence in depth. The deterministic, attacker-unbypassable
 # backstop is the CI gate in .github/workflows/bump-quarantine-gate.yml
@@ -27,7 +31,7 @@ updates:
     open-pull-requests-limit: 10
     cooldown:
       # 24h release-age quarantine for external crates.
-      default-days: 1
+      default-days: 1 # nosemgrep: package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown
       # Internal stSoftwareAU crates bypass the quarantine (update now).
       exclude:
         - "stsoftware*"
@@ -46,7 +50,7 @@ updates:
     open-pull-requests-limit: 10
     cooldown:
       # 24h release-age quarantine for external actions.
-      default-days: 1
+      default-days: 1 # nosemgrep: package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown
       # Internal stSoftwareAU actions bypass the quarantine (update now).
       exclude:
         - "stSoftwareAU/*"

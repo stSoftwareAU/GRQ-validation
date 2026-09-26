@@ -51,7 +51,10 @@ jobs:
       # NEAT-AI quality.yml pattern.
       - name: Fetch base branch
         if: github.event_name == 'pull_request'
-        run: git fetch origin "${{ github.base_ref }}:${{ github.base_ref }}" || true
+        # The base ref reaches the shell via env:, never a ${{ }} splice (Issue #888).
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch origin "${BASE_REF}:${BASE_REF}" || true
       # Licensed path: runs only when the licence is present; unguarded it
       # exits with ErrLicense before scanning and leaves the job green.
       # gitleaks/gitleaks-action@v3.0.0
