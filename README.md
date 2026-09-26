@@ -1327,9 +1327,7 @@ calls which:
 
 ```mermaid
 flowchart TD
-    main[main.rs CLI] --> index
-    main --> market_data
-    main --> dividends
+    main[main.rs CLI] --> utils
     main --> data_roots
     index[index.rs<br/>score index] --> performance
     index --> market_data
@@ -1338,7 +1336,6 @@ flowchart TD
     performance --> market_data
     dividends[dividends.rs<br/>dividend history] --> market_data
     market_data[market_data.rs<br/>price history] --> data_roots[data_roots.rs<br/>data roots]
-    dividends --> data_roots
     index --> utils[utils.rs<br/>score files + re-exports]
     performance --> utils
     market_data --> utils
