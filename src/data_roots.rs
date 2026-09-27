@@ -11,9 +11,141 @@
 //! work begins, and a single error lists *every* unusable root, so an operator
 //! fixes the whole configuration in one pass instead of one failure per run.
 
-use crate::utils::{data_root_from_value, env_root, DIVIDEND_DATA_ROOT_ENV, MARKET_DATA_ROOT_ENV};
 use anyhow::{anyhow, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// Environment variable naming the market-data root directory.
+pub const MARKET_DATA_ROOT_ENV: &str = "GRQ_MARKET_DATA_PATH";
+
+/// Environment variable naming the dividend-data root directory.
+pub const DIVIDEND_DATA_ROOT_ENV: &str = "GRQ_DIVIDEND_DATA_PATH";
+
+/// Resolves a caller-supplied data root from `raw`, the value of `variable`.
+///
+/// Injectable core of [`market_data_root`]/[`dividend_data_root`] so the
+/// fail-loud contract is testable without mutating the process environment —
+/// the unit tests run in parallel and many of them read these variables, so a
+/// scoped `set_var`/`remove_var` would race with those readers.
+///
+/// # Errors
+///
+/// Returns an error naming only `variable` and the expected tree shape when the
+/// value is absent or blank. There is deliberately no default: a silent
+/// fallback would let the pipeline produce header-only CSVs instead of failing.
+pub(crate) fn data_root_from_value(
+    variable: &str,
+    kind: &str,
+    raw: Option<String>,
+) -> Result<PathBuf> {
+    match raw {
+        Some(value) if !value.trim().is_empty() => Ok(PathBuf::from(value)),
+        _ => Err(anyhow!(
+            "{variable} is not set — set it to the directory holding the {kind} \
+             `data/<letter>/<SYM>.json` tree"
+        )),
+    }
+}
+
+/// Reads `variable` from the process environment.
+///
+/// This is the crate's single environment read site for the data roots (issue
+/// #803): every other function takes an already-resolved root as a parameter,
+/// so a root can never be silently re-resolved deep in a run.
+pub(crate) fn env_root(variable: &str) -> Option<String> {
+    std::env::var(variable).ok()
+}
+
+/// Resolves the market-data root from the `GRQ_MARKET_DATA_PATH` environment
+/// variable.
+///
+/// Used by [`crate::data_roots::DataRoots::resolve`] as the fallback behind
+/// `--market-data-path`, and by tests that need the operator's own tree.
+///
+/// # Errors
+///
+/// Returns an error when the variable is unset or blank.
+pub fn market_data_root() -> Result<PathBuf> {
+    data_root_from_value(
+        MARKET_DATA_ROOT_ENV,
+        "market-data",
+        env_root(MARKET_DATA_ROOT_ENV),
+    )
+}
+
+/// Resolves the dividend-data root from the `GRQ_DIVIDEND_DATA_PATH`
+/// environment variable.
+///
+/// Used by [`crate::data_roots::DataRoots::resolve`] as the fallback behind
+/// `--dividend-data-path`, and by tests that need the operator's own tree.
+///
+/// # Errors
+///
+/// Returns an error when the variable is unset or blank.
+pub fn dividend_data_root() -> Result<PathBuf> {
+    data_root_from_value(
+        DIVIDEND_DATA_ROOT_ENV,
+        "dividend-data",
+        env_root(DIVIDEND_DATA_ROOT_ENV),
+    )
+}
+
+/// Returns `true` when a share-price data repository exists at `base` (i.e. it
+/// contains a `data/` subdirectory). Best-effort probe;
+/// [`ensure_market_data_repository_at`] is the fail-loud gate every batch entry
+/// point calls instead.
+fn market_data_repository_available_at(base: &Path) -> bool {
+    base.join("data").is_dir()
+}
+
+/// Ensures a share-price data repository is present at the caller-supplied
+/// `base` before batch processing (issue #803: the root is threaded in, never
+/// re-resolved here).
+///
+/// # Errors
+///
+/// Returns an error when `base`/`data` is missing.
+pub fn ensure_market_data_repository_at(base: &Path) -> Result<()> {
+    if market_data_repository_available_at(base) {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Market data repository not found at {}/data — \
+             point {MARKET_DATA_ROOT_ENV} at a directory holding a \
+             `data/<letter>/<SYM>.json` tree",
+            base.display()
+        ))
+    }
+}
+
+/// Shared data-root fixtures for the unit tests of the modules split out of
+/// `utils` (issue #882).
+#[cfg(test)]
+pub(crate) mod test_fixtures {
+    use super::*;
+
+    /// A caller-supplied root that deliberately holds no data (issue #803).
+    ///
+    /// Used by the traversal-guard tests (which must fail before touching disk)
+    /// and by the projection/performance tests, which assert on price behaviour
+    /// only: an absent dividend tree contributes exactly zero dividends, so the
+    /// expected figures stay independent of any operator's data.
+    pub(crate) fn absent_data_root() -> &'static Path {
+        Path::new("target/test-fixtures/absent-data-root")
+    }
+
+    /// The operator's market-data root when one is configured *and* present on
+    /// disk, else `None` after printing why `test` is being skipped. Smoke
+    /// tests against real share prices can only run where that tree exists.
+    pub(crate) fn configured_market_root(test: &str) -> Option<PathBuf> {
+        match market_data_root() {
+            Ok(root) if root.exists() => Some(root),
+            _ => {
+                println!("Skipping {test}: external data repository not available");
+                None
+            }
+        }
+    }
+}
 
 /// The two caller-supplied data roots, resolved and validated once at start-up.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,5 +300,127 @@ mod tests {
             error.to_string().contains(MARKET_DATA_ROOT_ENV),
             "a blank market root must be reported, got: {error}"
         );
+    }
+
+    #[test]
+    fn test_ensure_market_data_repository_ok_when_present() {
+        // A base directory containing a `data/` subdir resolves to Ok, covering
+        // `market_data_repository_available`'s `true` branch transitively.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("data")).unwrap();
+        assert!(market_data_repository_available_at(dir.path()));
+        assert!(ensure_market_data_repository_at(dir.path()).is_ok());
+    }
+
+    #[test]
+    fn test_ensure_market_data_repository_err_when_absent() {
+        // A base directory without a `data/` subdir resolves to a descriptive
+        // Err naming the missing repository, covering the `false` branch.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!market_data_repository_available_at(dir.path()));
+        let err = ensure_market_data_repository_at(dir.path()).unwrap_err();
+        let msg = err.to_string();
+        let expected = format!("{}/data", dir.path().display());
+        assert!(
+            msg.contains(&expected),
+            "message names the missing data directory {expected}: {msg}"
+        );
+        assert!(
+            msg.contains(MARKET_DATA_ROOT_ENV),
+            "message names the environment variable to set: {msg}"
+        );
+        assert!(
+            !msg.contains("GRQ-"),
+            "message must not name a private repository: {msg}"
+        );
+    }
+
+    // Issue #802: the data roots are caller-supplied. An unset or blank root is
+    // a fail-loud error naming only the environment variable — never a silent
+    // default, which is what produced header-only market-data CSVs.
+    #[test]
+    fn test_market_data_root_unset_fails_loud() {
+        let err = data_root_from_value(MARKET_DATA_ROOT_ENV, "market-data", None).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(MARKET_DATA_ROOT_ENV),
+            "message names the environment variable: {msg}"
+        );
+        assert!(
+            msg.contains("data/<letter>/<SYM>.json"),
+            "message says what the variable must point at: {msg}"
+        );
+        assert!(
+            !msg.contains("GRQ-"),
+            "message must not name a private repository: {msg}"
+        );
+
+        // A blank value is treated exactly like an unset one.
+        assert!(
+            data_root_from_value(MARKET_DATA_ROOT_ENV, "market-data", Some("  ".to_string()))
+                .is_err(),
+            "a blank root must not resolve to the current directory"
+        );
+    }
+
+    #[test]
+    fn test_dividend_data_root_unset_fails_loud() {
+        let err = data_root_from_value(DIVIDEND_DATA_ROOT_ENV, "dividend-data", None).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains(DIVIDEND_DATA_ROOT_ENV),
+            "message names the environment variable: {msg}"
+        );
+        assert!(
+            msg.contains("data/<letter>/<SYM>.json"),
+            "message says what the variable must point at: {msg}"
+        );
+        assert!(
+            !msg.contains("GRQ-"),
+            "message must not name a private repository: {msg}"
+        );
+
+        assert!(
+            data_root_from_value(DIVIDEND_DATA_ROOT_ENV, "dividend-data", Some(String::new()))
+                .is_err(),
+            "a blank root must not resolve to the current directory"
+        );
+    }
+
+    #[test]
+    fn test_data_root_from_value_returns_caller_supplied_path() {
+        let root = data_root_from_value(
+            MARKET_DATA_ROOT_ENV,
+            "market-data",
+            Some("/tmp/md".to_string()),
+        )
+        .unwrap();
+        assert_eq!(root, PathBuf::from("/tmp/md"));
+    }
+
+    /// Read-only wiring check: the public resolvers must read their environment
+    /// variable and must not fall back to a default when it is absent. Asserted
+    /// against whatever the ambient environment holds, so it never mutates
+    /// process state that the parallel tests around it read. It goes through
+    /// [`env_root`] — the crate's single environment read site (issue #803).
+    #[test]
+    fn test_data_roots_resolve_from_environment() {
+        for (variable, resolved) in [
+            (MARKET_DATA_ROOT_ENV, market_data_root()),
+            (DIVIDEND_DATA_ROOT_ENV, dividend_data_root()),
+        ] {
+            match env_root(variable) {
+                Some(value) if !value.trim().is_empty() => {
+                    assert_eq!(resolved.unwrap(), PathBuf::from(value));
+                }
+                _ => {
+                    let msg = resolved.unwrap_err().to_string();
+                    assert!(
+                        msg.contains(variable),
+                        "unset {variable} must fail loud naming itself, got: {msg}"
+                    );
+                }
+            }
+        }
     }
 }

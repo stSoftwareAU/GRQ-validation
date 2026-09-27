@@ -2,7 +2,7 @@
 //
 // These import the REAL shipped helpers from docs/projection.js — the single
 // source of truth for the "is this stock included?" rule, mirroring the Rust
-// backend's `is_priceable` predicate (src/utils.rs). The dashboard's app.js
+// backend's `is_priceable` predicate (src/performance.rs). The dashboard's app.js
 // aggregate and strikethrough work reuses this same tested rule.
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import "../docs/projection.js";

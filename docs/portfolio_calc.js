@@ -798,18 +798,18 @@ class PortfolioCalculator {
     calculateTrendLine(stock, scoreDate, endDate) {
         const marketData = this.marketData[stock.stock];
         if (!marketData || marketData.length === 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: No market data available`);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: No market data available`);
             return null;
         }
 
         const buyPriceObj = this.getBuyPrice(stock.stock, scoreDate);
 
         if (!buyPriceObj || buyPriceObj.price <= 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: No valid buy price. Buy price obj:`, buyPriceObj);
             return null;
         }
 
-        console.log(`calculateTrendLine - ${stock.stock}: Buy price: $${buyPriceObj.price.toFixed(2)}`);
+        console.log("%s", `calculateTrendLine - ${stock.stock}: Buy price: $${buyPriceObj.price.toFixed(2)}`);
 
         // Data-window / end-date selection lives in the shared projection module
         // (issue #144) so production and the Deno tests exercise the same window:
@@ -822,15 +822,15 @@ class PortfolioCalculator {
             endDate,
         );
 
-        console.log(`calculateTrendLine - ${stock.stock}: Data points collected: ${dataPoints.length}`);
+        console.log("%s", `calculateTrendLine - ${stock.stock}: Data points collected: ${dataPoints.length}`);
         if (dataPoints.length > 0) {
-            console.log(`calculateTrendLine - ${stock.stock}: First data point:`, dataPoints[0]);
-            console.log(`calculateTrendLine - ${stock.stock}: Last data point:`, dataPoints[dataPoints.length - 1]);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: First data point:`, dataPoints[0]);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: Last data point:`, dataPoints[dataPoints.length - 1]);
         }
 
         // Need at least 3 data points for meaningful regression
         if (dataPoints.length < 3) {
-            console.log(`calculateTrendLine - ${stock.stock}: Insufficient data points (${dataPoints.length} < 3)`);
+            console.log("%s", `calculateTrendLine - ${stock.stock}: Insufficient data points (${dataPoints.length} < 3)`);
             return null;
         }
 
@@ -838,7 +838,7 @@ class PortfolioCalculator {
         // (issue #100) so production and the Deno tests share one fit.
         const trendLine = GRQProjection.computeTrendLine(dataPoints);
 
-        console.log(`calculateTrendLine - ${stock.stock}: Slope: ${trendLine.slope.toFixed(4)}, Intercept: ${trendLine.intercept}, R²: ${trendLine.rSquared.toFixed(4)}, Predicted 90-day: ${trendLine.predicted90DayPerformance.toFixed(1)}%`);
+        console.log("%s", `calculateTrendLine - ${stock.stock}: Slope: ${trendLine.slope.toFixed(4)}, Intercept: ${trendLine.intercept}, R²: ${trendLine.rSquared.toFixed(4)}, Predicted 90-day: ${trendLine.predicted90DayPerformance.toFixed(1)}%`);
 
         return trendLine;
     }

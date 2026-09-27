@@ -20,9 +20,9 @@ and this project adheres to
   backfill command with the two data roots it needs (README and CONTRIBUTING).
   `tests/pick_details_documentation_test.ts` reads each documented threshold,
   emoji, sidecar column and CLI flag out of `docs/pick_details.js`,
-  `docs/pick_working.js`, `src/picks_sidecar.rs` and `src/main.rs`, so a
-  retuned constant or a renamed flag fails the gate instead of silently
-  leaving stale prose (Issue #843).
+  `docs/pick_working.js`, `src/picks_sidecar.rs` and `src/main.rs`, so a retuned
+  constant or a renamed flag fails the gate instead of silently leaving stale
+  prose (Issue #843).
 
 - "Show the working" popovers, accessible wording and a warning legend for the
   pick-detail columns (`docs/pick_working.js`). Each of the six cells is now a
@@ -65,16 +65,17 @@ and this project adheres to
   was never run — or a later change that stops emitting sidecars — turns CI red
   rather than silently blanking the dashboard columns (Issue #839).
 
-- Per-score-date pick-details sidecar `docs/scores/<YYYY>/<Month>/<DD>-picks.csv`
-  (`src/picks_sidecar.rs`), written beside the existing per-date CSVs with one
-  row per ticker: `week52_low`, `week52_high`, `close_score_date`,
-  `close_5d_prior` (five **trading** rows back) and `adv_dollar_10d`, computed
-  from the market-data tree over `score_date - 365 days ..= score_date`. Raw
-  inputs only — thresholds and the traffic light stay in `docs/pick_details.js`
-  — and a value that cannot be computed is left **blank, never zero**.
-  `adv_dollar_10d` reuses the `averageDollarVolume` definition of
-  `docs/volume_recommend.js`, with `tests/fixtures/adv_dollar_10d_parity.json`
-  pinning the Rust and JavaScript sides to one window (Issue #838).
+- Per-score-date pick-details sidecar
+  `docs/scores/<YYYY>/<Month>/<DD>-picks.csv` (`src/picks_sidecar.rs`), written
+  beside the existing per-date CSVs with one row per ticker: `week52_low`,
+  `week52_high`, `close_score_date`, `close_5d_prior` (five **trading** rows
+  back) and `adv_dollar_10d`, computed from the market-data tree over
+  `score_date - 365 days ..= score_date`. Raw inputs only — thresholds and the
+  traffic light stay in `docs/pick_details.js` — and a value that cannot be
+  computed is left **blank, never zero**. `adv_dollar_10d` reuses the
+  `averageDollarVolume` definition of `docs/volume_recommend.js`, with
+  `tests/fixtures/adv_dollar_10d_parity.json` pinning the Rust and JavaScript
+  sides to one window (Issue #838).
 
 - `scripts/version-increment.sh`, ported from NEAT-AI-scorer, and a Version Bump
   workflow step that increments `[package].version` (patch) on every pull
@@ -86,9 +87,9 @@ and this project adheres to
   `GRQ_MARKET_DATA_PATH` / `GRQ_DIVIDEND_DATA_PATH`) so an operator can point
   the pipeline at their own data tree. Both roots are resolved once into a
   `DataRoots` value and threaded explicitly through the pipeline, validated
-  before any work begins, and a single start-up error lists every unusable
-  root. `run.sh` and `process_date.sh` check both variables before building or
-  writing anything and pass them through as flags (Issue #803).
+  before any work begins, and a single start-up error lists every unusable root.
+  `run.sh` and `process_date.sh` check both variables before building or writing
+  anything and pass them through as flags (Issue #803).
 
 - Market-data presence quality gate (`tests/market_data_presence_test.ts`): a
   Deno test, run on every PR via `deno-quality.yml`, that iterates every
@@ -126,6 +127,12 @@ and this project adheres to
 
 ### Changed
 
+- The actionlint, Cargo Audit, Dependency Review and Markdown Lint PR gates now
+  skip a pull request that touches none of the files they check. A `changes` job
+  diffs the PR against its base and gates the real job, and an always-run
+  `*-result` job fails unless every gated job succeeded or was skipped, so each
+  check still reports a conclusion. Scheduled and manual runs still run in full.
+  Gitleaks, Semgrep and Deno Quality stay ungated on purpose (Issue #885).
 - The six pick-detail columns (Issue #840) move off the dashboard's aggregate
   stock table onto the single-stock view (`?stock=…`) only. They crowded the
   portfolio figures out of a phone screen and are a per-stock review aid, not a
@@ -133,8 +140,8 @@ and this project adheres to
   9 cells) now carries none of them. `docs/pick_columns.js` builds the header
   and body row for the single-stock table (`pickDetailHeaderRow()`,
   `pickDetailRowCells()`) so the two rows can never fall out of alignment, and
-  the pick-warning legend follows the columns — visible only on the
-  single-stock view. Display-only: the maths, the inclusion predicate and the
+  the pick-warning legend follows the columns — visible only on the single-stock
+  view. Display-only: the maths, the inclusion predicate and the
   `<DD>-picks.csv` sidecar load are unchanged (Issue #855).
 - The widened 21-column stock table is now usable on a phone: it scrolls
   sideways with **Stock** and the **Pick** traffic light pinned to the left
@@ -184,8 +191,8 @@ and this project adheres to
 
 ### Fixed
 
-- Genuine splits larger than 10:1 are no longer rejected on magnitude alone.
-  A single event above the cap is trusted when the observed pre/post price move
+- Genuine splits larger than 10:1 are no longer rejected on magnitude alone. A
+  single event above the cap is trusted when the observed pre/post price move
   confirms the coefficient within the existing ±15% tolerance, so MVIS's real
   1-for-15 reverse split (2026-08-03) is applied instead of leaving raw
   post-split prices plotted against a raw pre-split buy price — the ~+400% jump
@@ -201,26 +208,25 @@ and this project adheres to
   touched neither `src/` nor `Cargo.toml`, leaving the deployed scorer running a
   binary that predated `--market-data-path` and failing every cycle (Issues
   #816, #818).
-- Charts no longer keep the previous theme's colours after a theme switch,
-  which left the canvas-drawn axis ticks, axis titles and legend unreadable
+- Charts no longer keep the previous theme's colours after a theme switch, which
+  left the canvas-drawn axis ticks, axis titles and legend unreadable
   (near-white text on a light page after switching to light; dark-on-dark after
   switching to dark). Chart.js paints those colours once at build, so the fix
   adds `GRQChartTheme.applyChartTheme(chart, theme)` — the single source of
-  truth that re-sources every canvas colour from the theme and repaints the
-  live chart — and calls it on the theme-toggle click and the
-  `prefers-color-scheme` change for the main dashboard chart (which the mobile
-  pop-out re-parents) and the trend chart, in both switch directions
-  (Issue #708).
+  truth that re-sources every canvas colour from the theme and repaints the live
+  chart — and calls it on the theme-toggle click and the `prefers-color-scheme`
+  change for the main dashboard chart (which the mobile pop-out re-parents) and
+  the trend chart, in both switch directions (Issue #708).
 - Re-restored the 161 market-data CSVs under `docs/scores/2026/` (and their
   `index.json` performance figures) after a fresh "Auto commit models" push
   (`642eb620`, author `scorer 3`) re-wiped every one back to a lone header row —
   0 rows added, 205 488 deleted — which again forced the dashboard into "Limited
-  data mode" for every 2026 date, including the reported
-  `?date=2026-04-02`. `tests/regression_2026_market_data_test.rs` now also pins
-  `2026-04-02` so a future re-wipe fails the build. The durable fix — stopping
-  the external `scorer 3` pipeline from pushing header-only CSVs straight to
-  `main` (bypassing the PR-only presence gate) — needs a human and is tracked in
-  a follow-up (Issue #685).
+  data mode" for every 2026 date, including the reported `?date=2026-04-02`.
+  `tests/regression_2026_market_data_test.rs` now also pins `2026-04-02` so a
+  future re-wipe fails the build. The durable fix — stopping the external
+  `scorer 3` pipeline from pushing header-only CSVs straight to `main`
+  (bypassing the PR-only presence gate) — needs a human and is tracked in a
+  follow-up (Issue #685).
 - Restored the 161 market-data CSVs under `docs/scores/2026/` that a stray "Auto
   commit models" had reduced to a bare header row, which had forced the
   dashboard into "Limited data mode" for every 2026 prediction date. The price

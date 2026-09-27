@@ -58,7 +58,7 @@ export async function readFileOrNull(path: string): Promise<string | null> {
 }
 
 /**
- * Mirrors src/utils.rs::is_market_data_csv_empty and the data-presence gate: a
+ * Mirrors src/market_data.rs::is_market_data_csv_empty and the data-presence gate: a
  * market-data CSV counts as empty when it is missing (null), blank, or carries
  * only the header row — i.e. one or fewer non-blank lines.
  */

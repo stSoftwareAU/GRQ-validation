@@ -9,9 +9,16 @@ import { assert, assertEquals } from "@std/assert";
 import { parse as parseYaml } from "@std/yaml";
 import {
   assertActionsPinnedToSha,
+  assertCacheRuntimeSupported,
   assertPullRequestRunsOnMilestone,
+  commandSegments,
   invokesTool,
+  loadWorkflow,
+  stepIndexInvoking,
+  stepIndexUsing,
   type Workflow,
+  type WorkflowStep,
+  workflowSteps,
 } from "./workflow_assertions.ts";
 
 const WORKFLOW_PATH = ".github/workflows/cargo-audit.yml";
@@ -142,4 +149,84 @@ Deno.test("Cargo Audit workflow declares a concurrency group that cancels supers
     true,
     "concurrency must cancel superseded in-progress runs",
   );
+});
+
+// Issue #884: `cargo install cargo-audit` compiled from source on every run
+// (~3.3 min). The audit job must restore the built binary from a cache keyed on
+// the pinned version, so a version bump invalidates it, and skip the install on
+// a hit.
+const INSTALL_OPTS = { subcommand: "install", args: ["cargo-audit"] };
+
+/** The `--version` value passed to `cargo install cargo-audit`, if any. */
+function pinnedInstallVersion(step: WorkflowStep): string | undefined {
+  for (const segment of commandSegments(step.run ?? "")) {
+    const tokens = segment.split(/\s+/);
+    const at = tokens.indexOf("--version");
+    if (at !== -1) return tokens[at + 1];
+    const inline = tokens.find((t) => t.startsWith("--version="));
+    if (inline) return inline.slice("--version=".length);
+  }
+  return undefined;
+}
+
+async function auditCacheAndInstall() {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const steps = workflowSteps(doc, "audit");
+  const cacheIdx = stepIndexUsing(steps, "actions/cache@");
+  const installIdx = stepIndexInvoking(steps, "cargo", INSTALL_OPTS);
+  assert(cacheIdx !== -1, "audit job must have an actions/cache step");
+  assert(installIdx !== -1, "audit job must install cargo-audit");
+  return {
+    cacheIdx,
+    installIdx,
+    cache: steps[cacheIdx],
+    install: steps[installIdx],
+  };
+}
+
+Deno.test("Cargo Audit restores cargo-audit from cache before installing", async () => {
+  const { cacheIdx, installIdx, cache } = await auditCacheAndInstall();
+  assert(cacheIdx < installIdx, "cache step must run before the install step");
+  const paths = String(cache.with?.path ?? "").split("\n").map((p) => p.trim());
+  for (
+    const expected of [
+      "~/.cargo/bin/cargo-audit",
+      "~/.cargo/registry",
+      "~/.cargo/git",
+    ]
+  ) {
+    assert(paths.includes(expected), `cache path must include ${expected}`);
+  }
+});
+
+Deno.test("Cargo Audit cache key is tied to the pinned cargo-audit version", async () => {
+  const { cache, install } = await auditCacheAndInstall();
+  const version = pinnedInstallVersion(install);
+  assert(version, "cargo-audit install must pin an explicit --version");
+  const key = String(cache.with?.key ?? "");
+  assert(key.includes("runner.os"), `cache key must include runner.os: ${key}`);
+  assert(
+    key.includes(`cargo-audit-${version}`),
+    `cache key must embed the pinned version ${version} so a bump invalidates it: ${key}`,
+  );
+  assertEquals(
+    cache.with?.["restore-keys"],
+    undefined,
+    "no partial restore of a stale binary",
+  );
+});
+
+Deno.test("Cargo Audit skips the install on a cache hit", async () => {
+  const { cache, install } = await auditCacheAndInstall();
+  assert(cache.id, "cache step needs an id so the install can read cache-hit");
+  const condition = (install.if ?? "").replace(/\s+/g, " ");
+  assert(
+    condition.includes(`steps.${cache.id}.outputs.cache-hit != 'true'`),
+    `install must be skipped on a cache hit, got if: ${install.if}`,
+  );
+});
+
+Deno.test("Cargo Audit actions/cache pin carries a node24-era annotation", async () => {
+  const { text } = await loadWorkflow(WORKFLOW_PATH);
+  assertCacheRuntimeSupported(text);
 });

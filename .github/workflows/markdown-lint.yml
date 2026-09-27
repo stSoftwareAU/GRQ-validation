@@ -21,7 +21,46 @@ permissions:
   contents: read
 
 jobs:
+  # Issue #885: diff the PR against its base and report whether it touches
+  # Markdown files. Non-PR runs have no diff base, so they always run in full.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.filter.outputs.changed }}
+    steps:
+      # actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          # Full history so the base...head diff has both commits locally.
+          fetch-depth: 0
+          # Read-only diff: don't persist the GITHUB_TOKEN into .git/config.
+          persist-credentials: false
+      - name: Detect changes to Markdown files
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          PATHS_REGEX: '(\.md$|^\.markdownlint-cli2\.jsonc$|^\.github/workflows/markdown-lint\.yml$)'
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A failed diff aborts the step (set -e) rather than skipping the gate.
+          changed_files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
+          if printf '%s\n' "$changed_files" | grep -qE "$PATHS_REGEX"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Markdown files changed; skipping the gated job."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   markdownlint:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -51,3 +90,31 @@ jobs:
         run: npm install -g --ignore-scripts markdownlint-cli2@0.22.1
       - name: Run markdownlint-cli2
         run: markdownlint-cli2
+
+  # Issue #885: always runs, so this check reports a conclusion even when
+  # `markdownlint` is skipped. Fails unless every needed job succeeded or was skipped.
+  markdownlint-result:
+    needs: [changes, markdownlint]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every gated job succeeded or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RESULTS" ]; then
+            echo "::error::no job results reported"
+            exit 1
+          fi
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success|skipped) ;;
+              *)
+                echo "::error::a gated job finished as '$result'"
+                exit 1
+                ;;
+            esac
+          done
