@@ -4,7 +4,7 @@
 //
 // `getBuyPrice` restates the score-date midpoint into current split terms, but
 // the two shipped Actual readers used to take the horizon midpoint RAW:
-//   - GRQValidator.getStockReturnBreakdown (docs/app.js)
+//   - PortfolioCalculator.getStockReturnBreakdown (docs/portfolio_calc.js)
 //   - currentPriceWithinWindow (docs/trend_predictions.js)
 // When a reconcilable split falls BETWEEN the 90-day horizon and the data end,
 // the raw midpoint carries a spurious post-horizon split factor that the buy
@@ -12,19 +12,22 @@
 // divide the raw midpoint by GRQProjection.postHorizonSplitFactor (via the
 // horizonPriceCurrentBasis kernel) so the Actual shares the buy price's basis.
 //
-// These exercise the REAL shipped code: the trend reader is imported and called
-// directly; the app.js method is extracted from source and executed with a fake
-// `this`, so the assertions run the actual function body — not a copy or a grep.
+// These exercise the REAL shipped code: the trend reader and the dashboard's
+// PortfolioCalculator (docs/portfolio_calc.js, issue #881) are imported and
+// called directly — not a copy or a grep.
 
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import "../docs/projection.js";
 import "../docs/volume_recommend.js";
 import "../docs/trend_predictions.js";
+import "../docs/portfolio_calc.js";
 
 // deno-lint-ignore no-explicit-any
 const P = (globalThis as any).GRQProjection;
 // deno-lint-ignore no-explicit-any
 const Trend = (globalThis as any).GRQTrendPredictions;
+// deno-lint-ignore no-explicit-any
+const Calc = (globalThis as any).GRQPortfolioCalc;
 
 function midnight(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
@@ -129,72 +132,41 @@ Deno.test("resolvePredictionStocks Actual and buy price share the current basis"
   assertAlmostEquals(priceReturn, 20);
 });
 
-// --- docs/app.js: getStockReturnBreakdown ------------------------------------
+// --- docs/portfolio_calc.js: getStockReturnBreakdown -------------------------
 
-// Extract a class method body from app.js source and rebuild it as a callable
-// function so the test runs the REAL shipped body (app.js bootstraps a live DOM
-// at import time and cannot be imported headlessly). Brace-matched, not grepped.
-function extractMethod(src: string, signature: string): string {
-  // Match the DEFINITION signature exactly (call sites share the bare name).
-  const start = src.indexOf(signature);
-  if (start === -1) throw new Error(`method ${signature} not found`);
-  const open = src.indexOf("{", start);
-  if (open === -1) throw new Error(`opening brace for ${name} not found`);
-  let depth = 0;
-  for (let i = open; i < src.length; i++) {
-    const c = src[i];
-    if (c === "{") depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0) return src.slice(open, i + 1);
-    }
-  }
-  throw new Error(`unterminated body for ${signature}`);
+// The dashboard's calculations live in the DOM-free PortfolioCalculator
+// (issue #881), so the REAL shipped methods run here against a plain fixture
+// source — no DOM, no source extraction.
+interface Breakdown {
+  buyPrice: number;
+  currentPrice: number;
+  totalDividends: number;
+  priceReturn: number;
+  dividendReturn: number;
+  totalReturn: number;
 }
 
-async function loadBreakdown() {
-  const src = await Deno.readTextFile(
-    new URL("../docs/app.js", import.meta.url),
-  );
-  const body = extractMethod(
-    src,
-    "getStockReturnBreakdown(stock, scoreDate) {",
-  );
-  // GRQProjection is a free global in app.js; inject it as a closure param.
-  const factory = new Function(
-    "GRQProjection",
-    `return function(stock, scoreDate) ${body};`,
-  );
-  return factory(P) as (stock: unknown, scoreDate: Date) => {
-    buyPrice: number;
-    currentPrice: number;
-    totalDividends: number;
-    priceReturn: number;
-    dividendReturn: number;
-    totalReturn: number;
-  } | null;
+interface Calculator {
+  getStockReturnBreakdown(stock: unknown, scoreDate: Date): Breakdown | null;
+  calculateStockPerformance(stock: unknown): number | null;
 }
 
-function fakeValidator(market: MarketPoint[]) {
-  return {
-    marketData: { "NYSE:AAA": market } as Record<string, MarketPoint[]>,
+function calculator(market: MarketPoint[]): Calculator {
+  return new Calc.PortfolioCalculator({
+    marketData: { "NYSE:AAA": market },
+    dividendData: {},
+    scoreData: [{ stock: "NYSE:AAA" }],
+    analysisData: null,
+    // Parses to SCORE (2026-01-01, local midnight).
     selectedFile: "2026/January/01.tsv",
-    getScoreDate(_file: string) {
-      return SCORE;
-    },
-    getBuyPrice(symbol: string, scoreDate: Date) {
-      return P.getBuyPrice(this.marketData[symbol], scoreDate);
-    },
-    getDividendsWithin90Days(_symbol: string) {
-      return [];
-    },
-  };
+    costOfCapital: 10,
+    chartWindowDays: () => 90,
+  });
 }
 
-Deno.test("getStockReturnBreakdown reads the Actual on the buy price's current basis (forward split)", async () => {
-  const breakdown = await loadBreakdown();
-  const ctx = fakeValidator(marketWithPostHorizonSplit());
-  const result = breakdown.call(ctx, { stock: "NYSE:AAA" }, SCORE);
+Deno.test("getStockReturnBreakdown reads the Actual on the buy price's current basis (forward split)", () => {
+  const result = calculator(marketWithPostHorizonSplit())
+    .getStockReturnBreakdown({ stock: "NYSE:AAA" }, SCORE);
   assert(result !== null);
   // Buy price restated to current terms: 100 / 2.0 = 50.
   assertAlmostEquals(result!.buyPrice, 50);
@@ -204,59 +176,47 @@ Deno.test("getStockReturnBreakdown reads the Actual on the buy price's current b
   assertAlmostEquals(result!.priceReturn, 20);
 });
 
-Deno.test("getStockReturnBreakdown is unchanged when no split follows the horizon", async () => {
-  const breakdown = await loadBreakdown();
-  const ctx = fakeValidator([pt("2026-01-02", 100), pt("2026-03-30", 120)]);
-  const result = breakdown.call(ctx, { stock: "NYSE:AAA" }, SCORE);
+Deno.test("getStockReturnBreakdown is unchanged when no split follows the horizon", () => {
+  const result = calculator([pt("2026-01-02", 100), pt("2026-03-30", 120)])
+    .getStockReturnBreakdown({ stock: "NYSE:AAA" }, SCORE);
   assert(result !== null);
   assertAlmostEquals(result!.buyPrice, 100);
   assertAlmostEquals(result!.currentPrice, 120);
   assertAlmostEquals(result!.priceReturn, 20);
 });
 
-Deno.test("getStockReturnBreakdown returns null when no point falls on/before the horizon", async () => {
-  const breakdown = await loadBreakdown();
-  const ctx = fakeValidator([pt("2026-09-01", 10)]);
-  const result = breakdown.call(ctx, { stock: "NYSE:AAA" }, SCORE);
+Deno.test("getStockReturnBreakdown returns null when no point falls on/before the horizon", () => {
+  const result = calculator([pt("2026-09-01", 10)])
+    .getStockReturnBreakdown({ stock: "NYSE:AAA" }, SCORE);
   assertEquals(result, null);
 });
 
-// --- docs/app.js: calculateStockPerformance ----------------------------------
+// --- docs/portfolio_calc.js: calculateStockPerformance -----------------------
 // The twin 90-day return that feeds the Return-above-cost-of-capital, judgement
 // and projection surfaces. It must stay on the SAME current basis as the Actual
 // (issue #569) so the two cannot disagree for a stock that splits post-horizon.
 
-async function loadStockPerformance() {
-  const src = await Deno.readTextFile(
-    new URL("../docs/app.js", import.meta.url),
-  );
-  const body = extractMethod(src, "calculateStockPerformance(stock) {");
-  const factory = new Function(
-    "GRQProjection",
-    `return function(stock) ${body};`,
-  );
-  return factory(P) as (stock: unknown) => number | null;
-}
-
-Deno.test("calculateStockPerformance restates the horizon onto the buy price's basis (forward split)", async () => {
-  const perf = await loadStockPerformance();
-  const ctx = fakeValidator(marketWithPostHorizonSplit());
+Deno.test("calculateStockPerformance restates the horizon onto the buy price's basis (forward split)", () => {
+  const calc = calculator(marketWithPostHorizonSplit());
   // (60 - 50) / 50 * 100 = +20%, NOT the spurious +140% from the raw 120.
-  assertAlmostEquals(perf.call(ctx, { stock: "NYSE:AAA" })!, 20);
+  assertAlmostEquals(
+    calc.calculateStockPerformance({ stock: "NYSE:AAA" })!,
+    20,
+  );
 });
 
-Deno.test("calculateStockPerformance is unchanged when no split follows the horizon", async () => {
-  const perf = await loadStockPerformance();
-  const ctx = fakeValidator([pt("2026-01-02", 100), pt("2026-03-30", 120)]);
-  assertAlmostEquals(perf.call(ctx, { stock: "NYSE:AAA" })!, 20);
+Deno.test("calculateStockPerformance is unchanged when no split follows the horizon", () => {
+  const calc = calculator([pt("2026-01-02", 100), pt("2026-03-30", 120)]);
+  assertAlmostEquals(
+    calc.calculateStockPerformance({ stock: "NYSE:AAA" })!,
+    20,
+  );
 });
 
-Deno.test("calculateStockPerformance and getStockReturnBreakdown agree on the same basis", async () => {
-  const perf = await loadStockPerformance();
-  const breakdown = await loadBreakdown();
-  const market = marketWithPostHorizonSplit();
-  const a = perf.call(fakeValidator(market), { stock: "NYSE:AAA" });
-  const b = breakdown.call(fakeValidator(market), { stock: "NYSE:AAA" }, SCORE);
+Deno.test("calculateStockPerformance and getStockReturnBreakdown agree on the same basis", () => {
+  const calc = calculator(marketWithPostHorizonSplit());
+  const a = calc.calculateStockPerformance({ stock: "NYSE:AAA" });
+  const b = calc.getStockReturnBreakdown({ stock: "NYSE:AAA" }, SCORE);
   assert(b !== null);
   assertAlmostEquals(a!, b!.totalReturn);
 });

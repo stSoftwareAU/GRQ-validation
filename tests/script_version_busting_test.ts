@@ -31,6 +31,7 @@ const APP_DEPENDENCY_SCRIPTS = [
   "escape.js",
   "projection.js",
   "volume_recommend.js",
+  "portfolio_calc.js",
   "chart_window_settings.js",
   "color_key.js",
   "series_label_colour.js",
@@ -53,9 +54,10 @@ const APP_DEPENDENCY_SCRIPTS = [
 
 /** Extract the `?v=` query for a given script src in index.html, or null. */
 function scriptVersion(html: string, name: string): string | null {
-  const match = html.match(
-    new RegExp(`src="${name.replace(".", "\\.")}\\?v=([0-9.]+)"`),
-  );
+  const prefix = `src="${name}?v=`;
+  const start = html.indexOf(prefix);
+  if (start === -1) return null;
+  const match = html.slice(start + prefix.length).match(/^([0-9.]+)"/);
   return match ? match[1] : null;
 }
 
@@ -90,9 +92,8 @@ Deno.test("every app.js dependency script is version-busted to APP_VERSION", () 
 
 Deno.test("no app.js dependency is left with an unversioned <script src>", () => {
   for (const name of APP_DEPENDENCY_SCRIPTS) {
-    const unversioned = new RegExp(`src="${name.replace(".", "\\.")}"`);
     assertEquals(
-      unversioned.test(indexHtml),
+      indexHtml.includes(`src="${name}"`),
       false,
       `docs/index.html still loads ${name} without a ?v= cache-buster`,
     );

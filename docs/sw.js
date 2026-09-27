@@ -6,7 +6,7 @@
 // app version or the SRI-pinned CDN assets below change so the service worker
 // re-fetches and re-validates everything.
 
-const APP_VERSION = "1.1.113";
+const APP_VERSION = "1.1.114";
 const CACHE_NAME = `grq-validation-v${APP_VERSION}`;
 const STATIC_CACHE_NAME = `grq-validation-static-v${APP_VERSION}`;
 const DYNAMIC_CACHE_NAME = `grq-validation-dynamic-v${APP_VERSION}`;
@@ -25,6 +25,8 @@ const CORE_ASSETS = [
   "./projection.js",
   // Shared low-volume/liquidity helper (issue #576/#577).
   "./volume_recommend.js",
+  // DOM-free portfolio/per-stock calculations split out of app.js (issue #881).
+  "./portfolio_calc.js",
   // Shared stock-pick metrics (issue #836) and the dashboard's pick-detail
   // table columns that render them (issue #840). app.js calls both at render
   // time, so they must ship in the same all-or-nothing shell update.
