@@ -21,7 +21,7 @@ live in a new `PortfolioCalculator` class in `docs/portfolio_calc.js`, and
   `globalThis.GRQPortfolioCalc`. The browser and the Deno tests therefore run
   the same code.
 - `GRQValidator` now builds `this.calc = new GRQPortfolioCalc.PortfolioCalculator(this)` and
-  calls every figure through `this.calc.*`. `app.js` is 1,197 lines shorter.
+  calls every figure through `this.calc.*`. `app.js` drops from 5,744 to 4,795 lines.
 - `docs/index.html` loads the new script with a version-busted tag, and
   `docs/sw.js` precaches it.
 - The calculations were moved without behaviour changes.
@@ -39,8 +39,14 @@ The dashboard renders normally after the extraction:
 
 ![Dashboard after extraction](docs/evidence/issue-881-dashboard.png)
 
-`./quality.sh < /dev/null` passes: 1,669 Deno tests passed and 0 failed, plus
-fmt, lint, check and the Rust suites.
+`./quality.sh < /dev/null` passes after merging the latest `main`: 1,700 Deno
+tests passed and 0 failed, plus fmt, lint, check and the Rust suites.
+`semgrep scan --config p/default --error` (the CI ruleset) reports no findings
+on `docs/app.js`, `docs/portfolio_calc.js` and the touched tests.
+
+Merging `main` brought in its semgrep format-string fixes (`console.log("%s", …)`).
+The three `calculateTrendLine` log lines had moved into `portfolio_calc.js`, so
+they received the same fix there.
 
 ## Test Plan
 
