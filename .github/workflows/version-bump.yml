@@ -28,7 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Forks cannot push back to the PR branch, so only run for same-repo PRs.
-    # Skip our own bot commit to avoid a self-trigger loop.
+    # Skip our own bot commit to avoid a self-trigger loop. A push made with
+    # ACTIONS_PUSH is attributed to that token's owner rather than the bot, so
+    # the run goes ahead — the bump scripts are idempotent against the base
+    # branch, so it finds nothing to change and does not commit again.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'github-actions[bot]'
@@ -42,7 +45,11 @@ jobs:
           # the bump back to it. Full history is needed to read the base.
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Push with the ACTIONS_PUSH PAT (as the other stSoftwareAU repos
+          # do), not GITHUB_TOKEN: runs triggered by a github-actions[bot]
+          # push are held as "action_required", leaving the PR on "workflows
+          # awaiting approval" until someone pushed again.
+          token: ${{ secrets.ACTIONS_PUSH }}
 
       # denoland/setup-deno@v2.0.5
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
