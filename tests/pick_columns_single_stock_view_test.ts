@@ -75,7 +75,7 @@ function values(): PickValues {
 
 /** Split a row of markup into its top-level `<th>`/`<td>` cells. */
 function cells(html: string, tag: "th" | "td"): string[] {
-  return html.split(new RegExp(`<${tag}[\\s>]`)).slice(1);
+  return html.split(tag === "th" ? /<th[\s>]/ : /<td[\s>]/).slice(1);
 }
 
 /** The static #stockTable `<thead>` from docs/index.html. */
@@ -195,6 +195,8 @@ Deno.test("every pick cell in the single-stock row is a popover trigger", () => 
 
 Deno.test("the single-stock row escapes an untrusted ticker", () => {
   const html = pickDetailRowCells(values(), '"><script>alert(1)</script>');
+  // This assertion is the XSS check itself: it proves the fixed payload was escaped.
+  // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
   assert(!html.includes("<script>"), "the ticker must never be rendered raw");
   assertStringIncludes(html, "&lt;script&gt;");
 });
