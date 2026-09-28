@@ -288,6 +288,37 @@ flowchart TD
 The CI gate is unchanged and remains the backstop; the guard simply stops a bad
 date reaching `main` in the first place.
 
+#### Who calls the guard: promotion and pairing share one commit (issue #860)
+
+The guard was never actually invoked on the embargoed-promotion path. Two
+separately scheduled upstream jobs split the work: the daily scorer job promoted
+`DD.tsv` + `DD-analysis.csv` and committed them alone, and `DD.csv` only arrived
+when the validation job next ran `./run.sh`. Between the two commits `main` was
+unpaired — `2026/July/27`, `2026/August/26` and `2026/August/29` each reddened
+every PR this way.
+
+The order cannot simply be reversed: `./run.sh` generates market data only for
+dates already listed in `docs/scores/index.json`. So promotion now runs in the
+validation job itself, immediately before `./run.sh`, and
+`deno task check-score-data` gates that job's single commit. The scorer job
+publishes only the daily market data (`USDAUD.json` and the benchmark indices).
+
+```mermaid
+sequenceDiagram
+    participant S as Upstream scorer job
+    participant V as Upstream validation job
+    participant R as GRQ-validation main
+    S->>R: commit USDAUD.json + indices only
+    V->>V: promote embargo-aged days → DD.tsv, DD-analysis.csv, index.json
+    V->>V: ./run.sh → DD.csv, DD-picks.csv
+    V->>V: deno task check-score-data
+    alt paired
+        V->>R: one commit — score date and its market data together
+    else unpaired
+        V--xR: nothing committed, the job fails loud
+    end
+```
+
 ### Processor pairing gate: the run's exit code is honest (issue #833)
 
 The guard above only helps a job that calls it. On 2026-08-18 the promotion
