@@ -1228,6 +1228,15 @@ when the branch has already been bumped — so re-runs do not ratchet the versio
 This replaced an unreliable local pre-commit hook that only fired when a
 contributor had installed it.
 
+**Do not install a local version-bump hook.** The removed hook (Issue #323)
+grepped `const VERSION="…"` in `docs/index.html`; that constant no longer
+exists — the version is `APP_VERSION` in `docs/sw.js` — so a copy left in a
+clone's `.git/hooks/pre-commit` matches nothing, prints
+`Version auto-incremented to ..1` and bumps nothing (Issue #898). If a clone
+still has one, delete it with `rm .git/hooks/pre-commit` (after checking it is
+that hook). To bump by hand, run
+`deno run --allow-read --allow-write scripts/bump_version.ts`.
+
 ```mermaid
 flowchart LR
     A[Open / update PR] --> B[Version Bump workflow]
