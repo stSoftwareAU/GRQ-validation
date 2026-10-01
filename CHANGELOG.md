@@ -191,6 +191,11 @@ and this project adheres to
 
 ### Fixed
 
+- The Actionlint PR gate ended in `startup_failure` on every run because the
+  organisation's Actions allow-list refuses the third-party
+  `docker://rhysd/actionlint` step action; it now downloads the pinned
+  actionlint 1.7.9 release and verifies its sha256 before running it (Issue
+  #903).
 - Genuine splits larger than 10:1 are no longer rejected on magnitude alone. A
   single event above the cap is trusted when the observed pre/post price move
   confirms the coefficient within the existing ±15% tolerance, so MVIS's real
