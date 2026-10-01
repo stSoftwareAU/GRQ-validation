@@ -1,54 +1,30 @@
 # PR Summary — Issue #899: drop orphaned `npm:@playwright/mcp` from `deno.lock`
 
-Closes #899
+Superseded by #901 for the `deno.lock` fix; see below.
 
 ## Summary
 
-`deno.lock` still pinned `npm:@playwright/mcp@0.0.75` and its chain (`playwright` → `playwright-core` → optional `fsevents@2.3.2`), although nothing in `deno.json` or the code imports it. Deno therefore resolved and downloaded the three packages on every run, and on macOS printed `Ignored build scripts for packages: npm:fsevents@2.3.2` from `deno task refresh-indices`. This PR deletes the orphaned specifier and the whole `npm` section, which held only these four packages. Nothing else in the lock changes.
+`deno.lock` pinned an orphaned `npm:@playwright/mcp@0.0.75` and its chain
+(`playwright` → `playwright-core` → optional `fsevents@2.3.2`), although
+nothing in `deno.json` or the code imports it. This branch (PR #904) was
+opened to fix that, but PR #901 (`2259a32d`, merged to `main` on 2026-10-01
+at 19:59 UTC) pruned the orphaned specifier and the whole `npm` section
+first and closed #899. PR #904 later merged `main` three times (last merge
+20:22 UTC, after #901 landed), so `main`'s already-pruned `deno.lock`
+replaced this branch's version — the final diff against `main` carries no
+`deno.lock` change.
 
-- [x] Prune the orphaned specifier and `npm` section from `deno.lock`
-- [x] Verify `deno install --frozen` / `deno check --frozen` against the pruned lock
-- [x] Quality gate run (see Test Plan)
-
-## Spec
-
-### Intent and Rationale
-
-- Stop Deno resolving and downloading an npm package tree that nothing uses, which removes the fsevents build-script warning at its source.
-
-### Essential Design Decisions
-
-- Pruned only the stale entries rather than regenerating the whole lock, so the jsr and `remote` pins stay byte-identical.
-- No `"nodeModulesDir": "auto"`, no `package.json`, no `node_modules/`. Silencing the warning that way would keep the unused dependency.
-
-### Undiscoverable Facts
-
-- The entry was most likely left by an ad-hoc `deno run npm:@playwright/mcp` (the Playwright MCP server) that wrote into the repo's lock. No tracked file imports it: the only "playwright" mentions are comments in `scripts/gen_issue_*_evidence.ts`.
-- `fsevents` is darwin-only, so the warning never appears on Linux. The downloads below are the platform-neutral symptom.
-
-## Evidence
-
-`deno install --frozen` with a fresh `DENO_DIR`, run against the base lock and then the pruned one (output filtered to npm/warning lines):
-
-```text
-== before
-Download https://registry.npmjs.org/@playwright/mcp/-/mcp-0.0.75.tgz
-Download https://registry.npmjs.org/playwright/-/playwright-1.61.0-alpha-1778188671000.tgz
-Download https://registry.npmjs.org/playwright-core/-/playwright-core-1.61.0-alpha-1778188671000.tgz
-Downloaded 3 packages from npm
-+ npm:@playwright/mcp 0.0.75
-== after
-Downloaded 0 packages from npm
-```
-
-Lock diff: `deno.lock | 32 +-------` (1 insertion, the trailing comma fix, and 31 deletions). After the install, `deno.lock` is unchanged and no `node_modules/` exists.
+What #904 actually contains against `main` is only the routine
+auto-increment version bump (Cargo `0.1.38` → `0.1.39`, dashboard
+`1.1.117` → `1.1.118`, consistent across `docs/index.html`,
+`docs/sw-register.js`, `docs/sw.js`, `docs/trend.html`) plus this summary
+file.
 
 ## Test Plan
 
-- `deno check --frozen scripts/*.ts tests/*.ts`: passes.
-- `deno install --frozen`: no npm downloads, no build-script warning, lock untouched.
-- `./quality.sh`: 1698 passed, 2 failed. Both failures are the committed-tree market-data gates (`market_data_presence_test.ts`, `score_data_pairing_test.ts`). They report `docs/scores/2026/August/30.csv`, `31.csv` and `September/01.csv` missing, and already fail on `main`, as `deno task check-score-data` showed before this change. That is the root cause tracked by #896, which needs the private market-data host to backfill, and it is unrelated to the lock.
-
-## Deno regression avoided
-
-- Fixed by pruning the Deno lock; did not add `nodeModulesDir`, `package.json` or `node_modules/` to silence the warning.
+- No `deno.lock` change ships in this PR, so the before/after npm-download
+  evidence and lock-diff numbers from the earlier iteration of this branch
+  no longer apply here and have been removed. See PR #901 for that
+  evidence.
+- `./quality.sh`: run against the version-bump-only diff; no new failures
+  introduced by this PR beyond the pre-existing #896 market-data gates.
