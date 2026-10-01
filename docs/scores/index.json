@@ -4229,6 +4229,36 @@
       "performance_90_day": -2.1063799165304307,
       "performance_annualized": -22.83245479418259,
       "total_stocks": 100
+    },
+    {
+      "year": "2026",
+      "month": "August",
+      "day": "30",
+      "file": "2026/August/30.tsv",
+      "date": "2026-08-30",
+      "performance_90_day": -0.8827257756739633,
+      "performance_annualized": -9.91952854523641,
+      "total_stocks": 100
+    },
+    {
+      "year": "2026",
+      "month": "August",
+      "day": "31",
+      "file": "2026/August/31.tsv",
+      "date": "2026-08-31",
+      "performance_90_day": -1.7396667446542775,
+      "performance_annualized": -19.238387129259927,
+      "total_stocks": 100
+    },
+    {
+      "year": "2026",
+      "month": "September",
+      "day": "01",
+      "file": "2026/September/01.tsv",
+      "date": "2026-09-01",
+      "performance_90_day": -1.323539307852779,
+      "performance_annualized": -15.448593759574214,
+      "total_stocks": 100
     }
   ]
 }
