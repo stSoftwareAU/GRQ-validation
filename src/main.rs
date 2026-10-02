@@ -325,6 +325,21 @@ fn main() -> Result<()> {
             }
         };
 
+        // An index entry whose score file does not exist on disk cannot be
+        // processed or regenerated — there are no tickers to build market
+        // data from. It is a data inconsistency (a day indexed but never
+        // published), not a transient fault: logging it at error level every
+        // run hides real read failures in the noise, so skip it with a
+        // distinct warning naming the entry for an operator to clean up.
+        if !std::path::Path::new(&score_file_path).exists() {
+            log::warn!(
+                "Skipping index entry {}: score file does not exist on disk \
+                 (remove the index.json entry or restore the file)",
+                score_entry.file
+            );
+            continue;
+        }
+
         info!(
             "Processing score file {}/{}: {}",
             i + 1,
