@@ -10,8 +10,9 @@
 // source-text greps — Issue #202) and verify the gate's invariants: the file
 // exists and parses, triggers on pull_request, is least-privilege
 // (contents: read), cancels superseded runs (Issue #139), actually invokes
-// actionlint, and pins its third-party image to an immutable sha256 digest
-// (supply-chain hardening, mirroring semgrep.yml — Issue #72).
+// actionlint, and installs it from a version-pinned, sha256-verified release
+// download rather than a `docker://` step action, which the organisation's
+// Actions allow-list refuses (Issue #903).
 
 import { assert, assertEquals, assertMatch } from "@std/assert";
 import {
@@ -99,8 +100,8 @@ Deno.test("actionlint workflow declares a concurrency group that cancels superse
 });
 
 // The whole point of the gate: some step must actually run actionlint, either
-// by invoking the binary in a `run:` block or by using the official
-// rhysd/actionlint image (whose entrypoint is actionlint).
+// by invoking the downloaded binary in a `run:` block or by using an
+// actionlint-named action/image.
 Deno.test("actionlint workflow actually invokes actionlint", async () => {
   const { doc } = await loadWorkflow(WORKFLOW_PATH);
   const steps = workflowSteps(doc);
@@ -115,8 +116,8 @@ Deno.test("actionlint workflow actually invokes actionlint", async () => {
 
 // Supply-chain hardening (Issue #72): every third-party action must be pinned
 // to an immutable ref. First-party actions (actions/checkout) pin to a 40-char
-// commit SHA; a `docker://` image action pins to a 64-char sha256 digest.
-// Neither may float on a mutable tag/branch.
+// commit SHA; a `docker://` image action, were one ever added back, would need
+// to pin to a 64-char sha256 digest. Neither may float on a mutable tag/branch.
 Deno.test("actionlint workflow pins every action to an immutable ref", async () => {
   const { text } = await loadWorkflow(WORKFLOW_PATH);
   const usesLines = text.split("\n")
@@ -148,22 +149,50 @@ Deno.test("actionlint checkout does not persist credentials", async () => {
   }
 });
 
-// Issue #871: a bare `image@sha256:<digest>` pin is immutable but untrackable —
-// Dependabot's github-actions manager keys a bump off the tag beside the
-// digest. The image must be pinned as `image:<X.Y.Z>@sha256:<digest>`.
-Deno.test("actionlint docker image pin carries a release tag beside its digest", async () => {
+// Issue #903: the organisation's Actions allow-list refuses third-party
+// `docker://` step actions outright (startup_failure on every run), so no
+// step anywhere in this workflow may use one.
+Deno.test("actionlint workflow never uses a docker:// step action", async () => {
   const { doc } = await loadWorkflow(WORKFLOW_PATH);
-  const images = workflowSteps(doc, "actionlint")
+  const dockerSteps = workflowSteps(doc)
     .map((step) => step.uses)
     .filter((uses): uses is string =>
       typeof uses === "string" && uses.startsWith("docker://")
     );
-  assert(images.length > 0, "actionlint job must use a docker image action");
-  for (const image of images) {
-    assertMatch(
-      image,
-      /^docker:\/\/[a-z0-9._/-]+:\d+\.\d+\.\d+@sha256:[0-9a-f]{64}$/,
-      `docker image must be pinned as image:<X.Y.Z>@sha256:<digest>: ${image}`,
-    );
-  }
+  assertEquals(
+    dockerSteps,
+    [],
+    "no step may use a docker:// action; the org allow-list refuses it",
+  );
+});
+
+// Issue #903: with the docker:// action gone, the actionlint job must
+// download the pinned release binary and verify it against its published
+// sha256 before running it.
+Deno.test("actionlint job downloads an exact-version release and verifies its sha256", async () => {
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const steps = workflowSteps(doc, "actionlint");
+  const installStep = steps.find((step) =>
+    typeof step.env?.ACTIONLINT_VERSION === "string" &&
+    typeof step.env?.ACTIONLINT_SHA256 === "string"
+  );
+  assert(
+    installStep,
+    "actionlint job must have a step with ACTIONLINT_VERSION and ACTIONLINT_SHA256 env",
+  );
+  const env = installStep.env as Record<string, string>;
+  assertMatch(
+    env.ACTIONLINT_VERSION,
+    /^\d+\.\d+\.\d+$/,
+    "ACTIONLINT_VERSION must be an exact release version",
+  );
+  assertMatch(
+    env.ACTIONLINT_SHA256,
+    /^[0-9a-f]{64}$/,
+    "ACTIONLINT_SHA256 must be a 64-char hex sha256",
+  );
+  assert(
+    (installStep.run ?? "").includes("sha256sum -c"),
+    "install step must verify the download with sha256sum -c",
+  );
 });

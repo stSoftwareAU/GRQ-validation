@@ -9,13 +9,15 @@ name: Actionlint
 # regression is introduced, mirroring the shellcheck, markdown-lint, gitleaks
 # and semgrep gates already in this repo.
 #
-# The official rhysd/actionlint image is pinned to an immutable sha256 digest
-# rather than a mutable tag, matching the container pinning in semgrep.yml
-# (supply-chain hardening — Issue #72). Refresh the digest deliberately when
-# bumping the linter; resolve a new one with
-# `docker buildx imagetools inspect rhysd/actionlint:<version>`. The pin keeps
-# the release tag beside the digest (`image:<X.Y.Z>@sha256:<digest>`) so
-# Dependabot's github-actions manager can track it (Issue #871).
+# The organisation's Actions allow-list refuses third-party `docker://` step
+# actions, so this job can no longer run actionlint as a container action
+# (Issue #903). Instead it downloads the pinned actionlint release binary and
+# verifies it against its published sha256 before running it — the release
+# tarball is pinned to an exact version rather than a mutable tag, matching
+# the digest pinning used elsewhere in this repo (supply-chain hardening,
+# Issue #72). Dependabot's github-actions manager cannot track a plain `run:`
+# download, so the version and checksum below must be bumped by hand together
+# (Issue #903 supersedes the Issue #871 image-tag pin).
 
 on:
   pull_request:
@@ -88,15 +90,27 @@ jobs:
           # pushes back or fetches a private submodule, so don't persist the
           # GITHUB_TOKEN into .git/config where a later step could read it.
           persist-credentials: false
-      # rhysd/actionlint 1.7.9 official image, entrypoint `actionlint`, pinned
-      # to an immutable sha256 digest (Issue #72). The `:1.7.9` tag beside the
-      # digest lets Dependabot track and bump the image (Issue #871). The image
-      # bundles shellcheck so `run:` blocks are linted too. `-color` keeps
-      # annotations readable.
+      # Issue #903: the org Actions allow-list refuses the third-party
+      # `docker://rhysd/actionlint` step action, so the pinned release binary
+      # is downloaded and checksum-verified here instead of run as a
+      # container action. The sha256 below comes from the release's
+      # `actionlint_<ver>_checksums.txt`; refresh version and checksum
+      # together when bumping.
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: "1.7.9"
+          ACTIONLINT_SHA256: 233b280d05e100837f4af1433c7b40a5dcb306e3aa68fb4f17f8a7f45a7df7b4
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+      # The runner image ships shellcheck, so actionlint's bundled shellcheck
+      # integration still lints `run:` blocks. `-color` keeps annotations
+      # readable.
       - name: Run actionlint
-        uses: docker://rhysd/actionlint:1.7.9@sha256:a0383f60d92601e2694e24b24d37df7b6a40bed7cedbc447611c50009bf02d94
-        with:
-          args: -color
+        run: "\"$RUNNER_TEMP/actionlint\" -color"
 
   # Issue #885: always runs, so this check reports a conclusion even when
   # `actionlint` is skipped. Fails unless every needed job succeeded or was skipped.
