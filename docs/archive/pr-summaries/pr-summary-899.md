@@ -15,10 +15,13 @@ replaced this branch's version — the final diff against `main` carries no
 `deno.lock` change.
 
 What #904 actually contains against `main` is only the routine
-auto-increment version bump (Cargo `0.1.38` → `0.1.39`, dashboard
-`1.1.117` → `1.1.118`, consistent across `docs/index.html`,
+auto-increment version bump (Cargo `0.1.39` → `0.1.40`, dashboard
+`1.1.118` → `1.1.119`, consistent across `docs/index.html`,
 `docs/sw-register.js`, `docs/sw.js`, `docs/trend.html`) plus this summary
-file.
+file. (A later merge of `main`, which had independently bumped to
+`0.1.39`/`1.1.118` via #900, brought this branch's own further
+auto-increment commits to `0.1.40`/`1.1.119` — the higher counter value
+from both sides.)
 
 ## Test Plan
 
