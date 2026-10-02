@@ -1,7 +1,7 @@
 # PR Summary — Issue #899: drop orphaned `npm:@playwright/mcp` from `deno.lock`
 
-Superseded. The lock prune landed in #901, and this branch no longer differs
-from `main` except for this note.
+The lock prune landed in #901. This pull request now carries the routine
+version bump on top of current `main`, including the Actionlint fix from #905.
 
 ## Summary
 
@@ -10,24 +10,24 @@ from `main` except for this note.
 nothing in `deno.json` or the code imports it. This branch (PR #904) was
 opened to fix that, but PR #901 (`2259a32d`, merged to `main` on 2026-10-01
 at 19:59 UTC) pruned the orphaned specifier and the whole `npm` section
-first and closed #899. Later merges of `main` into this branch absorbed that
-already-pruned lock, so the diff carries no `deno.lock` change.
+first and closed #899. Later merges of `main` absorbed that already-pruned
+lock, so this diff carries no `deno.lock` change.
 
-A later routine version bump on this branch (Cargo `0.1.38` → `0.1.39`,
-dashboard `1.1.117` → `1.1.118`) was also superseded. `main` is already at
-Cargo `0.1.40` and dashboard `1.1.119`, including the Actionlint fix from
-#905. Merging that `main` removed the version-only diff and replaced this
-branch's Actionlint workflow, which was failing every run with
-`startup_failure` because it still used the refused `docker://` action
-(Issue #903).
+Merging current `main` also replaced this branch's Actionlint workflow.
+That workflow was failing every run with `startup_failure` because it still
+used the refused `docker://` action (Issue #903). `.github/workflows/actionlint.yml`
+now matches `main` (the pinned release binary from #905).
 
-What #904 contains against current `main` is only this summary file.
+What remains against `main` is the routine auto-increment (Issues #323, #818):
+
+- Cargo `0.1.40` → `0.1.41`
+- Dashboard `1.1.119` → `1.1.120` (`docs/index.html`, `docs/sw-register.js`,
+  `docs/sw.js`, `docs/trend.html`)
 
 ## Test Plan
 
 - No `deno.lock` change ships in this PR. See PR #901 for the lock-prune
   evidence.
-- No version bump ships in this PR. `Cargo.toml`, `Cargo.lock`, and the
-  dashboard cache-busting strings match `main`.
-- `.github/workflows/actionlint.yml` matches `main` (the #905 pin), so the
-  workflow can start.
+- `.github/workflows/actionlint.yml` matches `main`, so the workflow can start.
+- Version strings are consistent: `Cargo.toml` / `Cargo.lock` at `0.1.41`,
+  dashboard cache-busting strings at `1.1.120`.
