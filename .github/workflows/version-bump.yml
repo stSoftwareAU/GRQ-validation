@@ -11,6 +11,9 @@ name: Version Bump
 # PR head ref would race.
 on:
   pull_request:
+    # Draft PRs are work in progress (owner, 2026-10-23): CI runs
+    # once, when the PR is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ main ]
 
 # Cancel superseded runs so rapid pushes to the same PR ref do not race on the
@@ -32,9 +35,7 @@ jobs:
     # ACTIONS_PUSH is attributed to that token's owner rather than the bot, so
     # the run goes ahead — the bump scripts are idempotent against the base
     # branch, so it finds nothing to change and does not commit again.
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'github-actions[bot]'
+    if: (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     permissions:
       contents: write
     steps:

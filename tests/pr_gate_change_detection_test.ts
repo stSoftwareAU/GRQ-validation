@@ -147,7 +147,13 @@ for (const wf of GATED) {
     const { doc } = await loadWorkflow(path);
     const job = requireJob(doc, wf.job, wf.file);
     assert(needsList(job).includes("changes"), `${wf.job} must need changes`);
-    assertEquals(job.if, "needs.changes.outputs.changed == 'true'");
+    // Draft PRs skip CI; it runs once the PR is marked ready (owner,
+    // 2026-10-23, stSoftwareAU/VibeCoder#4152).
+    assertEquals(
+      job.if,
+      "(needs.changes.outputs.changed == 'true') && " +
+        "(github.event_name != 'pull_request' || !github.event.pull_request.draft)",
+    );
   });
 
   Deno.test(`${wf.file} - '${wf.aggregator}' always reports a conclusion`, async () => {
