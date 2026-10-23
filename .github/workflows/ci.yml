@@ -9,6 +9,9 @@ on:
   push:
     branches: [ main, "milestone/**" ]
   pull_request:
+    # Draft PRs are work in progress (owner, 2026-10-23): CI runs
+    # once, when the PR is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ main, "milestone/**" ]
 
 env:
@@ -31,6 +34,7 @@ permissions:
 
 jobs:
   check-changes:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Check for Changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -88,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: check-changes
-    if: needs.check-changes.outputs.rust-changed == 'true'
+    if: ${{ (needs.check-changes.outputs.rust-changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     
     steps:
     - name: Checkout code
@@ -169,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [check-changes, test]
-    if: needs.check-changes.outputs.rust-changed == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    if: ${{ (needs.check-changes.outputs.rust-changed == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped')) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     
     steps:
     - name: Checkout code
@@ -244,9 +248,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: check-changes
-    if: |
-      github.ref == 'refs/heads/main' && 
-      needs.check-changes.outputs.docs-changed == 'true'
+    if: ${{ (github.ref == 'refs/heads/main' && needs.check-changes.outputs.docs-changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     # A per-job block fully overrides the top-level default, so contents: read
     # is restated here for the checkout step alongside the Pages elevation.
     # actions: write is needed so the cleanup step below can delete stale
