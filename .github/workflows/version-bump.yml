@@ -35,7 +35,7 @@ jobs:
     # ACTIONS_PUSH is attributed to that token's owner rather than the bot, so
     # the run goes ahead — the bump scripts are idempotent against the base
     # branch, so it finds nothing to change and does not commit again.
-    if: ${{ (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     permissions:
       contents: write
     steps:

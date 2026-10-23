@@ -25,7 +25,7 @@ jobs:
   # Issue #885: diff the PR against its base and report whether it touches
   # Rust dependencies. Non-PR runs have no diff base, so they always run in full.
   changes:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -62,7 +62,7 @@ jobs:
 
   audit:
     needs: changes
-    if: ${{ (needs.changes.outputs.changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: (needs.changes.outputs.changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Disable cargo's HTTP/2 multiplexing. Crate downloads on GitHub runners
@@ -105,7 +105,7 @@ jobs:
   # `audit` is skipped. Fails unless every needed job succeeded or was skipped.
   cargo-audit-result:
     needs: [changes, audit]
-    if: ${{ (always()) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -23,7 +23,7 @@ jobs:
   # Issue #885: diff the PR against its base and report whether it touches
   # dependency manifests. Non-PR runs have no diff base, so they always run in full.
   changes:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -60,7 +60,7 @@ jobs:
 
   dependency-review:
     needs: changes
-    if: ${{ (needs.changes.outputs.changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: (needs.changes.outputs.changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -79,7 +79,7 @@ jobs:
   # `dependency-review` is skipped. Fails unless every needed job succeeded or was skipped.
   dependency-review-result:
     needs: [changes, dependency-review]
-    if: ${{ (always()) && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

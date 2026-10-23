@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   check-docs-changes:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -66,7 +66,7 @@ jobs:
 
   pa11y:
     needs: check-docs-changes
-    if: ${{ (needs.check-docs-changes.outputs.docs-changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: (needs.check-docs-changes.outputs.docs-changed == 'true') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
