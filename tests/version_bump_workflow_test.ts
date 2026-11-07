@@ -118,3 +118,29 @@ Deno.test("version bump workflow pins actions to commit SHAs", async () => {
   const { text } = await loadWorkflow(WORKFLOW_PATH);
   assertActionsPinnedToSha(text);
 });
+
+Deno.test("version bump never pushes with GITHUB_TOKEN and requires ACTIONS_PUSH", async () => {
+  // GitHub holds every run started by a GITHUB_TOKEN push as action_required
+  // (PR #893), so the checkout token must be the PAT alone and an empty PAT
+  // must fail the job before anything is committed.
+  const { doc } = await loadWorkflow(WORKFLOW_PATH);
+  const steps = workflowSteps(doc);
+  const checkout = steps.find((s) =>
+    String(s.uses ?? "").startsWith("actions/checkout@")
+  );
+  assert(checkout, "workflow must check out the PR branch");
+  assertEquals(
+    String((checkout.with as Record<string, unknown>)?.token),
+    "${{ secrets.ACTIONS_PUSH }}",
+    "checkout must use ACTIONS_PUSH only, with no GITHUB_TOKEN fallback",
+  );
+  const guardIndex = steps.findIndex((s) =>
+    String(s.run ?? "").includes('-z "${ACTIONS_PUSH}"') &&
+    String(s.run ?? "").includes("exit 1")
+  );
+  const checkoutIndex = steps.indexOf(checkout);
+  assert(
+    guardIndex >= 0 && guardIndex < checkoutIndex,
+    "a step before checkout must exit 1 when ACTIONS_PUSH is empty",
+  );
+});

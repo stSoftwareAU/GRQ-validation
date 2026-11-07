@@ -39,6 +39,20 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Dependabot-triggered runs cannot read Actions secrets, so ACTIONS_PUSH
+      # is empty there unless it is also registered as a Dependabot secret
+      # (`gh secret set ACTIONS_PUSH --app dependabot`). Fail loudly rather
+      # than push the bump with GITHUB_TOKEN, whose runs GitHub holds.
+      - name: Require the ACTIONS_PUSH token
+        env:
+          ACTIONS_PUSH: ${{ secrets.ACTIONS_PUSH }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ACTIONS_PUSH}" ]; then
+            echo "::error::ACTIONS_PUSH is empty: a PAT-backed push is required. Pushing the version bump with GITHUB_TOKEN would leave every run it starts held as action_required. For Dependabot runs, register it with: gh secret set ACTIONS_PUSH --app dependabot"
+            exit 1
+          fi
+
       # actions/checkout@v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -47,13 +61,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           # Push with the ACTIONS_PUSH PAT (as the other stSoftwareAU repos
-          # do), not GITHUB_TOKEN: runs triggered by a github-actions[bot]
+          # do), never GITHUB_TOKEN: runs triggered by a github-actions[bot]
           # push are held as "action_required", leaving the PR on "workflows
-          # awaiting approval" until someone pushed again.
-          # Dependabot-triggered runs cannot read ACTIONS_PUSH (it is an
-          # Actions secret, not a Dependabot one), so fall back to the job's
-          # GITHUB_TOKEN (contents: write) rather than failing checkout.
-          token: ${{ secrets.ACTIONS_PUSH || secrets.GITHUB_TOKEN }}
+          # awaiting approval" until someone pushed again. There is no
+          # GITHUB_TOKEN fallback; the guard step above fails the job instead.
+          token: ${{ secrets.ACTIONS_PUSH }}
 
       # denoland/setup-deno@v2.0.5
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
