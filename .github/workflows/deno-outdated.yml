@@ -29,7 +29,7 @@ jobs:
         # update immediately. The flag honours deno.json's minimumDependencyAge.
         run: deno outdated --update --latest --minimum-dependency-age=P1D
       # peter-evans/create-pull-request@v7.0.11
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1
+      - uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1
         with:
           # Org-level PAT (Issue #1636); falls back to GITHUB_TOKEN when
           # the secret is unset. Using the PAT ensures downstream PR
