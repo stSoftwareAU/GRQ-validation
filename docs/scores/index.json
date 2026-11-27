@@ -4729,6 +4729,16 @@
       "performance_90_day": -7.938441256476177,
       "performance_annualized": -64.71641682906927,
       "total_stocks": 99
+    },
+    {
+      "year": "2026",
+      "month": "October",
+      "day": "28",
+      "file": "2026/October/28.tsv",
+      "date": "2026-10-28",
+      "performance_90_day": -10.802352699088285,
+      "performance_annualized": -77.48987912920352,
+      "total_stocks": 98
     }
   ]
 }
